@@ -1,0 +1,87 @@
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { prisma } from "@/lib/prisma";
+import IndividualReportCardClient from "@/components/ReportCards/IndividualReportCardClient";
+
+export default async function AdminIndividualReportCardPage({ 
+  params 
+}: { 
+  params: Promise<{ studentId: string }> 
+}) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== "ADMIN") return null;
+
+  const { studentId } = await params;
+
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    include: {
+      class: true
+    }
+  });
+
+  if (!student || !student.class) {
+    return <div style={{ padding: '2rem' }}>Student not found.</div>;
+  }
+
+  // Fetch all exams for this class
+  const exams = await prisma.exam.findMany({
+    where: { classId: student.classId! },
+    orderBy: { date: 'asc' }
+  });
+
+  // Fetch all subjects for this class
+  const subjects = await prisma.subject.findMany({
+    where: { classId: student.classId! },
+    orderBy: { name: 'asc' }
+  });
+
+  // Fetch marks for this student
+  const marks = await prisma.mark.findMany({
+    where: { studentId: studentId }
+  });
+
+  // Check if sent to parent recently
+  // Assuming if a Notification exists, it was sent. We get the latest one.
+  const parentAccounts = await prisma.parentStudent.findMany({
+    where: { studentId: studentId },
+    include: {
+      parent: true
+    }
+  });
+
+  let sentAt: Date | null = null;
+  if (parentAccounts.length > 0) {
+    const parentUserIds = parentAccounts.map(p => p.parent.userId);
+    const latestNotification = await prisma.notification.findFirst({
+      where: {
+        userId: { in: parentUserIds },
+        type: "REPORT_CARD",
+        content: { contains: student.firstName }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    if (latestNotification) {
+      sentAt = latestNotification.createdAt;
+    }
+  }
+
+  return (
+    <div style={{ padding: '2rem' }}>
+      <IndividualReportCardClient 
+        student={{
+          id: student.id,
+          firstName: student.firstName,
+          lastName: student.lastName,
+          rollNumber: student.rollNumber,
+          class: student.class
+        }}
+        exams={exams}
+        subjects={subjects}
+        marks={marks}
+        sentAt={sentAt}
+        baseUrl="/dashboard/admin/report-cards"
+      />
+    </div>
+  );
+}

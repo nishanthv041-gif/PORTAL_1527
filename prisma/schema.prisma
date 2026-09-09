@@ -1,0 +1,479 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User model for Role-Based Access Control
+model User {
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  password            String?
+  role                String   @default("PARENT")
+  status              String   @default("ACTIVE") // ACTIVE, INACTIVE
+  name                String
+  googleEmail         String?
+  googleEmailVerified Boolean  @default(false)
+  theme               String   @default("light") // light | dark
+  notificationsEnabled Boolean @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relationships
+  teacher          Teacher?
+  parent           Parent?
+  staff            Staff?
+  ratings          Rating[]
+  sentMessages     Message[]      @relation("SentMessages")
+  receivedMessages Message[]      @relation("ReceivedMessages")
+  notifications    Notification[]
+}
+
+model Student {
+  id          String    @id @default(cuid())
+  rollNumber  String    @unique
+  admissionNo String    @unique
+  firstName   String
+  lastName    String
+  dateOfBirth DateTime?
+  gender      String?
+  bloodGroup  String?
+  address     String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relationships
+  classId       String?
+  class         Class?             @relation(fields: [classId], references: [id])
+  parents       ParentStudent[]
+  attendances   Attendance[]
+  marks         Mark[]
+  reportCards   ReportCard[]
+  disciplinary  DisciplineRecord[]
+  achievements  Achievement[]
+  leaveRequests LeaveRequest[]
+  complaints    Complaint[]
+}
+
+model Teacher {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id])
+  phone         String?
+  qualification String?
+  joinDate      DateTime?
+  resumeUrl     String?
+  isActive      Boolean   @default(true)
+
+  // Relationships
+  classes        Class[]
+  subjects       Subject[]
+  assignments    Assignment[]
+  complaints     Complaint[]
+  meetings       Meeting[]
+  classTeacherOf Class?        @relation("ClassTeacher")
+  examRequests   ExamRequest[]
+}
+
+model Staff {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id])
+  phone       String?
+  designation String?
+  gender      String?
+  dateOfBirth DateTime?
+  address     String?
+  joinDate    DateTime?
+  isActive    Boolean   @default(true)
+}
+
+model Parent {
+  id         String  @id @default(cuid())
+  userId     String  @unique
+  user       User    @relation(fields: [userId], references: [id])
+  phone      String?
+  occupation String?
+  isActive   Boolean @default(true)
+
+  // Relationships
+  children ParentStudent[]
+  meetings Meeting[]
+}
+
+model ParentStudent {
+  parentId  String
+  studentId String
+  parent    Parent  @relation(fields: [parentId], references: [id])
+  student   Student @relation(fields: [studentId], references: [id])
+
+  @@id([parentId, studentId])
+}
+
+model Class {
+  id          String  @id @default(cuid())
+  name        String // e.g., "Grade 10"
+  section     String // e.g., "A"
+  isActive    Boolean @default(true)
+  maxStrength Int     @default(40)
+
+  // Relationships
+  teacherId      String?
+  teacher        Teacher?      @relation(fields: [teacherId], references: [id])
+  classTeacherId String?       @unique
+  classTeacher   Teacher?      @relation("ClassTeacher", fields: [classTeacherId], references: [id])
+  students       Student[]
+  timetable      Timetable[]
+  subjects       Subject[]
+  exams          Exam[]
+  examRequests   ExamRequest[]
+  assignments    Assignment[]
+  attendances    Attendance[]
+}
+
+model Subject {
+  id        String  @id @default(cuid())
+  name      String
+  code      String
+  maxMarks  Int     @default(100)
+  passMarks Int     @default(35)
+  isActive  Boolean @default(true)
+
+  // Relationships
+  classId      String
+  class        Class         @relation(fields: [classId], references: [id])
+  teacherId    String?
+  teacher      Teacher?      @relation(fields: [teacherId], references: [id])
+  marks        Mark[]
+  timetable    Timetable[]
+  examRequests ExamRequest[]
+}
+
+model Attendance {
+  id      String   @id @default(cuid())
+  date    DateTime
+  status  String // PRESENT, ABSENT, LATE, HALF_DAY, LEAVE
+  remarks String?
+
+  // Relationships
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id])
+  classId   String?
+  class     Class?  @relation(fields: [classId], references: [id])
+
+  @@unique([studentId, date])
+}
+
+model Exam {
+  id          String   @id @default(cuid())
+  name        String
+  date        DateTime
+  isPublished Boolean  @default(false)
+
+  // Relationships
+  classId     String
+  class       Class        @relation(fields: [classId], references: [id])
+  marks       Mark[]
+  reportCards ReportCard[]
+}
+
+model Mark {
+  id       String  @id @default(cuid())
+  score    Float
+  maxScore Float
+  remarks  String?
+
+  // Relationships
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id])
+  examId    String
+  exam      Exam    @relation(fields: [examId], references: [id])
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id])
+
+  history MarkHistory[]
+
+  @@unique([studentId, examId, subjectId])
+}
+
+model MarkHistory {
+  id        String   @id @default(cuid())
+  markId    String
+  mark      Mark     @relation(fields: [markId], references: [id], onDelete: Cascade)
+  oldScore  Float?
+  newScore  Float
+  changedBy String // ID of the user who made the change
+  changedAt DateTime @default(now())
+}
+
+model ReportCard {
+  id             String  @id @default(cuid())
+  totalMarks     Float
+  percentage     Float
+  grade          String
+  rank           Int?
+  remarks        String?
+  published      Boolean @default(false)
+  parentVerified Boolean @default(false)
+
+  // Relationships
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id])
+  examId    String
+  exam      Exam    @relation(fields: [examId], references: [id])
+
+  @@unique([studentId, examId])
+}
+
+model Timetable {
+  id           String  @id @default(cuid())
+  dayOfWeek    String // MONDAY, TUESDAY, etc.
+  startTime    String // e.g., "09:00"
+  endTime      String // e.g., "09:45"
+  period       Int
+  classroom    String?
+  academicYear String?
+  isBreak      Boolean @default(false)
+
+  // Relationships
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id])
+  subjectId String?
+  subject   Subject? @relation(fields: [subjectId], references: [id])
+}
+
+model Assignment {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  deadline    DateTime
+  fileUrl     String?
+
+  // Relationships
+  classId     String
+  class       Class        @relation(fields: [classId], references: [id])
+  teacherId   String
+  teacher     Teacher      @relation(fields: [teacherId], references: [id])
+  submissions Submission[]
+}
+
+model Submission {
+  id          String   @id @default(cuid())
+  fileUrl     String?
+  text        String?
+  submittedAt DateTime @default(now())
+  status      String // PENDING, SUBMITTED, GRADED
+  remarks     String?
+
+  // Relationships
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id])
+  studentId    String
+}
+
+model Complaint {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  category    String
+  severity    String
+  status      String // OPEN, UNDER_REVIEW, RESOLVED
+  date        DateTime @default(now())
+  remarks     String?
+
+  // Relationships
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id])
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id])
+}
+
+model DisciplineRecord {
+  id          String   @id @default(cuid())
+  incident    String
+  description String
+  severity    String
+  actionTaken String
+  date        DateTime @default(now())
+  status      String
+
+  // Relationships
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id])
+}
+
+model Achievement {
+  id          String   @id @default(cuid())
+  title       String
+  category    String
+  date        DateTime
+  description String?
+  fileUrl     String?
+  isVerified  Boolean  @default(false)
+
+  // Relationships
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id])
+}
+
+model LeaveRequest {
+  id        String   @id @default(cuid())
+  startDate DateTime
+  endDate   DateTime
+  reason    String
+  status    String // PENDING, APPROVED, REJECTED
+  fileUrl   String?
+
+  // Relationships
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id])
+}
+
+model Meeting {
+  id       String   @id @default(cuid())
+  date     DateTime
+  time     String
+  agenda   String
+  location String?
+  link     String?
+  summary  String?
+
+  // Relationships
+  teachers Teacher[]
+  parents  Parent[]
+}
+
+model Announcement {
+  id         String    @id @default(cuid())
+  title      String
+  content    String
+  targetType String // ALL, CLASS, PARENTS, TEACHERS
+  targetId   String? // ID of specific class if applicable
+  priority   String    @default("NORMAL") // LOW, NORMAL, HIGH
+  expiryDate DateTime?
+  fileUrl    String?
+  createdAt  DateTime  @default(now())
+  authorId   String
+}
+
+model CalendarEvent {
+  id            String    @id @default(cuid())
+  title         String
+  type          String // EXAM, HOLIDAY, PROGRAM, MEETING, OTHER
+  date          DateTime
+  endDate       DateTime?
+  startTime     String
+  endTime       String
+  location      String?
+  description   String?
+  targetClass   String?
+  targetSection String?
+  organizer     String?
+  audience      String    @default("ALL") // STUDENT, TEACHER, ALL
+  status        String    @default("UPCOMING") // UPCOMING, COMPLETED, CANCELLED
+  isPublished   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+}
+
+model SchoolProgram {
+  id              String   @id @default(cuid())
+  name            String
+  date            DateTime
+  time            String
+  venue           String
+  description     String?
+  classesInvolved String?
+  coordinator     String?
+  maxParticipants Int?
+  registrationReq Boolean  @default(false)
+  audience        String   @default("ALL") // STUDENT, TEACHER, ALL
+  status          String   @default("PLANNED")
+  createdAt       DateTime @default(now())
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  category  String // GENERAL, EMAIL, NOTIFICATION, SECURITY, ACADEMIC
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model Message {
+  id         String    @id @default(cuid())
+  content    String
+  senderId   String
+  sender     User      @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId String
+  recipient  User      @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  isRead     Boolean   @default(false)
+  isDeleted  Boolean   @default(false)
+  fileUrl    String?
+  editedAt   DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  content   String
+  type      String // ATTENDANCE, EXAM, HOMEWORK, MEETING, ANNOUNCEMENT, SYSTEM
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String
+  action      String // LOGIN, CREATE_USER, EDIT_MARK, etc.
+  targetModel String
+  targetId    String?
+  details     String?
+  createdAt   DateTime @default(now())
+}
+
+model Rating {
+  id        String   @id @default(cuid())
+  rating    Int
+  feedback  String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  role      String
+  createdAt DateTime @default(now())
+}
+
+model ExamRequest {
+  id            String   @id @default(cuid())
+  classId       String
+  class         Class    @relation(fields: [classId], references: [id])
+  subjectId     String
+  subject       Subject  @relation(fields: [subjectId], references: [id])
+  teacherId     String
+  teacher       Teacher  @relation(fields: [teacherId], references: [id])
+  date          DateTime
+  startTime     String
+  endTime       String
+  maxMarks      Int      @default(100)
+  status        String   @default("PENDING") // PENDING, APPROVED, DECLINED
+  declineReason String?
+  createdAt     DateTime @default(now())
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ipAddress String?
+  userAgent String?
+  success   Boolean
+  timestamp DateTime @default(now())
+}

@@ -1,0 +1,119 @@
+.selectorContainer {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+:global(.dark) .selectorContainer {
+  background: #1e293b;
+  border: 1px solid #334155;
+  box-shadow: none;
+}
+
+.searchBar {
+  display: flex;
+  align-items: center;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.5rem;
+}
+
+:global(.dark) .searchBar {
+  background: #0f172a;
+}
+
+.searchIcon {
+  color: #64748b;
+  margin-right: 0.75rem;
+}
+
+.searchInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+:global(.dark) .searchInput {
+  color: #f8fafc;
+}
+
+.clearBtn {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border-radius: 50%;
+}
+
+.clearBtn:hover {
+  background: var(--danger-bg);
+}
+
+.dropdownGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.classGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.groupTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: #334155;
+}
+
+:global(.dark) .groupTitle {
+  color: var(--text-muted);
+}
+
+.sectionButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sectionBtn {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+:global(.dark) .sectionBtn {
+  background: #334155;
+  border-color: #475569;
+  color: var(--text-muted);
+}
+
+.sectionBtn:hover {
+  background: #e2e8f0;
+}
+
+:global(.dark) .sectionBtn:hover {
+  background: #475569;
+}
+
+.activeBtn {
+  background: var(--primary) !important;
+  color: white !important;
+  border-color: var(--primary) !important;
+}
