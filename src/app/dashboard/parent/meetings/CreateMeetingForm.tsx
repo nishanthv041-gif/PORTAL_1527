@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { requestMeetingAction } from "./actions";
+import { requestMeetingAction } from "@/backend/actions/dashboard/parent/meetings/actions";
 
 export default function CreateMeetingForm({ parentId, teachers }: { parentId: string, teachers: { id: string, name: string, subject: string }[] }) {
   const [isSubmitting, setIsSubmitting] = useState(false);

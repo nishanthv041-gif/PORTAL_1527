@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createAssignment } from "./actions";
+import { createAssignment } from "@/backend/actions/dashboard/teacher/assignments/actions";
 
 type ClassData = { id: string; name: string; section: string; };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { gradeSubmission } from "./actions";
+import { gradeSubmission } from "@/backend/actions/dashboard/teacher/assignments/[id]/actions";
 
 import { Submission, Student } from "@prisma/client";
 

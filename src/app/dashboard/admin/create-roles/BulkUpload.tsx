@@ -3,7 +3,7 @@
 import { useState } from "react";
 import * as XLSX from "xlsx";
 import { Upload, Download, FileSpreadsheet, Loader2 } from "lucide-react";
-import { bulkCreateUsers } from "./bulk-actions";
+import { bulkCreateUsers } from "@/backend/actions/dashboard/admin/create-roles/bulk-actions";
 
 export default function BulkUpload({ type }: { type: "teacher" | "student" }) {
   const [file, setFile] = useState<File | null>(null);

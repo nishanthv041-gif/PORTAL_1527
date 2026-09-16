@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Calendar, MessageSquare, CheckCircle, Clock, User as UserIcon, Edit2, Trash2 } from "lucide-react";
-import { updateComplaintStatusAction } from "./actions";
+import { updateComplaintStatusAction } from "@/backend/actions/dashboard/admin/complaints/actions";
 
 import { Complaint, Teacher, User, Student, Class, ParentStudent, Parent } from "@prisma/client";
 
@@ -273,7 +273,7 @@ export default function ComplaintsClient({ complaints }: { complaints: Complaint
                       } else {
                         // If we are calling the server action directly
                         if (replyMessage && complaint.teacher?.userId) {
-                          const { replyToComplaintAction } = await import('./actions');
+                          const { replyToComplaintAction } = await import('@/backend/actions/dashboard/admin/complaints/actions');
                           const res = await replyToComplaintAction(complaint.id, replyMessage, complaint.teacher.userId);
                           if (res.error) alert(res.error);
                           else alert("Reply sent successfully.");

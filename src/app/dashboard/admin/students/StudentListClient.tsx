@@ -8,7 +8,7 @@ import Link from "next/link";
 import { Student, Class, ParentStudent, Parent, User, Attendance } from "@prisma/client";
 
 import { MoreVertical, Trash2 } from "lucide-react";
-import { activateStudent, deactivateStudent, deleteStudent } from "./actions";
+import { activateStudent, deactivateStudent, deleteStudent } from "@/backend/actions/dashboard/admin/students/actions";
 
 type StudentWithRelations = Student & {
   class: Class | null;

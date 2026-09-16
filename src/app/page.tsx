@@ -1,10 +1,10 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "./api/auth/[...nextauth]/route";
+import { authOptions } from "@/backend/auth/authOptions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { BookOpen, Users, ShieldAlert, GraduationCap } from "lucide-react";
 import styles from "./login/login.module.css";
-import ThemeToggle from "@/components/ThemeToggle";
+import ThemeToggle from "@/frontend/components/ThemeToggle";
 
 export default async function Home() {
   const session = await getServerSession(authOptions);

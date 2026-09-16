@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { User, Clock, AlertCircle, Edit2, Trash2 } from "lucide-react";
-import { raiseComplaintAction } from "./actions";
+import { raiseComplaintAction } from "@/backend/actions/dashboard/teacher/complaints/actions";
 
 type ComplaintWithStudent = {
   id: string;

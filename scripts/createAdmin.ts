@@ -18,7 +18,7 @@ async function main() {
 
   console.log("Creating new admin account...");
   
-  const hashedPassword = await bcrypt.hash("Nishanth@1527", 10);
+  const hashedPassword = await bcrypt.hash("Nishanth@2715", 10);
   
   const admin = await prisma.user.create({
     data: {

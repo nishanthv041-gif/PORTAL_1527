@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { applyLeaveAction } from "./actions";
+import { applyLeaveAction } from "@/backend/actions/dashboard/parent/leaves/actions";
 
 export default function ApplyLeaveForm({ studentId }: { studentId: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);

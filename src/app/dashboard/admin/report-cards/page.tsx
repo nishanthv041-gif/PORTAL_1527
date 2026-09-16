@@ -1,9 +1,9 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { prisma } from "@/lib/prisma";
+import { authOptions } from "@/backend/auth/authOptions";
+import { prisma } from "@/backend/db/prisma";
 import { Exam, Subject, Mark } from "@prisma/client";
 import ClassSelector from "../ClassSelector";
-import ReportCardsClient from "@/components/ReportCards/ReportCardsClient";
+import ReportCardsClient from "@/frontend/components/ReportCards/ReportCardsClient";
 
 export default async function AdminReportCardsPage({
   searchParams

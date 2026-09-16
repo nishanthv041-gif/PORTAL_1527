@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { submitComplaintAction } from "./actions";
+import { submitComplaintAction } from "@/backend/actions/dashboard/parent/complaints/actions";
 
 export default function CreateComplaintForm({ studentId, teacherId }: { studentId: string, teacherId: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);

@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/backend/auth/authOptions";
 import Link from "next/link";
 import styles from "../../dashboard.module.css";
 import { GraduationCap, Users } from "lucide-react";

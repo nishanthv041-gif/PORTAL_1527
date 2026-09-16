@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Search, Eye, CheckCircle2, XCircle, MoreVertical, Trash2, Download } from "lucide-react";
 import Link from "next/link";
-import { deactivateParent, activateParent, deleteParent } from "./actions";
+import { deactivateParent, activateParent, deleteParent } from "@/backend/actions/dashboard/admin/parents/actions";
 import { Parent, User, ParentStudent, Student, Class } from "@prisma/client";
 
 type ParentWithRelations = Parent & {

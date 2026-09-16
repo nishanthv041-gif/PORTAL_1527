@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { saveMarks } from "./actions";
+import { saveMarks } from "@/backend/actions/dashboard/admin/exams/[id]/actions";
 
 type ClassData = {
   students: { id: string; firstName: string; lastName: string; rollNumber: string }[];

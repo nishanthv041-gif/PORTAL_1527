@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "../../../dashboard.module.css";
-import { createTeacherAction } from "../actions";
+import { createTeacherAction } from "@/backend/actions/dashboard/admin/create-roles/actions";
 import BulkUpload from "../BulkUpload";
 
 import { Subject, Class } from "@prisma/client";

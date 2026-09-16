@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { User, Briefcase } from "lucide-react";
-import { createStaffAction } from "./actions";
+import { createStaffAction } from "@/backend/actions/dashboard/admin/create-roles/staff/actions";
 import { useRouter } from "next/navigation";
 
 export default function CreateStaffClient() {

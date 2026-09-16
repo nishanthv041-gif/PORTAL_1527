@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, Calendar, Clock, MapPin, Link as LinkIcon, Trash2, Users } from "lucide-react";
-import { createMeetingAction, deleteMeetingAction } from "./actions";
+import { createMeetingAction, deleteMeetingAction } from "@/backend/actions/dashboard/admin/meetings/actions";
 import { Meeting, Teacher, Parent, User, Class } from "@prisma/client";
 
 type TeacherWithUser = Teacher & { user: User };

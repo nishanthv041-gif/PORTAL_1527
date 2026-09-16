@@ -1,11 +1,11 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { prisma } from "@/lib/prisma";
+import { authOptions } from "@/backend/auth/authOptions";
+import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import { Bell, CheckCircle, Clock, Trash2 } from "lucide-react";
 import MarkReadButton from "./MarkReadButton";
-import ToggleNotifications from "@/components/ToggleNotifications";
-import { toggleNotificationsEnabled, deleteNotificationAction } from "./actions";
+import ToggleNotifications from "@/frontend/components/ToggleNotifications";
+import { toggleNotificationsEnabled, deleteNotificationAction } from "@/backend/actions/dashboard/parent/notifications/actions";
 
 export default async function ParentNotificationsPage() {
   const session = await getServerSession(authOptions);

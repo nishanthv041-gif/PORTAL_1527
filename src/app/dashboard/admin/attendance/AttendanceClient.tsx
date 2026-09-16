@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, XCircle, AlertCircle, Clock, Edit2, Save, X } from "lucide-react";
-import { adminUpdateAttendance } from "./actions";
+import { adminUpdateAttendance } from "@/backend/actions/dashboard/admin/attendance/actions";
 
 import { Class, Student, Attendance } from "@prisma/client";
 

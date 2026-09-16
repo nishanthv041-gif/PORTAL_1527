@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { recordAchievementAction } from "./actions";
+import { recordAchievementAction } from "@/backend/actions/dashboard/teacher/achievements/actions";
 
 export default function CreateAchievementForm({ students }: { students: { id: string, name: string, rollNo: string, className: string }[] }) {
   const [isSubmitting, setIsSubmitting] = useState(false);

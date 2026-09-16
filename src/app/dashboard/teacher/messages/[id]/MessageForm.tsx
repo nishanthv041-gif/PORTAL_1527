@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { sendMessage } from "./actions";
+import { sendMessage } from "@/backend/actions/dashboard/teacher/messages/[id]/actions";
 
 export default function MessageForm({ senderId, receiverId }: { senderId: string, receiverId: string }) {
   const [content, setContent] = useState("");

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, Trash2, Calendar as CalendarIcon, MapPin, Clock, Users } from "lucide-react";
-import { createTeacherEventAction, deleteTeacherEventAction } from "./actions";
+import { createTeacherEventAction, deleteTeacherEventAction } from "@/backend/actions/dashboard/teacher/calendar/actions";
 
 import { CalendarEvent } from "@prisma/client";
 

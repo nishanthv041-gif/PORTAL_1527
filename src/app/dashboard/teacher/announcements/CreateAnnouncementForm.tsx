@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createTeacherAnnouncementAction } from "./actions";
+import { createTeacherAnnouncementAction } from "@/backend/actions/dashboard/teacher/announcements/actions";
 
 export default function CreateAnnouncementForm({ classes }: { classes: { id: string, name: string, section: string }[] }) {
   const [isSubmitting, setIsSubmitting] = useState(false);

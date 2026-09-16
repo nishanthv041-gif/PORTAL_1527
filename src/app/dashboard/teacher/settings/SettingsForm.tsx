@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { updateProfile } from "./actions";
+import { updateProfile } from "@/backend/actions/dashboard/teacher/settings/actions";
 
 export default function SettingsForm({ userId, name, email, phone, qualification }: { userId: string, name: string, email: string, phone: string, qualification: string }) {
   const [loading, setLoading] = useState(false);

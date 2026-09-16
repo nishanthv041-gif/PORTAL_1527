@@ -1,11 +1,11 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { prisma } from "@/lib/prisma";
+import { authOptions } from "@/backend/auth/authOptions";
+import { prisma } from "@/backend/db/prisma";
 import Link from "next/link";
 import styles from "../../../dashboard.module.css";
 import { ArrowLeft } from "lucide-react";
 import MessageForm from "./MessageForm";
-import MessageItem from "@/components/MessageItem";
+import MessageItem from "@/frontend/components/MessageItem";
 import { redirect } from "next/navigation";
 
 export default async function AdminMessageThreadPage({ params }: { params: Promise<{ id: string }> }) {

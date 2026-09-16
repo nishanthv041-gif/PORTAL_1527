@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Edit2, X } from "lucide-react";
-import { editClassAction } from "./classes/actions";
+import { editClassAction } from "@/backend/actions/dashboard/admin/classes/actions";
 
 const CLASS_OPTIONS = Array.from({ length: 10 }, (_, i) => `Class ${i + 1}`);
 const SECTION_OPTIONS = ["A", "B", "C", "D"];

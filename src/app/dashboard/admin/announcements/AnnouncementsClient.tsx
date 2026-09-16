@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Megaphone, Clock, Trash2, Users, BookOpen, GraduationCap, Link as LinkIcon, AlertCircle, Edit2 } from "lucide-react";
-import { createAnnouncementAction, deleteAnnouncementAction } from "./actions";
+import { createAnnouncementAction, deleteAnnouncementAction } from "@/backend/actions/dashboard/admin/announcements/actions";
 import { Announcement, Class } from "@prisma/client";
 
 export default function AnnouncementsClient({ announcements, classes }: { announcements: Announcement[], classes: Class[] }) {

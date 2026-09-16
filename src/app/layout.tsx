@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { ThemeProvider } from "@/components/ThemeProvider";
+import { authOptions } from "@/backend/auth/authOptions";
+import { ThemeProvider } from "@/frontend/components/ThemeProvider";
 import Script from "next/script";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -44,15 +44,10 @@ export default async function RootLayout({
   let initialTheme = "light";
   let isAuthenticated = false;
 
-  try {
-    const session = await getServerSession(authOptions);
-    if (session?.user) {
-      isAuthenticated = true;
-      initialTheme = session.user.theme ?? "light";
-    }
-  } catch {
-    // getServerSession can fail in some edge-cases (e.g. during build).
-    // Fall back to "light".
+  const session = await getServerSession(authOptions);
+  if (session?.user) {
+    isAuthenticated = true;
+    initialTheme = session.user.theme ?? "light";
   }
 
   return (

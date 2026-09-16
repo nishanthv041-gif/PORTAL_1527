@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { saveBulkAttendance } from "./actions";
+import { saveBulkAttendance } from "@/backend/actions/dashboard/teacher/attendance/actions";
 
 type ClassData = {
   id: string;

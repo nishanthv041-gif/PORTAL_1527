@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/backend/db/prisma";
 import ParentStudentWizard from "./ParentStudentWizard";
 
 export default async function CreateParentPage() {

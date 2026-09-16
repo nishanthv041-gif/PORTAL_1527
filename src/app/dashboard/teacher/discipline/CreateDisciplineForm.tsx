@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { logDisciplineAction } from "./actions";
+import { logDisciplineAction } from "@/backend/actions/dashboard/teacher/discipline/actions";
 
 export default function CreateDisciplineForm({ students }: { students: { id: string, name: string, rollNo: string, className: string }[] }) {
   const [isSubmitting, setIsSubmitting] = useState(false);

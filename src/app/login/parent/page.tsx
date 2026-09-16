@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { GraduationCap, ArrowLeft } from "lucide-react";
 import styles from "../login.module.css";
-import ThemeToggle from "@/components/ThemeToggle";
+import ThemeToggle from "@/frontend/components/ThemeToggle";
 
 export default function ParentLoginPage() {
   const router = useRouter();
@@ -16,8 +16,8 @@ export default function ParentLoginPage() {
   const [loading, setLoading] = useState(false);
 
   const handleAutofill = () => {
-    setEmail("stanley.mitchell@gmail.com");
-    setPassword("Parent@123");
+    setEmail("poorvika1527@gmail.com");
+    setPassword("poorvika@2715");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

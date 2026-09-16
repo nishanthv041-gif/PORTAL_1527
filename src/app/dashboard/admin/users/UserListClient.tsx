@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Shield, CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
-import { deactivateUser, activateAllUsers, deleteUser } from "./actions";
+import { deactivateUser, activateAllUsers, deleteUser } from "@/backend/actions/dashboard/admin/users/actions";
 import { User, Teacher, Parent } from "@prisma/client";
 
 import { MoreVertical, Eye, Trash2 } from "lucide-react";

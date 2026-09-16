@@ -1,7 +1,7 @@
 "use client";
 
 import { Award, User, Calendar, CheckCircle, XCircle } from "lucide-react";
-import { toggleAchievementVerificationAction } from "./actions";
+import { toggleAchievementVerificationAction } from "@/backend/actions/dashboard/admin/achievements/actions";
 import { Achievement, Student, Class } from "@prisma/client";
 
 type AchievementWithStudent = Achievement & {

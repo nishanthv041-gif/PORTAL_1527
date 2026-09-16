@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, ShieldAlert, Calendar, User, FileText, Trash2, ShieldCheck, Shield } from "lucide-react";
-import { createDisciplineRecordAction, deleteDisciplineRecordAction } from "./actions";
+import { createDisciplineRecordAction, deleteDisciplineRecordAction } from "@/backend/actions/dashboard/admin/discipline/actions";
 import { DisciplineRecord, Student, Class } from "@prisma/client";
 
 type StudentWithClass = Student & { class: Class | null };

@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "../api/auth/[...nextauth]/route";
+import { authOptions } from "@/backend/auth/authOptions";
 import { redirect } from "next/navigation";
 
 export default async function DashboardRoot() {

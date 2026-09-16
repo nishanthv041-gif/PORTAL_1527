@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Check } from "lucide-react";
-import { markNotificationReadAction } from "./actions";
+import { markNotificationReadAction } from "@/backend/actions/dashboard/teacher/notifications/actions";
 
 export default function MarkReadButton({ notificationId }: { notificationId: string }) {
   const [isMarking, setIsMarking] = useState(false);

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Megaphone, Clock, AlertCircle, Link as LinkIcon, Edit2, Trash2, BookOpen, Users, GraduationCap } from "lucide-react";
 import { Announcement, Class } from "@prisma/client";
-import { createTeacherAnnouncementAction } from "./actions";
+import { createTeacherAnnouncementAction } from "@/backend/actions/dashboard/teacher/announcements/actions";
 
 export default function TeacherAnnouncementsClient({
   announcements,

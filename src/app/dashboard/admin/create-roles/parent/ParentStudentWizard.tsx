@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "../../../dashboard.module.css";
-import { createParentStudentAction } from "../actions";
+import { createParentStudentAction } from "@/backend/actions/dashboard/admin/create-roles/actions";
 import BulkUpload from "../BulkUpload";
 
 export default function ParentStudentWizard({ classes }: { classes: { id: string; name: string; section: string }[] }) {

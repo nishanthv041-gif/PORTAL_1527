@@ -2,8 +2,8 @@
 
 import { Bell, Info, AlertTriangle, CheckCircle, XCircle, Clock, Trash2, CheckCheck } from "lucide-react";
 import { Notification, User } from "@prisma/client";
-import { deleteNotification, markAllNotificationsRead, toggleNotificationsEnabled } from "./actions";
-import ToggleNotifications from "@/components/ToggleNotifications";
+import { deleteNotification, markAllNotificationsRead, toggleNotificationsEnabled } from "@/backend/actions/dashboard/admin/notifications/actions";
+import ToggleNotifications from "@/frontend/components/ToggleNotifications";
 import { useRouter } from "next/navigation";
 
 type NotificationWithUser = Notification & { user: User };

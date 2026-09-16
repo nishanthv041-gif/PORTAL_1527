@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { prisma } from "@/lib/prisma";
+import { authOptions } from "@/backend/auth/authOptions";
+import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import CreateMeetingForm from "./CreateMeetingForm";
 import { Calendar, Clock, MapPin, Link as LinkIcon } from "lucide-react";

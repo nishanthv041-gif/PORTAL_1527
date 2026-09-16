@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar as CalendarIcon, Clock, Edit, Save, Trash2, X, MapPin, Coffee, Loader2, Upload, FileSpreadsheet } from "lucide-react";
-import { createTimetableSlotAction, deleteTimetableSlotAction, bulkCreateTimetableSlotsAction } from "./actions";
+import { createTimetableSlotAction, deleteTimetableSlotAction, bulkCreateTimetableSlotsAction } from "@/backend/actions/dashboard/admin/timetable/actions";
 import { Class, Timetable, Subject, Teacher, User, CalendarEvent } from "@prisma/client";
 import * as XLSX from "xlsx";
 

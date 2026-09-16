@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { GraduationCap, ArrowLeft } from "lucide-react";
 import styles from "../login.module.css";
-import ThemeToggle from "@/components/ThemeToggle";
+import ThemeToggle from "@/frontend/components/ThemeToggle";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -16,8 +16,8 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false);
 
   const handleAutofill = () => {
-    setEmail("admin@srtportal.edu");
-    setPassword("Admin@123");
+    setEmail("nishanthv041@gmail.com");
+    setPassword("Nishanth@2715");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

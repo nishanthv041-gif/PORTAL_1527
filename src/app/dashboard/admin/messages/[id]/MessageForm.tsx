@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { adminSendMessage } from "./actions";
+import { adminSendMessage } from "@/backend/actions/dashboard/admin/messages/[id]/actions";
 import { Send } from "lucide-react";
 
 export default function MessageForm({ receiverId }: { receiverId: string }) {

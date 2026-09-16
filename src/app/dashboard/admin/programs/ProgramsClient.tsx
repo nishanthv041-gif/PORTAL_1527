@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, Eye, EyeOff, Calendar as CalendarIcon, MapPin, Clock, Trash2 } from "lucide-react";
-import { createProgramAction, updateProgramStatusAction, deleteProgramAction } from "./actions";
+import { createProgramAction, updateProgramStatusAction, deleteProgramAction } from "@/backend/actions/dashboard/admin/programs/actions";
 import { CalendarEvent } from "@prisma/client";
 
 export default function ProgramsClient({ programs }: { programs: CalendarEvent[] }) {

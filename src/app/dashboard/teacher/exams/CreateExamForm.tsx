@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createExamRequest } from "./actions";
+import { createExamRequest } from "@/backend/actions/dashboard/teacher/exams/actions";
 import { Subject, Class } from "@prisma/client";
 
 export default function CreateExamForm({ 

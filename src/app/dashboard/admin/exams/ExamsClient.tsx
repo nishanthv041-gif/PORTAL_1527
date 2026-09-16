@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { Book, Eye, EyeOff, CheckCircle2, Circle, AlertTriangle } from "lucide-react";
-import { toggleExamPublishAction } from "./actions";
+import { toggleExamPublishAction } from "@/backend/actions/dashboard/admin/exams/actions";
 import { Exam, Class, Student, Subject, Mark, ExamRequest, Teacher, User } from "@prisma/client";
 import { BarChart, Bar, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { acceptExamRequest, declineExamRequest } from "./actions";
+import { acceptExamRequest, declineExamRequest } from "@/backend/actions/dashboard/admin/exams/actions";
 
 type ExamWithRelations = Exam & {
   class: Class & { students: Student[], subjects: Subject[] };

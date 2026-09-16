@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { BookOpen, Users, TrendingUp, Plus, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
-import { createSubjectAction } from "./actions";
+import { createSubjectAction } from "@/backend/actions/dashboard/admin/subjects/actions";
 import { Subject, Class, Teacher, User, Student, Mark } from "@prisma/client";
 
 type TeacherWithUser = Teacher & { user: User };
@@ -236,7 +236,7 @@ export default function SubjectListClient({ subjects, classes, teachers }: { sub
                     if (confirm("Are you sure you want to deactivate this subject?")) {
                       for (const subj of instances) {
                         if (subj.isActive) {
-                          const { deactivateSubject } = await import("./actions");
+                          const { deactivateSubject } = await import("@/backend/actions/dashboard/admin/subjects/actions");
                           const res = await deactivateSubject(subj.id);
                           if (res?.error) {
                             alert(res.error);
@@ -254,7 +254,7 @@ export default function SubjectListClient({ subjects, classes, teachers }: { sub
                   onClick={async () => {
                     if (confirm("WARNING: This will permanently delete this subject. This cannot be undone.")) {
                       for (const subj of instances) {
-                        const { deleteSubject } = await import("./actions");
+                        const { deleteSubject } = await import("@/backend/actions/dashboard/admin/subjects/actions");
                         const res = await deleteSubject(subj.id);
                         if (res.error) {
                           alert(res.error);

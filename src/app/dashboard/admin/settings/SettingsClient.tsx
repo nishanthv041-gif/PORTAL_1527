@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Save, Plus, Trash2, Settings2, Globe, Shield, Mail } from "lucide-react";
-import { saveSystemSettingAction, deleteSystemSettingAction } from "./actions";
+import { saveSystemSettingAction, deleteSystemSettingAction } from "@/backend/actions/dashboard/admin/settings/actions";
 import { SystemSetting } from "@prisma/client";
 
 export default function SettingsClient({ initialSettings }: { initialSettings: SystemSetting[] }) {

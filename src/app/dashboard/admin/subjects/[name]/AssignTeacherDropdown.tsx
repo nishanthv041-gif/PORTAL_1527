@@ -1,6 +1,6 @@
 "use client";
 
-import { assignSubjectTeacher } from "../actions";
+import { assignSubjectTeacher } from "@/backend/actions/dashboard/admin/subjects/actions";
 
 export default function AssignTeacherDropdown({ 
   subjectId, 
