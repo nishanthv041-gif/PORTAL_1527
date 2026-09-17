@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   // Check if a session cookie exists in the request
   const hasSessionCookie = 
     req.cookies.has("next-auth.session-token") || 
