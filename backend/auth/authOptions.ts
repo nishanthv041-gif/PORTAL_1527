@@ -4,6 +4,13 @@ import { prisma } from "@/backend/db/prisma";
 import bcrypt from "bcryptjs";
 import { loginRateLimiter } from "@/backend/lib/rate-limit";
 
+if (!process.env.NEXTAUTH_SECRET) {
+  throw new Error("Missing NEXTAUTH_SECRET environment variable. Please define it in production.");
+}
+if (!process.env.NEXTAUTH_URL && !process.env.VERCEL_URL && process.env.NODE_ENV === "production") {
+  throw new Error("Missing NEXTAUTH_URL environment variable. Please define it in production (e.g., https://your-render-app.onrender.com).");
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
