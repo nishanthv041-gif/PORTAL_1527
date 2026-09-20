@@ -2,7 +2,7 @@ import NextAuth, { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/backend/db/prisma";
 import bcrypt from "bcryptjs";
-import { loginRateLimiter } from "@/backend/utils/rate-limit";
+import { loginRateLimiter } from "@/backend/lib/rate-limit";
 
 export const authOptions: NextAuthOptions = {
   providers: [
