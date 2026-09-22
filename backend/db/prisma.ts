@@ -1,15 +1,19 @@
 import { PrismaClient } from '@prisma/client';
+import { env } from '@/backend/config/env';
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("Missing DATABASE_URL environment variable. Please define it in production.");
-}
+const globalForPrisma = global as unknown as { prisma?: PrismaClient };
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
-
-export const prisma =
-  globalForPrisma.prisma ||
-  new PrismaClient({
-    log: ['query'],
-  });
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+export const prisma = new Proxy({} as PrismaClient, {
+  get(target, prop) {
+    if (!globalForPrisma.prisma) {
+      // The getter inside env.DATABASE_URL will throw if missing
+      const url = env.DATABASE_URL;
+      
+      globalForPrisma.prisma = new PrismaClient({
+        log: ['query'],
+      });
+    }
+    const value = (globalForPrisma.prisma as any)[prop];
+    return typeof value === 'function' ? value.bind(globalForPrisma.prisma) : value;
+  }
+});

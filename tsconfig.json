@@ -22,7 +22,7 @@
       "@/backend/*": ["./backend/*"],
       "@/frontend/*": ["./frontend/*"],
       "@/types/*": ["./frontend/types/*"],
-      "@/*": ["./src/*"]
+      "@/app/*": ["./app/*"]
     }
   },
   "include": [

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Send, CheckCircle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { sendReportCardToParentAction } from "@/backend/services/reportCardActions";
+import { sendReportCardToParentAction } from "@/backend/lib/services/reportCardActions";
 
 type SubjectData = {
   id: string;

@@ -3,16 +3,12 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/backend/db/prisma";
 import bcrypt from "bcryptjs";
 import { loginRateLimiter } from "@/backend/lib/rate-limit";
-
-if (!process.env.NEXTAUTH_SECRET) {
-  throw new Error("Missing NEXTAUTH_SECRET environment variable. Please define it in production.");
-}
-if (!process.env.NEXTAUTH_URL && !process.env.VERCEL_URL && process.env.NODE_ENV === "production") {
-  throw new Error("Missing NEXTAUTH_URL environment variable. Please define it in production (e.g., https://your-render-app.onrender.com).");
-}
+import { googleProviderConfig, verifyGoogleSignIn, populateGoogleJwt } from "./providers/google";
+import { env } from "@/backend/config/env";
 
 export const authOptions: NextAuthOptions = {
   providers: [
+    googleProviderConfig,
     CredentialsProvider({
       name: "Credentials",
       credentials: {
@@ -75,7 +71,16 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async signIn({ user, account, profile }) {
+      if (account?.provider === "google") {
+        return await verifyGoogleSignIn(user, account);
+      }
+      return true;
+    },
+    async jwt({ token, user, account }) {
+      if (account?.provider === "google") {
+        return await populateGoogleJwt(token, user, account);
+      }
       if (user) {
         token.role = user.role;
         token.id = user.id;
@@ -100,7 +105,7 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  get secret() { return env.NEXTAUTH_SECRET; },
   logger: {
     error(code, metadata) {
       if (code === "JWT_SESSION_ERROR") {
