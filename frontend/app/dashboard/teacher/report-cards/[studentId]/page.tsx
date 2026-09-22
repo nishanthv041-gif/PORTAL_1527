@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import IndividualReportCardClient from "@/frontend/components/ReportCards/IndividualReportCardClient";
 
@@ -8,7 +8,7 @@ export default async function TeacherIndividualReportCardPage({
 }: { 
   params: Promise<{ studentId: string }> 
 }) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session || session.user.role !== "TEACHER") return null;
 
   const { studentId } = await params;

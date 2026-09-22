@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { BookOpen, Users, ShieldAlert, GraduationCap } from "lucide-react";
@@ -12,7 +12,7 @@ interface HomeProps {
 }
 
 export default async function Home({ searchParams }: HomeProps) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
 
   if (session) {
     switch (session.user.role) {

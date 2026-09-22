@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { ThemeProvider } from "@/frontend/components/ThemeProvider";
 import Script from "next/script";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -44,7 +44,7 @@ export default async function RootLayout({
   let initialTheme = "light";
   let isAuthenticated = false;
 
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (session?.user) {
     isAuthenticated = true;
     initialTheme = session.user.theme ?? "light";

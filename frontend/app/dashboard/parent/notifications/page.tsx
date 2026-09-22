@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import { Bell, CheckCircle, Clock, Trash2 } from "lucide-react";
@@ -8,7 +8,7 @@ import ToggleNotifications from "@/frontend/components/ToggleNotifications";
 import { toggleNotificationsEnabled, deleteNotificationAction } from "@/backend/api/actions/dashboard/parent/notifications/actions";
 
 export default async function ParentNotificationsPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
   const dbUser = await prisma.user.findUnique({

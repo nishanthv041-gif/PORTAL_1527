@@ -1,11 +1,11 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import TeacherComplaintsClient from "./TeacherComplaintsClient";
 
 export default async function TeacherComplaintsPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
   const teacher = await prisma.teacher.findUnique({

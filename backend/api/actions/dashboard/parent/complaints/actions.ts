@@ -3,11 +3,11 @@
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 
 export async function submitComplaintAction(formData: FormData) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(getAuthOptions());
     if (!session) return { error: "Unauthorized" };
 
     const studentId = formData.get("studentId") as string;

@@ -1,12 +1,12 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import Link from "next/link";
 import { MessageSquare } from "lucide-react";
 
 export default async function AdminMessagesPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session || session.user.role !== 'ADMIN') return null;
 
   const teachers = await prisma.user.findMany({

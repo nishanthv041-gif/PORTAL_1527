@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import Link from "next/link";
 import styles from "../../../dashboard.module.css";
@@ -8,7 +8,7 @@ import GradeForm from "./GradeForm";
 
 export default async function TeacherAssignmentDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
   const assignment = await prisma.assignment.findUnique({

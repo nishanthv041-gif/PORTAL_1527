@@ -1,11 +1,11 @@
 "use server";
 
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 
 export async function sendReportCardToParentAction(studentId: string) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session || (session.user.role !== "ADMIN" && session.user.role !== "TEACHER")) {
     return { success: false, error: "Unauthorized" };
   }

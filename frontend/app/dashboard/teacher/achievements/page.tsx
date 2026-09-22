@@ -1,12 +1,12 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import CreateAchievementForm from "./CreateAchievementForm";
 import { Award, User, Calendar, CheckCircle, Clock } from "lucide-react";
 
 export default async function TeacherAchievementsPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
   const teacher = await prisma.teacher.findUnique({

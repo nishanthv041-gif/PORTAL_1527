@@ -3,11 +3,11 @@
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 
 export async function createProgramAction(formData: FormData) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
     const title = formData.get("title") as string;
@@ -66,7 +66,7 @@ export async function updateProgramStatusAction(id: string, isPublished: boolean
 
 export async function deleteProgramAction(id: string) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
     await prisma.calendarEvent.delete({ where: { id } });

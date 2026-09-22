@@ -1,11 +1,11 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import { Megaphone, Clock, AlertCircle, Link as LinkIcon } from "lucide-react";
 
 export default async function ParentAnnouncementsPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session || session.user.role !== 'PARENT') return null;
 
   // Find parent's children to get their class IDs

@@ -3,11 +3,11 @@
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 
 export async function createTeacherEventAction(formData: FormData) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'TEACHER') {
       return { error: "Unauthorized" };
     }
@@ -64,7 +64,7 @@ export async function createTeacherEventAction(formData: FormData) {
 
 export async function deleteTeacherEventAction(id: string) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'TEACHER') {
       return { error: "Unauthorized" };
     }

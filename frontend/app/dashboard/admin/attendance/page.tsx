@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { Student, Attendance } from "@prisma/client";
 import styles from "../../dashboard.module.css";
@@ -10,7 +10,7 @@ export default async function AdminAttendancePage({
 }: {
   searchParams: Promise<{ classId?: string; date?: string }>;
 }) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session || session.user.role !== 'ADMIN') return null;
 
   const resolvedSearchParams = await searchParams;

@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import ChildSwitcher from "../ChildSwitcher";
@@ -11,7 +11,7 @@ export default async function ParentDisciplinePage({
   searchParams: Promise<{ childId?: string }>
 }) {
   const resolvedSearchParams = await searchParams;
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
   const parent = await prisma.parent.findUnique({

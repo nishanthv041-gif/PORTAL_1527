@@ -1,12 +1,12 @@
 "use server";
 
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 
 export async function adminSendMessage(receiverId: string, content: string) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   
   if (!session || session.user.role !== 'ADMIN') {
     return { error: "Unauthorized" };

@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import TimetableClient from "./TimetableClient";
@@ -13,7 +13,7 @@ export default async function AdminTimetablePage({
 }: {
   searchParams: Promise<{ classId?: string; weekOf?: string }>;
 }) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session || session.user.role !== 'ADMIN') return null;
 
   const resolvedSearchParams = await searchParams;

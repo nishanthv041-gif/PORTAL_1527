@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import Link from "next/link";
 import styles from "../../dashboard.module.css";
@@ -7,7 +7,7 @@ import { BookOpen, Calendar as CalendarIcon } from "lucide-react";
 import CreateExamForm from "./CreateExamForm";
 
 export default async function TeacherExamsPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
   const teacher = await prisma.teacher.findUnique({

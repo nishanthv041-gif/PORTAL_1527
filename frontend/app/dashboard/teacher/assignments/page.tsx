@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import Link from "next/link";
 import styles from "../../dashboard.module.css";
@@ -7,7 +7,7 @@ import { Calendar as CalendarIcon, Edit3 } from "lucide-react";
 import CreateAssignmentForm from "./CreateAssignmentForm";
 
 export default async function TeacherAssignmentsPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
   const teacher = await prisma.teacher.findUnique({

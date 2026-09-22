@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { Exam, Subject, Mark } from "@prisma/client";
 import ClassSelector from "../../admin/ClassSelector";
@@ -10,7 +10,7 @@ export default async function TeacherReportCardsPage({
 }: {
   searchParams: Promise<{ classId?: string }>
 }) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session || session.user.role !== "TEACHER") return null;
 
   const resolvedSearchParams = await searchParams;

@@ -3,11 +3,11 @@
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 
 export async function updateComplaintStatusAction(id: string, status: string, remarks: string) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
     await prisma.complaint.update({
@@ -27,7 +27,7 @@ export async function updateComplaintStatusAction(id: string, status: string, re
 
 export async function replyToComplaintAction(complaintId: string, replyMessage: string, recipientUserId: string) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
     const recipient = await prisma.user.findUnique({

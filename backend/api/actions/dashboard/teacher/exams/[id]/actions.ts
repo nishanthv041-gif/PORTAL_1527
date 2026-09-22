@@ -1,7 +1,7 @@
 "use server";
 
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 
@@ -10,7 +10,7 @@ export async function saveMarks(
   subjectId: string,
   marks: { studentId: string; score: number; maxScore: number; remarks: string | null }[]
 ) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(getAuthOptions());
   if (!session) return { success: false, error: "Unauthorized" };
 
   try {

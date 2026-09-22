@@ -3,11 +3,11 @@
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/backend/auth/authOptions";
+import { getAuthOptions } from "@/backend/auth/authOptions";
 
 export async function saveSystemSettingAction(formData: FormData) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
     const key = formData.get("key") as string;
@@ -36,7 +36,7 @@ export async function saveSystemSettingAction(formData: FormData) {
 
 export async function deleteSystemSettingAction(key: string) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
     await prisma.systemSetting.delete({ where: { key } });

@@ -6,7 +6,8 @@ import { loginRateLimiter } from "@/backend/lib/rate-limit";
 import { googleProviderConfig, verifyGoogleSignIn, populateGoogleJwt } from "./providers/google";
 import { env } from "@/backend/config/env";
 
-export const authOptions: NextAuthOptions = {
+export function getAuthOptions(): NextAuthOptions {
+  return {
   providers: [
     googleProviderConfig,
     CredentialsProvider({
@@ -105,7 +106,7 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
   },
-  get secret() { return env.NEXTAUTH_SECRET; },
+  secret: process.env.NEXTAUTH_SECRET,
   logger: {
     error(code, metadata) {
       if (code === "JWT_SESSION_ERROR") {
@@ -116,4 +117,5 @@ export const authOptions: NextAuthOptions = {
     },
   },
 };
+}
 
