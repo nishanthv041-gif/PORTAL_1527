@@ -8,10 +8,11 @@ import ThemeToggle from "@/frontend/components/ThemeToggle";
 import GoogleSignInButton from "@/frontend/components/GoogleSignInButton";
 
 interface HomeProps {
-  searchParams: { error?: string };
+  searchParams: Promise<{ error?: string }>;
 }
 
-export default async function Home({ searchParams }: HomeProps) {
+export default async function Home(props: HomeProps) {
+  const searchParams = await props.searchParams;
   const session = await getServerSession(getAuthOptions());
 
   if (session) {

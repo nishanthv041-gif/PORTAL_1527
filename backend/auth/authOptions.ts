@@ -1,10 +1,9 @@
-import NextAuth, { NextAuthOptions } from "next-auth";
+import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/backend/db/prisma";
 import bcrypt from "bcryptjs";
 import { loginRateLimiter } from "@/backend/lib/rate-limit";
 import { googleProviderConfig, verifyGoogleSignIn, populateGoogleJwt } from "./providers/google";
-import { env } from "@/backend/config/env";
 
 export function getAuthOptions(): NextAuthOptions {
   return {
@@ -72,7 +71,7 @@ export function getAuthOptions(): NextAuthOptions {
     }),
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       if (account?.provider === "google") {
         return await verifyGoogleSignIn(user, account);
       }

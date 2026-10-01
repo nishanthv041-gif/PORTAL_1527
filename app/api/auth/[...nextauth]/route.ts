@@ -1,1 +1,1 @@
-export * from "@/frontend/app/api/auth/[...nextauth]/route";
+export { GET, POST } from "@/frontend/app/api/auth/[...nextauth]/route";

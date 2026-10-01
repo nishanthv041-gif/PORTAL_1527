@@ -15,6 +15,9 @@ const cspHeader = `
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  turbopack: {
+    root: __dirname,
+  },
   async headers() {
     return [
       {

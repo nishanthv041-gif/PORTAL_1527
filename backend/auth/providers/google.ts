@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import GoogleProvider from "next-auth/providers/google";
 import { prisma } from "@/backend/db/prisma";
 import { env } from "@/backend/config/env";

@@ -6,6 +6,7 @@ export async function GET() {
 
   const check = (key: keyof typeof env) => {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const _ = env[key];
     } catch {
       missing.push(key);
