@@ -51,21 +51,25 @@ export async function verifyGoogleSignIn(user: any, account: any) {
 
 export async function populateGoogleJwt(token: any, user: any, account: any) {
   if (account?.provider === "google" && user?.email) {
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email },
-      select: {
-        id: true,
-        role: true,
-        theme: true,
-        notificationsEnabled: true,
-      },
-    });
+    try {
+      const dbUser = await prisma.user.findUnique({
+        where: { email: user.email },
+        select: {
+          id: true,
+          role: true,
+          theme: true,
+          notificationsEnabled: true,
+        },
+      });
 
-    if (dbUser) {
-      token.id = dbUser.id;
-      token.role = dbUser.role;
-      token.theme = dbUser.theme;
-      token.notificationsEnabled = dbUser.notificationsEnabled;
+      if (dbUser) {
+        token.id = dbUser.id;
+        token.role = dbUser.role;
+        token.theme = dbUser.theme;
+        token.notificationsEnabled = dbUser.notificationsEnabled;
+      }
+    } catch (error) {
+      console.error("[GoogleAuth JWT] Prisma error:", error);
     }
   }
   return token;
