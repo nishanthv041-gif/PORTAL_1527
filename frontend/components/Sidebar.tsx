@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import styles from "./Sidebar.module.css";
 import { 
   Menu,
@@ -34,6 +34,14 @@ import {
 export default function Sidebar({ role }: { role: string }) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  useEffect(() => {
+    // Close mobile menu on route change
+    const checkbox = document.getElementById("mobile-menu-toggle") as HTMLInputElement | null;
+    if (checkbox && checkbox.checked) {
+      checkbox.checked = false;
+    }
+  }, [pathname]);
 
   const adminLinks = [
     { href: "/dashboard/admin", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
