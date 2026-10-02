@@ -6,6 +6,11 @@ import { env } from "@/backend/config/env";
 export const googleProviderConfig = GoogleProvider({
   get clientId() { return env.GOOGLE_CLIENT_ID; },
   get clientSecret() { return env.GOOGLE_CLIENT_SECRET; },
+  authorization: {
+    params: {
+      prompt: "select_account",
+    },
+  },
 });
 
 export async function verifyGoogleSignIn(user: any, account: any) {
