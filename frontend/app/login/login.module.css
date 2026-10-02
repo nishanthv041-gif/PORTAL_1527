@@ -11,6 +11,7 @@
   min-height: 100vh;
   background-color: var(--background);
   transition: background-color 0.2s ease;
+  padding: 1.5rem;
 }
 
 .card {
@@ -24,6 +25,12 @@
   transition:
     background-color 0.2s ease,
     border-color 0.2s ease;
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 1.5rem;
+  }
 }
 
 .headerRow {

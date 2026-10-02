@@ -4,15 +4,83 @@
   background-color: var(--background);
 }
 
+.mobileMenuToggle {
+  display: none;
+}
+
 .mainContent {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+}
+
+.topbarContainer {
+  position: relative;
+  z-index: 20;
+}
+
+.hamburger {
+  display: none;
+  cursor: pointer;
+  color: var(--foreground);
+}
+
+.menuOverlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 40;
+}
+
+.sidebarWrapper {
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
 }
 
 .pageContent {
   flex: 1;
   padding: 2rem;
   overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .hamburger {
+    display: flex;
+    position: absolute;
+    top: 15px;
+    left: 1rem;
+    z-index: 30;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+  }
+
+  .sidebarWrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
+  .mobileMenuToggle:checked ~ .sidebarWrapper {
+    transform: translateX(0);
+  }
+
+  .mobileMenuToggle:checked ~ .mainContent .menuOverlay {
+    display: block;
+  }
+
+  .pageContent {
+    padding: 1rem;
+  }
 }
