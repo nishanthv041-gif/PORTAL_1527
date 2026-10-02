@@ -21,6 +21,23 @@ export async function deactivateUser(id: string) {
   revalidatePath('/dashboard/admin/users');
 }
 
+export async function activateUser(id: string) {
+  await prisma.user.update({
+    where: { id },
+    data: { status: 'ACTIVE' }
+  });
+  
+  const user = await prisma.user.findUnique({ where: { id }, include: { teacher: true, parent: true } });
+  if (user?.teacher) {
+    await prisma.teacher.update({ where: { id: user.teacher.id }, data: { isActive: true } });
+  }
+  if (user?.parent) {
+    await prisma.parent.update({ where: { id: user.parent.id }, data: { isActive: true } });
+  }
+
+  revalidatePath('/dashboard/admin/users');
+}
+
 export async function activateAllUsers() {
   await prisma.user.updateMany({
     where: { status: 'INACTIVE' },
@@ -56,16 +73,17 @@ export async function deleteUser(id: string) {
 
     // Dependency blocks
     if (user.teacher) {
-      if (
-        user.teacher.classTeacherOf ||
-        user.teacher.classes.length > 0 ||
-        user.teacher.subjects.length > 0 ||
-        user.teacher.examRequests.length > 0 ||
-        user.teacher.complaints.length > 0 ||
-        user.teacher.assignments.length > 0
-      ) {
-        throw new Error("Cannot delete Teacher with active assignments or history (classes, subjects, exams, complaints). Please reassign them or use Deactivate instead.");
-      }
+      // Disconnect from classes and subjects
+      await prisma.class.updateMany({ where: { classTeacherId: user.teacher.id }, data: { classTeacherId: null } });
+      await prisma.class.updateMany({ where: { teacherId: user.teacher.id }, data: { teacherId: null } });
+      await prisma.subject.updateMany({ where: { teacherId: user.teacher.id }, data: { teacherId: null } });
+
+      // Delete nested dependencies
+      await prisma.submission.deleteMany({ where: { assignment: { teacherId: user.teacher.id } } });
+      await prisma.assignment.deleteMany({ where: { teacherId: user.teacher.id } });
+      await prisma.complaint.deleteMany({ where: { teacherId: user.teacher.id } });
+      await prisma.examRequest.deleteMany({ where: { teacherId: user.teacher.id } });
+
       await prisma.teacher.delete({ where: { id: user.teacher.id } });
     }
 

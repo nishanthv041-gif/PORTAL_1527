@@ -43,6 +43,16 @@ export default async function CreateRolesPage() {
             <p style={{ color: 'var(--text-secondary)' }}>Register administrative, support, and non-teaching personnel.</p>
           </div>
         </Link>
+
+        <Link href="/dashboard/admin/create-roles/admin" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', transition: 'transform 0.2s, box-shadow 0.2s', cursor: 'pointer' }} className="hover:shadow-lg hover:-translate-y-1">
+            <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.1)', color: "var(--danger)", display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
+              <Users size={40} />
+            </div>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>Admin</h2>
+            <p style={{ color: 'var(--text-secondary)' }}>Add another Admin using their Gmail ID for Google OAuth access.</p>
+          </div>
+        </Link>
       </div>
     </div>
   );

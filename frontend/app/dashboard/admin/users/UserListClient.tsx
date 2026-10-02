@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Shield, CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
-import { deactivateUser, activateAllUsers, deleteUser } from "@/backend/api/actions/dashboard/admin/users/actions";
+import { deactivateUser, activateUser, activateAllUsers, deleteUser } from "@/backend/api/actions/dashboard/admin/users/actions";
 import { User, Teacher, Parent } from "@prisma/client";
 
 import { MoreVertical, Eye, Trash2 } from "lucide-react";
@@ -179,6 +179,18 @@ export default function UserListClient({ users }: { users: UserWithRelations[] }
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--warning)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
                         >
                           <XCircle size={16} /> Deactivate
+                        </button>
+                      )}
+                      {user.status === 'INACTIVE' && user.role !== 'ADMIN' && (
+                        <button 
+                          onClick={async () => {
+                            await activateUser(user.id);
+                            setOpenMenuId(null);
+                            router.refresh();
+                          }}
+                          style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--success)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
+                        >
+                          <CheckCircle2 size={16} /> Activate
                         </button>
                       )}
                       {user.role !== 'ADMIN' && (
