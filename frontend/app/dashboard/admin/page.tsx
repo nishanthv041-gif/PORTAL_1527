@@ -189,7 +189,7 @@ export default async function AdminDashboardPage({
         </Link>
       </div>
 
-      <div style={{ marginTop: "2rem", display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: "1rem" }}>
+      <div style={{ marginTop: "2rem", display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'center', marginBottom: "1rem" }}>
         <h2 style={{ fontSize: "1.25rem", fontWeight: 600, margin: 0 }}>Class Overview</h2>
         {selectedClassData && (
           <EditClassModal classData={selectedClassData} teachers={teachersData} />
@@ -227,7 +227,7 @@ export default async function AdminDashboardPage({
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
+          <div className={styles.chartsContainer}>
             {/* Class Teacher Card */}
             {selectedClassData.teacher && (
               <div style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
@@ -235,7 +235,7 @@ export default async function AdminDashboardPage({
                   <Briefcase size={20} className="text-indigo-500" />
                   Class Teacher Profile
                 </h3>
-                <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'center' }}>
                   <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--primary-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', color: 'var(--primary)' }}>
                     {selectedClassData.teacher.user.name.charAt(0)}
                   </div>
