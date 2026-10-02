@@ -16,8 +16,13 @@ export async function verifyGoogleSignIn(user: any, account: any) {
 
     let dbUser;
     try {
-      dbUser = await prisma.user.findUnique({
-        where: { email: user.email },
+      dbUser = await prisma.user.findFirst({
+        where: { 
+          OR: [
+            { email: user.email },
+            { googleEmail: user.email }
+          ]
+        },
       });
     } catch (error) {
       console.error("[GoogleAuth] Prisma error:", error);
@@ -52,8 +57,13 @@ export async function verifyGoogleSignIn(user: any, account: any) {
 export async function populateGoogleJwt(token: any, user: any, account: any) {
   if (account?.provider === "google" && user?.email) {
     try {
-      const dbUser = await prisma.user.findUnique({
-        where: { email: user.email },
+      const dbUser = await prisma.user.findFirst({
+        where: { 
+          OR: [
+            { email: user.email },
+            { googleEmail: user.email }
+          ]
+        },
         select: {
           id: true,
           role: true,
