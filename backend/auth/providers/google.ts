@@ -16,6 +16,9 @@ export const googleProviderConfig = GoogleProvider({
 export async function verifyGoogleSignIn(user: any, account: any) {
   if (account?.provider === "google") {
     if (!user.email) {
+      await prisma.loginAttempt.create({
+        data: { email: "unknown@google", success: false, ipAddress: "Google OAuth", userAgent: "OAuth Provider" }
+      });
       return "/?error=AccessDenied: Google account has no email.";
     }
 
@@ -31,15 +34,24 @@ export async function verifyGoogleSignIn(user: any, account: any) {
       });
     } catch (error) {
       console.error("[GoogleAuth] Prisma error:", error);
+      await prisma.loginAttempt.create({
+        data: { email: user.email, success: false, ipAddress: "Google OAuth", userAgent: "OAuth Provider" }
+      });
       return "/?error=Server error verifying account.";
     }
 
     if (!dbUser) {
       console.warn(`[GoogleAuth] Rejecting unrecognized email: ${user.email}`);
+      await prisma.loginAttempt.create({
+        data: { email: user.email, success: false, ipAddress: "Google OAuth", userAgent: "OAuth Provider" }
+      });
       return "/?error=AccessDenied: Your Google account email is not registered. Please contact your administrator.";
     }
 
     if (dbUser.status === "INACTIVE") {
+      await prisma.loginAttempt.create({
+        data: { email: user.email, success: false, ipAddress: "Google OAuth", userAgent: "OAuth Provider" }
+      });
       return "/?error=AccessDenied: Your account has been deactivated. Please contact the administrator.";
     }
 
@@ -53,6 +65,10 @@ export async function verifyGoogleSignIn(user: any, account: any) {
         },
       });
     }
+
+    await prisma.loginAttempt.create({
+      data: { email: user.email, success: true, ipAddress: "Google OAuth", userAgent: "OAuth Provider" }
+    });
 
     return true; // Allow sign in
   }
