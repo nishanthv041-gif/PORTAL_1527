@@ -11,13 +11,25 @@ export async function sendReportEmailAction(email: string, ipAddress: string | n
       return { error: "SMTP_EMAIL or SMTP_PASSWORD environment variables are not set. Cannot send email." };
     }
 
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: smtpEmail,
-        pass: smtpPassword,
-      },
-    });
+    const transporter = nodemailer.createTransport(
+      process.env.SMTP_HOST
+        ? {
+            host: process.env.SMTP_HOST,
+            port: parseInt(process.env.SMTP_PORT || '587'),
+            secure: process.env.SMTP_PORT === '465',
+            auth: {
+              user: smtpEmail,
+              pass: smtpPassword,
+            },
+          }
+        : {
+            service: 'gmail',
+            auth: {
+              user: smtpEmail,
+              pass: smtpPassword,
+            },
+          }
+    );
 
     const mailOptions = {
       from: `"Portal Security" <${smtpEmail}>`,
