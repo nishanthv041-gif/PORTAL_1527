@@ -74,20 +74,31 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                   {record.userAgent || "N/A"}
                 </td>
                 <td style={{ padding: "1rem", fontSize: '0.875rem', textAlign: 'center' }}>
-                  <a 
-                    href={`mailto:${record.email}?subject=Security Notice: Login Activity on Your Portal Account&body=Hello,%0D%0A%0D%0AWe are writing to inform you of a recent login attempt on your account.%0D%0A%0D%0ATime: ${new Date(record.timestamp).toLocaleString()}%0D%0AStatus: ${record.success ? 'Success' : 'Failed'}%0D%0AIP Address: ${record.ipAddress || 'Unknown'}%0D%0A%0D%0AIf this was not you, please contact the administrator immediately.`}
+                  <button 
+                    onClick={async () => {
+                      if (confirm(`Are you sure you want to send a security alert email to ${record.email}?`)) {
+                        const { sendReportEmailAction } = await import('@/backend/api/actions/dashboard/admin/login-status/actions');
+                        const res = await sendReportEmailAction(record.email, record.ipAddress, record.timestamp, record.success);
+                        if (res?.error) {
+                          alert(res.error);
+                        } else {
+                          alert(`Security alert sent to ${record.email}!`);
+                        }
+                      }
+                    }}
                     style={{ 
                       padding: '0.4rem 0.8rem', 
                       backgroundColor: 'var(--primary-bg)', 
                       color: 'var(--primary)', 
+                      border: 'none',
                       borderRadius: '6px', 
-                      textDecoration: 'none', 
+                      cursor: 'pointer',
                       fontWeight: 500,
                       display: 'inline-block' 
                     }}
                   >
                     Report
-                  </a>
+                  </button>
                 </td>
               </tr>
             ))}
