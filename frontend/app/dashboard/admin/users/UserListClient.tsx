@@ -14,7 +14,7 @@ type UserWithRelations = User & {
   parent: Parent | null;
 };
 
-export default function UserListClient({ users }: { users: UserWithRelations[] }) {
+export default function UserListClient({ users }: { users: (UserWithRelations & { expiresAt: Date | null })[] }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -145,6 +145,11 @@ export default function UserListClient({ users }: { users: UserWithRelations[] }
                       <XCircle size={14} /> Inactive
                     </span>
                   )}
+                  {user.expiresAt && new Date(user.expiresAt) > new Date() && (
+                    <div style={{ marginTop: '4px', fontSize: '0.75rem', color: 'var(--warning)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Shield size={10} /> Deletes {new Date(user.expiresAt).toLocaleDateString()}
+                    </div>
+                  )}
                 </td>
                 <td style={{ padding: "1rem", fontSize: '0.875rem', opacity: 0.8 }}>
                   {new Date(user.createdAt).toLocaleDateString()}
@@ -191,6 +196,21 @@ export default function UserListClient({ users }: { users: UserWithRelations[] }
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--success)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
                         >
                           <CheckCircle2 size={16} /> Activate
+                        </button>
+                      )}
+                      {user.role !== 'ADMIN' && (
+                        <button 
+                          onClick={async () => {
+                            if (confirm("Are you sure you want to schedule this user for deletion in 84 hours?")) {
+                              const { setUserExpiry } = await import('@/backend/api/actions/dashboard/admin/users/actions');
+                              await setUserExpiry(user.id, 84);
+                              setOpenMenuId(null);
+                              router.refresh();
+                            }
+                          }}
+                          style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--warning)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
+                        >
+                          <Shield size={16} /> Delete in 84 hrs
                         </button>
                       )}
                       {user.role !== 'ADMIN' && (

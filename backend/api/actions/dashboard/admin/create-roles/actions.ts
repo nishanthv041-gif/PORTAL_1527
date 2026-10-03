@@ -103,6 +103,7 @@ export async function createParentStudentAction(formData: FormData) {
     const rollNumber = formData.get("rollNumber") as string;
     const admissionNo = formData.get("admissionNo") as string;
     const classId = formData.get("classId") as string;
+    const batch = formData.get("batch") as string;
 
     // Parent fields
     const parentName = formData.get("parentName") as string;
@@ -164,6 +165,7 @@ export async function createParentStudentAction(formData: FormData) {
           dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
           address: parentAddress,
           classId: classId || null,
+          batch: batch || null,
           isActive: true
         }
       });

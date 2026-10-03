@@ -21,6 +21,17 @@ export async function deactivateUser(id: string) {
   revalidatePath('/dashboard/admin/users');
 }
 
+export async function setUserExpiry(id: string, hours: number) {
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + hours);
+  
+  await prisma.user.update({
+    where: { id },
+    data: { expiresAt }
+  });
+  revalidatePath('/dashboard/admin/users');
+}
+
 export async function activateUser(id: string) {
   await prisma.user.update({
     where: { id },

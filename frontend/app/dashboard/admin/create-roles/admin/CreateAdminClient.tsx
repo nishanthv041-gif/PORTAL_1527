@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, FormEvent } from "react";
 import { Shield } from "lucide-react";
 import { createAdminAction } from "@/backend/api/actions/dashboard/admin/create-roles/actions";
 import { useRouter } from "next/navigation";
@@ -9,7 +9,7 @@ export default function CreateAdminClient() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);

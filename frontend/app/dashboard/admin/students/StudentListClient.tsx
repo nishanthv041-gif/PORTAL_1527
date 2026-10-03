@@ -20,6 +20,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [classFilter, setClassFilter] = useState("");
+  const [batchFilter, setBatchFilter] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const router = useRouter();
 
@@ -32,9 +33,12 @@ export default function StudentListClient({ students, classes }: { students: Stu
                           parentName.includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter ? (statusFilter === "ACTIVE" ? student.isActive : !student.isActive) : true;
     const matchesClass = classFilter ? student.classId === classFilter : true;
+    const matchesBatch = batchFilter ? student.batch === batchFilter : true;
     
-    return matchesSearch && matchesStatus && matchesClass;
+    return matchesSearch && matchesStatus && matchesClass && matchesBatch;
   });
+
+  const uniqueBatches = Array.from(new Set(students.map(s => s.batch).filter(Boolean)));
 
   return (
     <div style={{ marginTop: '2rem', background: 'var(--card-bg)', borderRadius: '12px', padding: '1.5rem', border: '1px solid var(--border-color)' }}>
@@ -69,6 +73,16 @@ export default function StudentListClient({ students, classes }: { students: Stu
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
           </select>
+          <select 
+            value={batchFilter}
+            onChange={(e) => setBatchFilter(e.target.value)}
+            style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
+          >
+            <option value="">All Batches</option>
+            {uniqueBatches.map(b => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -79,6 +93,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Roll No.</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Name</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Class</th>
+              <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Batch</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Parent</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Attendance</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Status</th>
@@ -105,6 +120,9 @@ export default function StudentListClient({ students, classes }: { students: Stu
                   </td>
                   <td style={{ padding: "1rem", fontSize: '0.875rem' }}>
                     {student.class ? `${student.class.name} - ${student.class.section}` : 'N/A'}
+                  </td>
+                  <td style={{ padding: "1rem", fontSize: '0.875rem' }}>
+                    {student.batch || 'N/A'}
                   </td>
                   <td style={{ padding: "1rem", fontSize: '0.875rem' }}>
                     <div style={{ opacity: 0.8 }}>{parent?.user.name || '-'}</div>

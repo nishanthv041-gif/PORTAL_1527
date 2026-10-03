@@ -23,6 +23,7 @@ model User {
   googleEmailVerified Boolean  @default(false)
   theme               String   @default("light") // light | dark
   notificationsEnabled Boolean @default(true)
+  expiresAt           DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -47,6 +48,7 @@ model Student {
   bloodGroup  String?
   address     String?
   isActive    Boolean   @default(true)
+  batch       String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
