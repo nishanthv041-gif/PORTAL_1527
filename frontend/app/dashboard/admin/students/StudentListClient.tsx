@@ -38,7 +38,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
     return matchesSearch && matchesStatus && matchesClass && matchesBatch;
   });
 
-  const uniqueBatches = Array.from(new Set(students.map(s => s.batch).filter(Boolean)));
+  const uniqueBatches = Array.from(new Set(students.map(s => s.batch).filter((b): b is string => Boolean(b))));
 
   return (
     <div style={{ marginTop: '2rem', background: 'var(--card-bg)', borderRadius: '12px', padding: '1.5rem', border: '1px solid var(--border-color)' }}>
