@@ -36,6 +36,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Status</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>IP Address</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>User Agent</th>
+              <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -71,6 +72,22 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                 </td>
                 <td style={{ padding: "1rem", fontSize: '0.875rem', opacity: 0.8, maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={record.userAgent || ""}>
                   {record.userAgent || "N/A"}
+                </td>
+                <td style={{ padding: "1rem", fontSize: '0.875rem', textAlign: 'center' }}>
+                  <a 
+                    href={`mailto:${record.email}?subject=Security Notice: Login Activity on Your Portal Account&body=Hello,%0D%0A%0D%0AWe are writing to inform you of a recent login attempt on your account.%0D%0A%0D%0ATime: ${new Date(record.timestamp).toLocaleString()}%0D%0AStatus: ${record.success ? 'Success' : 'Failed'}%0D%0AIP Address: ${record.ipAddress || 'Unknown'}%0D%0A%0D%0AIf this was not you, please contact the administrator immediately.`}
+                    style={{ 
+                      padding: '0.4rem 0.8rem', 
+                      backgroundColor: 'var(--primary-bg)', 
+                      color: 'var(--primary)', 
+                      borderRadius: '6px', 
+                      textDecoration: 'none', 
+                      fontWeight: 500,
+                      display: 'inline-block' 
+                    }}
+                  >
+                    Report
+                  </a>
                 </td>
               </tr>
             ))}

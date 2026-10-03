@@ -111,12 +111,27 @@ export async function deleteUser(id: string) {
     await prisma.message.deleteMany({ where: { OR: [{ senderId: id }, { receiverId: id }] } });
     await prisma.notification.deleteMany({ where: { userId: id } });
     await prisma.rating.deleteMany({ where: { userId: id } });
+    await prisma.auditLog.deleteMany({ where: { userId: id } });
+    await prisma.loginAttempt.deleteMany({ where: { email: user.email } });
     await prisma.user.delete({ where: { id } });
 
     revalidatePath('/dashboard/admin/users');
     return { success: true };
   } catch (error: unknown) {
-    if (error instanceof Error) return { error: error.message };
-    return { error: "Failed to delete user." };
+    console.error("Delete user error:", error);
+    if (error && typeof error === 'object' && 'code' in error) {
+      const prismaError = error as { code: string; message: string };
+      if (prismaError.code === 'P2003') {
+        return { error: "Cannot delete user due to existing related records (e.g., Audit logs, Messages, etc.)." };
+      }
+      if (prismaError.code === 'P2025') {
+        return { error: "User or related record was not found in the database. They might have been already deleted." };
+      }
+      return { error: `Database error (${prismaError.code}): ${prismaError.message.split('\n')[0]}` };
+    }
+    if (error instanceof Error) {
+      return { error: error.message };
+    }
+    return { error: "An unexpected error occurred while deleting the user." };
   }
 }
