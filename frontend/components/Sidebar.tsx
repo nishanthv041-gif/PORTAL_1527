@@ -49,6 +49,7 @@ export default function Sidebar({ role }: { role: string }) {
     { href: "/dashboard/admin/activity-centre", label: "Activity Centre", icon: <Star size={20} /> },
     { href: "/dashboard/admin/users", label: "User Management", icon: <UserCheck size={20} /> },
     { href: "/dashboard/admin/create-roles", label: "Create New Roles", icon: <UserPlus size={20} /> },
+    { href: "/dashboard/admin/login-status", label: "Log In Status", icon: <Clock size={20} /> },
     { href: "/dashboard/admin/notifications", label: "Notifications", icon: <Bell size={20} /> },
     { href: "/dashboard/admin/settings", label: "Settings", icon: <Settings size={20} /> },
   ];

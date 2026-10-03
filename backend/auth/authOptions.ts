@@ -36,12 +36,20 @@ export function getAuthOptions(): NextAuthOptions {
           throw new Error("Server error, try again");
         }
 
-        if (!user || !user.password) return null;
+        if (!user || !user.password) {
+          await prisma.loginAttempt.create({
+            data: { email: credentials.email, success: false, ipAddress: ip, userAgent: req?.headers?.['user-agent'] as string | undefined }
+          });
+          return null;
+        }
 
         const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
 
         if (isPasswordValid) {
           if (user.status === "INACTIVE") {
+            await prisma.loginAttempt.create({
+              data: { email: credentials.email, success: false, ipAddress: ip, userAgent: req?.headers?.['user-agent'] as string | undefined }
+            });
             throw new Error(
               "Your account has been deactivated. Please contact the administrator."
             );
@@ -52,10 +60,17 @@ export function getAuthOptions(): NextAuthOptions {
             credentials.expectedRole &&
             credentials.expectedRole.toUpperCase() !== user.role.toUpperCase()
           ) {
+            await prisma.loginAttempt.create({
+              data: { email: credentials.email, success: false, ipAddress: ip, userAgent: req?.headers?.['user-agent'] as string | undefined }
+            });
             throw new Error(
               `This is a ${user.role.toLowerCase()} account. Please use the correct login page.`
             );
           }
+
+          await prisma.loginAttempt.create({
+            data: { email: credentials.email, success: true, ipAddress: ip, userAgent: req?.headers?.['user-agent'] as string | undefined }
+          });
 
           return {
             id: user.id,
@@ -66,6 +81,10 @@ export function getAuthOptions(): NextAuthOptions {
             notificationsEnabled: user.notificationsEnabled,
           };
         }
+
+        await prisma.loginAttempt.create({
+          data: { email: credentials.email, success: false, ipAddress: ip, userAgent: req?.headers?.['user-agent'] as string | undefined }
+        });
         return null;
       },
     }),
