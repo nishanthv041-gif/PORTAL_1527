@@ -122,7 +122,9 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
         {!isCollapsed && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
             {schoolLogo && (
-              <img src={schoolLogo} alt={schoolName} style={{ height: '32px', width: '32px', objectFit: 'cover', borderRadius: '50%', flexShrink: 0, mixBlendMode: 'multiply' }} />
+              <div style={{ backgroundColor: 'white', borderRadius: '50%', padding: '2px', display: 'flex', justifyContent: 'center', alignItems: 'center', width: '36px', height: '36px', flexShrink: 0 }}>
+                <img src={schoolLogo} alt={schoolName} style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '50%' }} />
+              </div>
             )}
             <span className={styles.logoText} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{schoolName}</span>
           </div>
