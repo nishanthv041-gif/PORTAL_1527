@@ -106,7 +106,6 @@ export async function deleteTeacher(id: string) {
       await tx.notification.deleteMany({ where: { userId: teacher.userId } });
       await tx.rating.deleteMany({ where: { userId: teacher.userId } });
       await tx.auditLog.deleteMany({ where: { userId: teacher.userId } });
-      await tx.loginAttempt.deleteMany({ where: { userId: teacher.userId } });
       
       // Delete the teacher record first, then the user
       await tx.teacher.delete({ where: { id } });
