@@ -48,6 +48,7 @@ export default async function DashboardLayout({
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
             opacity: 0.05,
+            mixBlendMode: 'multiply',
             pointerEvents: 'none',
             zIndex: 0
           }} />

@@ -54,7 +54,7 @@ export default function CreateAdminClient() {
           disabled={isSubmitting}
           style={{ padding: '0.75rem 2rem', backgroundColor: "var(--danger)", color: "white", border: 'none', borderRadius: '8px', fontWeight: 500, cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.7 : 1 }}
         >
-          {isSubmitting ? "Registering..." : "Add Admin"}
+          {isSubmitting ? "Registering..." : "Add in Google OAuth"}
         </button>
       </div>
     </form>
