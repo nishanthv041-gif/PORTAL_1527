@@ -34,6 +34,28 @@ export async function saveSystemSettingAction(formData: FormData) {
   }
 }
 
+export async function saveSystemSettingsBatchAction(settings: { key: string; value: string; category: string }[]) {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
+
+    // Run sequentially or use a transaction
+    for (const setting of settings) {
+      if (!setting.key) continue;
+      await prisma.systemSetting.upsert({
+        where: { key: setting.key },
+        update: { value: setting.value, category: setting.category },
+        create: { key: setting.key, value: setting.value, category: setting.category }
+      });
+    }
+
+    revalidatePath("/dashboard/admin/settings");
+    return { success: true };
+  } catch (error: unknown) {
+    return { error: "Failed to save settings batch." };
+  }
+}
+
 export async function deleteSystemSettingAction(key: string) {
   try {
     const session = await getServerSession(getAuthOptions());
@@ -48,4 +70,16 @@ export async function deleteSystemSettingAction(key: string) {
     }
     return { error: "Failed to delete setting." };
   }
+}
+
+export async function getSystemSettings() {
+  const settings = await prisma.systemSetting.findMany();
+  const settingsMap: Record<string, string> = {};
+  settings.forEach(s => { settingsMap[s.key] = s.value; });
+  return settingsMap;
+}
+
+export async function getSystemSetting(key: string, defaultValue: string = "") {
+  const setting = await prisma.systemSetting.findUnique({ where: { key } });
+  return setting?.value || defaultValue;
 }
