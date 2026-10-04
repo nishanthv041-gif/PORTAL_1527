@@ -36,21 +36,45 @@ export default async function DashboardLayout({
     <SettingsProvider settings={settings}>
       <div className={styles.container}>
         {settings.SCHOOL_LOGO && (
-          <div style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: '50vw',
-            height: '50vh',
-            backgroundImage: `url(${settings.SCHOOL_LOGO})`,
-            backgroundSize: 'contain',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
-            opacity: 0.05,
-            pointerEvents: 'none',
-            zIndex: 0
-          }} />
+          <>
+            {/* Ambient color aurora from logo */}
+            <div style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '100vw',
+              height: '100vh',
+              backgroundImage: `url(${settings.SCHOOL_LOGO})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              opacity: 0.06,
+              filter: 'blur(100px)',
+              pointerEvents: 'none',
+              zIndex: 0
+            }} />
+            
+            {/* Centered logo with radial mask to hide edges */}
+            <div style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '60vw',
+              height: '60vw',
+              maxWidth: '700px',
+              maxHeight: '700px',
+              backgroundImage: `url(${settings.SCHOOL_LOGO})`,
+              backgroundSize: 'contain',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+              opacity: 0.04,
+              pointerEvents: 'none',
+              zIndex: 0,
+              WebkitMaskImage: 'radial-gradient(circle, black 30%, transparent 70%)',
+              maskImage: 'radial-gradient(circle, black 30%, transparent 70%)'
+            }} />
+          </>
         )}
         <input type="checkbox" id="mobile-menu-toggle" className={styles.mobileMenuToggle} />
         
