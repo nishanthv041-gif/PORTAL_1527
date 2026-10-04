@@ -156,6 +156,23 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
     setSaveSuccess(false);
   };
 
+  const handleActivateAll = () => {
+    if (window.confirm("IMPORTANT: Activating all options is on your own responsibility. Do you want to proceed?")) {
+      setSettingsValues(prev => {
+        const next = { ...prev };
+        SETTINGS_CATEGORIES.forEach(category => {
+          category.fields.forEach(field => {
+            if (field.type === 'boolean') {
+              next[field.key] = 'true';
+            }
+          });
+        });
+        return next;
+      });
+      setSaveSuccess(false);
+    }
+  };
+
   const handleSaveAll = async () => {
     setIsSubmitting(true);
     setSaveSuccess(false);
@@ -219,21 +236,38 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
             <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>{activeCategory.label}</h2>
           </div>
 
-          <button
-            onClick={handleSaveAll}
-            disabled={isSubmitting}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem',
-              backgroundColor: saveSuccess ? 'var(--success)' : 'var(--primary)',
-              color: saveSuccess ? 'var(--success-fg)' : 'var(--primary-fg)',
-              border: 'none', borderRadius: '8px', fontWeight: 500, cursor: isSubmitting ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s ease', whiteSpace: 'nowrap'
-            }}
-          >
-            {isSubmitting ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> :
-              saveSuccess ? <CheckCircle2 size={18} /> : <Save size={18} />}
-            {isSubmitting ? 'Saving...' : saveSuccess ? 'Saved All!' : 'Save Changes'}
-          </button>
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <button
+              onClick={handleActivateAll}
+              disabled={isSubmitting}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem',
+                backgroundColor: 'transparent',
+                color: '#ef4444',
+                border: '1px solid #ef4444', borderRadius: '8px', fontWeight: 500, cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease', whiteSpace: 'nowrap'
+              }}
+              title="Activate all boolean options"
+            >
+              <CheckCircle2 size={18} />
+              Activate All Options
+            </button>
+            <button
+              onClick={handleSaveAll}
+              disabled={isSubmitting}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem',
+                backgroundColor: saveSuccess ? 'var(--success)' : 'var(--primary)',
+                color: saveSuccess ? 'var(--success-fg)' : 'var(--primary-fg)',
+                border: 'none', borderRadius: '8px', fontWeight: 500, cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease', whiteSpace: 'nowrap'
+              }}
+            >
+              {isSubmitting ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> :
+                saveSuccess ? <CheckCircle2 size={18} /> : <Save size={18} />}
+              {isSubmitting ? 'Saving...' : saveSuccess ? 'Saved All!' : 'Save Changes'}
+            </button>
+          </div>
         </div>
 
         {/* Fields */}
@@ -248,6 +282,11 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
                     {field.label}
                   </label>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{field.key}</span>
+                  {field.key === "SCHOOL_LOGO" && (
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#ef4444', fontWeight: 600 }}>
+                      * IMPORTANT: Setting this logo is on your own responsibility.
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ width: '100%', maxWidth: '400px' }}>
