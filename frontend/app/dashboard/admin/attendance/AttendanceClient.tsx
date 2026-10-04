@@ -64,8 +64,8 @@ export default function AttendanceClient({
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '2rem', background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-        <div style={{ flex: 1 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', marginBottom: '2rem', background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+        <div style={{ flex: 1, minWidth: '200px' }}>
           <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Select Class</label>
           <select 
             value={selectedClass} 
@@ -78,7 +78,7 @@ export default function AttendanceClient({
             ))}
           </select>
         </div>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: '200px' }}>
           <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Date</label>
           <input 
             type="date" 

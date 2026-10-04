@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { Award, TrendingUp, Filter } from "lucide-react";
+import styles from "./performance.module.css";
 import { Class, Exam } from "@prisma/client";
 
 type TopPerformer = { name: string; rollNo: string; percentage: number };
@@ -38,21 +39,21 @@ export default function PerformanceClient({
     router.push(url);
   };
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem', alignItems: 'start' }}>
+    <div className={styles.container}>
       
       {/* Charts & Filters */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         
         {/* Filters */}
-        <div style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
-          <div style={{ flex: 1 }}>
+        <div className={styles.filters}>
+          <div className={styles.filterItem}>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>Class</label>
             <select value={classId} onChange={e => setClassId(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }}>
               <option value="">All Classes (Overview)</option>
               {classes.map(c => <option key={c.id} value={c.id}>{c.name} - {c.section}</option>)}
             </select>
           </div>
-          <div style={{ flex: 1 }}>
+          <div className={styles.filterItem}>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>Exam / Term</label>
             <select value={examId} onChange={e => setExamId(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }}>
               <option value="">All Exams</option>
@@ -68,16 +69,16 @@ export default function PerformanceClient({
           <div style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem' }}>Class Performance (Grade Distribution)</h2>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+            <div className={styles.statsGrid}>
               {/* Pie Chart */}
-              <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className={styles.pieContainer}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={100} label>
                       {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                     </Pie>
                     <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} />
-                    <Legend />
+                    <Legend wrapperStyle={{ fontSize: '12px', overflowX: 'auto' }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
