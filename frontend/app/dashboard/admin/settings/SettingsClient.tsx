@@ -334,13 +334,18 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                       <div style={{ 
                         width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden', 
-                        backgroundColor: 'var(--border-color)', display: 'flex', justifyContent: 'center', alignItems: 'center',
-                        border: '2px solid var(--border-color)', flexShrink: 0
+                        padding: '3px',
+                        background: 'linear-gradient(135deg, #3b82f6, #ec4899)',
+                        boxShadow: '0 4px 12px rgba(236, 72, 153, 0.2)',
+                        display: 'flex', justifyContent: 'center', alignItems: 'center',
+                        flexShrink: 0
                       }}>
                         {currentValue ? (
-                          <img src={currentValue} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <img src={currentValue} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
                         ) : (
-                          <Building2 size={32} style={{ color: 'var(--text-secondary)' }} />
+                          <div style={{ width: '100%', height: '100%', borderRadius: '50%', backgroundColor: 'var(--primary-bg)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            <Building2 size={32} style={{ color: 'var(--text-secondary)' }} />
+                          </div>
                         )}
                       </div>
                       <input

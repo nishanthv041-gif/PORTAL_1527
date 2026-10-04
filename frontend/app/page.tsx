@@ -43,7 +43,19 @@ export default async function Home(props: HomeProps) {
       <div className={styles.card}>
         <div className={styles.headerRow} style={{ justifyContent: "center" }}>
           {schoolLogo ? (
-            <img src={schoolLogo} alt={schoolName} style={{ height: "60px", objectFit: "contain" }} />
+            <div style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              padding: '3px',
+              background: 'linear-gradient(135deg, #3b82f6, #ec4899)',
+              boxShadow: '0 8px 24px rgba(236, 72, 153, 0.3)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}>
+              <img src={schoolLogo} alt={schoolName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', backgroundColor: 'transparent' }} />
+            </div>
           ) : (
             <>
               <div className={styles.headerLogo}>
