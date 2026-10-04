@@ -120,11 +120,12 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
           <Menu size={24} />
         </button>
         {!isCollapsed && (
-          schoolLogo ? (
-            <img src={schoolLogo} alt={schoolName} style={{ height: '32px', maxWidth: '160px', objectFit: 'contain' }} />
-          ) : (
-            <span className={styles.logoText}>{schoolName}</span>
-          )
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
+            {schoolLogo && (
+              <img src={schoolLogo} alt={schoolName} style={{ height: '32px', width: '32px', objectFit: 'cover', borderRadius: '50%', flexShrink: 0 }} />
+            )}
+            <span className={styles.logoText} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{schoolName}</span>
+          </div>
         )}
       </div>
       <nav className={styles.nav}>

@@ -35,6 +35,23 @@ export default async function DashboardLayout({
   return (
     <SettingsProvider settings={settings}>
       <div className={styles.container}>
+        {settings.SCHOOL_LOGO && (
+          <div style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '50vw',
+            height: '50vh',
+            backgroundImage: `url(${settings.SCHOOL_LOGO})`,
+            backgroundSize: 'contain',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            opacity: 0.05,
+            pointerEvents: 'none',
+            zIndex: 0
+          }} />
+        )}
         <input type="checkbox" id="mobile-menu-toggle" className={styles.mobileMenuToggle} />
         
         <div className={styles.sidebarWrapper}>
