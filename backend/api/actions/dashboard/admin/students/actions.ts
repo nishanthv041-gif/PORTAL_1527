@@ -35,34 +35,33 @@ export async function deleteStudent(id: string) {
   try {
     const student = await prisma.student.findUnique({
       where: { id },
-      include: {
-        attendances: true,
-        marks: true,
-        reportCards: true
-      }
     });
 
-    if (!student) throw new Error("Student not found.");
+    if (!student) return { error: `Student not found (ID: ${id}). Please refresh the page.` };
 
-    // Forcefully cascade academic history
-    await prisma.attendance.deleteMany({ where: { studentId: id } });
-    await prisma.mark.deleteMany({ where: { studentId: id } }); // MarkHistory will cascade automatically
-    await prisma.reportCard.deleteMany({ where: { studentId: id } });
+    await prisma.$transaction(async (tx) => {
+      // Forcefully cascade academic history
+      await tx.attendance.deleteMany({ where: { studentId: id } });
+      await tx.mark.deleteMany({ where: { studentId: id } });
+      await tx.reportCard.deleteMany({ where: { studentId: id } });
 
-    // Safely cascade remaining dependencies
-    await prisma.parentStudent.deleteMany({ where: { studentId: id } });
-    await prisma.disciplineRecord.deleteMany({ where: { studentId: id } });
-    await prisma.achievement.deleteMany({ where: { studentId: id } });
-    await prisma.leaveRequest.deleteMany({ where: { studentId: id } });
-    await prisma.complaint.deleteMany({ where: { studentId: id } });
-    await prisma.submission.deleteMany({ where: { studentId: id } }); // Orphaned relation cleanup
+      // Cascade fee records
+      await tx.feeRecord.deleteMany({ where: { studentId: id } });
 
-    await prisma.student.delete({ where: { id } });
+      // Safely cascade remaining dependencies
+      await tx.parentStudent.deleteMany({ where: { studentId: id } });
+      await tx.disciplineRecord.deleteMany({ where: { studentId: id } });
+      await tx.achievement.deleteMany({ where: { studentId: id } });
+      await tx.leaveRequest.deleteMany({ where: { studentId: id } });
+      await tx.complaint.deleteMany({ where: { studentId: id } });
+      await tx.submission.deleteMany({ where: { studentId: id } });
+
+      await tx.student.delete({ where: { id } });
+    });
 
     revalidatePath('/dashboard/admin/students');
     return { success: true };
-  } catch (error: unknown) {
-    if (error instanceof Error) return { error: error.message };
-    return { error: "Failed to delete student." };
+  } catch (error: any) {
+    return { error: `Failed to delete student: ${error.message || "Unknown error"}` };
   }
 }

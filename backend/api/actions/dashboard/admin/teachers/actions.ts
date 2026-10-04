@@ -65,64 +65,58 @@ export async function deleteTeacher(id: string) {
   try {
     const teacher = await prisma.teacher.findUnique({
       where: { id },
-      include: {
-        classes: true,
-        subjects: true,
-        examRequests: true,
-        complaints: true,
-        assignments: true,
-        classTeacherOf: true,
-        user: true
-      }
     });
 
-    if (!teacher) throw new Error("Teacher not found.");
+    if (!teacher) return { error: `Teacher not found (ID: ${id}). Please refresh the page.` };
 
-    // Disconnect class teacher
-    await prisma.class.updateMany({
-      where: { classTeacherId: id },
-      data: { classTeacherId: null }
-    });
-
-    // Cascade delete exam requests and complaints
-    await prisma.examRequest.deleteMany({ where: { teacherId: id } });
-    await prisma.complaint.deleteMany({ where: { teacherId: id } });
-
-    // Cascade delete assignments and their submissions
-    const assignments = await prisma.assignment.findMany({ where: { teacherId: id }, select: { id: true } });
-    const assignmentIds = assignments.map(a => a.id);
-    if (assignmentIds.length > 0) {
-      await prisma.submission.deleteMany({ where: { assignmentId: { in: assignmentIds } } });
-      await prisma.assignment.deleteMany({ where: { teacherId: id } });
-    }
-
-    // Disconnect from meetings via individual updates
-    const teacherMeetings = await prisma.meeting.findMany({
-      where: { teachers: { some: { id } } },
-      select: { id: true }
-    });
-    for (const meeting of teacherMeetings) {
-      await prisma.meeting.update({
-        where: { id: meeting.id },
-        data: { teachers: { disconnect: [{ id }] } }
+    await prisma.$transaction(async (tx) => {
+      // Disconnect class teacher
+      await tx.class.updateMany({
+        where: { classTeacherId: id },
+        data: { classTeacherId: null }
       });
-    }
 
-    // Cascade dependent data tied to the user/teacher
-    await prisma.announcement.deleteMany({ where: { authorId: teacher.userId } });
-    await prisma.message.deleteMany({ where: { OR: [{ senderId: teacher.userId }, { receiverId: teacher.userId }] } });
-    await prisma.notification.deleteMany({ where: { userId: teacher.userId } });
-    await prisma.rating.deleteMany({ where: { userId: teacher.userId } });
-    
-    // Delete the teacher record first, then the user
-    await prisma.teacher.delete({ where: { id } });
-    await prisma.user.delete({ where: { id: teacher.userId } });
+      // Cascade delete exam requests and complaints
+      await tx.examRequest.deleteMany({ where: { teacherId: id } });
+      await tx.complaint.deleteMany({ where: { teacherId: id } });
+
+      // Cascade delete assignments and their submissions
+      const assignments = await tx.assignment.findMany({ where: { teacherId: id }, select: { id: true } });
+      const assignmentIds = assignments.map(a => a.id);
+      if (assignmentIds.length > 0) {
+        await tx.submission.deleteMany({ where: { assignmentId: { in: assignmentIds } } });
+        await tx.assignment.deleteMany({ where: { teacherId: id } });
+      }
+
+      // Disconnect from meetings via individual updates
+      const teacherMeetings = await tx.meeting.findMany({
+        where: { teachers: { some: { id } } },
+        select: { id: true }
+      });
+      for (const meeting of teacherMeetings) {
+        await tx.meeting.update({
+          where: { id: meeting.id },
+          data: { teachers: { disconnect: [{ id }] } }
+        });
+      }
+
+      // Cascade dependent data tied to the user/teacher
+      await tx.announcement.deleteMany({ where: { authorId: teacher.userId } });
+      await tx.message.deleteMany({ where: { OR: [{ senderId: teacher.userId }, { receiverId: teacher.userId }] } });
+      await tx.notification.deleteMany({ where: { userId: teacher.userId } });
+      await tx.rating.deleteMany({ where: { userId: teacher.userId } });
+      await tx.auditLog.deleteMany({ where: { userId: teacher.userId } });
+      await tx.loginAttempt.deleteMany({ where: { userId: teacher.userId } });
+      
+      // Delete the teacher record first, then the user
+      await tx.teacher.delete({ where: { id } });
+      await tx.user.delete({ where: { id: teacher.userId } });
+    });
 
     revalidatePath('/dashboard/admin/teachers');
     revalidatePath('/dashboard/admin/users');
     return { success: true };
-  } catch (error: unknown) {
-    if (error instanceof Error) return { error: error.message };
-    return { error: "Failed to delete teacher." };
+  } catch (error: any) {
+    return { error: `Failed to delete teacher: ${error.message || "Unknown error"}` };
   }
 }

@@ -150,30 +150,28 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
 
   const activeCategory = SETTINGS_CATEGORIES.find(c => c.id === activeTab)!;
 
-  const handleChange = (key: string, value: string) => {
+  const handleChange = async (key: string, value: string) => {
+    // Optimistic UI update
     setSettingsValues(prev => ({ ...prev, [key]: value }));
-    setSaveSuccess(false);
+
+    // Auto-save to backend
+    const field = activeCategory.fields.find(f => f.key === key);
+    if (!field) return;
+
+    const res = await saveSystemSettingsBatchAction([{
+      key,
+      value,
+      category: activeCategory.id
+    }]);
+
+    if (res.error) {
+      console.error("Failed to auto-save setting:", res.error);
+    }
   };
 
-  const handleSave = async () => {
-    setIsSubmitting(true);
-    setSaveSuccess(false);
-
-    // Prepare batch data for current tab
-    const batch = activeCategory.fields.map(field => ({
-      key: field.key,
-      value: settingsValues[field.key] || field.default,
-      category: activeCategory.id
-    }));
-
-    const res = await saveSystemSettingsBatchAction(batch);
-    if (res.error) {
-      alert(res.error);
-    } else {
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-    }
-    setIsSubmitting(false);
+  // Local state for fast typing without triggering backend immediately
+  const handleTextChange = (key: string, value: string) => {
+    setSettingsValues(prev => ({ ...prev, [key]: value }));
   };
 
   return (
@@ -213,21 +211,9 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
             <div style={{ color: 'var(--primary)' }}>{activeCategory.icon}</div>
             <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>{activeCategory.label}</h2>
           </div>
-          <button 
-            onClick={handleSave}
-            disabled={isSubmitting}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem',
-              backgroundColor: saveSuccess ? 'var(--success)' : 'var(--primary)',
-              color: saveSuccess ? 'var(--success-fg)' : 'var(--primary-fg)',
-              border: 'none', borderRadius: '8px', fontWeight: 500, cursor: isSubmitting ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            {isSubmitting ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : 
-             saveSuccess ? <CheckCircle2 size={18} /> : <Save size={18} />}
-            {isSubmitting ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save Changes'}
-          </button>
+          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <CheckCircle2 size={16} /> Changes are saved automatically
+          </span>
         </div>
 
         {/* Fields */}
@@ -281,7 +267,8 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
                   ) : field.type === 'textarea' ? (
                     <textarea 
                       value={currentValue}
-                      onChange={(e) => handleChange(field.key, e.target.value)}
+                      onChange={(e) => handleTextChange(field.key, e.target.value)}
+                      onBlur={(e) => handleChange(field.key, e.target.value)}
                       rows={4}
                       style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.9rem', resize: 'vertical' }}
                     />
@@ -289,7 +276,8 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
                     <input 
                       type={field.type} 
                       value={currentValue}
-                      onChange={(e) => handleChange(field.key, e.target.value)}
+                      onChange={(e) => handleTextChange(field.key, e.target.value)}
+                      onBlur={(e) => handleChange(field.key, e.target.value)}
                       style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.9rem' }}
                     />
                   )}
