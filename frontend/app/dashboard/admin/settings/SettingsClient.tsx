@@ -8,6 +8,7 @@ import {
   Wallet, Bell, FileSpreadsheet, Lock, Globe, Database, 
   Server, Save, Loader2, CheckCircle2
 } from "lucide-react";
+import styles from "./settings.module.css";
 
 const SETTINGS_CATEGORIES = [
   {
@@ -150,35 +151,41 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
 
   const activeCategory = SETTINGS_CATEGORIES.find(c => c.id === activeTab)!;
 
-  const handleChange = async (key: string, value: string) => {
-    // Optimistic UI update
+  const handleChange = (key: string, value: string) => {
     setSettingsValues(prev => ({ ...prev, [key]: value }));
-
-    // Auto-save to backend
-    const field = activeCategory.fields.find(f => f.key === key);
-    if (!field) return;
-
-    const res = await saveSystemSettingsBatchAction([{
-      key,
-      value,
-      category: activeCategory.id
-    }]);
-
-    if (res.error) {
-      console.error("Failed to auto-save setting:", res.error);
-    }
+    setSaveSuccess(false);
   };
 
-  // Local state for fast typing without triggering backend immediately
-  const handleTextChange = (key: string, value: string) => {
-    setSettingsValues(prev => ({ ...prev, [key]: value }));
+  const handleSaveAll = async () => {
+    setIsSubmitting(true);
+    setSaveSuccess(false);
+
+    const batch = [];
+    for (const category of SETTINGS_CATEGORIES) {
+      for (const field of category.fields) {
+        batch.push({
+          key: field.key,
+          value: settingsValues[field.key] !== undefined ? settingsValues[field.key] : field.default,
+          category: category.id
+        });
+      }
+    }
+
+    const res = await saveSystemSettingsBatchAction(batch);
+    if (res.error) {
+      alert("Failed to save settings: " + res.error);
+    } else {
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    }
+    setIsSubmitting(false);
   };
 
   return (
-    <div style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
+    <div className={styles.container}>
       
       {/* Sidebar Navigation */}
-      <div style={{ width: '280px', flexShrink: 0, background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+      <div className={styles.sidebar}>
         <div style={{ padding: '1.25rem', borderBottom: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.02)' }}>
           <h2 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>System Settings</h2>
         </div>
@@ -203,17 +210,30 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
       </div>
 
       {/* Main Content Area */}
-      <div style={{ flex: 1, background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)', minHeight: '500px', display: 'flex', flexDirection: 'column' }}>
+      <div className={styles.mainContent}>
         
         {/* Header */}
-        <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div style={{ color: 'var(--primary)' }}>{activeCategory.icon}</div>
             <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>{activeCategory.label}</h2>
           </div>
-          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <CheckCircle2 size={16} /> Changes are saved automatically
-          </span>
+          
+          <button 
+            onClick={handleSaveAll}
+            disabled={isSubmitting}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem',
+              backgroundColor: saveSuccess ? 'var(--success)' : 'var(--primary)',
+              color: saveSuccess ? 'var(--success-fg)' : 'var(--primary-fg)',
+              border: 'none', borderRadius: '8px', fontWeight: 500, cursor: isSubmitting ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease', whiteSpace: 'nowrap'
+            }}
+          >
+            {isSubmitting ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : 
+             saveSuccess ? <CheckCircle2 size={18} /> : <Save size={18} />}
+            {isSubmitting ? 'Saving...' : saveSuccess ? 'Saved All!' : 'Save Changes'}
+          </button>
         </div>
 
         {/* Fields */}
@@ -222,7 +242,7 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
             const currentValue = settingsValues[field.key] !== undefined ? settingsValues[field.key] : field.default;
             
             return (
-              <div key={field.key} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem', alignItems: field.type === 'textarea' ? 'flex-start' : 'center', borderBottom: '1px solid rgba(0,0,0,0.05)', paddingBottom: '1.5rem' }}>
+              <div key={field.key} className={`${styles.fieldRow} ${field.type === 'textarea' ? styles.textareaRow : ''}`}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
                     {field.label}
@@ -232,11 +252,11 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
                 
                 <div style={{ width: '100%', maxWidth: '400px' }}>
                   {field.type === 'boolean' ? (
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.5rem 0' }}>
                       <div style={{ 
                         width: '44px', height: '24px', borderRadius: '12px', 
                         background: currentValue === 'true' ? 'var(--primary)' : 'var(--border-color)',
-                        position: 'relative', transition: 'all 0.2s'
+                        position: 'relative', transition: 'all 0.2s', pointerEvents: 'none'
                       }}>
                         <div style={{
                           width: '20px', height: '20px', borderRadius: '50%', background: 'white',
@@ -248,7 +268,7 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
                         type="checkbox" 
                         checked={currentValue === 'true'}
                         onChange={(e) => handleChange(field.key, e.target.checked ? 'true' : 'false')}
-                        style={{ display: 'none' }}
+                        style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
                       />
                       <span style={{ fontSize: '0.875rem', fontWeight: 500, color: currentValue === 'true' ? 'var(--success)' : 'var(--text-secondary)' }}>
                         {currentValue === 'true' ? 'Enabled' : 'Disabled'}
@@ -267,8 +287,7 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
                   ) : field.type === 'textarea' ? (
                     <textarea 
                       value={currentValue}
-                      onChange={(e) => handleTextChange(field.key, e.target.value)}
-                      onBlur={(e) => handleChange(field.key, e.target.value)}
+                      onChange={(e) => handleChange(field.key, e.target.value)}
                       rows={4}
                       style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.9rem', resize: 'vertical' }}
                     />
@@ -276,8 +295,7 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
                     <input 
                       type={field.type} 
                       value={currentValue}
-                      onChange={(e) => handleTextChange(field.key, e.target.value)}
-                      onBlur={(e) => handleChange(field.key, e.target.value)}
+                      onChange={(e) => handleChange(field.key, e.target.value)}
                       style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.9rem' }}
                     />
                   )}
