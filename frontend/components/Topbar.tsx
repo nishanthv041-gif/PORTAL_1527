@@ -26,7 +26,7 @@ export default function Topbar({
   // Typically, show it if we are deeper than the main dashboard level.
   // /dashboard is 2 segments (['', 'dashboard'])
   // /dashboard/admin/users is 4 segments
-  const showBack = pathname.split("/").filter(Boolean).length > 2;
+  const showBack = (pathname || "").split("/").filter(Boolean).length > 2;
 
   return (
     <header className={styles.topbar}>
