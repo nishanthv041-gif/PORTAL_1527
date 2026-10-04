@@ -7,6 +7,8 @@ import styles from "./login/login.module.css";
 import ThemeToggle from "@/frontend/components/ThemeToggle";
 import GoogleSignInButton from "@/frontend/components/GoogleSignInButton";
 
+import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/settings/actions";
+
 interface HomeProps {
   searchParams: Promise<{ error?: string }>;
 }
@@ -14,6 +16,9 @@ interface HomeProps {
 export default async function Home(props: HomeProps) {
   const searchParams = await props.searchParams;
   const session = await getServerSession(getAuthOptions());
+  const settings = await getSystemSettings();
+  const schoolName = settings.SCHOOL_NAME || "SRT Portal";
+  const schoolLogo = settings.SCHOOL_LOGO || null;
 
   if (session) {
     switch (session.user.role) {
@@ -37,10 +42,16 @@ export default async function Home(props: HomeProps) {
 
       <div className={styles.card}>
         <div className={styles.headerRow} style={{ justifyContent: "center" }}>
-          <div className={styles.headerLogo}>
-            <GraduationCap size={24} />
-          </div>
-          <span className={styles.headerTitle}>SRT Portal</span>
+          {schoolLogo ? (
+            <img src={schoolLogo} alt={schoolName} style={{ height: "40px", objectFit: "contain" }} />
+          ) : (
+            <>
+              <div className={styles.headerLogo}>
+                <GraduationCap size={24} />
+              </div>
+              <span className={styles.headerTitle}>{schoolName}</span>
+            </>
+          )}
         </div>
 
         <h1 className={styles.title}>Hi, Welcome Back!</h1>

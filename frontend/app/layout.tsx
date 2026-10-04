@@ -6,10 +6,19 @@ import { ThemeProvider } from "@/frontend/components/ThemeProvider";
 import Script from "next/script";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
-export const metadata: Metadata = {
-  title: "SRT School Portal",
-  description: "School management portal for teachers, parents, and admins",
-};
+import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
+
+export async function generateMetadata(): Promise<Metadata> {
+  let schoolName = "School Portal";
+  try {
+    schoolName = await getSystemSetting("SCHOOL_NAME", "SRT School Portal");
+  } catch (err) {}
+  
+  return {
+    title: schoolName,
+    description: "School management portal for teachers, parents, and admins",
+  };
+}
 
 /**
  * Inline script that runs BEFORE hydration to prevent theme flash.

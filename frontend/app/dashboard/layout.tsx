@@ -6,6 +6,8 @@ import Topbar from "@/frontend/components/Topbar";
 import styles from "./layout.module.css";
 import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/settings/actions";
 
+import { SettingsProvider } from "@/frontend/contexts/SettingsContext";
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -31,27 +33,29 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className={styles.container}>
-      <input type="checkbox" id="mobile-menu-toggle" className={styles.mobileMenuToggle} />
-      
-      <div className={styles.sidebarWrapper}>
-        <Sidebar role={session.user.role} settings={settings} />
-      </div>
-      
-      <div className={styles.mainContent}>
-        <div className={styles.topbarContainer}>
-          <label htmlFor="mobile-menu-toggle" className={styles.menuOverlay}></label>
-          <label htmlFor="mobile-menu-toggle" className={styles.hamburger}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="12" x2="21" y2="12"></line>
-              <line x1="3" y1="6" x2="21" y2="6"></line>
-              <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
-          </label>
-          <Topbar user={session.user} />
+    <SettingsProvider settings={settings}>
+      <div className={styles.container}>
+        <input type="checkbox" id="mobile-menu-toggle" className={styles.mobileMenuToggle} />
+        
+        <div className={styles.sidebarWrapper}>
+          <Sidebar role={session.user.role} settings={settings} />
         </div>
-        <main className={styles.pageContent}>{children}</main>
+        
+        <div className={styles.mainContent}>
+          <div className={styles.topbarContainer}>
+            <label htmlFor="mobile-menu-toggle" className={styles.menuOverlay}></label>
+            <label htmlFor="mobile-menu-toggle" className={styles.hamburger}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+            </label>
+            <Topbar user={session.user} />
+          </div>
+          <main className={styles.pageContent}>{children}</main>
+        </div>
       </div>
-    </div>
+    </SettingsProvider>
   );
 }

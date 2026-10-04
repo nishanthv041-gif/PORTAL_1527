@@ -107,6 +107,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
   if (role === "TEACHER") links = teacherLinks;
 
   const schoolName = settings.SCHOOL_NAME || "EduPortal";
+  const schoolLogo = settings.SCHOOL_LOGO || null;
 
   return (
     <aside className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ""}`}>
@@ -118,7 +119,13 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
         >
           <Menu size={24} />
         </button>
-        {!isCollapsed && <span className={styles.logoText}>{schoolName}</span>}
+        {!isCollapsed && (
+          schoolLogo ? (
+            <img src={schoolLogo} alt={schoolName} style={{ height: '32px', maxWidth: '160px', objectFit: 'contain' }} />
+          ) : (
+            <span className={styles.logoText}>{schoolName}</span>
+          )
+        )}
       </div>
       <nav className={styles.nav}>
         {links.map((link) => {

@@ -7,8 +7,11 @@ export async function createSubjectAction(formData: FormData) {
   try {
     const name = formData.get("name") as string;
     const code = formData.get("code") as string;
+    const { getSystemSetting } = await import("@/backend/api/actions/dashboard/admin/settings/actions");
+    const defaultPassSetting = await getSystemSetting("DEFAULT_PASSING_MARKS", "40");
+    
     const maxMarks = parseInt(formData.get("maxMarks") as string || "100", 10);
-    const passMarks = parseInt(formData.get("passMarks") as string || "35", 10);
+    const passMarks = parseInt(formData.get("passMarks") as string || defaultPassSetting, 10);
     const teacherId = formData.get("teacherId") as string;
     const classIdsInput = formData.get("classIds") as string;
 
