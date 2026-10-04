@@ -10,7 +10,9 @@ export async function adminUpdateAttendance(studentId: string, dateStr: string, 
     const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
+    if (!dateStr) return { error: "Date is required to mark attendance." };
     const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return { error: "Invalid date format." };
     date.setHours(0, 0, 0, 0);
     
     const student = await prisma.student.findUnique({ where: { id: studentId } });

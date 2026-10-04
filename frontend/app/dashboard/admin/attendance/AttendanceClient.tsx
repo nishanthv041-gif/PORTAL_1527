@@ -40,6 +40,10 @@ export default function AttendanceClient({
   };
 
   const saveEdit = async (studentId: string) => {
+    if (!selectedDate) {
+      alert("Please select a date first.");
+      return;
+    }
     const res = await adminUpdateAttendance(studentId, selectedDate, editStatus, editRemarks);
     if (res.error) {
       alert(res.error);
