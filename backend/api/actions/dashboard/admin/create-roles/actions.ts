@@ -210,19 +210,10 @@ export async function createParentStudentAction(formData: FormData) {
 
 export async function createAdminAction(formData: FormData) {
   try {
-    const { getSystemSetting } = await import("@/backend/api/actions/dashboard/admin/settings/actions");
-    const allowAdmin = await getSystemSetting("ALLOW_ADMIN_REGISTRATION", "false");
-    if (allowAdmin === "false") {
-      return { error: "Admin account creation is currently disabled in System Settings." };
-    }
-    
     const name = formData.get("name") as string;
     const email = formData.get("email") as string;
     
-    if (!name || !email) return { error: "Name and Gmail ID are required." };
-    if (!email.endsWith("@gmail.com") && !email.endsWith("@googlemail.com")) {
-      return { error: "Admin accounts currently require a valid Google email for OAuth." };
-    }
+    if (!name || !email) return { error: "Name and Email ID are required." };
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) return { error: "A user with this email already exists." };
