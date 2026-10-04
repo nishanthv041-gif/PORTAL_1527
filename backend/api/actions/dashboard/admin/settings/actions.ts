@@ -39,15 +39,17 @@ export async function saveSystemSettingsBatchAction(settings: { key: string; val
     const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
-    // Run sequentially or use a transaction
-    for (const setting of settings) {
-      if (!setting.key) continue;
-      await prisma.systemSetting.upsert({
-        where: { key: setting.key },
-        update: { value: setting.value, category: setting.category },
-        create: { key: setting.key, value: setting.value, category: setting.category }
-      });
-    }
+    const upserts = settings
+      .filter(s => s.key)
+      .map(setting => 
+        prisma.systemSetting.upsert({
+          where: { key: setting.key },
+          update: { value: setting.value, category: setting.category },
+          create: { key: setting.key, value: setting.value, category: setting.category }
+        })
+      );
+
+    await prisma.$transaction(upserts);
 
     revalidatePath("/dashboard/admin/settings");
     return { success: true };

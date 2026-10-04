@@ -156,20 +156,36 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
     setSaveSuccess(false);
   };
 
-  const handleActivateAll = () => {
+  const handleActivateAll = async () => {
     if (window.confirm("IMPORTANT: Activating all options is on your own responsibility. Do you want to proceed?")) {
-      setSettingsValues(prev => {
-        const next = { ...prev };
-        SETTINGS_CATEGORIES.forEach(category => {
-          category.fields.forEach(field => {
-            if (field.type === 'boolean') {
-              next[field.key] = 'true';
-            }
+      const nextValues = { ...settingsValues };
+      const batch: any[] = [];
+      
+      SETTINGS_CATEGORIES.forEach(category => {
+        category.fields.forEach(field => {
+          if (field.type === 'boolean') {
+            nextValues[field.key] = 'true';
+          }
+          batch.push({
+            key: field.key,
+            value: nextValues[field.key] !== undefined ? nextValues[field.key] : field.default,
+            category: category.id
           });
         });
-        return next;
       });
+      
+      setSettingsValues(nextValues);
+      setIsSubmitting(true);
       setSaveSuccess(false);
+      
+      const res = await saveSystemSettingsBatchAction(batch);
+      if (res.error) {
+        alert("Failed to save settings: " + res.error);
+      } else {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      }
+      setIsSubmitting(false);
     }
   };
 
