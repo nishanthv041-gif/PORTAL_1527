@@ -47,7 +47,7 @@ export async function deleteStudent(id: string) {
 
       // Safely cascade remaining dependencies
       await tx.parentStudent.deleteMany({ where: { studentId: id } });
-      await tx.disciplinary.deleteMany({ where: { studentId: id } });
+      await tx.disciplineRecord.deleteMany({ where: { studentId: id } });
       await tx.achievement.deleteMany({ where: { studentId: id } });
       await tx.leaveRequest.deleteMany({ where: { studentId: id } });
       await tx.complaint.deleteMany({ where: { studentId: id } });
