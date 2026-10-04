@@ -17,7 +17,7 @@ const SETTINGS_CATEGORIES = [
     icon: <Building2 size={18} />,
     fields: [
       { key: "SCHOOL_NAME", label: "School Name", type: "text", default: "My School" },
-      { key: "SCHOOL_LOGO", label: "School Logo URL", type: "text", default: "" },
+      { key: "SCHOOL_LOGO", label: "School Logo", type: "image", default: "" },
       { key: "SCHOOL_ADDRESS", label: "Address", type: "textarea", default: "" },
       { key: "SCHOOL_CONTACT", label: "Contact Number", type: "text", default: "" },
       { key: "SCHOOL_EMAIL", label: "Email", type: "email", default: "" }
@@ -116,15 +116,6 @@ const SETTINGS_CATEGORIES = [
       { key: "TIME_ZONE", label: "Time Zone", type: "text", default: "UTC" },
       { key: "DATE_FORMAT", label: "Date Format", type: "select", options: ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"], default: "MM/DD/YYYY" },
       { key: "THEME_MODE", label: "Default Theme Mode", type: "select", options: ["Light", "Dark", "System"], default: "System" }
-    ]
-  },
-  {
-    id: "BACKUP",
-    label: "Backup & Data",
-    icon: <Database size={18} />,
-    fields: [
-      { key: "AUTO_BACKUP", label: "Enable Daily Auto-Backups", type: "boolean", default: "true" },
-      { key: "BACKUP_RETENTION", label: "Backup Retention (days)", type: "number", default: "30" }
     ]
   },
   {
@@ -339,6 +330,35 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
                         <option key={opt} value={opt}>{opt}</option>
                       ))}
                     </select>
+                  ) : field.type === 'image' ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                      <div style={{ 
+                        width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden', 
+                        backgroundColor: 'var(--border-color)', display: 'flex', justifyContent: 'center', alignItems: 'center',
+                        border: '2px solid var(--border-color)', flexShrink: 0
+                      }}>
+                        {currentValue ? (
+                          <img src={currentValue} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <Building2 size={32} style={{ color: 'var(--text-secondary)' }} />
+                        )}
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              handleChange(field.key, event.target?.result as string);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.9rem' }}
+                      />
+                    </div>
                   ) : field.type === 'textarea' ? (
                     <textarea
                       value={currentValue}
