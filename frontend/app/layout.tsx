@@ -27,36 +27,53 @@ export async function generateMetadata(): Promise<Metadata> {
  *   2. localStorage cache
  *   3. default: "light"
  */
-const flashPreventionScript = `
-(function() {
-  try {
-    var cached = localStorage.getItem('theme-cache');
-    var valid = cached === 'dark' || cached === 'light';
-    // Only apply if the server hasn't already set a theme
-    var current = document.documentElement.getAttribute('data-theme');
-    if (!current && valid) {
-      document.documentElement.setAttribute('data-theme', cached);
-    } else if (!current) {
-      document.documentElement.setAttribute('data-theme', 'light');
-    }
-  } catch(e) {}
-})();
-`;
-
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Try to get the session server-side so we can set the correct initial theme
-  // on the <html> element before the page is sent to the client.
-  let initialTheme = "light";
+  let defaultThemeMode = "light";
+  try {
+    const rawMode = await getSystemSetting("THEME_MODE", "System");
+    if (rawMode === "Dark") defaultThemeMode = "dark";
+    if (rawMode === "Light") defaultThemeMode = "light";
+    if (rawMode === "System") defaultThemeMode = "system";
+  } catch (err) {}
+
+  const flashPreventionScript = `
+  (function() {
+    try {
+      var cached = localStorage.getItem('theme-cache');
+      var valid = cached === 'dark' || cached === 'light';
+      var current = document.documentElement.getAttribute('data-theme');
+      var systemSetting = '${defaultThemeMode}';
+      
+      if (!current) {
+        if (valid) {
+          document.documentElement.setAttribute('data-theme', cached);
+        } else {
+          if (systemSetting === 'dark' || systemSetting === 'light') {
+            document.documentElement.setAttribute('data-theme', systemSetting);
+          } else {
+            // System preference
+            var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+          }
+        }
+      }
+    } catch(e) {}
+  })();
+  `;
+
+  let initialTheme = defaultThemeMode === "system" ? "light" : defaultThemeMode; // fallback for server render
   let isAuthenticated = false;
 
   const session = await getServerSession(getAuthOptions());
   if (session?.user) {
     isAuthenticated = true;
-    initialTheme = session.user.theme ?? "light";
+    if (session.user.theme) {
+      initialTheme = session.user.theme;
+    }
   }
 
   return (
