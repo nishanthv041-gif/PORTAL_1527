@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import ChildSwitcher from "../ChildSwitcher";
 import { BookOpen, Calendar as CalendarIcon } from "lucide-react";
+import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
 
 export default async function ParentExamsPage({
   searchParams
@@ -13,6 +14,16 @@ export default async function ParentExamsPage({
   const resolvedSearchParams = await searchParams;
   const session = await getServerSession(getAuthOptions());
   if (!session) return null;
+
+  const canView = await getSystemSetting("RESULT_VISIBILITY", "false");
+  if (canView === "false") {
+    return (
+      <div className={styles.dashboard}>
+        <h1 className={styles.title}>Exams & Marks</h1>
+        <p style={{ color: "var(--danger)" }}>Exam results are currently hidden by the administrator.</p>
+      </div>
+    );
+  }
 
   const parent = await prisma.parent.findUnique({
     where: { userId: session.user.id },

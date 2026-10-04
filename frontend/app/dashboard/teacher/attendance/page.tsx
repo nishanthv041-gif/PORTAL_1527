@@ -3,10 +3,21 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import AttendanceForm from "./AttendanceForm";
+import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
 
 export default async function TeacherAttendancePage() {
   const session = await getServerSession(getAuthOptions());
   if (!session) return null;
+
+  const canManage = await getSystemSetting("TEACHER_MANAGE_ATTENDANCE", "true");
+  if (canManage === "false") {
+    return (
+      <div className={styles.dashboard}>
+        <h1 className={styles.title}>Attendance</h1>
+        <p style={{ color: "var(--danger)" }}>Attendance management has been disabled by the administrator.</p>
+      </div>
+    );
+  }
 
   const teacher = await prisma.teacher.findUnique({
     where: { userId: session.user.id },

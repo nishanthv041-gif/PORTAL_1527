@@ -5,10 +5,21 @@ import Link from "next/link";
 import styles from "../../dashboard.module.css";
 import { BookOpen, Calendar as CalendarIcon } from "lucide-react";
 import CreateExamForm from "./CreateExamForm";
+import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
 
 export default async function TeacherExamsPage() {
   const session = await getServerSession(getAuthOptions());
   if (!session) return null;
+
+  const canManage = await getSystemSetting("TEACHER_MANAGE_MARKS", "true");
+  if (canManage === "false") {
+    return (
+      <div className={styles.dashboard}>
+        <h1 className={styles.title}>Exams</h1>
+        <p style={{ color: "var(--danger)" }}>Exam and marks management has been disabled by the administrator.</p>
+      </div>
+    );
+  }
 
   const teacher = await prisma.teacher.findUnique({
     where: { userId: session.user.id },

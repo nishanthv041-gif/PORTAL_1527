@@ -9,6 +9,12 @@ function isValidEmail(email: string) {
 
 export async function createTeacherAction(formData: FormData) {
   try {
+    const { getSystemSetting } = await import("@/backend/api/actions/dashboard/admin/settings/actions");
+    const allowTeacher = await getSystemSetting("ALLOW_TEACHER_REGISTRATION", "true");
+    if (allowTeacher === "false") {
+      return { error: "Teacher account creation is currently disabled in System Settings." };
+    }
+
     const name = formData.get("name") as string;
     const phone = formData.get("phone") as string;
     const qualification = formData.get("qualification") as string;
@@ -96,6 +102,13 @@ export async function createTeacherAction(formData: FormData) {
 
 export async function createParentStudentAction(formData: FormData) {
   try {
+    const { getSystemSetting } = await import("@/backend/api/actions/dashboard/admin/settings/actions");
+    const allowParent = await getSystemSetting("ALLOW_PARENT_REGISTRATION", "true");
+    const allowStudent = await getSystemSetting("ALLOW_STUDENT_REGISTRATION", "true");
+    if (allowParent === "false" || allowStudent === "false") {
+      return { error: "Parent or Student account creation is currently disabled in System Settings." };
+    }
+    
     // Student fields
     const studentName = formData.get("studentName") as string;
     const gender = formData.get("gender") as string;
@@ -197,6 +210,12 @@ export async function createParentStudentAction(formData: FormData) {
 
 export async function createAdminAction(formData: FormData) {
   try {
+    const { getSystemSetting } = await import("@/backend/api/actions/dashboard/admin/settings/actions");
+    const allowAdmin = await getSystemSetting("ALLOW_ADMIN_REGISTRATION", "false");
+    if (allowAdmin === "false") {
+      return { error: "Admin account creation is currently disabled in System Settings." };
+    }
+    
     const name = formData.get("name") as string;
     const email = formData.get("email") as string;
     

@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import ChildSwitcher from "../ChildSwitcher";
 import { Calendar as CalendarIcon, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
 
 export default async function ParentAttendancePage({
   searchParams
@@ -13,6 +14,16 @@ export default async function ParentAttendancePage({
   const resolvedSearchParams = await searchParams;
   const session = await getServerSession(getAuthOptions());
   if (!session) return null;
+
+  const canManage = await getSystemSetting("PARENT_ATTENDANCE_VISIBILITY", "true");
+  if (canManage === "false") {
+    return (
+      <div className={styles.dashboard}>
+        <h1 className={styles.title}>Attendance Records</h1>
+        <p style={{ color: "var(--danger)" }}>Attendance visibility has been disabled by the administrator.</p>
+      </div>
+    );
+  }
 
   const parent = await prisma.parent.findUnique({
     where: { userId: session.user.id },

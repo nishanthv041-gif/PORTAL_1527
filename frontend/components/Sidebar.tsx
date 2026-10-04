@@ -31,7 +31,7 @@ import {
   AlertOctagon
 } from "lucide-react";
 
-export default function Sidebar({ role }: { role: string }) {
+export default function Sidebar({ role, settings = {} }: { role: string; settings?: Record<string, string> }) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -54,7 +54,7 @@ export default function Sidebar({ role }: { role: string }) {
     { href: "/dashboard/admin/settings", label: "Settings", icon: <Settings size={20} /> },
   ];
 
-  const teacherLinks = [
+  let teacherLinks = [
     { href: "/dashboard/teacher", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
     { href: "/dashboard/teacher/classes", label: "My Classes", icon: <GraduationCap size={20} /> },
     { href: "/dashboard/teacher/attendance", label: "Attendance", icon: <Users size={20} /> },
@@ -73,7 +73,14 @@ export default function Sidebar({ role }: { role: string }) {
     { href: "/dashboard/teacher/settings", label: "Settings", icon: <Settings size={20} /> },
   ];
 
-  const parentLinks = [
+  if (settings.TEACHER_MANAGE_ATTENDANCE === "false") {
+    teacherLinks = teacherLinks.filter(l => l.href !== "/dashboard/teacher/attendance");
+  }
+  if (settings.TEACHER_MANAGE_MARKS === "false") {
+    teacherLinks = teacherLinks.filter(l => !["/dashboard/teacher/exams", "/dashboard/teacher/assignments", "/dashboard/teacher/report-cards"].includes(l.href));
+  }
+
+  let parentLinks = [
     { href: "/dashboard/parent", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
     { href: "/dashboard/parent/attendance", label: "Attendance", icon: <Users size={20} /> },
     { href: "/dashboard/parent/exams", label: "Exams", icon: <BookOpen size={20} /> },
@@ -88,9 +95,18 @@ export default function Sidebar({ role }: { role: string }) {
     { href: "/dashboard/parent/settings", label: "Settings", icon: <Settings size={20} /> },
   ];
 
+  if (settings.PARENT_ATTENDANCE_VISIBILITY === "false") {
+    parentLinks = parentLinks.filter(l => l.href !== "/dashboard/parent/attendance");
+  }
+  if (settings.RESULT_VISIBILITY === "false") {
+    parentLinks = parentLinks.filter(l => !["/dashboard/parent/exams", "/dashboard/parent/report-cards"].includes(l.href));
+  }
+
   let links = parentLinks;
   if (role === "ADMIN") links = adminLinks;
   if (role === "TEACHER") links = teacherLinks;
+
+  const schoolName = settings.SCHOOL_NAME || "EduPortal";
 
   return (
     <aside className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ""}`}>
@@ -102,7 +118,7 @@ export default function Sidebar({ role }: { role: string }) {
         >
           <Menu size={24} />
         </button>
-        {!isCollapsed && <span className={styles.logoText}>EduPortal</span>}
+        {!isCollapsed && <span className={styles.logoText}>{schoolName}</span>}
       </div>
       <nav className={styles.nav}>
         {links.map((link) => {

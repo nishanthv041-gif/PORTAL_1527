@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import Sidebar from "@/frontend/components/Sidebar";
 import Topbar from "@/frontend/components/Topbar";
 import styles from "./layout.module.css";
+import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/settings/actions";
 
 export default async function DashboardLayout({
   children,
@@ -16,14 +17,25 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
+  const settings = await getSystemSettings();
 
+  if (settings.MAINTENANCE_MODE === "true" && session.user.role !== "ADMIN") {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '2rem', textAlign: 'center', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
+        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '1rem', color: 'var(--primary)' }}>System Under Maintenance</h1>
+        <p style={{ fontSize: '1.1rem', maxWidth: '500px', lineHeight: 1.5, opacity: 0.8 }}>
+          We are currently performing scheduled maintenance on the portal. Please check back later.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.container}>
       <input type="checkbox" id="mobile-menu-toggle" className={styles.mobileMenuToggle} />
       
       <div className={styles.sidebarWrapper}>
-        <Sidebar role={session.user.role} />
+        <Sidebar role={session.user.role} settings={settings} />
       </div>
       
       <div className={styles.mainContent}>
