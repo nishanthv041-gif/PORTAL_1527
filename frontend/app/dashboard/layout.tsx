@@ -23,11 +23,89 @@ export default async function DashboardLayout({
 
   if (settings.MAINTENANCE_MODE === "true" && session.user.role !== "ADMIN") {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '2rem', textAlign: 'center', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '1rem', color: 'var(--primary)' }}>System Under Maintenance</h1>
-        <p style={{ fontSize: '1.1rem', maxWidth: '500px', lineHeight: 1.5, opacity: 0.8 }}>
-          We are currently performing scheduled maintenance on the portal. Please check back later.
-        </p>
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        minHeight: '100dvh', 
+        padding: '1.5rem', 
+        textAlign: 'center', 
+        backgroundColor: 'var(--background)', 
+        color: 'var(--foreground)',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {/* Ambient Glows */}
+        <div style={{
+          position: 'absolute',
+          top: '0',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '600px',
+          height: '600px',
+          background: 'radial-gradient(circle, var(--primary) 0%, transparent 70%)',
+          opacity: 0.1,
+          filter: 'blur(60px)',
+          pointerEvents: 'none',
+          zIndex: 0
+        }} />
+
+        <div style={{
+          background: 'var(--card)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid var(--border)',
+          borderRadius: '24px',
+          padding: '3rem 2rem',
+          maxWidth: '500px',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          boxShadow: 'var(--shadow-md)',
+          position: 'relative',
+          zIndex: 1
+        }}>
+          {/* Settings/Maintenance Icon */}
+          <div style={{
+            width: '80px',
+            height: '80px',
+            borderRadius: '50%',
+            background: 'var(--primary-bg)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '1.5rem',
+            color: 'var(--primary)',
+            boxShadow: '0 0 20px var(--primary-bg)'
+          }}>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </div>
+
+          <h1 style={{ 
+            fontSize: 'clamp(1.5rem, 5vw, 2.25rem)', 
+            fontWeight: '700', 
+            marginBottom: '1rem', 
+            color: 'var(--primary)',
+            lineHeight: 1.2,
+            letterSpacing: '-0.02em',
+            textAlign: 'center'
+          }}>
+            System Under Maintenance
+          </h1>
+          <p style={{ 
+            fontSize: 'clamp(1rem, 3vw, 1.125rem)', 
+            lineHeight: 1.6, 
+            opacity: 0.8,
+            margin: 0,
+            textAlign: 'center'
+          }}>
+            We are currently performing scheduled maintenance on the portal. Please check back later.
+          </p>
+        </div>
       </div>
     );
   }
