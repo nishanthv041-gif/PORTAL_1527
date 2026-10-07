@@ -21,7 +21,7 @@ export default async function DashboardLayout({
 
   const settings = await getSystemSettings();
 
-  if (settings.MAINTENANCE_MODE === "true" && session.user.role !== "ADMIN") {
+  if (false && settings.MAINTENANCE_MODE === "true" && session.user.role !== "ADMIN") {
     return (
       <div style={{ 
         display: 'flex', 
