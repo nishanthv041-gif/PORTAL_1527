@@ -1,9 +1,7 @@
 import { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : process.env.NEXT_PUBLIC_APP_URL || 'https://portal-27.vercel.app';
+  const baseUrl = 'https://nipoportal.vercel.app';
 
   return {
     rules: {
