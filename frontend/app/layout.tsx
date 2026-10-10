@@ -17,6 +17,9 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: schoolName,
     description: "School management portal for teachers, parents, and admins",
+    verification: {
+      google: "qVtRH0vqbgqX_w0_sDfrgHF91IaAL9EvKq3i2KplAj4",
+    },
   };
 }
 

@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function main() { await prisma.systemSetting.upsert({ where: { key: 'MAINTENANCE_MODE' }, update: { value: 'false' }, create: { key: 'MAINTENANCE_MODE', value: 'false', category: 'GENERAL' } }); console.log('Maintenance mode disabled'); } main().then(() => prisma.$disconnect());
