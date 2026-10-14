@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Search, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { LoginAttempt } from "@prisma/client";
+import { sendReportEmailAction } from "@/backend/api/actions/dashboard/admin/login-status/actions";
 
 export default function LoginStatusClient({ records }: { records: LoginAttempt[] }) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -81,7 +82,6 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                       if (confirm(`Are you sure you want to send a security alert email to ${record.email}?`)) {
                         setSendingId(record.id);
                         try {
-                          const { sendReportEmailAction } = await import('@/backend/api/actions/dashboard/admin/login-status/actions');
                           const res = await sendReportEmailAction(record.email, record.ipAddress, record.timestamp, record.success);
                           if (res?.error) {
                             alert(res.error);

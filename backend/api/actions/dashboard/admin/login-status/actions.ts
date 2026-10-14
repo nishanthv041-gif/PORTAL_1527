@@ -4,6 +4,11 @@ import nodemailer from "nodemailer";
 
 export async function sendReportEmailAction(email: string, ipAddress: string | null, timestamp: Date, success: boolean) {
   try {
+    const recipient = email?.trim();
+    if (!recipient || !recipient.includes("@")) {
+      return { error: `Invalid recipient email address: "${email}"` };
+    }
+
     const smtpEmail = process.env.SMTP_EMAIL?.trim();
     const smtpPassword = process.env.SMTP_PASSWORD?.trim().replace(/\s+/g, '');
 
@@ -33,7 +38,7 @@ export async function sendReportEmailAction(email: string, ipAddress: string | n
 
     const mailOptions = {
       from: `"Portal Security" <${smtpEmail}>`,
-      to: email,
+      to: recipient,
       subject: "Security Notice: Login Activity on Your Portal Account",
       text: `Hello,\n\nWe are writing to inform you of a recent login attempt on your account.\n\nTime: ${new Date(timestamp).toLocaleString()}\nStatus: ${success ? 'Success' : 'Failed'}\nIP Address: ${ipAddress || 'Unknown'}\n\nIf this was not you, please contact the administrator immediately.\n\nThank you,\nPortal Admin`,
       html: `
