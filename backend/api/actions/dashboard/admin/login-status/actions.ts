@@ -8,28 +8,28 @@ export async function sendReportEmailAction(email: string, ipAddress: string | n
     const smtpPassword = process.env.SMTP_PASSWORD?.trim().replace(/\s+/g, '');
 
     if (!smtpEmail || !smtpPassword) {
-      return { error: "SMTP_EMAIL or SMTP_PASSWORD environment variables are not set. Cannot send email." };
+      return { 
+        error: "SMTP_EMAIL or SMTP_PASSWORD is not set in Vercel. Please set SMTP_EMAIL and SMTP_PASSWORD in Vercel Project Settings > Environment Variables, then redeploy." 
+      };
     }
 
-    const transporter = nodemailer.createTransport(
-      process.env.SMTP_HOST
-        ? {
-            host: process.env.SMTP_HOST,
-            port: parseInt(process.env.SMTP_PORT || '587'),
-            secure: process.env.SMTP_PORT === '465',
-            auth: {
-              user: smtpEmail,
-              pass: smtpPassword,
-            },
-          }
-        : {
-            service: 'gmail',
-            auth: {
-              user: smtpEmail,
-              pass: smtpPassword,
-            },
-          }
-    );
+    // Direct port 465 SSL for high reliability on Vercel/serverless environments
+    const host = process.env.SMTP_HOST || "smtp.gmail.com";
+    const port = parseInt(process.env.SMTP_PORT || "465");
+    const isSecure = process.env.SMTP_PORT ? process.env.SMTP_PORT === "465" : true;
+
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: isSecure,
+      auth: {
+        user: smtpEmail,
+        pass: smtpPassword,
+      },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
+    });
 
     const mailOptions = {
       from: `"Portal Security" <${smtpEmail}>`,
@@ -57,8 +57,10 @@ export async function sendReportEmailAction(email: string, ipAddress: string | n
     console.log(`[EMAIL SERVICE] Successfully sent alert to ${email}. MessageId: ${info.messageId}`);
 
     return { success: true, message: "Security alert email sent successfully!" };
-  } catch (error) {
-    console.error("Failed to send alert email:", error);
-    return { error: "Failed to send alert email. Please check server logs." };
+  } catch (error: any) {
+    console.error("[EMAIL SERVICE ERROR]:", error);
+    return { 
+      error: `Failed to send email: ${error?.message || "Please check SMTP configuration"}` 
+    };
   }
 }

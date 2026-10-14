@@ -6,6 +6,7 @@ import { LoginAttempt } from "@prisma/client";
 
 export default function LoginStatusClient({ records }: { records: LoginAttempt[] }) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [sendingId, setSendingId] = useState<string | null>(null);
 
   const filteredRecords = records.filter((record) => {
     return record.email.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -75,14 +76,22 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                 </td>
                 <td style={{ padding: "1rem", fontSize: '0.875rem', textAlign: 'center' }}>
                   <button 
+                    disabled={sendingId === record.id}
                     onClick={async () => {
                       if (confirm(`Are you sure you want to send a security alert email to ${record.email}?`)) {
-                        const { sendReportEmailAction } = await import('@/backend/api/actions/dashboard/admin/login-status/actions');
-                        const res = await sendReportEmailAction(record.email, record.ipAddress, record.timestamp, record.success);
-                        if (res?.error) {
-                          alert(res.error);
-                        } else {
-                          alert(`Security alert sent to ${record.email}!`);
+                        setSendingId(record.id);
+                        try {
+                          const { sendReportEmailAction } = await import('@/backend/api/actions/dashboard/admin/login-status/actions');
+                          const res = await sendReportEmailAction(record.email, record.ipAddress, record.timestamp, record.success);
+                          if (res?.error) {
+                            alert(res.error);
+                          } else {
+                            alert(`Security alert sent to ${record.email}!`);
+                          }
+                        } catch (err: any) {
+                          alert(`Error: ${err?.message || 'Failed to send'}`);
+                        } finally {
+                          setSendingId(null);
                         }
                       }
                     }}
@@ -92,12 +101,13 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                       color: 'var(--primary)', 
                       border: 'none',
                       borderRadius: '6px', 
-                      cursor: 'pointer',
+                      cursor: sendingId === record.id ? 'not-allowed' : 'pointer',
+                      opacity: sendingId === record.id ? 0.6 : 1,
                       fontWeight: 500,
                       display: 'inline-block' 
                     }}
                   >
-                    Report
+                    {sendingId === record.id ? 'Sending...' : 'Report'}
                   </button>
                 </td>
               </tr>
