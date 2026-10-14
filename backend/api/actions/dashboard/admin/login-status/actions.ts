@@ -4,8 +4,8 @@ import nodemailer from "nodemailer";
 
 export async function sendReportEmailAction(email: string, ipAddress: string | null, timestamp: Date, success: boolean) {
   try {
-    const smtpEmail = process.env.SMTP_EMAIL;
-    const smtpPassword = process.env.SMTP_PASSWORD;
+    const smtpEmail = process.env.SMTP_EMAIL?.trim();
+    const smtpPassword = process.env.SMTP_PASSWORD?.trim().replace(/\s+/g, '');
 
     if (!smtpEmail || !smtpPassword) {
       return { error: "SMTP_EMAIL or SMTP_PASSWORD environment variables are not set. Cannot send email." };
