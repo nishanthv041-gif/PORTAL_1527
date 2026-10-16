@@ -79,21 +79,6 @@ export default function ModernLoginForm({
     setActiveSlide((prev) => (prev + 1) % slides.length);
   };
 
-  const handleAutofill = (role: "ADMIN" | "TEACHER" | "PARENT") => {
-    setSelectedRole(role);
-    setError("");
-    if (role === "ADMIN") {
-      setEmail("nishanthv041@gmail.com");
-      setPassword("Nishanth@2715");
-    } else if (role === "TEACHER") {
-      setEmail("nishanthr.ad25@bitsathy.ac.in");
-      setPassword("Nishanth@2715");
-    } else if (role === "PARENT") {
-      setEmail("poorvika1527@gmail.com");
-      setPassword("poorvika@2715");
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -325,34 +310,6 @@ export default function ModernLoginForm({
                 </>
               )}
             </button>
-
-            {/* Demo Quick-Fill Helper */}
-            <div className={styles.demoFillBar}>
-              <span className={styles.demoFillLabel}>Demo Credentials:</span>
-              <div className={styles.demoChips}>
-                <button
-                  type="button"
-                  onClick={() => handleAutofill("ADMIN")}
-                  className={styles.demoChip}
-                >
-                  Admin
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAutofill("TEACHER")}
-                  className={styles.demoChip}
-                >
-                  Teacher
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAutofill("PARENT")}
-                  className={styles.demoChip}
-                >
-                  Parent
-                </button>
-              </div>
-            </div>
           </div>
 
           {/* Footer note */}
