@@ -1,6 +1,6 @@
 /* ============================================================
-   MODERN SPLIT-SCREEN LOGIN — CSS Module
-   Inspired by contemporary clean 3D showcases & Medio layout
+   PIXEL-PERFECT SPLIT-SCREEN LOGIN — CSS Module
+   Matching reference image: browser frame, curved scoop, 3D moss campus
    ============================================================ */
 
 .pageWrapper {
@@ -9,112 +9,168 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--background);
+  background-color: #e5e7eb;
   padding: 1.5rem;
-  position: relative;
-  overflow-x: hidden;
   box-sizing: border-box;
+  font-family: inherit;
 }
 
-/* Subtle decorative ambient glows */
-.pageWrapper::before {
-  content: "";
-  position: absolute;
-  top: -10%;
-  left: -5%;
-  width: 45vw;
-  height: 45vw;
-  background: radial-gradient(circle, rgba(98, 117, 51, 0.12) 0%, transparent 70%);
-  pointer-events: none;
-  z-index: 0;
+[data-theme="dark"] .pageWrapper {
+  background-color: #0b0f19;
 }
 
-.pageWrapper::after {
-  content: "";
-  position: absolute;
-  bottom: -10%;
-  right: -5%;
-  width: 40vw;
-  height: 40vw;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* Top corner theme toggle bar */
-.topBar {
-  position: fixed;
-  top: 1.25rem;
-  right: 1.5rem;
-  z-index: 60;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-/* Outer browser/window presentation frame */
-.frameContainer {
+/* Outer browser window mockup frame */
+.browserFrame {
   width: 100%;
-  max-width: 1200px;
-  min-height: 720px;
-  background: #ffffff;
-  border-radius: 28px;
-  box-shadow: 0 25px 70px -15px rgba(15, 23, 42, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.04);
-  display: flex;
+  max-width: 1160px;
+  background-color: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.05);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   position: relative;
-  z-index: 10;
   transition: box-shadow 0.3s ease;
 }
 
-[data-theme="dark"] .frameContainer {
-  background: #111827;
-  box-shadow: 0 25px 70px -15px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+[data-theme="dark"] .browserFrame {
+  background-color: #111827;
+  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+/* Simulated Safari / Mac browser top navigation bar */
+.browserTopBar {
+  height: 48px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.25rem;
+  box-sizing: border-box;
+}
+
+[data-theme="dark"] .browserTopBar {
+  background-color: #111827;
+  border-bottom-color: #1e293b;
+}
+
+/* Window traffic light dots */
+.windowDots {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 120px;
+}
+
+.dotRed {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background-color: #ff5f56;
+}
+
+.dotYellow {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background-color: #ffbd2e;
+}
+
+.dotGreen {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background-color: #27c93f;
+}
+
+/* Browser address search pill */
+.browserUrlPill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background-color: #f1f5f9;
+  padding: 0.35rem 1.75rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 500;
+  max-width: 320px;
+  width: 100%;
+}
+
+[data-theme="dark"] .browserUrlPill {
+  background-color: #1e293b;
+  color: #94a3b8;
+}
+
+.browserTopActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  width: 120px;
+}
+
+/* Main Split Content Canvas (Green Background Container) */
+.mainCanvas {
+  background-color: #627533;
+  background: linear-gradient(145deg, #596b2e 0%, #637735 50%, #526329 100%);
+  display: flex;
+  position: relative;
+  min-height: 640px;
+  width: 100%;
+  box-sizing: border-box;
+  padding-bottom: 24px;
 }
 
 /* ------------------------------------------------------------
-   LEFT PANEL: LOGIN FORM
+   LEFT PANEL (WHITE / CARD PANEL)
+   Curved at the bottom right so green wraps underneath!
    ------------------------------------------------------------ */
 .leftPanel {
-  flex: 1.05;
-  background: #ffffff;
-  padding: 3.25rem 3.5rem;
+  width: 48%;
+  background-color: #ffffff;
+  border-bottom-right-radius: 64px;
+  padding: 3rem 3.25rem 2.5rem 3.25rem;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   position: relative;
-  z-index: 2;
-  border-bottom-right-radius: 56px;
-  transition: background-color 0.2s ease;
+  z-index: 10;
+  box-sizing: border-box;
+  box-shadow: 10px 0 35px -5px rgba(0, 0, 0, 0.08);
 }
 
 [data-theme="dark"] .leftPanel {
-  background: #111827;
+  background-color: #111827;
+  box-shadow: 10px 0 35px -5px rgba(0, 0, 0, 0.35);
 }
 
-/* Brand header */
+/* Brand logo & portal name */
 .brandRow {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .brandLogo {
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #1e293b, #0f172a);
+  background: #0f172a;
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
   flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
 }
 
 [data-theme="dark"] .brandLogo {
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  background: #3b82f6;
 }
 
 .brandTextGroup {
@@ -123,12 +179,11 @@
 }
 
 .brandName {
-  font-size: 1.35rem;
+  font-size: 1.3rem;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: #0f172a;
   line-height: 1.1;
-  text-transform: capitalize;
 }
 
 [data-theme="dark"] .brandName {
@@ -141,17 +196,17 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #64748b;
-  margin-top: 0.15rem;
+  margin-top: 2px;
 }
 
 [data-theme="dark"] .brandBadge {
   color: #94a3b8;
 }
 
-/* Form content area */
+/* Form Content Wrapper */
 .formContent {
   width: 100%;
-  max-width: 440px;
+  max-width: 400px;
   margin: 0 auto;
 }
 
@@ -169,65 +224,36 @@
 }
 
 .subheadline {
-  font-size: 0.95rem;
+  font-size: 0.925rem;
   color: #64748b;
+  line-height: 1.45;
   margin: 0 0 1.75rem 0;
-  line-height: 1.5;
 }
 
 [data-theme="dark"] .subheadline {
   color: #94a3b8;
 }
 
-/* Role Selector Pills */
-.roleTabs {
+/* Error message banner */
+.errorAlert {
+  padding: 0.75rem 1rem;
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 10px;
+  color: #ef4444;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 1.25rem;
   display: flex;
-  gap: 0.4rem;
-  background: #f1f5f9;
-  padding: 0.3rem;
-  border-radius: 999px;
-  margin-bottom: 1.5rem;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-[data-theme="dark"] .roleTabs {
-  background: #1e293b;
-}
-
-.roleTab {
-  flex: 1;
-  padding: 0.45rem 0.5rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  border: none;
-  background: transparent;
-  color: #64748b;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: center;
-}
-
-[data-theme="dark"] .roleTab {
-  color: #94a3b8;
-}
-
-.roleTabActive {
-  background: #ffffff;
-  color: #0f172a;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-}
-
-[data-theme="dark"] .roleTabActive {
-  background: #3b82f6;
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
-}
-
-/* Input Fields */
+/* Form inputs */
 .form {
   display: flex;
   flex-direction: column;
-  gap: 0.95rem;
+  gap: 0.9rem;
 }
 
 .inputFieldWrapper {
@@ -237,11 +263,11 @@
 
 .inputField {
   width: 100%;
-  height: 52px;
+  height: 50px;
   padding: 0 1.15rem;
   border: 1.5px solid #e2e8f0;
   border-radius: 12px;
-  font-size: 0.95rem;
+  font-size: 16px; /* 16px prevents iOS browser auto-zoom */
   color: #0f172a;
   background-color: #ffffff;
   outline: none;
@@ -294,15 +320,15 @@
   color: #f8fafc;
 }
 
-/* Submit Button */
+/* Primary Log in Button (Solid Black Pill) */
 .loginButton {
   width: 100%;
-  height: 52px;
+  height: 50px;
   background-color: #000000;
   color: #ffffff;
   border: none;
-  border-radius: 12px;
-  font-size: 1rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   cursor: pointer;
@@ -311,28 +337,21 @@
   justify-content: center;
   gap: 0.5rem;
   transition: all 0.2s ease;
-  margin-top: 0.35rem;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  margin-top: 0.25rem;
 }
 
 [data-theme="dark"] .loginButton {
   background-color: #f8fafc;
   color: #0f172a;
-  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.1);
 }
 
 .loginButton:hover:not(:disabled) {
-  background-color: #1f2937;
+  background-color: #27272a;
   transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
 }
 
 [data-theme="dark"] .loginButton:hover:not(:disabled) {
   background-color: #e2e8f0;
-}
-
-.loginButton:active:not(:disabled) {
-  transform: translateY(0);
 }
 
 .loginButton:disabled {
@@ -340,7 +359,7 @@
   cursor: not-allowed;
 }
 
-/* Divider */
+/* Divider "Or" */
 .divider {
   display: flex;
   align-items: center;
@@ -348,7 +367,7 @@
   color: #94a3b8;
   font-size: 0.85rem;
   font-weight: 500;
-  margin: 1.25rem 0;
+  margin: 1.15rem 0;
 }
 
 .divider::before,
@@ -371,15 +390,15 @@
   margin-left: 0.85rem;
 }
 
-/* Google Sign In Button */
+/* Google Sign-In Button (White Pill) */
 .googleButton {
   width: 100%;
   height: 50px;
   background-color: #ffffff;
   color: #1e293b;
   border: 1.5px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 0.95rem;
+  border-radius: 10px;
+  font-size: 0.925rem;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -411,76 +430,6 @@
   cursor: not-allowed;
 }
 
-/* Demo quick-fill helper */
-.demoFillBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 1.25rem;
-  padding-top: 1rem;
-  border-top: 1px dashed #e2e8f0;
-}
-
-[data-theme="dark"] .demoFillBar {
-  border-color: #334155;
-}
-
-.demoFillLabel {
-  font-size: 0.75rem;
-  color: #64748b;
-  font-weight: 600;
-}
-
-.demoChips {
-  display: flex;
-  gap: 0.35rem;
-}
-
-.demoChip {
-  font-size: 0.72rem;
-  padding: 0.25rem 0.6rem;
-  border-radius: 6px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  color: #475569;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.15s ease;
-}
-
-[data-theme="dark"] .demoChip {
-  background: #1e293b;
-  border-color: #334155;
-  color: #94a3b8;
-}
-
-.demoChip:hover {
-  background: #0f172a;
-  color: #ffffff;
-  border-color: #0f172a;
-}
-
-[data-theme="dark"] .demoChip:hover {
-  background: #3b82f6;
-  color: #ffffff;
-  border-color: #3b82f6;
-}
-
-/* Error message banner */
-.errorAlert {
-  padding: 0.75rem 1rem;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  border-radius: 10px;
-  color: #ef4444;
-  font-size: 0.85rem;
-  font-weight: 500;
-  margin-bottom: 1.15rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
 /* Footer note */
 .formFooter {
   font-size: 0.75rem;
@@ -490,21 +439,19 @@
 }
 
 /* ------------------------------------------------------------
-   RIGHT PANEL: 3D SHOWCASE & CAROUSEL
+   RIGHT PANEL (GREEN 3D ARTWORK & CAROUSEL)
    ------------------------------------------------------------ */
 .rightPanel {
-  flex: 1.25;
-  background: #627533;
-  background: linear-gradient(145deg, #5c6f30 0%, #637734 50%, #54662b 100%);
+  width: 52%;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 3.25rem 3.5rem 3rem 3.5rem;
+  padding: 2.5rem 3.25rem 1rem 3.25rem;
   position: relative;
-  overflow: hidden;
+  box-sizing: border-box;
 }
 
-/* Top right badge */
+/* Top Badge */
 .topBadgeRow {
   display: flex;
   justify-content: flex-end;
@@ -516,36 +463,34 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.45rem 0.95rem;
+  padding: 0.4rem 0.9rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.16);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.25);
   color: #ffffff;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.02em;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-/* Center 3D artwork display */
+/* Center 3D School Image */
 .artContainer {
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  z-index: 5;
-  margin: 1.5rem 0;
+  margin: 1rem 0;
 }
 
 .artImage {
   width: 100%;
-  max-width: 440px;
+  max-width: 400px;
   height: auto;
   aspect-ratio: 1 / 1;
   object-fit: contain;
-  filter: drop-shadow(0 25px 35px rgba(0, 0, 0, 0.22));
+  filter: drop-shadow(0 20px 30px rgba(0, 0, 0, 0.2));
   animation: floatArt 6s ease-in-out infinite;
   user-select: none;
   pointer-events: none;
@@ -556,43 +501,41 @@
     transform: translateY(0px) rotate(0deg);
   }
   50% {
-    transform: translateY(-9px) rotate(0.4deg);
+    transform: translateY(-8px) rotate(0.3deg);
   }
 }
 
-/* Bottom carousel showcase */
+/* Bottom Showcase Section */
 .bottomShowcase {
-  position: relative;
-  z-index: 10;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
+  position: relative;
+  z-index: 10;
 }
 
 .showcaseTextWrapper {
-  min-height: 80px;
+  min-height: 64px;
 }
 
 .showcaseTitle {
-  font-size: 1.85rem;
+  font-size: 1.75rem;
   font-weight: 800;
   color: #ffffff;
   letter-spacing: -0.03em;
   line-height: 1.25;
-  margin: 0 0 0.45rem 0;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  margin: 0 0 0.35rem 0;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .showcaseDesc {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   color: rgba(255, 255, 255, 0.85);
-  line-height: 1.5;
+  line-height: 1.45;
   margin: 0;
-  max-width: 480px;
 }
 
-/* Carousel controls row: pagination pills on left, circle arrow buttons on right */
+/* Controls row: pagination capsules on left, circle arrows on right */
 .showcaseControls {
   display: flex;
   align-items: center;
@@ -617,9 +560,8 @@
 }
 
 .pillDotActive {
-  width: 32px;
+  width: 28px;
   background: #ffffff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .arrowNav {
@@ -629,8 +571,8 @@
 }
 
 .navCircleButton {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   border: 1.5px solid rgba(255, 255, 255, 0.4);
   background: transparent;
@@ -643,7 +585,7 @@
 }
 
 .navCircleButton:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.2);
   border-color: rgba(255, 255, 255, 0.8);
   transform: scale(1.05);
 }
@@ -653,23 +595,21 @@
 }
 
 /* ------------------------------------------------------------
-   RESPONSIVE ADAPTATIONS
+   RESPONSIVE DESIGN (PC, TABLET, MOBILE)
    ------------------------------------------------------------ */
-@media (max-width: 980px) {
-  .frameContainer {
-    flex-direction: column;
-    min-height: auto;
-    border-radius: 20px;
+
+/* Small desktop / tablet view */
+@media (max-width: 1024px) {
+  .browserFrame {
+    max-width: 960px;
   }
 
   .leftPanel {
-    border-bottom-right-radius: 0;
     padding: 2.5rem 2rem;
   }
 
   .rightPanel {
-    padding: 2.5rem 2rem;
-    min-height: 480px;
+    padding: 2.5rem 2rem 1rem 2rem;
   }
 
   .headline {
@@ -685,25 +625,122 @@
   }
 }
 
-@media (max-width: 540px) {
+/* Mobile View (phones, tablets < 860px) */
+@media (max-width: 860px) {
   .pageWrapper {
     padding: 0.75rem;
+    align-items: flex-start;
   }
 
-  .frameContainer {
+  .browserFrame {
     border-radius: 16px;
+    margin: 0.5rem auto;
   }
 
+  /* Compact browser top bar on mobile */
+  .browserTopBar {
+    height: 40px;
+    padding: 0 0.85rem;
+  }
+
+  .windowDots {
+    width: auto;
+    gap: 5px;
+  }
+
+  .dotRed,
+  .dotYellow,
+  .dotGreen {
+    width: 9px;
+    height: 9px;
+  }
+
+  .browserUrlPill {
+    font-size: 0.72rem;
+    padding: 0.25rem 0.75rem;
+    max-width: 180px;
+  }
+
+  .browserTopActions {
+    width: auto;
+  }
+
+  /* Stack into seamless single column on mobile */
+  .mainCanvas {
+    flex-direction: column;
+    padding-bottom: 0;
+    min-height: auto;
+  }
+
+  /* Left Panel on Mobile */
   .leftPanel {
-    padding: 2rem 1.25rem;
+    width: 100%;
+    border-bottom-right-radius: 36px;
+    padding: 2rem 1.25rem 2rem 1.25rem;
+    box-shadow: none;
   }
 
-  .rightPanel {
-    padding: 2rem 1.25rem;
+  .formContent {
+    max-width: 100%;
   }
 
   .headline {
-    font-size: 1.95rem;
+    font-size: 2rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .subheadline {
+    font-size: 0.875rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .inputField {
+    height: 48px;
+    font-size: 16px;
+  }
+
+  .loginButton,
+  .googleButton {
+    height: 48px;
+  }
+
+  /* Right Panel on Mobile (Green Showcase Section) */
+  .rightPanel {
+    width: 100%;
+    padding: 2rem 1.25rem 2rem 1.25rem;
+    min-height: auto;
+  }
+
+  .topBadgeRow {
+    justify-content: center;
+    margin-bottom: 1rem;
+  }
+
+  .artContainer {
+    margin: 0.5rem 0 1.25rem 0;
+  }
+
+  .artImage {
+    max-width: 240px;
+  }
+
+  .showcaseTextWrapper {
+    min-height: auto;
+    text-align: center;
+  }
+
+  .showcaseTitle {
+    font-size: 1.35rem;
+  }
+
+  .showcaseDesc {
+    font-size: 0.85rem;
+  }
+
+  .showcaseControls {
+    justify-content: center;
+    gap: 1.5rem;
+    margin-top: 0.5rem;
   }
 
   .navCircleButton {
