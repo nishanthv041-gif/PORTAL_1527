@@ -1,0 +1,713 @@
+/* ============================================================
+   MODERN SPLIT-SCREEN LOGIN — CSS Module
+   Inspired by contemporary clean 3D showcases & Medio layout
+   ============================================================ */
+
+.pageWrapper {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--background);
+  padding: 1.5rem;
+  position: relative;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* Subtle decorative ambient glows */
+.pageWrapper::before {
+  content: "";
+  position: absolute;
+  top: -10%;
+  left: -5%;
+  width: 45vw;
+  height: 45vw;
+  background: radial-gradient(circle, rgba(98, 117, 51, 0.12) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.pageWrapper::after {
+  content: "";
+  position: absolute;
+  bottom: -10%;
+  right: -5%;
+  width: 40vw;
+  height: 40vw;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Top corner theme toggle bar */
+.topBar {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.5rem;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Outer browser/window presentation frame */
+.frameContainer {
+  width: 100%;
+  max-width: 1200px;
+  min-height: 720px;
+  background: #ffffff;
+  border-radius: 28px;
+  box-shadow: 0 25px 70px -15px rgba(15, 23, 42, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  display: flex;
+  overflow: hidden;
+  position: relative;
+  z-index: 10;
+  transition: box-shadow 0.3s ease;
+}
+
+[data-theme="dark"] .frameContainer {
+  background: #111827;
+  box-shadow: 0 25px 70px -15px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+/* ------------------------------------------------------------
+   LEFT PANEL: LOGIN FORM
+   ------------------------------------------------------------ */
+.leftPanel {
+  flex: 1.05;
+  background: #ffffff;
+  padding: 3.25rem 3.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  z-index: 2;
+  border-bottom-right-radius: 56px;
+  transition: background-color 0.2s ease;
+}
+
+[data-theme="dark"] .leftPanel {
+  background: #111827;
+}
+
+/* Brand header */
+.brandRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.brandLogo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .brandLogo {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+}
+
+.brandTextGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.brandName {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+  line-height: 1.1;
+  text-transform: capitalize;
+}
+
+[data-theme="dark"] .brandName {
+  color: #f8fafc;
+}
+
+.brandBadge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  margin-top: 0.15rem;
+}
+
+[data-theme="dark"] .brandBadge {
+  color: #94a3b8;
+}
+
+/* Form content area */
+.formContent {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.headline {
+  font-size: 2.75rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: #0f172a;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.1;
+}
+
+[data-theme="dark"] .headline {
+  color: #f8fafc;
+}
+
+.subheadline {
+  font-size: 0.95rem;
+  color: #64748b;
+  margin: 0 0 1.75rem 0;
+  line-height: 1.5;
+}
+
+[data-theme="dark"] .subheadline {
+  color: #94a3b8;
+}
+
+/* Role Selector Pills */
+.roleTabs {
+  display: flex;
+  gap: 0.4rem;
+  background: #f1f5f9;
+  padding: 0.3rem;
+  border-radius: 999px;
+  margin-bottom: 1.5rem;
+}
+
+[data-theme="dark"] .roleTabs {
+  background: #1e293b;
+}
+
+.roleTab {
+  flex: 1;
+  padding: 0.45rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+[data-theme="dark"] .roleTab {
+  color: #94a3b8;
+}
+
+.roleTabActive {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .roleTabActive {
+  background: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+/* Input Fields */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+}
+
+.inputFieldWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.inputField {
+  width: 100%;
+  height: 52px;
+  padding: 0 1.15rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  color: #0f172a;
+  background-color: #ffffff;
+  outline: none;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+[data-theme="dark"] .inputField {
+  background-color: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+.inputField::placeholder {
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.inputField:focus {
+  border-color: #0f172a;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+}
+
+[data-theme="dark"] .inputField:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+}
+
+.passwordToggle {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+}
+
+.passwordToggle:hover {
+  color: #0f172a;
+}
+
+[data-theme="dark"] .passwordToggle:hover {
+  color: #f8fafc;
+}
+
+/* Submit Button */
+.loginButton {
+  width: 100%;
+  height: 52px;
+  background-color: #000000;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  margin-top: 0.35rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="dark"] .loginButton {
+  background-color: #f8fafc;
+  color: #0f172a;
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.1);
+}
+
+.loginButton:hover:not(:disabled) {
+  background-color: #1f2937;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .loginButton:hover:not(:disabled) {
+  background-color: #e2e8f0;
+}
+
+.loginButton:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.loginButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Divider */
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin: 1.25rem 0;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+[data-theme="dark"] .divider::before,
+[data-theme="dark"] .divider::after {
+  border-color: #334155;
+}
+
+.divider::before {
+  margin-right: 0.85rem;
+}
+
+.divider::after {
+  margin-left: 0.85rem;
+}
+
+/* Google Sign In Button */
+.googleButton {
+  width: 100%;
+  height: 50px;
+  background-color: #ffffff;
+  color: #1e293b;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+[data-theme="dark"] .googleButton {
+  background-color: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+.googleButton:hover:not(:disabled) {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+[data-theme="dark"] .googleButton:hover:not(:disabled) {
+  background-color: #273549;
+  border-color: #475569;
+}
+
+.googleButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Demo quick-fill helper */
+.demoFillBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #e2e8f0;
+}
+
+[data-theme="dark"] .demoFillBar {
+  border-color: #334155;
+}
+
+.demoFillLabel {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.demoChips {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.demoChip {
+  font-size: 0.72rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+[data-theme="dark"] .demoChip {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+.demoChip:hover {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+}
+
+[data-theme="dark"] .demoChip:hover {
+  background: #3b82f6;
+  color: #ffffff;
+  border-color: #3b82f6;
+}
+
+/* Error message banner */
+.errorAlert {
+  padding: 0.75rem 1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 10px;
+  color: #ef4444;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Footer note */
+.formFooter {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-align: center;
+  margin-top: 1.5rem;
+}
+
+/* ------------------------------------------------------------
+   RIGHT PANEL: 3D SHOWCASE & CAROUSEL
+   ------------------------------------------------------------ */
+.rightPanel {
+  flex: 1.25;
+  background: #627533;
+  background: linear-gradient(145deg, #5c6f30 0%, #637734 50%, #54662b 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 3.25rem 3.5rem 3rem 3.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Top right badge */
+.topBadgeRow {
+  display: flex;
+  justify-content: flex-end;
+  position: relative;
+  z-index: 10;
+}
+
+.portalBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Center 3D artwork display */
+.artContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 5;
+  margin: 1.5rem 0;
+}
+
+.artImage {
+  width: 100%;
+  max-width: 440px;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  filter: drop-shadow(0 25px 35px rgba(0, 0, 0, 0.22));
+  animation: floatArt 6s ease-in-out infinite;
+  user-select: none;
+  pointer-events: none;
+}
+
+@keyframes floatArt {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-9px) rotate(0.4deg);
+  }
+}
+
+/* Bottom carousel showcase */
+.bottomShowcase {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.showcaseTextWrapper {
+  min-height: 80px;
+}
+
+.showcaseTitle {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+  margin: 0 0 0.45rem 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.showcaseDesc {
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 480px;
+}
+
+/* Carousel controls row: pagination pills on left, circle arrow buttons on right */
+.showcaseControls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.paginationPills {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pillDot {
+  height: 8px;
+  width: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.35);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pillDotActive {
+  width: 32px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.arrowNav {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.navCircleButton {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  background: transparent;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.navCircleButton:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.8);
+  transform: scale(1.05);
+}
+
+.navCircleButton:active {
+  transform: scale(0.95);
+}
+
+/* ------------------------------------------------------------
+   RESPONSIVE ADAPTATIONS
+   ------------------------------------------------------------ */
+@media (max-width: 980px) {
+  .frameContainer {
+    flex-direction: column;
+    min-height: auto;
+    border-radius: 20px;
+  }
+
+  .leftPanel {
+    border-bottom-right-radius: 0;
+    padding: 2.5rem 2rem;
+  }
+
+  .rightPanel {
+    padding: 2.5rem 2rem;
+    min-height: 480px;
+  }
+
+  .headline {
+    font-size: 2.25rem;
+  }
+
+  .artImage {
+    max-width: 320px;
+  }
+
+  .showcaseTitle {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 540px) {
+  .pageWrapper {
+    padding: 0.75rem;
+  }
+
+  .frameContainer {
+    border-radius: 16px;
+  }
+
+  .leftPanel {
+    padding: 2rem 1.25rem;
+  }
+
+  .rightPanel {
+    padding: 2rem 1.25rem;
+  }
+
+  .headline {
+    font-size: 1.95rem;
+  }
+
+  .navCircleButton {
+    width: 38px;
+    height: 38px;
+  }
+}

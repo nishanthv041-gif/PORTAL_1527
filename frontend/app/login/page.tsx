@@ -1,24 +1,40 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { redirect } from "next/navigation";
+import ModernLoginForm from "@/frontend/components/ModernLoginForm";
+import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/settings/actions";
 
-export default async function LoginPage() {
+interface LoginPageProps {
+  searchParams: Promise<{ error?: string }>;
+}
+
+export default async function LoginPage(props: LoginPageProps) {
+  const searchParams = await props.searchParams;
   const session = await getServerSession(getAuthOptions());
 
   if (session) {
     switch (session.user.role) {
-      case 'ADMIN':
+      case "ADMIN":
         redirect("/dashboard/admin");
-      case 'TEACHER':
+      case "TEACHER":
         redirect("/dashboard/teacher");
-      case 'PARENT':
+      case "PARENT":
         redirect("/dashboard/parent");
-      case 'STUDENT':
+      case "STUDENT":
       default:
         redirect("/dashboard");
     }
   }
 
-  // If no session, redirect to the new root portal selection page
-  redirect("/");
+  const settings = await getSystemSettings();
+  const schoolName = settings.SCHOOL_NAME || "SRT Portal";
+  const schoolLogo = settings.SCHOOL_LOGO || null;
+
+  return (
+    <ModernLoginForm
+      schoolName={schoolName}
+      schoolLogo={schoolLogo}
+      initialError={searchParams.error}
+    />
+  );
 }
