@@ -48,19 +48,22 @@ export async function sendReportEmailAction(
     });
 
     const mailOptions = {
-      from: `"Portal Security" <${smtpEmail}>`,
+      from: `"Portal Administration" <${smtpEmail}>`,
       replyTo: smtpEmail,
       to: recipient,
-      subject: `Security Alert: Login activity for account ${email}`,
-      text: `Hello,\n\nThis is a security alert regarding your account (${email}).\n\nLogin Time: ${formattedDate}\nStatus: ${success ? "Success" : "Failed"}\nIP Address: ${ipAddress || "Unknown"}\n\nIf you did not initiate this login, please contact support or reset your password immediately.\n\nRegards,\nPortal Administration`,
+      subject: `Portal Account Notice: Login Activity for ${email}`,
+      headers: {
+        "X-Entity-Ref-ID": `${Date.now()}-${email}`,
+      },
+      text: `Hello,\n\nThis is an administrative account notice regarding your account (${email}).\n\nLogin Time: ${formattedDate}\nStatus: ${success ? "Success" : "Failed"}\nIP Address: ${ipAddress || "Unknown"}\n\nIf you did not initiate this login, please contact your administrator immediately.\n\nRegards,\nPortal Administration`,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1a202c;">
           <div style="border-bottom: 2px solid #3b82f6; padding-bottom: 12px; margin-bottom: 20px;">
-            <h2 style="margin: 0; color: #1e293b; font-size: 20px;">Portal Security Notice</h2>
+            <h2 style="margin: 0; color: #1e293b; font-size: 20px;">Portal Account Notice</h2>
           </div>
           <p style="font-size: 15px; color: #334155;">Hello,</p>
           <p style="font-size: 14px; line-height: 1.5; color: #475569;">
-            We detected a login attempt for account: <strong style="color: #0f172a;">${email}</strong>
+            This is an administrative notice regarding login activity for account: <strong style="color: #0f172a;">${email}</strong>
           </p>
           <div style="background-color: ${success ? "#f0fdf4" : "#fef2f2"}; border: 1px solid ${success ? "#bbf7d0" : "#fecaca"}; border-radius: 8px; padding: 16px; margin: 20px 0;">
             <p style="margin: 4px 0; font-size: 14px;"><strong>Status:</strong> <span style="color: ${success ? "#16a34a" : "#dc2626"}; font-weight: bold;">${success ? "Successful Login" : "Failed Attempt"}</span></p>

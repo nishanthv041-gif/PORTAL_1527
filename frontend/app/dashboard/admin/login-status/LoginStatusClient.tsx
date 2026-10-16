@@ -1,20 +1,45 @@
 "use client";
 
 import { useState } from "react";
-import { Search, CheckCircle2, XCircle, Clock, Mail, Send, X, AlertCircle } from "lucide-react";
+import {
+  Search,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Mail,
+  Send,
+  X,
+  AlertCircle,
+  Loader2,
+  SlidersHorizontal,
+} from "lucide-react";
 import { LoginAttempt } from "@prisma/client";
-import { sendReportEmailAction, sendTestEmailAction } from "@/backend/api/actions/dashboard/admin/login-status/actions";
+import {
+  sendReportEmailAction,
+  sendTestEmailAction,
+} from "@/backend/api/actions/dashboard/admin/login-status/actions";
 
 export default function LoginStatusClient({ records }: { records: LoginAttempt[] }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRecord, setSelectedRecord] = useState<LoginAttempt | null>(null);
   const [recipientEmail, setRecipientEmail] = useState("");
-  const [isSending, setIsSending] = useState(false);
+  const [isSendingModal, setIsSendingModal] = useState(false);
   const [modalFeedback, setModalFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // Direct Row Sending State
+  const [sendingRowId, setSendingRowId] = useState<string | null>(null);
+  const [sentSuccessRowId, setSentSuccessRowId] = useState<string | null>(null);
+
+  // Global Page Banner
+  const [globalBanner, setGlobalBanner] = useState<{
+    type: "success" | "error" | "info";
+    message: string;
+    details?: string;
+  } | null>(null);
 
   // Quick Test Email State
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
-  const [testEmailAddress, setTestEmailAddress] = useState("iniya.k008@gmail.com");
+  const [testEmailAddress, setTestEmailAddress] = useState("");
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testFeedback, setTestFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -25,24 +50,68 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
     );
   });
 
+  // Direct 1-Click Send to that particular user
+  const handleDirectReport = async (record: LoginAttempt) => {
+    if (sendingRowId) return;
+    setSendingRowId(record.id);
+    setGlobalBanner(null);
+
+    try {
+      const res = await sendReportEmailAction(
+        record.email,
+        record.ipAddress,
+        record.timestamp,
+        record.success,
+        record.email
+      );
+
+      if (res?.error) {
+        setGlobalBanner({
+          type: "error",
+          message: `Failed to send report to ${record.email}`,
+          details: res.error,
+        });
+      } else {
+        setSentSuccessRowId(record.id);
+        setGlobalBanner({
+          type: "success",
+          message: `Security report email sent to ${record.email}!`,
+          details: "Delivered via SMTP. Note: If the recipient does not see it in their Inbox, please ask them to check their Spam/Junk folder.",
+        });
+        setTimeout(() => {
+          setSentSuccessRowId((prev) => (prev === record.id ? null : prev));
+        }, 5000);
+      }
+    } catch (err: any) {
+      setGlobalBanner({
+        type: "error",
+        message: `Error sending report to ${record.email}`,
+        details: err?.message || "Please check server connection.",
+      });
+    } finally {
+      setSendingRowId(null);
+    }
+  };
+
   const handleOpenReportModal = (record: LoginAttempt) => {
     setSelectedRecord(record);
     setRecipientEmail(record.email);
     setModalFeedback(null);
   };
 
-  const handleSendReport = async () => {
+  const handleSendReportFromModal = async () => {
     if (!selectedRecord) return;
-    setIsSending(true);
+    setIsSendingModal(true);
     setModalFeedback(null);
 
     try {
+      const targetRecipient = recipientEmail.trim() || selectedRecord.email;
       const res = await sendReportEmailAction(
         selectedRecord.email,
         selectedRecord.ipAddress,
         selectedRecord.timestamp,
         selectedRecord.success,
-        recipientEmail
+        targetRecipient
       );
 
       if (res?.error) {
@@ -50,7 +119,13 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
       } else {
         setModalFeedback({
           type: "success",
-          message: res.message || `Security alert email sent to ${recipientEmail}!`,
+          message: `Security alert sent to ${targetRecipient}! (Please check Spam/Junk folder if not in Inbox)`,
+        });
+        setSentSuccessRowId(selectedRecord.id);
+        setGlobalBanner({
+          type: "success",
+          message: `Security alert sent to ${targetRecipient}!`,
+          details: "Delivered via SMTP. If the recipient does not see it in their Inbox, please ask them to check their Spam/Junk folder.",
         });
       }
     } catch (err: any) {
@@ -59,7 +134,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
         message: err?.message || "Failed to send email. Please check server connection.",
       });
     } finally {
-      setIsSending(false);
+      setIsSendingModal(false);
     }
   };
 
@@ -78,7 +153,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
       } else {
         setTestFeedback({
           type: "success",
-          message: res.message || `Test email sent to ${testEmailAddress}!`,
+          message: res.message || `Test email sent to ${testEmailAddress}! (Please check Spam/Junk if not in Inbox)`,
         });
       }
     } catch (err: any) {
@@ -129,6 +204,59 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
         </button>
       </div>
 
+      {/* Global Status Banner */}
+      {globalBanner && (
+        <div
+          style={{
+            padding: "0.85rem 1.25rem",
+            borderRadius: "8px",
+            marginBottom: "1.25rem",
+            fontSize: "0.875rem",
+            backgroundColor:
+              globalBanner.type === "success"
+                ? "rgba(34, 197, 94, 0.12)"
+                : "rgba(239, 68, 68, 0.12)",
+            color: globalBanner.type === "success" ? "#22c55e" : "#ef4444",
+            border: `1px solid ${
+              globalBanner.type === "success" ? "rgba(34, 197, 94, 0.3)" : "rgba(239, 68, 68, 0.3)"
+            }`,
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: "1rem",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem" }}>
+            {globalBanner.type === "success" ? (
+              <CheckCircle2 size={18} style={{ marginTop: "2px", flexShrink: 0 }} />
+            ) : (
+              <AlertCircle size={18} style={{ marginTop: "2px", flexShrink: 0 }} />
+            )}
+            <div>
+              <div style={{ fontWeight: 600 }}>{globalBanner.message}</div>
+              {globalBanner.details && (
+                <div style={{ fontSize: "0.8rem", opacity: 0.9, marginTop: "0.25rem" }}>
+                  {globalBanner.details}
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => setGlobalBanner(null)}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "inherit",
+              cursor: "pointer",
+              padding: "2px",
+              opacity: 0.7,
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
@@ -177,23 +305,68 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                   {record.userAgent || "N/A"}
                 </td>
                 <td style={{ padding: "1rem", fontSize: "0.875rem", textAlign: "center" }}>
-                  <button
-                    onClick={() => handleOpenReportModal(record)}
-                    style={{
-                      padding: "0.45rem 0.9rem",
-                      backgroundColor: "var(--primary)",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.4rem",
-                    }}
-                  >
-                    <Send size={13} /> Report
-                  </button>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+                    {/* Primary Direct Report Button */}
+                    <button
+                      type="button"
+                      disabled={sendingRowId === record.id}
+                      onClick={() => handleDirectReport(record)}
+                      title={`Send report email directly to ${record.email}`}
+                      style={{
+                        padding: "0.45rem 0.85rem",
+                        backgroundColor: sentSuccessRowId === record.id ? "#16a34a" : "var(--primary)",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: sendingRowId === record.id ? "not-allowed" : "pointer",
+                        fontWeight: 600,
+                        fontSize: "0.825rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        opacity: sendingRowId === record.id ? 0.7 : 1,
+                        transition: "all 0.2s ease",
+                      }}
+                    >
+                      {sendingRowId === record.id ? (
+                        <>
+                          <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
+                          Sending...
+                        </>
+                      ) : sentSuccessRowId === record.id ? (
+                        <>
+                          <CheckCircle2 size={13} />
+                          Sent!
+                        </>
+                      ) : (
+                        <>
+                          <Send size={13} />
+                          Report
+                        </>
+                      )}
+                    </button>
+
+                    {/* Customize Recipient Options Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleOpenReportModal(record)}
+                      title="Customize recipient or view attempt details"
+                      style={{
+                        padding: "0.45rem 0.55rem",
+                        backgroundColor: "rgba(255, 255, 255, 0.05)",
+                        color: "inherit",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        opacity: 0.85,
+                      }}
+                    >
+                      <SlidersHorizontal size={13} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -205,7 +378,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
         )}
       </div>
 
-      {/* Report Email Modal */}
+      {/* Report Email Customizer Modal */}
       {selectedRecord && (
         <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
           <div style={{ background: "var(--card-bg, #1e293b)", color: "inherit", borderRadius: "12px", border: "1px solid var(--border-color, #334155)", width: "100%", maxWidth: "520px", padding: "1.75rem", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)" }}>
@@ -220,7 +393,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
             </div>
 
             <p style={{ fontSize: "0.875rem", opacity: 0.8, marginBottom: "1rem" }}>
-              Send an alert regarding the login attempt for <strong>{selectedRecord.email}</strong>.
+              Send a login report regarding the attempt for <strong>{selectedRecord.email}</strong>.
             </p>
 
             {/* Login Summary Box */}
@@ -257,16 +430,9 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                 <button
                   type="button"
                   onClick={() => setRecipientEmail(selectedRecord.email)}
-                  style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid var(--border-color)", color: "inherit", cursor: "pointer" }}
+                  style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid var(--border-color)", color: "inherit", cursor: "pointer" }}
                 >
-                  Use {selectedRecord.email}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRecipientEmail("iniya.k008@gmail.com")}
-                  style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid var(--border-color)", color: "inherit", cursor: "pointer" }}
-                >
-                  Send to iniya.k008@gmail.com
+                  Use Account Email ({selectedRecord.email})
                 </button>
               </div>
             </div>
@@ -292,6 +458,11 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
               </div>
             )}
 
+            {/* Deliverability Tip */}
+            <div style={{ fontSize: "0.78rem", opacity: 0.7, marginBottom: "1.25rem", padding: "0.5rem 0.75rem", background: "rgba(255,255,255,0.03)", borderRadius: "6px" }}>
+              💡 <strong>Deliverability Note:</strong> Emails are sent directly via SMTP. If the recipient does not see the alert in their Primary Inbox within 1 minute, please check the <strong>Spam / Junk</strong> folder.
+            </div>
+
             {/* Modal Actions */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
               <button
@@ -303,8 +474,8 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
               </button>
               <button
                 type="button"
-                disabled={isSending}
-                onClick={handleSendReport}
+                disabled={isSendingModal}
+                onClick={handleSendReportFromModal}
                 style={{
                   padding: "0.6rem 1.25rem",
                   borderRadius: "6px",
@@ -312,15 +483,24 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                   backgroundColor: "var(--primary)",
                   color: "#fff",
                   fontWeight: 600,
-                  cursor: isSending ? "not-allowed" : "pointer",
-                  opacity: isSending ? 0.7 : 1,
+                  cursor: isSendingModal ? "not-allowed" : "pointer",
+                  opacity: isSendingModal ? 0.7 : 1,
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "0.5rem",
                 }}
               >
-                <Send size={15} />
-                {isSending ? "Sending Alert..." : "Send Email Now"}
+                {isSendingModal ? (
+                  <>
+                    <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />
+                    Sending Alert...
+                  </>
+                ) : (
+                  <>
+                    <Send size={15} />
+                    Send Email Now
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -353,7 +533,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                 type="email"
                 value={testEmailAddress}
                 onChange={(e) => setTestEmailAddress(e.target.value)}
-                placeholder="e.g. iniya.k008@gmail.com"
+                placeholder="e.g. user@example.com"
                 style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: "8px", border: "1px solid var(--border-color)", backgroundColor: "transparent", color: "inherit", fontSize: "0.9rem" }}
               />
             </div>
@@ -404,8 +584,17 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                   gap: "0.5rem",
                 }}
               >
-                <Send size={15} />
-                {isSendingTest ? "Sending Test..." : "Send Test Now"}
+                {isSendingTest ? (
+                  <>
+                    <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />
+                    Sending Test...
+                  </>
+                ) : (
+                  <>
+                    <Send size={15} />
+                    Send Test Now
+                  </>
+                )}
               </button>
             </div>
           </div>
