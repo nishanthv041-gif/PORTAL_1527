@@ -1,40 +1,25 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import ChildSwitcher from "../ChildSwitcher";
 import ParentReportCardsClient from "./ParentReportCardsClient";
+import { getParentAndSelectedChild } from "../parentChildHelper";
 
 export default async function ParentReportCardsPage({
   searchParams
 }: {
   searchParams: Promise<{ childId?: string }>
 }) {
-  const session = await getServerSession(getAuthOptions());
-  if (!session) return null;
   const resolvedSearchParams = await searchParams;
+  const { session, parent, children, selectedChild } = await getParentAndSelectedChild(resolvedSearchParams?.childId);
+  if (!session) return null;
 
-  const parent = await prisma.parent.findUnique({
-    where: { userId: session.user.id },
-    include: {
-      children: {
-        include: {
-          student: true
-        }
-      }
-    }
-  });
-
-  if (!parent || parent.children.length === 0) {
-    return <p>No children linked to your account.</p>;
-  }
-
-  const children = parent.children.map(s => s.student);
-  
-  let selectedChild = children[0];
-  if (resolvedSearchParams.childId) {
-    const found = children.find(c => c.id === resolvedSearchParams.childId);
-    if (found) selectedChild = found;
+  if (!parent || children.length === 0 || !selectedChild) {
+    return (
+      <div className={styles.dashboard}>
+        <h1 className={styles.title}>Report Cards</h1>
+        <p>No children linked to your account.</p>
+      </div>
+    );
   }
 
   const reportCards = await prisma.reportCard.findMany({

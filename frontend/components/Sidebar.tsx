@@ -82,6 +82,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
 
   let parentLinks = [
     { href: "/dashboard/parent", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
+    { href: "/dashboard/parent/classes", label: "Classes", icon: <GraduationCap size={20} /> },
     { href: "/dashboard/parent/attendance", label: "Attendance", icon: <Users size={20} /> },
     { href: "/dashboard/parent/exams", label: "Exams", icon: <BookOpen size={20} /> },
     { href: "/dashboard/parent/assignments", label: "Assignments", icon: <BookOpen size={20} /> },

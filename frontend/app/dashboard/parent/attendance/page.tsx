@@ -1,10 +1,9 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import ChildSwitcher from "../ChildSwitcher";
 import { Calendar as CalendarIcon, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
+import { getParentAndSelectedChild } from "../parentChildHelper";
 
 export default async function ParentAttendancePage({
   searchParams
@@ -12,7 +11,7 @@ export default async function ParentAttendancePage({
   searchParams: Promise<{ childId?: string }>
 }) {
   const resolvedSearchParams = await searchParams;
-  const session = await getServerSession(getAuthOptions());
+  const { session, parent, children, selectedChild } = await getParentAndSelectedChild(resolvedSearchParams?.childId);
   if (!session) return null;
 
   const canManage = await getSystemSetting("PARENT_ATTENDANCE_VISIBILITY", "true");
@@ -25,27 +24,13 @@ export default async function ParentAttendancePage({
     );
   }
 
-  const parent = await prisma.parent.findUnique({
-    where: { userId: session.user.id },
-    include: {
-      children: {
-        include: {
-          student: true
-        }
-      }
-    }
-  });
-
-  if (!parent || parent.children.length === 0) {
-    return <p>No children linked to your account.</p>;
-  }
-
-  const children = parent.children.map(s => s.student);
-  
-  let selectedChild = children[0];
-  if (resolvedSearchParams.childId) {
-    const found = children.find(c => c.id === resolvedSearchParams.childId);
-    if (found) selectedChild = found;
+  if (!parent || children.length === 0 || !selectedChild) {
+    return (
+      <div className={styles.dashboard}>
+        <h1 className={styles.title}>Attendance Records</h1>
+        <p>No children linked to your account.</p>
+      </div>
+    );
   }
 
   const attendanceRecords = await prisma.attendance.findMany({

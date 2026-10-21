@@ -1,10 +1,9 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import ChildSwitcher from "../ChildSwitcher";
 import { BookOpen, Calendar as CalendarIcon } from "lucide-react";
 import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
+import { getParentAndSelectedChild } from "../parentChildHelper";
 
 export default async function ParentExamsPage({
   searchParams
@@ -12,7 +11,7 @@ export default async function ParentExamsPage({
   searchParams: Promise<{ childId?: string }>
 }) {
   const resolvedSearchParams = await searchParams;
-  const session = await getServerSession(getAuthOptions());
+  const { session, parent, children, selectedChild } = await getParentAndSelectedChild(resolvedSearchParams?.childId);
   if (!session) return null;
 
   const canView = await getSystemSetting("RESULT_VISIBILITY", "false");
@@ -25,31 +24,17 @@ export default async function ParentExamsPage({
     );
   }
 
-  const parent = await prisma.parent.findUnique({
-    where: { userId: session.user.id },
-    include: {
-      children: {
-        include: {
-          student: true
-        }
-      }
-    }
-  });
-
-  if (!parent || parent.children.length === 0) {
-    return <p>No children linked to your account.</p>;
+  if (!parent || children.length === 0 || !selectedChild) {
+    return (
+      <div className={styles.dashboard}>
+        <h1 className={styles.title}>Exams & Marks</h1>
+        <p>No children linked to your account.</p>
+      </div>
+    );
   }
 
-  const children = parent.children.map(s => s.student);
-  
-  let selectedChild = children[0];
-  if (resolvedSearchParams.childId) {
-    const found = children.find(c => c.id === resolvedSearchParams.childId);
-    if (found) selectedChild = found;
-  }
-
-  const exams = await prisma.exam.findMany({
-    where: { classId: selectedChild.classId! },
+  const exams = selectedChild.classId ? await prisma.exam.findMany({
+    where: { classId: selectedChild.classId },
     include: {
       marks: {
         where: { studentId: selectedChild.id },
@@ -57,7 +42,7 @@ export default async function ParentExamsPage({
       }
     },
     orderBy: { date: 'desc' }
-  });
+  }) : [];
 
   return (
     <div className={styles.dashboard}>

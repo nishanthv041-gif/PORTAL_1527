@@ -117,6 +117,8 @@ export async function createParentStudentAction(formData: FormData) {
     const admissionNo = formData.get("admissionNo") as string;
     const classId = formData.get("classId") as string;
     const batch = formData.get("batch") as string;
+    const rawResidence = (formData.get("residenceType") as string) || "DAYSCHOLAR";
+    const residenceType = rawResidence.toUpperCase().includes("HOSTEL") ? "HOSTEL" : "DAYSCHOLAR";
 
     // Parent fields
     const parentName = formData.get("parentName") as string;
@@ -129,9 +131,15 @@ export async function createParentStudentAction(formData: FormData) {
     if (!isValidEmail(parentEmail)) return { error: "Invalid official email address." };
     if (parentGoogleEmail && !isValidEmail(parentGoogleEmail)) return { error: "Invalid Google email address." };
 
-    // Check uniqueness
-    const existingUser = await prisma.user.findUnique({ where: { email: parentEmail } });
-    if (existingUser) return { error: "A user with this official email already exists." };
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({ 
+      where: { email: parentEmail },
+      include: { parent: true }
+    });
+    
+    if (existingUser && existingUser.role !== "PARENT") {
+      return { error: `A user with email ${parentEmail} already exists with role ${existingUser.role}.` };
+    }
 
     const existingStudent = await prisma.student.findFirst({
       where: { OR: [{ rollNumber }, { admissionNo }] }
@@ -147,26 +155,44 @@ export async function createParentStudentAction(formData: FormData) {
     const [firstName, ...lastNameParts] = studentName.split(' ');
     const lastName = lastNameParts.join(' ') || '.';
 
-    // Create User, Parent, and Student in transaction
+    // Create User (if new), Parent (if new), and Student in transaction
     await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          name: parentName,
-          email: parentEmail,
-          password: parentPassword,
-          role: "PARENT",
-          status: "ACTIVE",
-          googleEmail: parentGoogleEmail || null,
-          googleEmailVerified: googleEmailVerified && !!parentGoogleEmail,
-          parent: {
-            create: {
-              phone: parentPhone,
-              isActive: true,
+      let parentId: string;
+
+      if (!existingUser) {
+        const user = await tx.user.create({
+          data: {
+            name: parentName,
+            email: parentEmail,
+            password: parentPassword,
+            role: "PARENT",
+            status: "ACTIVE",
+            googleEmail: parentGoogleEmail || null,
+            googleEmailVerified: googleEmailVerified && !!parentGoogleEmail,
+            parent: {
+              create: {
+                phone: parentPhone,
+                isActive: true,
+              }
             }
-          }
-        },
-        include: { parent: true }
-      });
+          },
+          include: { parent: true }
+        });
+        parentId = user.parent!.id;
+      } else {
+        if (!existingUser.parent) {
+          const newParent = await tx.parent.create({
+            data: {
+              userId: existingUser.id,
+              phone: parentPhone,
+              isActive: true
+            }
+          });
+          parentId = newParent.id;
+        } else {
+          parentId = existingUser.parent.id;
+        }
+      }
 
       const student = await tx.student.create({
         data: {
@@ -179,25 +205,28 @@ export async function createParentStudentAction(formData: FormData) {
           address: parentAddress,
           classId: classId || null,
           batch: batch || null,
+          residenceType,
           isActive: true
         }
       });
 
-      if (user.parent) {
-        await tx.parentStudent.create({
-          data: {
-            parentId: user.parent.id,
-            studentId: student.id
-          }
-        });
-      }
+      await tx.parentStudent.create({
+        data: {
+          parentId,
+          studentId: student.id
+        }
+      });
 
-      return user;
+      return student;
     });
 
-    revalidatePath("/dashboard/admin/users");
-    revalidatePath("/dashboard/admin/parents");
-    revalidatePath("/dashboard/admin/students");
+    try {
+      revalidatePath("/dashboard/admin/users");
+      revalidatePath("/dashboard/admin/parents");
+      revalidatePath("/dashboard/admin/students");
+    } catch {
+      // Ignored outside Next.js request context
+    }
 
     return { success: true, message: "Parent & Student created successfully." };
   } catch (error: unknown) {

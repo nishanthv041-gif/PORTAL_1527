@@ -83,6 +83,13 @@ export default function ParentStudentWizard({ classes }: { classes: { id: string
                   ))}
                 </select>
               </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Hostel or Dayscholar *</label>
+                <select required name="residenceType" defaultValue="DAYSCHOLAR" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }}>
+                  <option value="DAYSCHOLAR">Dayscholar</option>
+                  <option value="HOSTEL">Hostel</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -148,7 +155,7 @@ export default function ParentStudentWizard({ classes }: { classes: { id: string
         </form>
       </div>
       
-      <BulkUpload type="student" />
+      <BulkUpload type="student" classes={classes} />
     </div>
   );
 }

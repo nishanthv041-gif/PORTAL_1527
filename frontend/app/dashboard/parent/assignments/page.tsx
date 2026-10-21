@@ -1,9 +1,8 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import ChildSwitcher from "../ChildSwitcher";
 import { BookOpen, Calendar as CalendarIcon, CheckCircle, Clock } from "lucide-react";
+import { getParentAndSelectedChild } from "../parentChildHelper";
 
 export default async function ParentAssignmentsPage({
   searchParams
@@ -11,34 +10,20 @@ export default async function ParentAssignmentsPage({
   searchParams: Promise<{ childId?: string }>
 }) {
   const resolvedSearchParams = await searchParams;
-  const session = await getServerSession(getAuthOptions());
+  const { session, parent, children, selectedChild } = await getParentAndSelectedChild(resolvedSearchParams?.childId);
   if (!session) return null;
 
-  const parent = await prisma.parent.findUnique({
-    where: { userId: session.user.id },
-    include: {
-      children: {
-        include: {
-          student: true
-        }
-      }
-    }
-  });
-
-  if (!parent || parent.children.length === 0) {
-    return <p>No children linked to your account.</p>;
+  if (!parent || children.length === 0 || !selectedChild) {
+    return (
+      <div className={styles.dashboard}>
+        <h1 className={styles.title}>Assignments</h1>
+        <p>No children linked to your account.</p>
+      </div>
+    );
   }
 
-  const children = parent.children.map(s => s.student);
-  
-  let selectedChild = children[0];
-  if (resolvedSearchParams.childId) {
-    const found = children.find(c => c.id === resolvedSearchParams.childId);
-    if (found) selectedChild = found;
-  }
-
-  const assignments = await prisma.assignment.findMany({
-    where: { classId: selectedChild.classId! },
+  const assignments = selectedChild.classId ? await prisma.assignment.findMany({
+    where: { classId: selectedChild.classId },
     include: {
       submissions: {
         where: { studentId: selectedChild.id }
@@ -48,7 +33,7 @@ export default async function ParentAssignmentsPage({
       }
     },
     orderBy: { deadline: 'desc' }
-  });
+  }) : [];
 
   return (
     <div className={styles.dashboard}>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Download, Eye, CheckCircle2, XCircle } from "lucide-react";
+import { Search, Download, Eye, CheckCircle2, XCircle, Building2, Home } from "lucide-react";
 import Link from "next/link";
 
 import { Student, Class, ParentStudent, Parent, User, Attendance } from "@prisma/client";
@@ -21,6 +21,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
   const [statusFilter, setStatusFilter] = useState("");
   const [classFilter, setClassFilter] = useState("");
   const [batchFilter, setBatchFilter] = useState("");
+  const [residenceFilter, setResidenceFilter] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const router = useRouter();
 
@@ -34,8 +35,9 @@ export default function StudentListClient({ students, classes }: { students: Stu
     const matchesStatus = statusFilter ? (statusFilter === "ACTIVE" ? student.isActive : !student.isActive) : true;
     const matchesClass = classFilter ? student.classId === classFilter : true;
     const matchesBatch = batchFilter ? student.batch === batchFilter : true;
+    const matchesResidence = residenceFilter ? (student.residenceType || "DAYSCHOLAR") === residenceFilter : true;
     
-    return matchesSearch && matchesStatus && matchesClass && matchesBatch;
+    return matchesSearch && matchesStatus && matchesClass && matchesBatch && matchesResidence;
   });
 
   const uniqueBatches = Array.from(new Set(students.map(s => s.batch).filter((b): b is string => Boolean(b))));
@@ -74,6 +76,15 @@ export default function StudentListClient({ students, classes }: { students: Stu
             <option value="INACTIVE">Inactive</option>
           </select>
           <select 
+            value={residenceFilter}
+            onChange={(e) => setResidenceFilter(e.target.value)}
+            style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
+          >
+            <option value="">All Types (Hostel/Dayscholar)</option>
+            <option value="DAYSCHOLAR">Dayscholar</option>
+            <option value="HOSTEL">Hostel</option>
+          </select>
+          <select 
             value={batchFilter}
             onChange={(e) => setBatchFilter(e.target.value)}
             style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
@@ -93,6 +104,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Roll No.</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Name</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Class</th>
+              <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Type</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Batch</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Parent</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Attendance</th>
@@ -106,6 +118,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
               const totalDays = student.attendances.length;
               const presentDays = student.attendances.filter((a) => a.status === 'PRESENT').length;
               const attPercent = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
+              const isHostel = (student.residenceType || "DAYSCHOLAR").toUpperCase().includes("HOSTEL");
 
               return (
                 <tr key={student.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
@@ -120,6 +133,22 @@ export default function StudentListClient({ students, classes }: { students: Stu
                   </td>
                   <td style={{ padding: "1rem", fontSize: '0.875rem' }}>
                     {student.class ? `${student.class.name} - ${student.class.section}` : 'N/A'}
+                  </td>
+                  <td style={{ padding: "1rem", fontSize: '0.875rem' }}>
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.3rem',
+                      padding: '0.2rem 0.5rem',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      backgroundColor: isHostel ? 'rgba(245, 158, 11, 0.12)' : 'rgba(59, 130, 246, 0.12)',
+                      color: isHostel ? 'var(--warning)' : 'var(--primary)'
+                    }}>
+                      {isHostel ? <Building2 size={12} /> : <Home size={12} />}
+                      {isHostel ? "Hostel" : "Dayscholar"}
+                    </span>
                   </td>
                   <td style={{ padding: "1rem", fontSize: '0.875rem' }}>
                     {student.batch || 'N/A'}
