@@ -80,7 +80,7 @@ export default async function ParentDashboard({
 
         {/* Stats Grid */}
         <div className={styles.statsGrid}>
-          <Link href={`/dashboard/parent/classes?childId=${selectedChild.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link href={`/dashboard/parent/classes?childId=${selectedChild.id}`} prefetch={true} style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className={styles.statCard} style={{ cursor: 'pointer', transition: 'transform 0.2s', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
               <div className={styles.statIcon}><GraduationCap size={24} /></div>
               <div className={styles.statInfo}>
@@ -95,7 +95,7 @@ export default async function ParentDashboard({
             </div>
           </Link>
 
-          <Link href={`/dashboard/parent/attendance?childId=${selectedChild.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link href={`/dashboard/parent/attendance?childId=${selectedChild.id}`} prefetch={true} style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className={styles.statCard} style={{ cursor: 'pointer', transition: 'transform 0.2s' }}>
               <div className={styles.statIcon}><Calendar size={24} /></div>
               <div className={styles.statInfo}>
@@ -113,7 +113,7 @@ export default async function ParentDashboard({
             </div>
           </Link>
 
-          <Link href={`/dashboard/parent/assignments?childId=${selectedChild.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link href={`/dashboard/parent/assignments?childId=${selectedChild.id}`} prefetch={true} style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className={styles.statCard} style={{ cursor: 'pointer', transition: 'transform 0.2s' }}>
               <div className={styles.statIcon}><BookOpen size={24} /></div>
               <div className={styles.statInfo}>
@@ -125,7 +125,7 @@ export default async function ParentDashboard({
             </div>
           </Link>
 
-          <Link href={`/dashboard/parent/report-cards?childId=${selectedChild.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link href={`/dashboard/parent/report-cards?childId=${selectedChild.id}`} prefetch={true} style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className={styles.statCard} style={{ cursor: 'pointer', transition: 'transform 0.2s' }}>
               <div className={styles.statIcon}><FileText size={24} /></div>
               <div className={styles.statInfo}>
@@ -137,7 +137,7 @@ export default async function ParentDashboard({
             </div>
           </Link>
 
-          <Link href={`/dashboard/parent/timetable?childId=${selectedChild.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link href={`/dashboard/parent/timetable?childId=${selectedChild.id}`} prefetch={true} style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className={styles.statCard} style={{ cursor: 'pointer', transition: 'transform 0.2s' }}>
               <div className={styles.statIcon}><Clock size={24} /></div>
               <div className={styles.statInfo}>
@@ -149,7 +149,7 @@ export default async function ParentDashboard({
             </div>
           </Link>
 
-          <Link href="/dashboard/parent/announcements" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link href="/dashboard/parent/announcements" prefetch={true} style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className={styles.statCard} style={{ cursor: 'pointer', transition: 'transform 0.2s' }}>
               <div className={styles.statIcon}><Bell size={24} /></div>
               <div className={styles.statInfo}>

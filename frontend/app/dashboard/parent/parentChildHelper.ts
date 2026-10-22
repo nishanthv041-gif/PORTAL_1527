@@ -1,9 +1,10 @@
+import { cache } from "react";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { cookies } from "next/headers";
 
-export async function getParentAndSelectedChild(searchParamsChildId?: string) {
+export const getParentAndSelectedChild = cache(async (searchParamsChildId?: string) => {
   const session = await getServerSession(getAuthOptions());
   if (!session) return { session: null, parent: null, children: [], selectedChild: null };
 
@@ -50,4 +51,5 @@ export async function getParentAndSelectedChild(searchParamsChildId?: string) {
   }
 
   return { session, parent, children, selectedChild };
-}
+});
+

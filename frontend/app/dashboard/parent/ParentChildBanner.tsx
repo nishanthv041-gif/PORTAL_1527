@@ -1,10 +1,11 @@
 "use client";
 
+import { useState, useEffect, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { 
   Building2, Home, GraduationCap, Clock, 
-  ArrowLeftRight, Check, LayoutDashboard
+  ArrowLeftRight, Check, LayoutDashboard, Loader2
 } from "lucide-react";
 import styles from "./ParentChildBanner.module.css";
 
@@ -42,21 +43,35 @@ export default function ParentChildBanner({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const handleSelect = (childId: string) => {
-    if (childId === selectedChild.id) return;
+  // Optimistic active child state for 0ms instantaneous feedback
+  const [activeChildId, setActiveChildId] = useState(selectedChild.id);
+  const [isPending, startTransition] = useTransition();
 
+  useEffect(() => {
+    setActiveChildId(selectedChild.id);
+  }, [selectedChild.id]);
+
+  // Current display child (instantaneous local state)
+  const currentChild = studentList.find(c => c.id === activeChildId) || selectedChild;
+
+  const handleSelect = (childId: string) => {
+    if (childId === activeChildId) return;
+
+    // 1. Instant 0ms visual switch
+    setActiveChildId(childId);
     setChildCookie(childId);
 
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("childId", childId);
-
-    router.push(`${pathname}?${params.toString()}`);
-    router.refresh();
+    // 2. Fast transition without redundant router.refresh()
+    startTransition(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("childId", childId);
+      router.push(`${pathname}?${params.toString()}`);
+    });
   };
 
   const hasMultipleChildren = studentList && studentList.length > 1;
-  const childClass = selectedChild.class;
-  const isHostel = selectedChild.residenceType?.toUpperCase().includes("HOSTEL");
+  const childClass = currentChild.class;
+  const isHostel = currentChild.residenceType?.toUpperCase().includes("HOSTEL");
 
   return (
     <div className={styles.banner}>
@@ -72,7 +87,7 @@ export default function ParentChildBanner({
 
           <div className={styles.segmentedTabGroup}>
             {studentList.map((child) => {
-              const isSelected = child.id === selectedChild.id;
+              const isSelected = child.id === activeChildId;
 
               return (
                 <button
@@ -93,7 +108,12 @@ export default function ParentChildBanner({
                       </span>
                       {isSelected && (
                         <span className={styles.activePill}>
-                          <Check size={11} strokeWidth={3} /> Active
+                          {isPending ? (
+                            <Loader2 size={11} className={styles.spinner} />
+                          ) : (
+                            <Check size={11} strokeWidth={3} />
+                          )}
+                          {isPending ? "Loading..." : "Active"}
                         </span>
                       )}
                     </div>
@@ -113,13 +133,13 @@ export default function ParentChildBanner({
         {/* Left: Avatar & Identity Details */}
         <div className={styles.profileIdentity}>
           <div className={styles.avatar}>
-            {selectedChild.firstName[0]}
+            {currentChild.firstName[0]}
           </div>
 
           <div className={styles.identityText}>
             <div className={styles.nameRow}>
               <h2 className={styles.childName}>
-                {selectedChild.firstName} {selectedChild.lastName}
+                {currentChild.firstName} {currentChild.lastName}
               </h2>
 
               <span
@@ -146,13 +166,13 @@ export default function ParentChildBanner({
               <div className={styles.metaPill}>
                 <span className={styles.metaPillLabel}>Roll</span>
                 <span className={styles.metaPillValue}>
-                  {selectedChild.rollNumber || "N/A"}
+                  {currentChild.rollNumber || "N/A"}
                 </span>
               </div>
               <div className={styles.metaPill}>
                 <span className={styles.metaPillLabel}>Adm No</span>
                 <span className={styles.metaPillValue}>
-                  {selectedChild.admissionNo || "N/A"}
+                  {currentChild.admissionNo || "N/A"}
                 </span>
               </div>
             </div>
@@ -163,7 +183,8 @@ export default function ParentChildBanner({
         <div className={styles.actionGroup}>
           {activePage !== "classes" && (
             <Link
-              href={`/dashboard/parent/classes?childId=${selectedChild.id}`}
+              href={`/dashboard/parent/classes?childId=${currentChild.id}`}
+              prefetch={true}
               className={`${styles.actionBtn} ${styles.actionBtnSecondary}`}
             >
               <GraduationCap size={16} />
@@ -173,7 +194,8 @@ export default function ParentChildBanner({
 
           {activePage !== "timetable" && (
             <Link
-              href={`/dashboard/parent/timetable?childId=${selectedChild.id}`}
+              href={`/dashboard/parent/timetable?childId=${currentChild.id}`}
+              prefetch={true}
               className={`${styles.actionBtn} ${styles.actionBtnPrimary}`}
             >
               <Clock size={16} />
@@ -183,7 +205,8 @@ export default function ParentChildBanner({
 
           {activePage !== "dashboard" && (
             <Link
-              href={`/dashboard/parent?childId=${selectedChild.id}`}
+              href={`/dashboard/parent?childId=${currentChild.id}`}
+              prefetch={true}
               className={`${styles.actionBtn} ${styles.actionBtnSecondary}`}
             >
               <LayoutDashboard size={16} />

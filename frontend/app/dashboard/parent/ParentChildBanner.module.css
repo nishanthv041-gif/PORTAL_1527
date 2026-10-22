@@ -351,3 +351,18 @@
   border-color: var(--primary);
   background-color: var(--card-bg);
 }
+
+.spinner {
+  animation: bannerSpin 0.75s linear infinite;
+  display: inline-block;
+}
+
+@keyframes bannerSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+

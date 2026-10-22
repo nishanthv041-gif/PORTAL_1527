@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
@@ -74,12 +75,12 @@ export async function deleteSystemSettingAction(key: string) {
   }
 }
 
-export async function getSystemSettings() {
+export const getSystemSettings = cache(async () => {
   const settings = await prisma.systemSetting.findMany();
   const settingsMap: Record<string, string> = {};
   settings.forEach(s => { settingsMap[s.key] = s.value; });
   return settingsMap;
-}
+});
 
 export async function getSystemSetting(key: string, defaultValue: string = "") {
   const setting = await prisma.systemSetting.findUnique({ where: { key } });

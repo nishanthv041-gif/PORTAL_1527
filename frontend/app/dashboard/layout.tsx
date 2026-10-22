@@ -7,6 +7,7 @@ import styles from "./layout.module.css";
 import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/settings/actions";
 
 import { SettingsProvider } from "@/frontend/contexts/SettingsContext";
+import NavigationProgressBar from "@/frontend/components/NavigationProgressBar";
 
 export default async function DashboardLayout({
   children,
@@ -112,6 +113,7 @@ export default async function DashboardLayout({
 
   return (
     <SettingsProvider settings={settings}>
+      <NavigationProgressBar />
       <div className={styles.container}>
         {settings.SCHOOL_LOGO && (
           <>

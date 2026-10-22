@@ -1,7 +1,8 @@
 "use client";
 
+import { useState, useEffect, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { Users, Home, Building2 } from "lucide-react";
+import { Users, Home, Building2, Loader2 } from "lucide-react";
 
 function setChildCookie(childId: string) {
   if (typeof document !== "undefined") {
@@ -33,15 +34,27 @@ export default function ChildSwitcher({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  // Optimistic active child state for 0ms instantaneous UI response
+  const [activeId, setActiveId] = useState(selectedChildId);
+  const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setActiveId(selectedChildId);
+  }, [selectedChildId]);
+
   const handleSelect = (childId: string) => {
+    if (childId === activeId) return;
+
+    // 1. Instant 0ms visual switch
+    setActiveId(childId);
     setChildCookie(childId);
     
-    // Update URL query params
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('childId', childId);
-    
-    router.push(`${pathname}?${params.toString()}`);
-    router.refresh();
+    // 2. Smooth route transition without redundant refresh
+    startTransition(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('childId', childId);
+      router.push(`${pathname}?${params.toString()}`);
+    });
   };
 
   if (!studentList || studentList.length === 0) {
@@ -122,7 +135,7 @@ export default function ChildSwitcher({
 
       <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'nowrap' }}>
         {studentList.map(child => {
-          const isSelected = child.id === selectedChildId;
+          const isSelected = child.id === activeId;
           const isHostel = child.residenceType?.toUpperCase().includes("HOSTEL");
 
           return (
