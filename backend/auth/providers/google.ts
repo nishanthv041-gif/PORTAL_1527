@@ -20,10 +20,11 @@ async function getClientMetadata() {
 
   try {
     const h = await headers();
+    const vercelIp = h.get("x-vercel-ip");
     const forwardedFor = h.get("x-forwarded-for");
     const realIp = h.get("x-real-ip");
     const cfIp = h.get("cf-connecting-ip");
-    const extractedIp = forwardedFor ? forwardedFor.split(",")[0].trim() : (realIp || cfIp);
+    const extractedIp = vercelIp || (forwardedFor ? forwardedFor.split(",")[0].trim() : (realIp || cfIp));
     if (extractedIp) {
       ipAddress = extractedIp;
     }

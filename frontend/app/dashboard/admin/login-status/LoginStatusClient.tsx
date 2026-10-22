@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Search,
   CheckCircle2,
@@ -14,6 +15,12 @@ import {
   SlidersHorizontal,
   Copy,
   Check,
+  RefreshCw,
+  Smartphone,
+  Laptop,
+  Globe,
+  ShieldCheck,
+  Info,
 } from "lucide-react";
 import { LoginAttempt } from "@prisma/client";
 import {
@@ -21,10 +28,99 @@ import {
   sendTestEmailAction,
 } from "@/backend/api/actions/dashboard/admin/login-status/actions";
 
+// Helper to parse human-readable System & Device information
+export function parseSystemInfo(ua?: string | null): {
+  deviceType: "mobile" | "desktop" | "apple" | "other";
+  osName: string;
+  browserName: string;
+  raw: string;
+} {
+  if (!ua || ua === "Unknown" || ua === "N/A") {
+    return {
+      deviceType: "other",
+      osName: "Unknown System",
+      browserName: "Browser",
+      raw: ua || "N/A",
+    };
+  }
+
+  let osName = "Desktop System";
+  let deviceType: "mobile" | "desktop" | "apple" | "other" = "desktop";
+
+  if (/android/i.test(ua)) {
+    deviceType = "mobile";
+    const androidVer = ua.match(/Android\s([0-9.]+)/i);
+    osName = androidVer ? `Android ${androidVer[1]} Mobile` : "Android Mobile";
+  } else if (/iphone/i.test(ua)) {
+    deviceType = "apple";
+    osName = "Apple iPhone (iOS)";
+  } else if (/ipad/i.test(ua)) {
+    deviceType = "apple";
+    osName = "Apple iPad (iPadOS)";
+  } else if (/windows nt 10/i.test(ua)) {
+    deviceType = "desktop";
+    osName = "Windows 10/11 PC";
+  } else if (/windows/i.test(ua)) {
+    deviceType = "desktop";
+    osName = "Windows PC";
+  } else if (/macintosh|mac os x/i.test(ua)) {
+    deviceType = "apple";
+    osName = "Apple Mac (macOS)";
+  } else if (/cros/i.test(ua)) {
+    deviceType = "desktop";
+    osName = "Chromebook (ChromeOS)";
+  } else if (/linux/i.test(ua)) {
+    deviceType = "desktop";
+    osName = "Linux PC";
+  }
+
+  let browserName = "Web Browser";
+  if (/edg/i.test(ua)) {
+    browserName = "Microsoft Edge";
+  } else if (/chrome|crios/i.test(ua)) {
+    browserName = "Google Chrome";
+  } else if (/firefox|fxios/i.test(ua)) {
+    browserName = "Mozilla Firefox";
+  } else if (/safari/i.test(ua)) {
+    browserName = "Apple Safari";
+  } else if (/opera|opr/i.test(ua)) {
+    browserName = "Opera";
+  }
+
+  return {
+    deviceType,
+    osName,
+    browserName,
+    raw: ua,
+  };
+}
+
+// Classify IP address type (Real Public vs Localhost)
+export function getIpClassification(ip?: string | null): { isRealPublic: boolean; label: string } {
+  if (!ip || ip === "Unknown" || ip === "N/A" || ip === "Google OAuth") {
+    return { isRealPublic: false, label: "OAuth / Unknown" };
+  }
+  if (ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.")) {
+    return { isRealPublic: false, label: "Local / Dev" };
+  }
+  return { isRealPublic: true, label: "Real Public IP" };
+}
+
 export default function LoginStatusClient({ records }: { records: LoginAttempt[] }) {
+  const router = useRouter();
+
+  // Search & Filter
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Auto Refresh State
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+
+  // Modal State
   const [selectedRecord, setSelectedRecord] = useState<LoginAttempt | null>(null);
   const [recipientEmail, setRecipientEmail] = useState("");
+  const [modalCcAdmin, setModalCcAdmin] = useState(true);
   const [isSendingModal, setIsSendingModal] = useState(false);
   const [modalFeedback, setModalFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -47,6 +143,26 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
   const [testEmailAddress, setTestEmailAddress] = useState("");
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testFeedback, setTestFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // Automatic Refresh Interval (Every 12 seconds)
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      router.refresh();
+      setLastRefreshedAt(new Date());
+    }, 12000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, router]);
+
+  // Manual Trigger Refresh
+  const handleManualRefresh = () => {
+    setIsRefreshing(true);
+    router.refresh();
+    setLastRefreshedAt(new Date());
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 700);
+  };
 
   // Copy IP to Clipboard with robust mobile fallback
   const handleCopyIp = async (ipText: string | null) => {
@@ -89,7 +205,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
       handleOpenReportModal(record);
       setModalFeedback({
         type: "error",
-        message: "This login attempt does not have a valid account email. Please enter the specific recipient email below.",
+        message: "This login attempt does not have a valid account email. Please specify the recipient email below.",
       });
       return;
     }
@@ -103,7 +219,9 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
         record.ipAddress,
         record.timestamp,
         record.success,
-        record.email
+        record.email,
+        true, // ccAdmin: always keep admin in loop
+        record.userAgent
       );
 
       if (res?.error) {
@@ -117,8 +235,10 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
         setGlobalBanner({
           type: "success",
           message: `Security report email sent to ${record.email}!`,
-          details: "Delivered via SMTP. Note: If the recipient does not see it in their Inbox, please ask them to check their Spam/Junk folder.",
+          details: "Delivered via SMTP (a confirmation copy was also sent to nishanthv041@gmail.com). Note: Institutional accounts (@bitsathy.ac.in) may place external emails in Spam/Junk folder.",
         });
+        // Automatically sync fresh data
+        router.refresh();
         setTimeout(() => {
           setSentSuccessRowId((prev) => (prev === record.id ? null : prev));
         }, 5000);
@@ -138,6 +258,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
     setSelectedRecord(record);
     const isValid = record.email && record.email.includes("@") && !record.email.includes("unknown");
     setRecipientEmail(isValid ? record.email : "");
+    setModalCcAdmin(true);
     setModalFeedback(null);
   };
 
@@ -163,7 +284,9 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
         selectedRecord.ipAddress,
         selectedRecord.timestamp,
         selectedRecord.success,
-        targetRecipient
+        targetRecipient,
+        modalCcAdmin,
+        selectedRecord.userAgent
       );
 
       if (res?.error) {
@@ -171,14 +294,16 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
       } else {
         setModalFeedback({
           type: "success",
-          message: `Security alert sent to ${targetRecipient}! (Please check Spam/Junk folder if not in Inbox)`,
+          message: `Security report sent to ${targetRecipient}! ${modalCcAdmin ? "(Copy sent to nishanthv041@gmail.com)" : ""}`,
         });
         setSentSuccessRowId(selectedRecord.id);
         setGlobalBanner({
           type: "success",
-          message: `Security alert sent to ${targetRecipient}!`,
-          details: "Delivered via SMTP. If the recipient does not see it in their Inbox, please ask them to check their Spam/Junk folder.",
+          message: `Security report sent to ${targetRecipient}!`,
+          details: `Delivered via SMTP${modalCcAdmin ? " (confirmation copy sent to nishanthv041@gmail.com)" : ""}. Note: If not seen in Inbox, check Spam/Junk folder.`,
         });
+        // Auto sync
+        router.refresh();
       }
     } catch (err: any) {
       setModalFeedback({
@@ -207,6 +332,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
           type: "success",
           message: res.message || `Test email sent to ${testEmailAddress}! (Please check Spam/Junk if not in Inbox)`,
         });
+        router.refresh();
       }
     } catch (err: any) {
       setTestFeedback({
@@ -219,41 +345,112 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
   };
 
   return (
-    <div style={{ marginTop: "2rem", background: "var(--card-bg)", borderRadius: "12px", padding: "1.5rem", border: "1px solid var(--border-color)" }}>
-      {/* Header Bar */}
+    <div style={{ marginTop: "1.5rem", background: "var(--card-bg)", borderRadius: "12px", padding: "1.5rem", border: "1px solid var(--border-color)" }}>
+      {/* Header Bar with Live Sync Controls */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
-        <div style={{ position: "relative", width: "100%", maxWidth: "300px" }}>
+        {/* Search */}
+        <div style={{ position: "relative", width: "100%", maxWidth: "320px" }}>
           <Search size={18} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", opacity: 0.5 }} />
           <input
             type="text"
-            placeholder="Search email, IP address..."
+            placeholder="Search email, IP address, device..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ width: "100%", padding: "0.75rem 1rem 0.75rem 2.5rem", borderRadius: "8px", border: "1px solid var(--border-color)", backgroundColor: "transparent", color: "inherit" }}
+            style={{
+              width: "100%",
+              padding: "0.7rem 1rem 0.7rem 2.5rem",
+              borderRadius: "8px",
+              border: "1px solid var(--border-color)",
+              backgroundColor: "transparent",
+              color: "inherit",
+              fontSize: "0.875rem",
+            }}
           />
         </div>
 
-        <button
-          onClick={() => {
-            setIsTestModalOpen(true);
-            setTestFeedback(null);
-          }}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            padding: "0.6rem 1rem",
-            backgroundColor: "rgba(99, 102, 241, 0.1)",
-            color: "var(--primary)",
-            border: "1px solid var(--primary)",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: 600,
-            fontSize: "0.875rem",
-          }}
-        >
-          <Mail size={16} /> Test Email Delivery
-        </button>
+        {/* Live Auto-Refresh & Actions Bar */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          {/* Auto Refresh Toggle Badge */}
+          <button
+            type="button"
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            title={autoRefresh ? "Auto-refresh is active (every 12s). Click to pause." : "Auto-refresh is paused. Click to enable."}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              fontSize: "0.8rem",
+              fontWeight: 500,
+              padding: "0.5rem 0.85rem",
+              borderRadius: "999px",
+              background: autoRefresh ? "rgba(34, 197, 94, 0.12)" : "rgba(255, 255, 255, 0.05)",
+              color: autoRefresh ? "#22c55e" : "var(--text-secondary)",
+              border: `1px solid ${autoRefresh ? "rgba(34, 197, 94, 0.3)" : "var(--border-color)"}`,
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                backgroundColor: autoRefresh ? "#22c55e" : "#888",
+                display: "inline-block",
+                boxShadow: autoRefresh ? "0 0 8px #22c55e" : "none",
+              }}
+            />
+            <span>{autoRefresh ? "Live Auto-Sync (12s)" : "Auto-Sync Paused"}</span>
+          </button>
+
+          {/* Manual Refresh Button */}
+          <button
+            type="button"
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            title="Refresh login records now"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.5rem 0.85rem",
+              backgroundColor: "rgba(255, 255, 255, 0.05)",
+              color: "inherit",
+              border: "1px solid var(--border-color)",
+              borderRadius: "8px",
+              cursor: isRefreshing ? "not-allowed" : "pointer",
+              fontWeight: 500,
+              fontSize: "0.825rem",
+            }}
+          >
+            <RefreshCw size={14} style={{ animation: isRefreshing ? "spin 0.8s linear infinite" : "none" }} />
+            <span>{isRefreshing ? "Refreshing..." : "Refresh"}</span>
+          </button>
+
+          {/* Test Email Delivery Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsTestModalOpen(true);
+              setTestFeedback(null);
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.5rem 0.95rem",
+              backgroundColor: "rgba(99, 102, 241, 0.1)",
+              color: "var(--primary)",
+              border: "1px solid var(--primary)",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: 600,
+              fontSize: "0.825rem",
+            }}
+          >
+            <Mail size={15} /> Test Email Delivery
+          </button>
+        </div>
       </div>
 
       {/* Global Status Banner */}
@@ -314,215 +511,352 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border-color)", backgroundColor: "rgba(0,0,0,0.02)" }}>
-              <th style={{ padding: "1rem", fontWeight: 600, fontSize: "0.875rem" }}>Email ID</th>
-              <th style={{ padding: "1rem", fontWeight: 600, fontSize: "0.875rem" }}>Date & Timing</th>
-              <th style={{ padding: "1rem", fontWeight: 600, fontSize: "0.875rem" }}>Status</th>
-              <th style={{ padding: "1rem", fontWeight: 600, fontSize: "0.875rem" }}>IP Address</th>
-              <th style={{ padding: "1rem", fontWeight: 600, fontSize: "0.875rem" }}>User Agent</th>
-              <th style={{ padding: "1rem", fontWeight: 600, fontSize: "0.875rem", textAlign: "center" }}>Action</th>
+              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem" }}>Account User</th>
+              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem" }}>Date & Timing</th>
+              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem" }}>Status</th>
+              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem" }}>IP Address</th>
+              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem" }}>Login System & Device</th>
+              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem", textAlign: "center" }}>Action</th>
             </tr>
           </thead>
           <tbody>
-            {filteredRecords.map((record) => (
-              <tr key={record.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
-                <td style={{ padding: "1rem", fontSize: "0.875rem", fontWeight: 500 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                    <div style={{ width: 32, height: 32, borderRadius: "50%", backgroundColor: "rgba(99, 102, 241, 0.1)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: 600 }}>
-                      {record.email.charAt(0).toUpperCase()}
-                    </div>
-                    {record.email}
-                  </div>
-                </td>
-                <td style={{ padding: "1rem", fontSize: "0.875rem" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", opacity: 0.9 }}>
-                    <Clock size={14} />
-                    {new Date(record.timestamp).toLocaleString()}
-                  </div>
-                </td>
-                <td style={{ padding: "1rem" }}>
-                  {record.success ? (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", color: "var(--success)", fontSize: "0.875rem", background: "var(--success-bg)", padding: "0.25rem 0.5rem", borderRadius: "999px" }}>
-                      <CheckCircle2 size={14} /> Success
-                    </span>
-                  ) : (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", color: "var(--danger)", fontSize: "0.875rem", background: "var(--danger-bg)", padding: "0.25rem 0.5rem", borderRadius: "999px" }}>
-                      <XCircle size={14} /> Failed
-                    </span>
-                  )}
-                </td>
-                <td style={{ padding: "1rem", fontSize: "0.875rem" }}>
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
-                    <span
-                      onClick={() => handleCopyIp(record.ipAddress)}
-                      title="Click to copy IP address"
-                      style={{
-                        fontFamily: "monospace",
-                        fontSize: "0.825rem",
-                        fontWeight: 600,
-                        padding: "0.25rem 0.55rem",
-                        borderRadius: "6px",
-                        background: record.ipAddress && record.ipAddress !== "Google OAuth" && record.ipAddress !== "Unknown" 
-                          ? "rgba(99, 102, 241, 0.08)" 
-                          : "rgba(255, 255, 255, 0.04)",
-                        border: "1px solid var(--border-color)",
-                        color: record.ipAddress && record.ipAddress !== "Google OAuth" && record.ipAddress !== "Unknown" 
-                          ? "var(--primary)" 
-                          : "inherit",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {record.ipAddress || "Unknown"}
-                    </span>
-                    {record.ipAddress && record.ipAddress !== "N/A" && (
-                      <button
-                        type="button"
-                        onClick={() => handleCopyIp(record.ipAddress)}
-                        title={`Copy ${record.ipAddress}`}
+            {filteredRecords.map((record) => {
+              const sys = parseSystemInfo(record.userAgent);
+              const ipType = getIpClassification(record.ipAddress);
+
+              return (
+                <tr key={record.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
+                  {/* Account User */}
+                  <td style={{ padding: "0.85rem 1rem", fontSize: "0.875rem", fontWeight: 500 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                      <div
                         style={{
-                          background: copiedIp === record.ipAddress ? "rgba(34, 197, 94, 0.15)" : "rgba(255, 255, 255, 0.06)",
-                          color: copiedIp === record.ipAddress ? "#22c55e" : "inherit",
-                          border: `1px solid ${copiedIp === record.ipAddress ? "#22c55e" : "var(--border-color)"}`,
-                          borderRadius: "6px",
-                          padding: "0.25rem 0.5rem",
+                          width: 32,
+                          height: 32,
+                          borderRadius: "50%",
+                          backgroundColor: "rgba(99, 102, 241, 0.1)",
+                          color: "var(--primary)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                           fontSize: "0.75rem",
                           fontWeight: 600,
-                          cursor: "pointer",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {record.email.charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ wordBreak: "break-all" }}>{record.email}</div>
+                    </div>
+                  </td>
+
+                  {/* Date & Time */}
+                  <td style={{ padding: "0.85rem 1rem", fontSize: "0.85rem", whiteSpace: "nowrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", opacity: 0.9 }}>
+                      <Clock size={14} style={{ opacity: 0.6 }} />
+                      {new Date(record.timestamp).toLocaleString()}
+                    </div>
+                  </td>
+
+                  {/* Status */}
+                  <td style={{ padding: "0.85rem 1rem" }}>
+                    {record.success ? (
+                      <span
+                        style={{
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "0.3rem",
-                          transition: "all 0.15s ease",
+                          color: "var(--success, #22c55e)",
+                          fontSize: "0.8rem",
+                          background: "var(--success-bg, rgba(34, 197, 94, 0.1))",
+                          padding: "0.25rem 0.55rem",
+                          borderRadius: "999px",
+                          fontWeight: 500,
                         }}
                       >
-                        {copiedIp === record.ipAddress ? (
+                        <CheckCircle2 size={13} /> Success
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3rem",
+                          color: "var(--danger, #ef4444)",
+                          fontSize: "0.8rem",
+                          background: "var(--danger-bg, rgba(239, 68, 68, 0.1))",
+                          padding: "0.25rem 0.55rem",
+                          borderRadius: "999px",
+                          fontWeight: 500,
+                        }}
+                      >
+                        <XCircle size={13} /> Failed
+                      </span>
+                    )}
+                  </td>
+
+                  {/* Real IP Address Column */}
+                  <td style={{ padding: "0.85rem 1rem", fontSize: "0.875rem" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
+                        <span
+                          onClick={() => handleCopyIp(record.ipAddress)}
+                          title="Click to copy IP address"
+                          style={{
+                            fontFamily: "monospace",
+                            fontSize: "0.85rem",
+                            fontWeight: 600,
+                            padding: "0.25rem 0.6rem",
+                            borderRadius: "6px",
+                            background: ipType.isRealPublic ? "rgba(99, 102, 241, 0.1)" : "rgba(255, 255, 255, 0.05)",
+                            border: `1px solid ${ipType.isRealPublic ? "rgba(99, 102, 241, 0.3)" : "var(--border-color)"}`,
+                            color: ipType.isRealPublic ? "var(--primary)" : "inherit",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {record.ipAddress || "Unknown"}
+                        </span>
+                        {record.ipAddress && record.ipAddress !== "N/A" && record.ipAddress !== "Unknown" && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopyIp(record.ipAddress)}
+                            title={`Copy IP address ${record.ipAddress}`}
+                            style={{
+                              background: copiedIp === record.ipAddress ? "rgba(34, 197, 94, 0.15)" : "rgba(255, 255, 255, 0.06)",
+                              color: copiedIp === record.ipAddress ? "#22c55e" : "inherit",
+                              border: `1px solid ${copiedIp === record.ipAddress ? "#22c55e" : "var(--border-color)"}`,
+                              borderRadius: "6px",
+                              padding: "0.25rem 0.5rem",
+                              fontSize: "0.75rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.3rem",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            {copiedIp === record.ipAddress ? (
+                              <>
+                                <Check size={12} style={{ color: "#22c55e" }} />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy size={12} />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                      <span style={{ fontSize: "0.72rem", opacity: 0.6, letterSpacing: "0.02em" }}>
+                        {ipType.label}
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* System & Device Column */}
+                  <td style={{ padding: "0.85rem 1rem", fontSize: "0.85rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }} title={record.userAgent || ""}>
+                      <div
+                        style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: "8px",
+                          backgroundColor: "rgba(255, 255, 255, 0.05)",
+                          border: "1px solid var(--border-color)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: sys.deviceType === "mobile" ? "#38bdf8" : "#818cf8",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {sys.deviceType === "mobile" ? (
+                          <Smartphone size={16} />
+                        ) : sys.deviceType === "desktop" || sys.deviceType === "apple" ? (
+                          <Laptop size={16} />
+                        ) : (
+                          <Globe size={16} />
+                        )}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 600, color: "inherit", fontSize: "0.85rem" }}>
+                          {sys.osName}
+                        </div>
+                        <div style={{ fontSize: "0.75rem", opacity: 0.7 }}>
+                          {sys.browserName}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Actions Column */}
+                  <td style={{ padding: "0.85rem 1rem", fontSize: "0.875rem", textAlign: "center" }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+                      {/* Direct Report Button */}
+                      <button
+                        type="button"
+                        disabled={sendingRowId === record.id}
+                        onClick={() => handleDirectReport(record)}
+                        title={`Send security report email directly to ${record.email} and admin`}
+                        style={{
+                          padding: "0.45rem 0.85rem",
+                          backgroundColor: sentSuccessRowId === record.id ? "#16a34a" : "var(--primary)",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: sendingRowId === record.id ? "not-allowed" : "pointer",
+                          fontWeight: 600,
+                          fontSize: "0.825rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          opacity: sendingRowId === record.id ? 0.7 : 1,
+                          transition: "all 0.2s ease",
+                        }}
+                      >
+                        {sendingRowId === record.id ? (
                           <>
-                            <Check size={12} style={{ color: "#22c55e" }} />
-                            <span>Copied!</span>
+                            <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
+                            Sending...
+                          </>
+                        ) : sentSuccessRowId === record.id ? (
+                          <>
+                            <CheckCircle2 size={13} />
+                            Sent!
                           </>
                         ) : (
                           <>
-                            <Copy size={12} />
-                            <span>Copy</span>
+                            <Send size={13} />
+                            Report
                           </>
                         )}
                       </button>
-                    )}
-                  </div>
-                </td>
-                <td style={{ padding: "1rem", fontSize: "0.875rem", opacity: 0.8, maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={record.userAgent || ""}>
-                  {record.userAgent || "N/A"}
-                </td>
-                <td style={{ padding: "1rem", fontSize: "0.875rem", textAlign: "center" }}>
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
-                    {/* Primary Direct Report Button */}
-                    <button
-                      type="button"
-                      disabled={sendingRowId === record.id}
-                      onClick={() => handleDirectReport(record)}
-                      title={`Send report email directly to ${record.email}`}
-                      style={{
-                        padding: "0.45rem 0.85rem",
-                        backgroundColor: sentSuccessRowId === record.id ? "#16a34a" : "var(--primary)",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "6px",
-                        cursor: sendingRowId === record.id ? "not-allowed" : "pointer",
-                        fontWeight: 600,
-                        fontSize: "0.825rem",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "0.4rem",
-                        opacity: sendingRowId === record.id ? 0.7 : 1,
-                        transition: "all 0.2s ease",
-                      }}
-                    >
-                      {sendingRowId === record.id ? (
-                        <>
-                          <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
-                          Sending...
-                        </>
-                      ) : sentSuccessRowId === record.id ? (
-                        <>
-                          <CheckCircle2 size={13} />
-                          Sent!
-                        </>
-                      ) : (
-                        <>
-                          <Send size={13} />
-                          Report
-                        </>
-                      )}
-                    </button>
 
-                    {/* Customize Recipient Options Button */}
-                    <button
-                      type="button"
-                      onClick={() => handleOpenReportModal(record)}
-                      title="Customize recipient or view attempt details"
-                      style={{
-                        padding: "0.45rem 0.55rem",
-                        backgroundColor: "rgba(255, 255, 255, 0.05)",
-                        color: "inherit",
-                        border: "1px solid var(--border-color)",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        opacity: 0.85,
-                      }}
-                    >
-                      <SlidersHorizontal size={13} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      {/* Customize Modal Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleOpenReportModal(record)}
+                        title="Customize recipient email or view full system details"
+                        style={{
+                          padding: "0.45rem 0.55rem",
+                          backgroundColor: "rgba(255, 255, 255, 0.05)",
+                          color: "inherit",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          opacity: 0.85,
+                        }}
+                      >
+                        <SlidersHorizontal size={13} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
         {filteredRecords.length === 0 && (
-          <p style={{ textAlign: "center", opacity: 0.7, padding: "2rem" }}>No login records found.</p>
+          <p style={{ textAlign: "center", opacity: 0.7, padding: "2.5rem" }}>No login records found.</p>
         )}
       </div>
 
       {/* Report Email Customizer Modal */}
       {selectedRecord && (
-        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-          <div style={{ background: "var(--card-bg, #1e293b)", color: "inherit", borderRadius: "12px", border: "1px solid var(--border-color, #334155)", width: "100%", maxWidth: "520px", padding: "1.75rem", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)" }}>
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              background: "var(--card-bg, #1e293b)",
+              color: "inherit",
+              borderRadius: "12px",
+              border: "1px solid var(--border-color, #334155)",
+              width: "100%",
+              maxWidth: "520px",
+              padding: "1.75rem",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)",
+            }}
+          >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <Mail style={{ color: "var(--primary, #3b82f6)" }} size={20} />
                 <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 600 }}>Send Security Report Email</h3>
               </div>
-              <button onClick={() => setSelectedRecord(null)} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", opacity: 0.7 }}>
+              <button
+                onClick={() => setSelectedRecord(null)}
+                style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", opacity: 0.7 }}
+              >
                 <X size={20} />
               </button>
             </div>
 
             <p style={{ fontSize: "0.875rem", opacity: 0.8, marginBottom: "1rem" }}>
-              Send a login report regarding the attempt for <strong>{selectedRecord.email}</strong>.
+              Send an administrative login report regarding the attempt for <strong>{selectedRecord.email}</strong>.
             </p>
 
             {/* Login Summary Box */}
-            <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "0.75rem 1rem", marginBottom: "1.25rem", fontSize: "0.85rem" }}>
+            <div
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid var(--border-color)",
+                borderRadius: "8px",
+                padding: "0.85rem 1rem",
+                marginBottom: "1.25rem",
+                fontSize: "0.85rem",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+                <span style={{ opacity: 0.7 }}>Account:</span>
+                <span style={{ fontWeight: 600 }}>{selectedRecord.email}</span>
+              </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem" }}>
                 <span style={{ opacity: 0.7 }}>Date & Time:</span>
                 <span>{new Date(selectedRecord.timestamp).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem" }}>
-                <span style={{ opacity: 0.7 }}>IP Address:</span>
-                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{selectedRecord.ipAddress || "Unknown"}</span>
+                <span style={{ opacity: 0.7 }}>Real IP Address:</span>
+                <span style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>
+                  {selectedRecord.ipAddress || "Unknown"}
+                </span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+                <span style={{ opacity: 0.7 }}>Login System / Device:</span>
+                <span style={{ fontWeight: 600 }}>
+                  {parseSystemInfo(selectedRecord.userAgent).osName} ({parseSystemInfo(selectedRecord.userAgent).browserName})
+                </span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ opacity: 0.7 }}>Status:</span>
-                <span style={{ color: selectedRecord.success ? "var(--success, #22c55e)" : "var(--danger, #ef4444)", fontWeight: 600 }}>
-                  {selectedRecord.success ? "Success" : "Failed"}
+                <span
+                  style={{
+                    color: selectedRecord.success ? "var(--success, #22c55e)" : "var(--danger, #ef4444)",
+                    fontWeight: 600,
+                  }}
+                >
+                  {selectedRecord.success ? "Successful Login" : "Failed Attempt"}
                 </span>
               </div>
             </div>
 
             {/* Recipient Input */}
-            <div style={{ marginBottom: "1.25rem" }}>
+            <div style={{ marginBottom: "1rem" }}>
               <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem" }}>
                 Recipient Email Address:
               </label>
@@ -531,14 +865,30 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                 value={recipientEmail}
                 onChange={(e) => setRecipientEmail(e.target.value)}
                 placeholder="Enter recipient email (e.g. user@gmail.com)..."
-                style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: "8px", border: "1px solid var(--border-color)", backgroundColor: "transparent", color: "inherit", fontSize: "0.9rem" }}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  backgroundColor: "transparent",
+                  color: "inherit",
+                  fontSize: "0.9rem",
+                }}
               />
               <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
                 {selectedRecord.email && !selectedRecord.email.includes("unknown") && (
                   <button
                     type="button"
                     onClick={() => setRecipientEmail(selectedRecord.email)}
-                    style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid var(--border-color)", color: "inherit", cursor: "pointer" }}
+                    style={{
+                      fontSize: "0.75rem",
+                      padding: "0.3rem 0.6rem",
+                      borderRadius: "4px",
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid var(--border-color)",
+                      color: "inherit",
+                      cursor: "pointer",
+                    }}
                   >
                     Use Account Email ({selectedRecord.email})
                   </button>
@@ -546,11 +896,34 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                 <button
                   type="button"
                   onClick={() => setRecipientEmail("nishanthv041@gmail.com")}
-                  style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem", borderRadius: "4px", background: "rgba(99, 102, 241, 0.1)", border: "1px solid var(--primary)", color: "var(--primary)", cursor: "pointer", fontWeight: 500 }}
+                  style={{
+                    fontSize: "0.75rem",
+                    padding: "0.3rem 0.6rem",
+                    borderRadius: "4px",
+                    background: "rgba(99, 102, 241, 0.1)",
+                    border: "1px solid var(--primary)",
+                    color: "var(--primary)",
+                    cursor: "pointer",
+                    fontWeight: 500,
+                  }}
                 >
                   Send to Admin (nishanthv041@gmail.com)
                 </button>
               </div>
+            </div>
+
+            {/* CC Admin Checkbox */}
+            <div style={{ marginBottom: "1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <input
+                type="checkbox"
+                id="modalCcAdmin"
+                checked={modalCcAdmin}
+                onChange={(e) => setModalCcAdmin(e.target.checked)}
+                style={{ cursor: "pointer", width: 16, height: 16 }}
+              />
+              <label htmlFor="modalCcAdmin" style={{ fontSize: "0.825rem", cursor: "pointer", opacity: 0.9 }}>
+                Send confirmation copy to Admin (<code>nishanthv041@gmail.com</code>)
+              </label>
             </div>
 
             {/* Feedback notification */}
@@ -561,7 +934,8 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                   borderRadius: "8px",
                   marginBottom: "1rem",
                   fontSize: "0.85rem",
-                  backgroundColor: modalFeedback.type === "success" ? "rgba(34, 197, 94, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                  backgroundColor:
+                    modalFeedback.type === "success" ? "rgba(34, 197, 94, 0.15)" : "rgba(239, 68, 68, 0.15)",
                   color: modalFeedback.type === "success" ? "#22c55e" : "#ef4444",
                   border: `1px solid ${modalFeedback.type === "success" ? "#22c55e" : "#ef4444"}`,
                   display: "flex",
@@ -575,8 +949,18 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
             )}
 
             {/* Deliverability Tip */}
-            <div style={{ fontSize: "0.78rem", opacity: 0.7, marginBottom: "1.25rem", padding: "0.5rem 0.75rem", background: "rgba(255,255,255,0.03)", borderRadius: "6px" }}>
-              💡 <strong>Deliverability Note:</strong> Emails are sent directly via SMTP. If the recipient does not see the alert in their Primary Inbox within 1 minute, please check the <strong>Spam / Junk</strong> folder.
+            <div
+              style={{
+                fontSize: "0.78rem",
+                opacity: 0.75,
+                marginBottom: "1.25rem",
+                padding: "0.6rem 0.85rem",
+                background: "rgba(255,255,255,0.03)",
+                borderRadius: "6px",
+                lineHeight: 1.45,
+              }}
+            >
+              💡 <strong>Delivery Note:</strong> Emails are sent via Google SMTP. Institutional college domains (such as <code>@bitsathy.ac.in</code>) frequently direct external notifications to the <strong>Spam / Junk</strong> folder.
             </div>
 
             {/* Modal Actions */}
@@ -584,7 +968,14 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
               <button
                 type="button"
                 onClick={() => setSelectedRecord(null)}
-                style={{ padding: "0.6rem 1rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "transparent", color: "inherit", cursor: "pointer" }}
+                style={{
+                  padding: "0.6rem 1rem",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border-color)",
+                  background: "transparent",
+                  color: "inherit",
+                  cursor: "pointer",
+                }}
               >
                 Close
               </button>
@@ -625,14 +1016,39 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
 
       {/* Test Email Modal */}
       {isTestModalOpen && (
-        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-          <div style={{ background: "var(--card-bg, #1e293b)", color: "inherit", borderRadius: "12px", border: "1px solid var(--border-color, #334155)", width: "100%", maxWidth: "480px", padding: "1.75rem", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)" }}>
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              background: "var(--card-bg, #1e293b)",
+              color: "inherit",
+              borderRadius: "12px",
+              border: "1px solid var(--border-color, #334155)",
+              width: "100%",
+              maxWidth: "480px",
+              padding: "1.75rem",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)",
+            }}
+          >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <Mail style={{ color: "var(--primary, #3b82f6)" }} size={20} />
                 <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 600 }}>Test Email Delivery</h3>
               </div>
-              <button onClick={() => setIsTestModalOpen(false)} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", opacity: 0.7 }}>
+              <button
+                onClick={() => setIsTestModalOpen(false)}
+                style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", opacity: 0.7 }}
+              >
                 <X size={20} />
               </button>
             </div>
@@ -650,7 +1066,15 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                 value={testEmailAddress}
                 onChange={(e) => setTestEmailAddress(e.target.value)}
                 placeholder="e.g. user@example.com"
-                style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: "8px", border: "1px solid var(--border-color)", backgroundColor: "transparent", color: "inherit", fontSize: "0.9rem" }}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  backgroundColor: "transparent",
+                  color: "inherit",
+                  fontSize: "0.9rem",
+                }}
               />
             </div>
 
@@ -661,7 +1085,8 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                   borderRadius: "8px",
                   marginBottom: "1rem",
                   fontSize: "0.85rem",
-                  backgroundColor: testFeedback.type === "success" ? "rgba(34, 197, 94, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                  backgroundColor:
+                    testFeedback.type === "success" ? "rgba(34, 197, 94, 0.15)" : "rgba(239, 68, 68, 0.15)",
                   color: testFeedback.type === "success" ? "#22c55e" : "#ef4444",
                   border: `1px solid ${testFeedback.type === "success" ? "#22c55e" : "#ef4444"}`,
                   display: "flex",
@@ -678,7 +1103,14 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
               <button
                 type="button"
                 onClick={() => setIsTestModalOpen(false)}
-                style={{ padding: "0.6rem 1rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "transparent", color: "inherit", cursor: "pointer" }}
+                style={{
+                  padding: "0.6rem 1rem",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border-color)",
+                  background: "transparent",
+                  color: "inherit",
+                  cursor: "pointer",
+                }}
               >
                 Close
               </button>

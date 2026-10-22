@@ -7,7 +7,9 @@ export async function sendReportEmailAction(
   ipAddress: string | null,
   timestamp: Date | string,
   success: boolean,
-  customRecipient?: string
+  customRecipient?: string,
+  ccAdmin: boolean = true,
+  userAgent?: string | null
 ) {
   try {
     const recipient = (customRecipient || email)?.trim().toLowerCase();
@@ -19,9 +21,11 @@ export async function sendReportEmailAction(
     return await sendSecurityReportEmail({
       accountEmail: email,
       ipAddress,
+      userAgent,
       timestamp,
       success,
       recipientEmail: recipient,
+      ccAdmin,
     });
   } catch (error: any) {
     console.error("[EMAIL SERVICE ERROR]:", error);
