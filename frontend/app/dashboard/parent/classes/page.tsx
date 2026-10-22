@@ -1,6 +1,5 @@
 import { getParentAndSelectedChild } from "../parentChildHelper";
 import styles from "../../dashboard.module.css";
-import ChildSwitcher from "../ChildSwitcher";
 import ParentChildBanner from "../ParentChildBanner";
 import { 
   GraduationCap, Users, BookOpen, User, Mail, Phone, 
@@ -64,8 +63,6 @@ export default async function ParentClassesPage({
             Viewing academic class, faculty and subjects for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong>.
           </p>
         </div>
-
-        <ChildSwitcher studentList={children} selectedChildId={selectedChild.id} />
       </div>
 
       {/* Child Profile Banner with Child Switching Option */}

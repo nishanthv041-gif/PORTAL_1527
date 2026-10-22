@@ -100,7 +100,9 @@ export default function ChildSwitcher({
       border: '1px solid var(--border-color)',
       borderRadius: '12px',
       padding: '0.35rem 0.5rem',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+      maxWidth: '100%',
+      flexWrap: 'wrap'
     }}>
       <div style={{
         display: 'flex',

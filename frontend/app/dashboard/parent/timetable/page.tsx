@@ -1,7 +1,6 @@
 import { getParentAndSelectedChild } from "../parentChildHelper";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
-import ChildSwitcher from "../ChildSwitcher";
 import ParentChildBanner from "../ParentChildBanner";
 import { Calendar as CalendarIcon, Clock, MapPin, User, Building2, Home } from "lucide-react";
 import Link from "next/link";
@@ -96,8 +95,6 @@ export default async function ParentTimetablePage({
             Weekly period schedule for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong> {childClass ? `(${childClass.name} - ${childClass.section})` : ''}
           </p>
         </div>
-
-        <ChildSwitcher studentList={children} selectedChildId={selectedChild.id} />
       </div>
 
       {/* Child Class Banner with Child Switching Option */}

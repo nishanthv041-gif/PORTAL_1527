@@ -5,7 +5,6 @@ import {
   BookOpen, Calendar, Bell, FileText, 
   GraduationCap, Clock, Building2, Home 
 } from "lucide-react";
-import ChildSwitcher from "./ChildSwitcher";
 import ParentChildBanner from "./ParentChildBanner";
 import Link from "next/link";
 
@@ -69,7 +68,6 @@ export default async function ParentDashboard({
             Viewing academic records for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong>
           </p>
         </div>
-        <ChildSwitcher studentList={children} selectedChildId={selectedChild.id} />
       </div>
 
       <div style={{ marginTop: '1.75rem' }}>
