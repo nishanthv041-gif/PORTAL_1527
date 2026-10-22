@@ -8,6 +8,8 @@ import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/setting
 
 import { SettingsProvider } from "@/frontend/contexts/SettingsContext";
 import NavigationProgressBar from "@/frontend/components/NavigationProgressBar";
+import { getUnifiedNotificationsAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import NotificationPopupModal from "@/frontend/components/notifications/NotificationPopupModal";
 
 export default async function DashboardLayout({
   children,
@@ -20,7 +22,10 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  const settings = await getSystemSettings();
+  const [settings, notifications] = await Promise.all([
+    getSystemSettings(),
+    getUnifiedNotificationsAction()
+  ]);
 
   if (false && settings.MAINTENANCE_MODE === "true" && session?.user?.role !== "ADMIN") {
     return (
@@ -114,6 +119,7 @@ export default async function DashboardLayout({
   return (
     <SettingsProvider settings={settings}>
       <NavigationProgressBar />
+      <NotificationPopupModal initialNotifications={notifications} />
       <div className={styles.container}>
         {settings.SCHOOL_LOGO && (
           <>

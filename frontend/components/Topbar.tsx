@@ -3,7 +3,7 @@
 import styles from "./Topbar.module.css";
 import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Bell } from "lucide-react";
 
 export default function Topbar({
   user,
@@ -62,6 +62,50 @@ export default function Topbar({
         <h2 className={styles.title}>{getPageTitle()}</h2>
       </div>
       <div className={styles.userInfo}>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("open-notification-popup"))}
+          title="View Notifications"
+          aria-label="View Notifications"
+          style={{
+            background: 'var(--card-bg, #ffffff)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '50%',
+            width: '38px',
+            height: '38px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: '#f59e0b',
+            position: 'relative',
+            marginRight: '0.35rem',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+            flexShrink: 0
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.transform = 'scale(1.06)';
+            e.currentTarget.style.borderColor = 'var(--primary)';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.borderColor = 'var(--border-color)';
+          }}
+        >
+          <Bell size={18} />
+          <span style={{
+            position: 'absolute',
+            top: '4px',
+            right: '4px',
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: '#ef4444',
+            border: '1.5px solid var(--card-bg, #ffffff)'
+          }} />
+        </button>
+
         <ThemeToggle style={{ marginRight: "0.25rem" }} />
         <div className={styles.userDetails}>
           <span className={styles.userName}>{user?.name}</span>
