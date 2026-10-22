@@ -95,29 +95,32 @@ export default function ChildSwitcher({
     <div style={{
       display: 'inline-flex',
       alignItems: 'center',
-      gap: '0.5rem',
+      gap: '0.4rem',
       backgroundColor: 'var(--card-bg)',
       border: '1px solid var(--border-color)',
       borderRadius: '12px',
-      padding: '0.35rem 0.5rem',
+      padding: '0.3rem 0.45rem',
       boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
       maxWidth: '100%',
-      flexWrap: 'wrap'
+      overflowX: 'auto',
+      WebkitOverflowScrolling: 'touch'
     }}>
       <div style={{
         display: 'flex',
         alignItems: 'center',
         gap: '0.35rem',
-        padding: '0 0.4rem',
+        padding: '0 0.35rem',
         color: 'var(--text-secondary)',
-        fontSize: '0.8rem',
-        fontWeight: 600
+        fontSize: '0.78rem',
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+        flexShrink: 0
       }}>
-        <Users size={15} />
+        <Users size={14} />
         <span>Select Child:</span>
       </div>
 
-      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'nowrap' }}>
         {studentList.map(child => {
           const isSelected = child.id === selectedChildId;
           const isHostel = child.residenceType?.toUpperCase().includes("HOSTEL");
@@ -130,15 +133,17 @@ export default function ChildSwitcher({
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0.4rem 0.85rem',
+                gap: '0.45rem',
+                padding: '0.35rem 0.75rem',
                 borderRadius: '8px',
                 border: isSelected ? '1px solid var(--primary)' : '1px solid transparent',
-                backgroundColor: isSelected ? 'var(--primary)' : 'rgba(0,0,0,0.03)',
-                color: isSelected ? 'var(--primary-fg)' : 'var(--foreground)',
+                backgroundColor: isSelected ? 'var(--primary)' : 'rgba(0,0,0,0.04)',
+                color: isSelected ? '#ffffff' : 'var(--foreground)',
                 cursor: 'pointer',
                 fontWeight: isSelected ? 700 : 500,
-                fontSize: '0.825rem',
+                fontSize: '0.82rem',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
                 transition: 'all 0.15s ease-in-out'
               }}
             >
@@ -152,12 +157,13 @@ export default function ChildSwitcher({
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: '0.7rem',
-                fontWeight: 700
+                fontWeight: 700,
+                flexShrink: 0
               }}>
                 {child.firstName[0]}
               </div>
 
-              <span>{child.firstName}</span>
+              <span style={{ whiteSpace: 'nowrap' }}>{child.firstName}</span>
 
               {child.class && (
                 <span style={{
@@ -166,7 +172,9 @@ export default function ChildSwitcher({
                   borderRadius: '4px',
                   backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)',
                   color: isSelected ? '#fff' : 'var(--text-secondary)',
-                  fontWeight: 600
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0
                 }}>
                   {child.class.name} - {child.class.section}
                 </span>

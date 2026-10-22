@@ -70,7 +70,7 @@ export default async function ParentDashboard({
         </div>
       </div>
 
-      <div style={{ marginTop: '1.75rem' }}>
+      <div style={{ marginTop: '1.25rem' }}>
         {/* Child Profile & Class Banner with Child Switching Option */}
         <ParentChildBanner 
           selectedChild={selectedChild} 
@@ -100,14 +100,14 @@ export default async function ParentDashboard({
               <div className={styles.statIcon}><Calendar size={24} /></div>
               <div className={styles.statInfo}>
                 <span className={styles.statLabel}>Recent Attendance</span>
-                <span className={styles.statValue} style={{ fontSize: '1rem', marginTop: '0.5rem' }}>
+                <span className={styles.statValue} style={{ fontSize: '1rem', marginTop: '0.35rem' }}>
                   {attendance.length > 0 ? (
-                    <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.35rem' }}>
+                    <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
                       {attendance.map(a => (
-                        <span key={a.id} title={`${new Date(a.date).toLocaleDateString()} - ${a.status}`} style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: a.status === 'PRESENT' ? "var(--success)" : a.status === 'ABSENT' ? "var(--danger)" : "var(--warning)" }}></span>
+                        <span key={a.id} title={`${new Date(a.date).toLocaleDateString()} - ${a.status}`} style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: a.status === 'PRESENT' ? "var(--success)" : a.status === 'ABSENT' ? "var(--danger)" : "var(--warning)", flexShrink: 0 }}></span>
                       ))}
                     </div>
-                  ) : 'No recent records'}
+                  ) : 'No records'}
                 </span>
               </div>
             </div>
