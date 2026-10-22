@@ -2,6 +2,7 @@ import { getParentAndSelectedChild } from "../parentChildHelper";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import ChildSwitcher from "../ChildSwitcher";
+import ParentChildBanner from "../ParentChildBanner";
 import { Calendar as CalendarIcon, Clock, MapPin, User, Building2, Home } from "lucide-react";
 import Link from "next/link";
 
@@ -99,76 +100,12 @@ export default async function ParentTimetablePage({
         <ChildSwitcher studentList={children} selectedChildId={selectedChild.id} />
       </div>
 
-      {/* Child Class Banner */}
-      <div style={{
-        background: 'var(--card-bg)',
-        border: '1px solid var(--border-color)',
-        borderRadius: '12px',
-        padding: '1rem 1.5rem',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '1rem',
-        marginBottom: '2rem'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{
-            width: '42px',
-            height: '42px',
-            borderRadius: '50%',
-            backgroundColor: 'rgba(99, 102, 241, 0.1)',
-            color: 'var(--primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 700,
-            fontSize: '1.1rem'
-          }}>
-            {selectedChild.firstName[0]}
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--foreground)' }}>
-                {selectedChild.firstName} {selectedChild.lastName}
-              </span>
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.25rem',
-                fontSize: '0.7rem',
-                fontWeight: 600,
-                padding: '0.15rem 0.5rem',
-                borderRadius: '999px',
-                backgroundColor: isHostel ? 'rgba(245, 158, 11, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                color: isHostel ? 'var(--warning)' : 'var(--primary)'
-              }}>
-                {isHostel ? <Building2 size={12} /> : <Home size={12} />}
-                {isHostel ? "Hostel" : "Dayscholar"}
-              </span>
-            </div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-              Class: {childClass ? `${childClass.name} - Section ${childClass.section}` : "No Class Assigned"} • Roll: {selectedChild.rollNumber}
-            </div>
-          </div>
-        </div>
-
-        <Link
-          href={`/dashboard/parent/classes?childId=${selectedChild.id}`}
-          style={{
-            padding: '0.5rem 1rem',
-            backgroundColor: 'transparent',
-            border: '1px solid var(--primary)',
-            color: 'var(--primary)',
-            borderRadius: '8px',
-            textDecoration: 'none',
-            fontSize: '0.85rem',
-            fontWeight: 600
-          }}
-        >
-          View Full Class Details
-        </Link>
-      </div>
+      {/* Child Class Banner with Child Switching Option */}
+      <ParentChildBanner 
+        selectedChild={selectedChild} 
+        studentList={children} 
+        activePage="timetable" 
+      />
 
       {!childClass ? (
         <div style={{ background: 'var(--card-bg)', border: '1px dashed var(--border-color)', borderRadius: '12px', padding: '3rem', textAlign: 'center' }}>

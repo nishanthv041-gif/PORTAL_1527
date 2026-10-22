@@ -1,6 +1,7 @@
 import { getParentAndSelectedChild } from "../parentChildHelper";
 import styles from "../../dashboard.module.css";
 import ChildSwitcher from "../ChildSwitcher";
+import ParentChildBanner from "../ParentChildBanner";
 import { 
   GraduationCap, Users, BookOpen, User, Mail, Phone, 
   Calendar, Building2, Home, Clock 
@@ -67,108 +68,12 @@ export default async function ParentClassesPage({
         <ChildSwitcher studentList={children} selectedChildId={selectedChild.id} />
       </div>
 
-      {/* Child Profile Banner */}
-      <div style={{
-        background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(236, 72, 153, 0.08))',
-        border: '1px solid var(--border-color)',
-        borderRadius: '14px',
-        padding: '1.25rem 1.5rem',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '1rem',
-        marginBottom: '2rem'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{
-            width: '52px',
-            height: '52px',
-            borderRadius: '50%',
-            background: 'var(--primary)',
-            color: 'var(--primary-fg)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '1.35rem',
-            fontWeight: 700,
-            boxShadow: '0 4px 10px rgba(99, 102, 241, 0.25)'
-          }}>
-            {selectedChild.firstName[0]}
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 700, margin: 0, color: 'var(--foreground)' }}>
-                {selectedChild.firstName} {selectedChild.lastName}
-              </h2>
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                padding: '0.2rem 0.6rem',
-                borderRadius: '999px',
-                backgroundColor: isHostel ? 'rgba(245, 158, 11, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                color: isHostel ? 'var(--warning)' : 'var(--primary)'
-              }}>
-                {isHostel ? <Building2 size={13} /> : <Home size={13} />}
-                {isHostel ? "Hostel Student" : "Dayscholar"}
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '0.35rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              <span>Roll No: <strong>{selectedChild.rollNumber}</strong></span>
-              <span>•</span>
-              <span>Admission No: <strong>{selectedChild.admissionNo}</strong></span>
-              {selectedChild.batch && (
-                <>
-                  <span>•</span>
-                  <span>Batch: <strong>{selectedChild.batch}</strong></span>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <Link 
-            href={`/dashboard/parent/timetable?childId=${selectedChild.id}`}
-            style={{
-              padding: '0.55rem 1rem',
-              backgroundColor: 'var(--background)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
-              color: 'var(--foreground)',
-              textDecoration: 'none',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem'
-            }}
-          >
-            <Clock size={16} /> View Timetable
-          </Link>
-          <Link 
-            href={`/dashboard/parent/attendance?childId=${selectedChild.id}`}
-            style={{
-              padding: '0.55rem 1rem',
-              backgroundColor: 'var(--primary)',
-              color: 'var(--primary-fg)',
-              border: 'none',
-              borderRadius: '8px',
-              textDecoration: 'none',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem'
-            }}
-          >
-            <Calendar size={16} /> Attendance
-          </Link>
-        </div>
-      </div>
+      {/* Child Profile Banner with Child Switching Option */}
+      <ParentChildBanner 
+        selectedChild={selectedChild} 
+        studentList={children} 
+        activePage="classes" 
+      />
 
       {!childClass ? (
         <div style={{ background: 'var(--card-bg)', border: '1px dashed var(--border-color)', borderRadius: '12px', padding: '3rem', textAlign: 'center' }}>
