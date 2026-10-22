@@ -15,6 +15,7 @@ type UserWithRelations = User & {
 };
 
 export default function UserListClient({ users }: { users: (UserWithRelations & { expiresAt: Date | null })[] }) {
+  const [userList, setUserList] = useState(users);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -22,7 +23,12 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const router = useRouter();
 
-  const filteredUsers = users.filter((user) => {
+  // Keep userList in sync when props refresh
+  useState(() => {
+    setUserList(users);
+  });
+
+  const filteredUsers = userList.filter((user) => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (user.teacher?.phone || user.parent?.phone || "").includes(searchTerm);
@@ -216,11 +222,19 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
                       {user.role !== 'ADMIN' && (
                         <button 
                           onClick={async () => {
-                            if (confirm("WARNING: This will permanently delete this account and cannot be undone. Are you sure?")) {
-                              const res = await deleteUser(user.id);
-                              if (res?.error) alert(res.error);
-                              else router.refresh();
+                            if (confirm(`WARNING: This will permanently delete user "${user.name}". This cannot be undone. Are you sure?`)) {
                               setOpenMenuId(null);
+                              const previousUsers = [...userList];
+                              // 0ms optimistic removal
+                              setUserList(prev => prev.filter(u => u.id !== user.id));
+
+                              const res = await deleteUser(user.id);
+                              if (res?.error) {
+                                alert(res.error);
+                                setUserList(previousUsers); // Rollback if error
+                              } else {
+                                router.refresh();
+                              }
                             }
                           }}
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--danger)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}

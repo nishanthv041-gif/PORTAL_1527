@@ -73,59 +73,98 @@ export async function deleteUser(id: string) {
     const user = await prisma.user.findUnique({
       where: { id },
       include: {
-        teacher: { include: { classTeacherOf: true, classes: true, subjects: true, examRequests: true, complaints: true, assignments: true } },
+        teacher: true,
         parent: true,
         staff: true
       }
     });
 
-    if (!user) throw new Error("User not found.");
-    if (user.role === 'ADMIN') throw new Error("Cannot delete ADMIN users.");
+    if (!user) return { error: "User not found." };
+    if (user.role === 'ADMIN') return { error: "Cannot delete ADMIN users." };
 
-    // Dependency blocks
-    if (user.teacher) {
-      // Disconnect from classes and subjects
-      await prisma.class.updateMany({ where: { classTeacherId: user.teacher.id }, data: { classTeacherId: null } });
-      await prisma.class.updateMany({ where: { teacherId: user.teacher.id }, data: { teacherId: null } });
-      await prisma.subject.updateMany({ where: { teacherId: user.teacher.id }, data: { teacherId: null } });
+    await prisma.$transaction(async (tx) => {
+      // 1. Dependency cleanup for TEACHER
+      if (user.teacher) {
+        const teacherId = user.teacher.id;
 
-      // Delete nested dependencies
-      await prisma.submission.deleteMany({ where: { assignment: { teacherId: user.teacher.id } } });
-      await prisma.assignment.deleteMany({ where: { teacherId: user.teacher.id } });
-      await prisma.complaint.deleteMany({ where: { teacherId: user.teacher.id } });
-      await prisma.examRequest.deleteMany({ where: { teacherId: user.teacher.id } });
+        // Disconnect from classes (both classTeacher and subject teacher)
+        await tx.class.updateMany({ where: { classTeacherId: teacherId }, data: { classTeacherId: null } });
+        await tx.class.updateMany({ where: { teacherId: teacherId }, data: { teacherId: null } });
+        await tx.subject.updateMany({ where: { teacherId: teacherId }, data: { teacherId: null } });
 
-      await prisma.teacher.delete({ where: { id: user.teacher.id } });
-    }
+        // Disconnect meetings
+        const meetingsWithTeacher = await tx.meeting.findMany({
+          where: { teachers: { some: { id: teacherId } } },
+          select: { id: true }
+        });
+        for (const m of meetingsWithTeacher) {
+          await tx.meeting.update({
+            where: { id: m.id },
+            data: { teachers: { disconnect: { id: teacherId } } }
+          });
+        }
 
-    if (user.parent) {
-      await prisma.parentStudent.deleteMany({ where: { parentId: user.parent.id } });
-      await prisma.parent.delete({ where: { id: user.parent.id } });
-    }
+        // Submissions & assignments
+        const assignments = await tx.assignment.findMany({ where: { teacherId }, select: { id: true } });
+        const assignmentIds = assignments.map(a => a.id);
+        if (assignmentIds.length > 0) {
+          await tx.submission.deleteMany({ where: { assignmentId: { in: assignmentIds } } });
+        }
+        await tx.assignment.deleteMany({ where: { teacherId } });
+        await tx.complaint.deleteMany({ where: { teacherId } });
+        await tx.examRequest.deleteMany({ where: { teacherId } });
 
-    if (user.staff) {
-      await prisma.staff.delete({ where: { id: user.staff.id } });
-    }
+        await tx.teacher.delete({ where: { id: teacherId } });
+      }
 
-    // Delete base User records
-    await prisma.message.deleteMany({ where: { OR: [{ senderId: id }, { receiverId: id }] } });
-    await prisma.notification.deleteMany({ where: { userId: id } });
-    await prisma.rating.deleteMany({ where: { userId: id } });
-    await prisma.auditLog.deleteMany({ where: { userId: id } });
-    await prisma.loginAttempt.deleteMany({ where: { email: user.email } });
-    await prisma.user.delete({ where: { id } });
+      // 2. Dependency cleanup for PARENT
+      if (user.parent) {
+        const parentId = user.parent.id;
+
+        // Disconnect meetings
+        const meetingsWithParent = await tx.meeting.findMany({
+          where: { parents: { some: { id: parentId } } },
+          select: { id: true }
+        });
+        for (const m of meetingsWithParent) {
+          await tx.meeting.update({
+            where: { id: m.id },
+            data: { parents: { disconnect: { id: parentId } } }
+          });
+        }
+
+        await tx.parentStudent.deleteMany({ where: { parentId } });
+        await tx.parent.delete({ where: { id: parentId } });
+      }
+
+      // 3. Dependency cleanup for STAFF
+      if (user.staff) {
+        await tx.staff.delete({ where: { id: user.staff.id } });
+      }
+
+      // 4. Base User records & logs
+      await tx.message.deleteMany({ where: { OR: [{ senderId: id }, { receiverId: id }] } });
+      await tx.notification.deleteMany({ where: { userId: id } });
+      await tx.rating.deleteMany({ where: { userId: id } });
+      await tx.auditLog.deleteMany({ where: { OR: [{ userId: id }, { targetId: id }] } });
+      await tx.announcement.deleteMany({ where: { authorId: id } });
+      await tx.loginAttempt.deleteMany({ where: { email: user.email } });
+
+      // 5. Delete the User
+      await tx.user.delete({ where: { id } });
+    });
 
     revalidatePath('/dashboard/admin/users');
-    return { success: true };
+    return { success: true, message: "User deleted successfully." };
   } catch (error: unknown) {
     console.error("Delete user error:", error);
     if (error && typeof error === 'object' && 'code' in error) {
       const prismaError = error as { code: string; message: string };
       if (prismaError.code === 'P2003') {
-        return { error: "Cannot delete user due to existing related records (e.g., Audit logs, Messages, etc.)." };
+        return { error: "Cannot delete user due to unresolved database relation constraint." };
       }
       if (prismaError.code === 'P2025') {
-        return { error: "User or related record was not found in the database. They might have been already deleted." };
+        return { error: "User or related record was already removed." };
       }
       return { error: `Database error (${prismaError.code}): ${prismaError.message.split('\n')[0]}` };
     }
