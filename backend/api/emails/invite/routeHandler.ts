@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import { sendUserInviteEmail } from "@/backend/lib/services/emailService";
 
 export async function POST(request: Request) {
   const session = await getServerSession(getAuthOptions());
@@ -16,15 +17,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing email or role" }, { status: 400 });
     }
 
-    // Mock sending email
-    console.log(`[EMAIL SERVICE] Sending invite email to ${name} (${email}) for role ${role}...`);
-    // Simulate delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    console.log(`[EMAIL SERVICE] Successfully sent email to ${email}`);
+    const result = await sendUserInviteEmail({ email, name, role });
 
-    return NextResponse.json({ success: true, message: "Invite sent successfully!" }, { status: 200 });
-  } catch (error) {
-    console.error("Failed to send invite:", error);
-    return NextResponse.json({ error: "Failed to send invite" }, { status: 500 });
+    if (result.error) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      message: result.message || "Invite sent successfully!" 
+    }, { status: 200 });
+  } catch (error: any) {
+    console.error("Failed to send invite email:", error);
+    return NextResponse.json({ 
+      error: `Failed to send invite: ${error?.message || "Unknown error"}` 
+    }, { status: 500 });
   }
 }

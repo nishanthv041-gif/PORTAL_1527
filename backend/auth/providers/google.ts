@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import GoogleProvider from "next-auth/providers/google";
+import { headers } from "next/headers";
 import { prisma } from "@/backend/db/prisma";
 import { env } from "@/backend/config/env";
 
@@ -13,11 +14,37 @@ export const googleProviderConfig = GoogleProvider({
   },
 });
 
+async function getClientMetadata() {
+  let ipAddress = "Unknown";
+  let userAgent = "Unknown";
+
+  try {
+    const h = await headers();
+    const forwardedFor = h.get("x-forwarded-for");
+    const realIp = h.get("x-real-ip");
+    const cfIp = h.get("cf-connecting-ip");
+    const extractedIp = forwardedFor ? forwardedFor.split(",")[0].trim() : (realIp || cfIp);
+    if (extractedIp) {
+      ipAddress = extractedIp;
+    }
+    const ua = h.get("user-agent");
+    if (ua) {
+      userAgent = ua;
+    }
+  } catch (err) {
+    console.warn("[GoogleAuth] Could not extract request headers:", err);
+  }
+
+  return { ipAddress, userAgent };
+}
+
 export async function verifyGoogleSignIn(user: any, account: any) {
   if (account?.provider === "google") {
+    const { ipAddress, userAgent } = await getClientMetadata();
+
     if (!user.email) {
       await prisma.loginAttempt.create({
-        data: { email: "unknown@google", success: false, ipAddress: "Google OAuth", userAgent: "OAuth Provider" }
+        data: { email: "unknown@google", success: false, ipAddress, userAgent }
       });
       return "/?error=AccessDenied: Google account has no email.";
     }
@@ -35,7 +62,7 @@ export async function verifyGoogleSignIn(user: any, account: any) {
     } catch (error) {
       console.error("[GoogleAuth] Prisma error:", error);
       await prisma.loginAttempt.create({
-        data: { email: user.email, success: false, ipAddress: "Google OAuth", userAgent: "OAuth Provider" }
+        data: { email: user.email, success: false, ipAddress, userAgent }
       });
       return "/?error=Server error verifying account.";
     }
@@ -43,14 +70,14 @@ export async function verifyGoogleSignIn(user: any, account: any) {
     if (!dbUser) {
       console.warn(`[GoogleAuth] Rejecting unrecognized email: ${user.email}`);
       await prisma.loginAttempt.create({
-        data: { email: user.email, success: false, ipAddress: "Google OAuth", userAgent: "OAuth Provider" }
+        data: { email: user.email, success: false, ipAddress, userAgent }
       });
       return "/?error=AccessDenied: Your Google account email is not registered. Please contact your administrator.";
     }
 
     if (dbUser.status === "INACTIVE") {
       await prisma.loginAttempt.create({
-        data: { email: user.email, success: false, ipAddress: "Google OAuth", userAgent: "OAuth Provider" }
+        data: { email: user.email, success: false, ipAddress, userAgent }
       });
       return "/?error=AccessDenied: Your account has been deactivated. Please contact the administrator.";
     }
@@ -67,7 +94,7 @@ export async function verifyGoogleSignIn(user: any, account: any) {
     }
 
     await prisma.loginAttempt.create({
-      data: { email: user.email, success: true, ipAddress: "Google OAuth", userAgent: "OAuth Provider" }
+      data: { email: user.email, success: true, ipAddress, userAgent }
     });
 
     return true; // Allow sign in

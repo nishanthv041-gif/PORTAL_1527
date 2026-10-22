@@ -12,6 +12,8 @@ import {
   AlertCircle,
   Loader2,
   SlidersHorizontal,
+  Copy,
+  Check,
 } from "lucide-react";
 import { LoginAttempt } from "@prisma/client";
 import {
@@ -25,6 +27,9 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
   const [recipientEmail, setRecipientEmail] = useState("");
   const [isSendingModal, setIsSendingModal] = useState(false);
   const [modalFeedback, setModalFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // Copy IP Feedback State
+  const [copiedIp, setCopiedIp] = useState<string | null>(null);
 
   // Direct Row Sending State
   const [sendingRowId, setSendingRowId] = useState<string | null>(null);
@@ -43,16 +48,52 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testFeedback, setTestFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
+  // Copy IP to Clipboard with robust mobile fallback
+  const handleCopyIp = async (ipText: string | null) => {
+    if (!ipText || ipText === "N/A" || ipText === "Unknown") return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(ipText);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = ipText;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setCopiedIp(ipText);
+      setTimeout(() => {
+        setCopiedIp((prev) => (prev === ipText ? null : prev));
+      }, 2500);
+    } catch (err) {
+      console.error("Failed to copy IP:", err);
+    }
+  };
+
   const filteredRecords = records.filter((record) => {
     return (
       record.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (record.ipAddress || "").includes(searchTerm)
+      (record.ipAddress || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (record.userAgent || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
   });
 
   // Direct 1-Click Send to that particular user
   const handleDirectReport = async (record: LoginAttempt) => {
     if (sendingRowId) return;
+
+    // If email is missing or placeholder like unknown@google, prompt modal
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!record.email || !emailRegex.test(record.email) || record.email.includes("unknown")) {
+      handleOpenReportModal(record);
+      setModalFeedback({
+        type: "error",
+        message: "This login attempt does not have a valid account email. Please enter the specific recipient email below.",
+      });
+      return;
+    }
+
     setSendingRowId(record.id);
     setGlobalBanner(null);
 
@@ -95,17 +136,28 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
 
   const handleOpenReportModal = (record: LoginAttempt) => {
     setSelectedRecord(record);
-    setRecipientEmail(record.email);
+    const isValid = record.email && record.email.includes("@") && !record.email.includes("unknown");
+    setRecipientEmail(isValid ? record.email : "");
     setModalFeedback(null);
   };
 
   const handleSendReportFromModal = async () => {
     if (!selectedRecord) return;
+    const targetRecipient = recipientEmail.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!targetRecipient || !emailRegex.test(targetRecipient)) {
+      setModalFeedback({
+        type: "error",
+        message: "Please enter a valid recipient email address (e.g. name@domain.com).",
+      });
+      return;
+    }
+
     setIsSendingModal(true);
     setModalFeedback(null);
 
     try {
-      const targetRecipient = recipientEmail.trim() || selectedRecord.email;
       const res = await sendReportEmailAction(
         selectedRecord.email,
         selectedRecord.ipAddress,
@@ -298,8 +350,63 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                     </span>
                   )}
                 </td>
-                <td style={{ padding: "1rem", fontSize: "0.875rem", opacity: 0.8 }}>
-                  {record.ipAddress || "N/A"}
+                <td style={{ padding: "1rem", fontSize: "0.875rem" }}>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
+                    <span
+                      onClick={() => handleCopyIp(record.ipAddress)}
+                      title="Click to copy IP address"
+                      style={{
+                        fontFamily: "monospace",
+                        fontSize: "0.825rem",
+                        fontWeight: 600,
+                        padding: "0.25rem 0.55rem",
+                        borderRadius: "6px",
+                        background: record.ipAddress && record.ipAddress !== "Google OAuth" && record.ipAddress !== "Unknown" 
+                          ? "rgba(99, 102, 241, 0.08)" 
+                          : "rgba(255, 255, 255, 0.04)",
+                        border: "1px solid var(--border-color)",
+                        color: record.ipAddress && record.ipAddress !== "Google OAuth" && record.ipAddress !== "Unknown" 
+                          ? "var(--primary)" 
+                          : "inherit",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {record.ipAddress || "Unknown"}
+                    </span>
+                    {record.ipAddress && record.ipAddress !== "N/A" && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyIp(record.ipAddress)}
+                        title={`Copy ${record.ipAddress}`}
+                        style={{
+                          background: copiedIp === record.ipAddress ? "rgba(34, 197, 94, 0.15)" : "rgba(255, 255, 255, 0.06)",
+                          color: copiedIp === record.ipAddress ? "#22c55e" : "inherit",
+                          border: `1px solid ${copiedIp === record.ipAddress ? "#22c55e" : "var(--border-color)"}`,
+                          borderRadius: "6px",
+                          padding: "0.25rem 0.5rem",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3rem",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {copiedIp === record.ipAddress ? (
+                          <>
+                            <Check size={12} style={{ color: "#22c55e" }} />
+                            <span>Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={12} />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </td>
                 <td style={{ padding: "1rem", fontSize: "0.875rem", opacity: 0.8, maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={record.userAgent || ""}>
                   {record.userAgent || "N/A"}
@@ -404,7 +511,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem" }}>
                 <span style={{ opacity: 0.7 }}>IP Address:</span>
-                <span>{selectedRecord.ipAddress || "Unknown"}</span>
+                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{selectedRecord.ipAddress || "Unknown"}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ opacity: 0.7 }}>Status:</span>
@@ -423,16 +530,25 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                 type="email"
                 value={recipientEmail}
                 onChange={(e) => setRecipientEmail(e.target.value)}
-                placeholder="Enter recipient email..."
+                placeholder="Enter recipient email (e.g. user@gmail.com)..."
                 style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: "8px", border: "1px solid var(--border-color)", backgroundColor: "transparent", color: "inherit", fontSize: "0.9rem" }}
               />
               <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
+                {selectedRecord.email && !selectedRecord.email.includes("unknown") && (
+                  <button
+                    type="button"
+                    onClick={() => setRecipientEmail(selectedRecord.email)}
+                    style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid var(--border-color)", color: "inherit", cursor: "pointer" }}
+                  >
+                    Use Account Email ({selectedRecord.email})
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setRecipientEmail(selectedRecord.email)}
-                  style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid var(--border-color)", color: "inherit", cursor: "pointer" }}
+                  onClick={() => setRecipientEmail("nishanthv041@gmail.com")}
+                  style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem", borderRadius: "4px", background: "rgba(99, 102, 241, 0.1)", border: "1px solid var(--primary)", color: "var(--primary)", cursor: "pointer", fontWeight: 500 }}
                 >
-                  Use Account Email ({selectedRecord.email})
+                  Send to Admin (nishanthv041@gmail.com)
                 </button>
               </div>
             </div>

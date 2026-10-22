@@ -21,7 +21,8 @@ export function getAuthOptions(): NextAuthOptions {
           return null;
         }
 
-        const ip = (req?.headers?.['x-forwarded-for'] || req?.headers?.['x-real-ip'] || 'unknown') as string;
+        const rawIp = (req?.headers?.['x-forwarded-for'] || req?.headers?.['x-real-ip'] || req?.headers?.['cf-connecting-ip'] || 'unknown') as string;
+        const ip = rawIp.includes(',') ? rawIp.split(',')[0].trim() : rawIp;
         if (!loginRateLimiter.check(ip)) {
           throw new Error("Too many login attempts. Please try again later.");
         }

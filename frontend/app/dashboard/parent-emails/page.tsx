@@ -37,14 +37,16 @@ export default function ParentEmailsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: user.email, role: user.role, name: user.name }),
       });
+      const data = await res.json().catch(() => null);
       if (res.ok) {
         setSentIds(new Set(sentIds).add(user.id));
+        alert(data?.message || `Invitation email sent successfully to ${user.email}!`);
       } else {
-        alert("Failed to send invite.");
+        alert(data?.error || "Failed to send invite.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Error sending invite.");
+      alert(`Error sending invite: ${err?.message || "Please check connection"}`);
     } finally {
       setSendingId(null);
     }
