@@ -1,6 +1,5 @@
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
-import ChildSwitcher from "../ChildSwitcher";
 import ParentReportCardsClient from "./ParentReportCardsClient";
 import { getParentAndSelectedChild } from "../parentChildHelper";
 
@@ -40,9 +39,10 @@ export default async function ParentReportCardsPage({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 className={styles.title} style={{ margin: 0 }}>Report Cards</h1>
-          <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>View and verify report cards for {selectedChild.firstName}.</p>
+          <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
+            Viewing and verifying report cards for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong>
+          </p>
         </div>
-        <ChildSwitcher studentList={children} selectedChildId={selectedChild.id} />
       </div>
 
       <ParentReportCardsClient reportCards={reportCards} />

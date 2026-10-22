@@ -103,6 +103,7 @@ export function getAuthOptions(): NextAuthOptions {
       if (user) {
         token.role = user.role;
         token.id = user.id;
+        token.name = user.name ? user.name.trim() : token.name;
         token.theme = user.theme;
         token.notificationsEnabled = user.notificationsEnabled;
       }
@@ -114,6 +115,9 @@ export function getAuthOptions(): NextAuthOptions {
         session.user.id = token.id as string;
         session.user.theme = token.theme as string;
         session.user.notificationsEnabled = token.notificationsEnabled as boolean;
+        if (token.name) {
+          session.user.name = token.name as string;
+        }
       }
       return session;
     },

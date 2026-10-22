@@ -10,6 +10,7 @@ import { SettingsProvider } from "@/frontend/contexts/SettingsContext";
 import NavigationProgressBar from "@/frontend/components/NavigationProgressBar";
 import { getUnifiedNotificationsAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
 import NotificationPopupModal from "@/frontend/components/notifications/NotificationPopupModal";
+import { prisma } from "@/backend/db/prisma";
 
 export default async function DashboardLayout({
   children,
@@ -20,6 +21,21 @@ export default async function DashboardLayout({
 
   if (!session) {
     redirect("/login");
+  }
+
+  let displayName = session.user.name;
+  if (session?.user?.id) {
+    try {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { name: true }
+      });
+      if (dbUser?.name) {
+        displayName = dbUser.name.trim();
+      }
+    } catch {
+      // Fall back to session.user.name
+    }
   }
 
   const [settings, notifications] = await Promise.all([
@@ -178,7 +194,7 @@ export default async function DashboardLayout({
                 <line x1="3" y1="18" x2="21" y2="18"></line>
               </svg>
             </label>
-            <Topbar user={session.user} />
+            <Topbar user={{ ...session.user, name: displayName }} />
           </div>
           <main className={styles.pageContent}>{children}</main>
         </div>

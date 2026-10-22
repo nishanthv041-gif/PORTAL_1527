@@ -1,9 +1,7 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
-import ChildSwitcher from "../ChildSwitcher";
 import { AlertOctagon, Calendar, FileText, CheckCircle } from "lucide-react";
+import { getParentAndSelectedChild } from "../parentChildHelper";
 
 export default async function ParentDisciplinePage({
   searchParams
@@ -11,30 +9,11 @@ export default async function ParentDisciplinePage({
   searchParams: Promise<{ childId?: string }>
 }) {
   const resolvedSearchParams = await searchParams;
-  const session = await getServerSession(getAuthOptions());
+  const { session, parent, children, selectedChild } = await getParentAndSelectedChild(resolvedSearchParams?.childId);
   if (!session) return null;
 
-  const parent = await prisma.parent.findUnique({
-    where: { userId: session.user.id },
-    include: {
-      children: {
-        include: {
-          student: true
-        }
-      }
-    }
-  });
-
-  if (!parent || parent.children.length === 0) {
+  if (!parent || children.length === 0 || !selectedChild) {
     return <p>No children linked to your account.</p>;
-  }
-
-  const children = parent.children.map(s => s.student);
-  
-  let selectedChild = children[0];
-  if (resolvedSearchParams.childId) {
-    const found = children.find(c => c.id === resolvedSearchParams.childId);
-    if (found) selectedChild = found;
   }
 
   const records = await prisma.disciplineRecord.findMany({
@@ -45,8 +24,12 @@ export default async function ParentDisciplinePage({
   return (
     <div className={styles.dashboard}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-        <h1 className={styles.title} style={{ margin: 0 }}>Discipline Records</h1>
-        <ChildSwitcher studentList={children} selectedChildId={selectedChild.id} />
+        <div>
+          <h1 className={styles.title} style={{ margin: 0 }}>Discipline Records</h1>
+          <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
+            Viewing discipline records for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong>
+          </p>
+        </div>
       </div>
 
       <div className={styles.chartsContainer} style={{ marginTop: '2rem' }}>

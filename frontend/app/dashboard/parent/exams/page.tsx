@@ -1,6 +1,5 @@
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
-import ChildSwitcher from "../ChildSwitcher";
 import { BookOpen, Calendar as CalendarIcon } from "lucide-react";
 import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
 import { getParentAndSelectedChild } from "../parentChildHelper";
@@ -47,8 +46,12 @@ export default async function ParentExamsPage({
   return (
     <div className={styles.dashboard}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-        <h1 className={styles.title} style={{ margin: 0 }}>Exams & Marks</h1>
-        <ChildSwitcher studentList={children} selectedChildId={selectedChild.id} />
+        <div>
+          <h1 className={styles.title} style={{ margin: 0 }}>Exams & Marks</h1>
+          <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
+            Viewing exams and marks for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong>
+          </p>
+        </div>
       </div>
 
       <div className={styles.chartsContainer} style={{ marginTop: '2rem' }}>

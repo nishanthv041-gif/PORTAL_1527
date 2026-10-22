@@ -87,6 +87,7 @@ export async function populateGoogleJwt(token: any, user: any, account: any) {
         },
         select: {
           id: true,
+          name: true,
           role: true,
           theme: true,
           notificationsEnabled: true,
@@ -95,6 +96,7 @@ export async function populateGoogleJwt(token: any, user: any, account: any) {
 
       if (dbUser) {
         token.id = dbUser.id;
+        token.name = dbUser.name ? dbUser.name.trim() : user.name;
         token.role = dbUser.role;
         token.theme = dbUser.theme;
         token.notificationsEnabled = dbUser.notificationsEnabled;
