@@ -52,14 +52,70 @@ export default function ParentEmailsPage() {
     }
   };
 
+  const [isSendingAll, setIsSendingAll] = useState(false);
+
+  const handleSendAllInvites = async () => {
+    if (!confirm(`Are you sure you want to send portal invitation emails to all ${users.length} registered parents?`)) {
+      return;
+    }
+    setIsSendingAll(true);
+    let successCount = 0;
+    const newSentIds = new Set(sentIds);
+
+    for (const u of users) {
+      try {
+        const res = await fetch("/api/emails/invite", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: u.email, role: u.role, name: u.name }),
+        });
+        if (res.ok) {
+          successCount++;
+          newSentIds.add(u.id);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    setSentIds(newSentIds);
+    setIsSendingAll(false);
+    alert(`Successfully sent invitations to ${successCount} out of ${users.length} parents!`);
+  };
+
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <h2>Parent Email Management</h2>
-        <button className={styles.primaryBtn}>
-          <Plus size={16} style={{ display: "inline", marginRight: "4px" }} />
-          Add Parent Email
-        </button>
+      <div className={styles.header} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+        <div>
+          <h2 style={{ margin: '0 0 0.25rem 0' }}>Parent Email Management</h2>
+          <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+            Total Registered Parents: <strong style={{ color: 'var(--primary)', fontSize: '1rem' }}>{users.length}</strong>
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button 
+            onClick={handleSendAllInvites}
+            disabled={isSendingAll || users.length === 0}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.5rem', 
+              background: 'var(--primary)', 
+              color: 'var(--primary-fg)', 
+              border: 'none', 
+              padding: '0.65rem 1.25rem', 
+              borderRadius: '8px', 
+              fontWeight: 600,
+              fontSize: '0.875rem',
+              cursor: (isSendingAll || users.length === 0) ? 'not-allowed' : 'pointer',
+              opacity: (isSendingAll || users.length === 0) ? 0.7 : 1,
+              boxShadow: '0 2px 8px rgba(79, 70, 229, 0.2)'
+            }}
+          >
+            {isSendingAll ? <Loader2 size={16} className={styles.spinner} /> : <Mail size={16} />}
+            <span>{isSendingAll ? "Sending All..." : `Send Invites to All (${users.length})`}</span>
+          </button>
+        </div>
       </div>
 
       <div className={styles.tableContainer}>

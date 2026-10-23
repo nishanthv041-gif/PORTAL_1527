@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { User, Book, FileText, ChevronRight, Save, Edit } from "lucide-react";
+import { User, Book, FileText, ChevronRight, Save, Edit, Send, Mail, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { sendClassReportCardsToAllParentsAction } from "@/backend/lib/services/reportCardActions";
 
 type StudentData = {
   id: string;
@@ -55,6 +56,42 @@ export default function ReportCardsClient({ classData, exams, subjects, marks, b
   const [isEditing, setIsEditing] = useState(false);
   const [editedMarks, setEditedMarks] = useState<MarkData[]>(marks);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSendingAll, setIsSendingAll] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{
+    success: boolean;
+    message: string;
+    recipients?: string[];
+  } | null>(null);
+
+  const handleSendAllParents = async () => {
+    if (!confirm(`Are you sure you want to send report cards to all parents in Class ${classData.name} - ${classData.section}?`)) {
+      return;
+    }
+    setIsSendingAll(true);
+    setBulkResult(null);
+    try {
+      const res = await sendClassReportCardsToAllParentsAction(classData.id);
+      setIsSendingAll(false);
+      if (res.success) {
+        setBulkResult({
+          success: true,
+          message: res.message || "Report cards sent successfully to all parents!",
+          recipients: res.recipients
+        });
+      } else {
+        setBulkResult({
+          success: false,
+          message: res.error || "Failed to send report cards"
+        });
+      }
+    } catch (err: unknown) {
+      setIsSendingAll(false);
+      setBulkResult({
+        success: false,
+        message: err instanceof Error ? err.message : "Error sending report cards"
+      });
+    }
+  };
 
   const handleMarkChange = (studentId: string, examId: string, subjectId: string, field: string, value: string) => {
     setEditedMarks(prev => {
@@ -320,57 +357,130 @@ export default function ReportCardsClient({ classData, exams, subjects, marks, b
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border-color)', marginBottom: '2rem' }}>
+      {/* Delivery Feedback Banner */}
+      {bulkResult && (
+        <div style={{
+          padding: '1rem 1.25rem',
+          borderRadius: '10px',
+          marginBottom: '1.5rem',
+          background: bulkResult.success ? 'var(--success-bg, #f0fdf4)' : 'var(--danger-bg, #fef2f2)',
+          border: `1px solid ${bulkResult.success ? '#bbf7d0' : '#fecaca'}`,
+          color: bulkResult.success ? '#15803d' : '#b91c1c',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {bulkResult.success ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+            <span style={{ fontWeight: 600 }}>{bulkResult.message}</span>
+          </div>
+          {bulkResult.recipients && bulkResult.recipients.length > 0 && (
+            <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>
+              Emailed to: <strong>{bulkResult.recipients.join(", ")}</strong>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        borderBottom: '1px solid var(--border-color)', 
+        marginBottom: '2rem',
+        flexWrap: 'wrap',
+        gap: '1rem'
+      }}>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button
+            onClick={() => setView("STUDENT")}
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: 'transparent',
+              border: 'none',
+              borderBottom: view === "STUDENT" ? '2px solid var(--primary)' : '2px solid transparent',
+              color: view === "STUDENT" ? 'var(--primary)' : 'var(--text-secondary)',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <User size={18} /> Student-Wise
+          </button>
+          <button
+            onClick={() => setView("SUBJECT")}
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: 'transparent',
+              border: 'none',
+              borderBottom: view === "SUBJECT" ? '2px solid var(--primary)' : '2px solid transparent',
+              color: view === "SUBJECT" ? 'var(--primary)' : 'var(--text-secondary)',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <Book size={18} /> Subject-Wise
+          </button>
+          <button
+            onClick={() => setView("CLASS")}
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: 'transparent',
+              border: 'none',
+              borderBottom: view === "CLASS" ? '2px solid var(--primary)' : '2px solid transparent',
+              color: view === "CLASS" ? 'var(--primary)' : 'var(--text-secondary)',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <FileText size={18} /> Class-Wise
+          </button>
+        </div>
+
+        {/* Bulk Send to All Parents in this Class */}
         <button
-          onClick={() => setView("STUDENT")}
+          onClick={handleSendAllParents}
+          disabled={isSendingAll || classData.students.length === 0}
           style={{
-            padding: '0.75rem 1.5rem',
-            background: 'transparent',
-            border: 'none',
-            borderBottom: view === "STUDENT" ? '2px solid var(--primary)' : '2px solid transparent',
-            color: view === "STUDENT" ? 'var(--primary)' : 'var(--text-secondary)',
-            fontWeight: 600,
-            cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.5rem'
-          }}
-        >
-          <User size={18} /> Student-Wise
-        </button>
-        <button
-          onClick={() => setView("SUBJECT")}
-          style={{
-            padding: '0.75rem 1.5rem',
-            background: 'transparent',
+            gap: '0.5rem',
+            padding: '0.65rem 1.25rem',
+            backgroundColor: "var(--primary)",
+            color: "var(--primary-fg)",
             border: 'none',
-            borderBottom: view === "SUBJECT" ? '2px solid var(--primary)' : '2px solid transparent',
-            color: view === "SUBJECT" ? 'var(--primary)' : 'var(--text-secondary)',
+            borderRadius: '8px',
             fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
+            fontSize: '0.875rem',
+            cursor: (isSendingAll || classData.students.length === 0) ? 'not-allowed' : 'pointer',
+            opacity: (isSendingAll || classData.students.length === 0) ? 0.7 : 1,
+            transition: 'all 0.2s',
+            marginBottom: '0.5rem',
+            boxShadow: '0 2px 8px rgba(79, 70, 229, 0.2)'
           }}
+          title="Send report cards via email to all parents of students in this class"
         >
-          <Book size={18} /> Subject-Wise
-        </button>
-        <button
-          onClick={() => setView("CLASS")}
-          style={{
-            padding: '0.75rem 1.5rem',
-            background: 'transparent',
-            border: 'none',
-            borderBottom: view === "CLASS" ? '2px solid var(--primary)' : '2px solid transparent',
-            color: view === "CLASS" ? 'var(--primary)' : 'var(--text-secondary)',
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}
-        >
-          <FileText size={18} /> Class-Wise
+          {isSendingAll ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              <span>Sending to All Parents...</span>
+            </>
+          ) : (
+            <>
+              <Send size={16} />
+              <span>Email Report Cards to All Parents</span>
+            </>
+          )}
         </button>
       </div>
 

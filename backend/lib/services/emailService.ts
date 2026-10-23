@@ -187,3 +187,200 @@ export async function sendUserInviteEmail({
     messageId: info.messageId,
   };
 }
+
+export interface ReportCardEmailSubjectMark {
+  subjectName: string;
+  score: number;
+  maxScore: number;
+  isFail?: boolean;
+  remarks?: string | null;
+}
+
+// Send Student Academic Report Card Email directly to a Parent's inbox
+export async function sendStudentReportCardEmail({
+  parentEmail,
+  parentName,
+  studentName,
+  rollNumber,
+  className,
+  examName,
+  totalScore,
+  maxTotal,
+  percentage,
+  grade,
+  subjectMarks = [],
+  remarks,
+  reportCardUrl = "https://nipoportal.vercel.app/dashboard/parent/report-cards",
+  ccAdmin = true,
+}: {
+  parentEmail: string;
+  parentName?: string | null;
+  studentName: string;
+  rollNumber: string;
+  className: string;
+  examName?: string;
+  totalScore?: number;
+  maxTotal?: number;
+  percentage?: number | string;
+  grade?: string;
+  subjectMarks?: ReportCardEmailSubjectMark[];
+  remarks?: string | null;
+  reportCardUrl?: string;
+  ccAdmin?: boolean;
+}) {
+  const targetRecipient = parentEmail?.trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!targetRecipient || !emailRegex.test(targetRecipient)) {
+    return { error: `Invalid recipient email address: "${parentEmail}"` };
+  }
+
+  const { smtpEmail, transporter } = getSmtpTransporter();
+  const displayName = parentName?.trim() || "Parent / Guardian";
+  const ccList = (ccAdmin && targetRecipient !== smtpEmail.toLowerCase()) ? [smtpEmail] : undefined;
+
+  const subjectRowsHtml = subjectMarks.map(sm => `
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 10px 12px; font-weight: 500; color: #1e293b;">${sm.subjectName}</td>
+      <td style="padding: 10px 12px; text-align: center; font-weight: 600; color: ${sm.isFail ? '#dc2626' : '#0f172a'};">${sm.score}</td>
+      <td style="padding: 10px 12px; text-align: center; color: #64748b;">${sm.maxScore}</td>
+      <td style="padding: 10px 12px; text-align: center;">
+        <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: ${sm.isFail ? '#fee2e2' : '#dcfce7'}; color: ${sm.isFail ? '#b91c1c' : '#15803d'};">
+          ${sm.isFail ? 'FAIL' : 'PASS'}
+        </span>
+      </td>
+    </tr>
+  `).join('');
+
+  const subjectRowsText = subjectMarks.map(sm => 
+    `- ${sm.subjectName}: ${sm.score} / ${sm.maxScore} (${sm.isFail ? 'FAIL' : 'PASS'})`
+  ).join('\n');
+
+  const mailOptions = {
+    from: `"SRT School Portal" <${smtpEmail}>`,
+    replyTo: smtpEmail,
+    to: targetRecipient,
+    cc: ccList,
+    subject: `Official Student Report Card: ${studentName} (${className}) - SRT School`,
+    text: `SRT School Portal - Student Report Card\n\nDear ${displayName},\n\nThe official academic report card for ${studentName} (Roll No: ${rollNumber}, Class: ${className}) is ready.\n\nSummary:\n- Exam: ${examName || "Term Examination"}\n- Total Score: ${totalScore ?? 'N/A'} / ${maxTotal ?? 'N/A'}\n- Percentage: ${percentage ? `${percentage}%` : 'N/A'}\n- Grade: ${grade || 'N/A'}\n\nSubject Breakdown:\n${subjectRowsText || 'See full breakdown in portal'}\n\nView Complete Report Card Online:\n${reportCardUrl}\n\nWarm regards,\nSRT School Administration`,
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1a202c;">
+        <div style="border-bottom: 3px solid #4f46e5; padding-bottom: 14px; margin-bottom: 20px;">
+          <h2 style="margin: 0; color: #1e293b; font-size: 22px;">
+            SRT School Academic Report Card
+          </h2>
+          <p style="margin: 4px 0 0; color: #64748b; font-size: 13px;">Official Academic Performance & Evaluation Record</p>
+        </div>
+
+        <p style="font-size: 15px; color: #334155; margin-bottom: 16px;">
+          Dear <strong>${displayName}</strong>,
+        </p>
+
+        <p style="font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 20px;">
+          The academic performance report card for your ward <strong>${studentName}</strong> has been published. Please review the performance summary below.
+        </p>
+
+        <!-- Student Profile Card -->
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr>
+              <td style="padding: 6px 0; width: 50%;">
+                <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; display: block;">Student Name</span>
+                <strong style="font-size: 15px; color: #0f172a;">${studentName}</strong>
+              </td>
+              <td style="padding: 6px 0; width: 50%;">
+                <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; display: block;">Roll Number</span>
+                <span style="font-size: 14px; font-weight: 600; color: #4f46e5;">${rollNumber}</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0;">
+                <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; display: block;">Class / Section</span>
+                <span style="font-size: 14px; color: #334155;">${className}</span>
+              </td>
+              <td style="padding: 6px 0;">
+                <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; display: block;">Exam / Term</span>
+                <span style="font-size: 14px; color: #334155;">${examName || "Term Examination"}</span>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        ${totalScore !== undefined && maxTotal ? `
+        <!-- Score Summary Cards -->
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+          <tr>
+            <td style="width: 33%; padding: 4px;">
+              <div style="background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 11px; color: #4338ca; font-weight: 700; text-transform: uppercase;">Total Score</div>
+                <div style="font-size: 18px; font-weight: 700; color: #312e81; margin-top: 4px;">${totalScore} / ${maxTotal}</div>
+              </div>
+            </td>
+            <td style="width: 33%; padding: 4px;">
+              <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 11px; color: #15803d; font-weight: 700; text-transform: uppercase;">Percentage</div>
+                <div style="font-size: 18px; font-weight: 700; color: #166534; margin-top: 4px;">${percentage ? `${percentage}%` : 'N/A'}</div>
+              </div>
+            </td>
+            <td style="width: 33%; padding: 4px;">
+              <div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-size: 11px; color: #a16207; font-weight: 700; text-transform: uppercase;">Grade</div>
+                <div style="font-size: 18px; font-weight: 700; color: #854d0e; margin-top: 4px;">${grade || 'Pass'}</div>
+              </div>
+            </td>
+          </tr>
+        </table>
+        ` : ''}
+
+        ${subjectMarks.length > 0 ? `
+        <!-- Subject Breakdown Table -->
+        <div style="margin-bottom: 24px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+              <tr style="background-color: #f1f5f9; border-bottom: 1px solid #cbd5e1; text-align: left;">
+                <th style="padding: 10px 12px; font-weight: 600; color: #475569;">Subject</th>
+                <th style="padding: 10px 12px; font-weight: 600; color: #475569; text-align: center;">Score</th>
+                <th style="padding: 10px 12px; font-weight: 600; color: #475569; text-align: center;">Max</th>
+                <th style="padding: 10px 12px; font-weight: 600; color: #475569; text-align: center;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${subjectRowsHtml}
+            </tbody>
+          </table>
+        </div>
+        ` : ''}
+
+        ${remarks ? `
+        <div style="background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 8px; padding: 12px 16px; margin-bottom: 24px;">
+          <strong style="font-size: 13px; color: #6b21a8; display: block; margin-bottom: 4px;">Teacher Remarks:</strong>
+          <span style="font-size: 13px; color: #4c1d95;">${remarks}</span>
+        </div>
+        ` : ''}
+
+        <!-- CTA Link -->
+        <div style="margin: 28px 0; text-align: center;">
+          <a href="${reportCardUrl}" style="background: #4f46e5; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 15px; font-weight: 600; display: inline-block;">
+            View Full Report Card Online &rarr;
+          </a>
+        </div>
+
+        <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin-bottom: 20px;">
+          You can sign in to the SRT School Parent Portal at any time to verify report cards, track attendance, and communicate with teachers.
+        </p>
+
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px;" />
+        <p style="font-size: 12px; color: #94a3b8; margin: 0; text-align: center;">
+          SRT School Examination Department &bull; Automated Report Card Dispatch
+        </p>
+      </div>
+    `,
+  };
+
+  const info = await transporter.sendMail(mailOptions);
+  return {
+    success: true,
+    message: `Report card emailed to ${targetRecipient}${ccList ? ` (and CC to ${smtpEmail})` : ''}`,
+    messageId: info.messageId,
+  };
+}

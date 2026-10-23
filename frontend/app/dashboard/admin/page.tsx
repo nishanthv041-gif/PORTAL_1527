@@ -25,10 +25,11 @@ export default async function AdminDashboardPage({
 
   const resolvedSearchParams = await searchParams;
 
-  const [totalStudents, totalTeachers, totalParents, totalClasses, uniqueSubjects, classes] = await Promise.all([
+  const [totalStudents, totalTeachers, parentRecordCount, parentUserCount, totalClasses, uniqueSubjects, classes] = await Promise.all([
     prisma.student.count({ where: { isActive: true } }),
     prisma.teacher.count({ where: { isActive: true } }),
     prisma.parent.count({ where: { isActive: true } }),
+    prisma.user.count({ where: { role: 'PARENT', status: 'ACTIVE' } }),
     prisma.class.count({ where: { isActive: true } }),
     prisma.subject.findMany({ distinct: ['name'], select: { name: true } }),
     prisma.class.findMany({
@@ -38,6 +39,8 @@ export default async function AdminDashboardPage({
     })
   ]);
 
+  const totalParents = Math.max(parentRecordCount, parentUserCount);
+
   const totalSubjects = uniqueSubjects.length;
 
   let selectedClassData = null;
@@ -46,6 +49,7 @@ export default async function AdminDashboardPage({
   let passFailStats = null;
   const attendanceStats = { present: 0, absent: 0, total: 0 };
   let sectionCount = 0;
+  let classParentsCount = 0;
 
   if (resolvedSearchParams.classId) {
     const classId = resolvedSearchParams.classId;
@@ -101,6 +105,14 @@ export default async function AdminDashboardPage({
         if (att.status === 'PRESENT') attendanceStats.present++;
         if (att.status === 'ABSENT' || att.status === 'LEAVE') attendanceStats.absent++;
       });
+
+      const classParentsSet = new Set<string>();
+      studentsData.forEach(s => {
+        s.parents.forEach(p => {
+          if (p.parent?.id) classParentsSet.add(p.parent.id);
+        });
+      });
+      classParentsCount = classParentsSet.size;
 
       let passCount = 0;
       let failCount = 0;
@@ -202,7 +214,7 @@ export default async function AdminDashboardPage({
       {selectedClassData && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           {/* Class Summary */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem', background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
             <div>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Class Name</p>
               <p style={{ fontSize: '1.5rem', fontWeight: 600 }}>{selectedClassData.name}</p>
@@ -214,6 +226,10 @@ export default async function AdminDashboardPage({
             <div>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Total Strength</p>
               <p style={{ fontSize: '1.5rem', fontWeight: 600 }}>{studentsData.length}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Class Parents</p>
+              <p style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--primary)' }}>{classParentsCount}</p>
             </div>
             <div>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Total Sections for {selectedClassData.name}</p>
@@ -275,8 +291,8 @@ export default async function AdminDashboardPage({
                   <tr style={{ borderBottom: '2px solid var(--border-color)', textAlign: 'left' }}>
                     <th style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>Roll No.</th>
                     <th style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>Name</th>
-                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>Parent Name</th>
-                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>Parent Phone</th>
+                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>Linked Parent(s)</th>
+                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>Parent Contact</th>
                     <th style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>Attendance %</th>
                     <th style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>Status</th>
                   </tr>
@@ -286,8 +302,6 @@ export default async function AdminDashboardPage({
                     const totalDays = student.attendances.length;
                     const presentDays = student.attendances.filter((a) => a.status === 'PRESENT').length;
                     const attPercent = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
-                    
-                    const parent = student.parents[0]?.parent;
 
                     return (
                       <tr key={student.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
@@ -297,10 +311,39 @@ export default async function AdminDashboardPage({
                             {student.firstName} {student.lastName}
                           </Link>
                         </td>
-                        <td style={{ padding: '0.75rem' }}>{parent?.user.name || '-'}</td>
-                        <td style={{ padding: '0.75rem' }}>{parent?.phone || '-'}</td>
                         <td style={{ padding: '0.75rem' }}>
-                          <span style={{ color: attPercent >= 75 ? "var(--success)" : attPercent >= 60 ? "var(--warning)" : "var(--danger)" }}>
+                          {student.parents.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              {student.parents.map((ps, idx) => (
+                                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{ps.parent.user.name}</span>
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>({ps.parent.user.email})</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>No parent linked</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '0.75rem' }}>
+                          {student.parents.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              {student.parents.map((ps, idx) => (
+                                <div key={idx} style={{ fontSize: '0.85rem' }}>
+                                  {ps.parent.phone ? (
+                                    <span>{ps.parent.phone}</span>
+                                  ) : (
+                                    <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '0.75rem' }}>
+                          <span style={{ color: attPercent >= 75 ? "var(--success)" : attPercent >= 60 ? "var(--warning)" : "var(--danger)", fontWeight: 600 }}>
                             {attPercent}%
                           </span>
                         </td>

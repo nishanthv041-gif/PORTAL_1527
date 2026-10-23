@@ -32,6 +32,39 @@ export default function ParentListClient({ parents, classes }: { parents: Parent
 
   return (
     <div style={{ marginTop: '2rem', background: 'var(--card-bg)', borderRadius: '12px', padding: '1.5rem', border: '1px solid var(--border-color)' }}>
+      {/* Parent Count & Metrics Bar */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', 
+        gap: '1rem', 
+        marginBottom: '1.5rem',
+        padding: '1rem',
+        background: 'rgba(0,0,0,0.02)',
+        borderRadius: '10px',
+        border: '1px solid var(--border-color)'
+      }}>
+        <div>
+          <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Total Parents</span>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>{parents.length}</div>
+        </div>
+        <div>
+          <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Active Parents</span>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--success)' }}>
+            {parents.filter(p => p.isActive && p.user.status === 'ACTIVE').length}
+          </div>
+        </div>
+        <div>
+          <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Linked to Students</span>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary)' }}>
+            {parents.filter(p => p.children && p.children.length > 0).length}
+          </div>
+        </div>
+        <div>
+          <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Showing / Filtered</span>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>{filteredParents.length}</div>
+        </div>
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
           <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />

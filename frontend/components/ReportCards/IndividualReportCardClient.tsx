@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Send, CheckCircle, ArrowLeft } from "lucide-react";
+import { Send, CheckCircle, ArrowLeft, Users, Mail, Phone, AlertCircle, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { sendReportCardToParentAction } from "@/backend/lib/services/reportCardActions";
 
@@ -26,6 +26,15 @@ type MarkData = {
   remarks: string | null;
 };
 
+type LinkedParent = {
+  id: string;
+  user: {
+    name: string;
+    email: string;
+  };
+  phone?: string | null;
+};
+
 interface IndividualReportCardProps {
   student: {
     id: string;
@@ -37,6 +46,7 @@ interface IndividualReportCardProps {
       name: string;
       section: string;
     };
+    parents?: LinkedParent[];
   };
   exams: ExamData[];
   subjects: SubjectData[];
@@ -57,6 +67,11 @@ export default function IndividualReportCardClient({
 }: IndividualReportCardProps) {
   const [isSending, setIsSending] = useState(false);
   const [sentAt, setSentAt] = useState<Date | null>(initialSentAt);
+  const [deliveryResult, setDeliveryResult] = useState<{
+    success: boolean;
+    message: string;
+    recipients?: string[];
+  } | null>(null);
 
   const computeGrade = (score: number, max: number, pass: number) => {
     if (score < pass) return "F";
@@ -71,14 +86,33 @@ export default function IndividualReportCardClient({
 
   const handleSendToParent = async () => {
     setIsSending(true);
-    const res = await sendReportCardToParentAction(student.id);
-    setIsSending(false);
-    if (res.success) {
-      setSentAt(new Date());
-    } else {
-      alert(res.error || "Failed to send report card to parent");
+    setDeliveryResult(null);
+    try {
+      const res = await sendReportCardToParentAction(student.id);
+      setIsSending(false);
+      if (res.success) {
+        setSentAt(new Date());
+        setDeliveryResult({
+          success: true,
+          message: res.message || "Report card sent successfully!",
+          recipients: res.recipients
+        });
+      } else {
+        setDeliveryResult({
+          success: false,
+          message: res.error || "Failed to send report card to parent"
+        });
+      }
+    } catch (err: unknown) {
+      setIsSending(false);
+      setDeliveryResult({
+        success: false,
+        message: err instanceof Error ? err.message : "Error sending report card"
+      });
     }
   };
+
+  const parentsList = student.parents || [];
 
   return (
     <div>
@@ -90,18 +124,92 @@ export default function IndividualReportCardClient({
         </div>
       )}
 
-      {/* Student Info Card */}
-      <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '2rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '2rem' }}>
-        <div style={{ width: 80, height: 80, borderRadius: '50%', background: "var(--primary)", color: "var(--primary-fg)", display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 700 }}>
-          {student.firstName[0]}{student.lastName[0]}
+      {/* Delivery Feedback Banner */}
+      {deliveryResult && (
+        <div style={{
+          padding: '1rem 1.25rem',
+          borderRadius: '10px',
+          marginBottom: '1.5rem',
+          background: deliveryResult.success ? 'var(--success-bg, #f0fdf4)' : 'var(--danger-bg, #fef2f2)',
+          border: `1px solid ${deliveryResult.success ? '#bbf7d0' : '#fecaca'}`,
+          color: deliveryResult.success ? '#15803d' : '#b91c1c',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {deliveryResult.success ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+            <span style={{ fontWeight: 600 }}>{deliveryResult.message}</span>
+          </div>
+          {deliveryResult.recipients && deliveryResult.recipients.length > 0 && (
+            <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>
+              Delivered to: <strong>{deliveryResult.recipients.join(", ")}</strong>
+            </div>
+          )}
         </div>
-        <div>
-          <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.5rem', fontWeight: 700 }}>{student.firstName} {student.lastName}</h2>
-          <div style={{ display: 'flex', gap: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-            <span><strong>Roll No:</strong> {student.rollNumber}</span>
-            <span><strong>Class:</strong> {student.class.name} - {student.class.section}</span>
+      )}
+
+      {/* Student Info Card */}
+      <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '1.75rem', marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+          <div style={{ width: 70, height: 70, borderRadius: '50%', background: "var(--primary)", color: "var(--primary-fg)", display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.75rem', fontWeight: 700 }}>
+            {student.firstName[0]}{student.lastName[0]}
+          </div>
+          <div style={{ flex: 1, minWidth: '220px' }}>
+            <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.5rem', fontWeight: 700 }}>{student.firstName} {student.lastName}</h2>
+            <div style={{ display: 'flex', gap: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem', flexWrap: 'wrap' }}>
+              <span><strong>Roll No:</strong> {student.rollNumber}</span>
+              <span><strong>Class:</strong> {student.class.name} - {student.class.section}</span>
+            </div>
           </div>
         </div>
+
+        {/* Linked Parents Count & Details */}
+        {!isReadOnly && (
+          <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+              <Users size={16} />
+              <span>Linked Parents ({parentsList.length})</span>
+            </div>
+
+            {parentsList.length === 0 ? (
+              <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--danger)' }}>
+                No parents linked to this student. Please link parents in the Students or Parents management section.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                {parentsList.map((p, idx) => (
+                  <div 
+                    key={p.id || idx}
+                    style={{
+                      background: 'rgba(0,0,0,0.03)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      padding: '0.5rem 0.85rem',
+                      fontSize: '0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      flexWrap: 'wrap'
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{p.user.name}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: 'var(--text-secondary)' }}>
+                      <Mail size={13} /> {p.user.email}
+                    </span>
+                    {p.phone && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: 'var(--text-secondary)' }}>
+                        <Phone size={13} /> {p.phone}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Report Card Table */}
@@ -127,7 +235,7 @@ export default function IndividualReportCardClient({
                   const mark = marks.find(m => m.examId === exam.id && m.subjectId === sub.id);
                   if (!mark) return <td key={sub.id} style={{ padding: '1rem', color: 'var(--text-secondary)' }}>-</td>;
                   if (mark.remarks === 'Absent') {
-                    totalMax += sub.maxMarks; // they lost these marks
+                    totalMax += sub.maxMarks;
                     return <td key={sub.id} style={{ padding: '1rem', color: 'var(--danger)', fontWeight: 600 }}>Absent</td>;
                   }
                   
@@ -143,11 +251,10 @@ export default function IndividualReportCardClient({
                   );
                 });
 
-                if (totalMax === 0) return null; // No marks entered for this exam yet
+                if (totalMax === 0) return null;
 
                 const percentage = (totalScore / totalMax) * 100;
-                // Average pass mark ratio across subjects approx
-                const passRatio = subjects.reduce((sum, s) => sum + (s.passMarks / s.maxMarks), 0) / subjects.length;
+                const passRatio = subjects.reduce((sum, s) => sum + (s.passMarks / s.maxMarks), 0) / (subjects.length || 1);
                 const overallPassMarks = totalMax * passRatio;
                 const overallGrade = computeGrade(totalScore, totalMax, overallPassMarks);
                 const isFail = totalScore < overallPassMarks;
@@ -174,51 +281,68 @@ export default function IndividualReportCardClient({
               })}
             </tbody>
           </table>
+          {exams.length === 0 && (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              No exams or marks published yet for this student.
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Sticky Send to Parent Action */}
+      {/* Sticky Send to All Parents Action */}
       {!isReadOnly && (
         <div style={{ position: 'sticky', bottom: '2rem', display: 'flex', justifyContent: 'center', zIndex: 10 }}>
           <div style={{ 
             background: 'var(--card-bg)', 
             padding: '1rem 2rem', 
             borderRadius: '50px', 
-            boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
             border: '1px solid var(--border-color)',
             display: 'flex',
             alignItems: 'center',
-            gap: '1.5rem'
+            gap: '1.5rem',
+            flexWrap: 'wrap',
+            justifyContent: 'center'
           }}>
             {sentAt ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--success)', fontWeight: 600 }}>
-                <CheckCircle size={20} />
-                Sent to Parent on {new Date(sentAt).toLocaleDateString()}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--success)', fontWeight: 600, fontSize: '0.9rem' }}>
+                <CheckCircle size={18} />
+                Sent to All Parents ({parentsList.length}) on {new Date(sentAt).toLocaleDateString()}
               </div>
             ) : (
-              <div style={{ color: 'var(--text-secondary)' }}>
-                Report card has not been sent.
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                Report card not yet sent to parents.
               </div>
             )}
 
             <button
               onClick={handleSendToParent}
-              disabled={isSending}
+              disabled={isSending || parentsList.length === 0}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
                 padding: '0.75rem 1.5rem',
-                backgroundColor: "var(--primary)", color: "var(--primary-fg)",
+                backgroundColor: "var(--primary)",
+                color: "var(--primary-fg)",
                 border: 'none',
                 borderRadius: '25px',
                 fontWeight: 600,
-                cursor: isSending ? 'not-allowed' : 'pointer',
-                opacity: isSending ? 0.8 : 1,
-                transition: 'all 0.2s'
+                fontSize: '0.9rem',
+                cursor: (isSending || parentsList.length === 0) ? 'not-allowed' : 'pointer',
+                opacity: (isSending || parentsList.length === 0) ? 0.7 : 1,
+                transition: 'all 0.2s',
+                boxShadow: '0 4px 12px rgba(79, 70, 229, 0.25)'
               }}
             >
-              {isSending ? "Sending..." : <><Send size={18} /> {sentAt ? "Send Again" : "Send to Parent"}</>}
+              {isSending ? (
+                <>Sending Emails...</>
+              ) : (
+                <>
+                  <Send size={16} />
+                  {sentAt ? `Send Again to All ${parentsList.length} Parents` : `Send to All ${parentsList.length} Parents`}
+                </>
+              )}
             </button>
           </div>
         </div>

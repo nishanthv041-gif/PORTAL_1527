@@ -16,7 +16,16 @@ export default async function AdminIndividualReportCardPage({
   const student = await prisma.student.findUnique({
     where: { id: studentId },
     include: {
-      class: true
+      class: true,
+      parents: {
+        include: {
+          parent: {
+            include: {
+              user: true
+            }
+          }
+        }
+      }
     }
   });
 
@@ -43,12 +52,7 @@ export default async function AdminIndividualReportCardPage({
 
   // Check if sent to parent recently
   // Assuming if a Notification exists, it was sent. We get the latest one.
-  const parentAccounts = await prisma.parentStudent.findMany({
-    where: { studentId: studentId },
-    include: {
-      parent: true
-    }
-  });
+  const parentAccounts = student.parents;
 
   let sentAt: Date | null = null;
   if (parentAccounts.length > 0) {
@@ -66,6 +70,15 @@ export default async function AdminIndividualReportCardPage({
     }
   }
 
+  const linkedParents = student.parents.map(ps => ({
+    id: ps.parent.id,
+    user: {
+      name: ps.parent.user.name,
+      email: ps.parent.user.email
+    },
+    phone: ps.parent.phone
+  }));
+
   return (
     <div style={{ padding: '2rem' }}>
       <IndividualReportCardClient 
@@ -74,7 +87,8 @@ export default async function AdminIndividualReportCardPage({
           firstName: student.firstName,
           lastName: student.lastName,
           rollNumber: student.rollNumber,
-          class: student.class
+          class: student.class,
+          parents: linkedParents
         }}
         exams={exams}
         subjects={subjects}

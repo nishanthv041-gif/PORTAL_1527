@@ -21,7 +21,18 @@ export default async function TeacherIndividualReportCardPage({
 
   const student = await prisma.student.findUnique({
     where: { id: studentId },
-    include: { class: true }
+    include: {
+      class: true,
+      parents: {
+        include: {
+          parent: {
+            include: {
+              user: true
+            }
+          }
+        }
+      }
+    }
   });
 
   if (!student || !student.class || !teacher) {
@@ -50,10 +61,7 @@ export default async function TeacherIndividualReportCardPage({
     where: { studentId: studentId }
   });
 
-  const parentAccounts = await prisma.parentStudent.findMany({
-    where: { studentId: studentId },
-    include: { parent: true }
-  });
+  const parentAccounts = student.parents;
 
   let sentAt: Date | null = null;
   if (parentAccounts.length > 0) {
@@ -71,6 +79,15 @@ export default async function TeacherIndividualReportCardPage({
     }
   }
 
+  const linkedParents = student.parents.map(ps => ({
+    id: ps.parent.id,
+    user: {
+      name: ps.parent.user.name,
+      email: ps.parent.user.email
+    },
+    phone: ps.parent.phone
+  }));
+
   return (
     <div style={{ padding: '2rem' }}>
       <IndividualReportCardClient 
@@ -79,7 +96,8 @@ export default async function TeacherIndividualReportCardPage({
           firstName: student.firstName,
           lastName: student.lastName,
           rollNumber: student.rollNumber,
-          class: student.class
+          class: student.class,
+          parents: linkedParents
         }}
         exams={exams}
         subjects={subjects}
