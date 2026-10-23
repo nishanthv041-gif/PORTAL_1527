@@ -12,7 +12,7 @@ import { Student, Attendance, Parent, User, Teacher } from "@prisma/client";
 
 type StudentWithRelations = Student & {
   parents: { parent: Parent & { user: User } }[];
-  attendances: Attendance[];
+  attendances: { status: string }[];
 };
 
 export default async function AdminDashboardPage({
@@ -75,7 +75,7 @@ export default async function AdminDashboardPage({
           where: { classId, isActive: true },
           include: {
             parents: { include: { parent: { include: { user: true } } } },
-            attendances: true
+            attendances: { select: { status: true } }
           }
         }),
         prisma.teacher.findMany({
@@ -87,10 +87,12 @@ export default async function AdminDashboardPage({
           where: {
             student: { classId },
             date: { gte: today, lt: tomorrow }
-          }
+          },
+          select: { status: true }
         }),
         prisma.mark.findMany({
           where: { student: { classId } },
+          select: { studentId: true, examId: true, score: true, maxScore: true }
         })
       ]);
 

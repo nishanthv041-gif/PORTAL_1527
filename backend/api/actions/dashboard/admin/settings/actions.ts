@@ -1,10 +1,16 @@
 "use server";
 
-import { cache } from "react";
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+
+// In-memory cache for system settings (0ms response, 5 min TTL)
+let cachedSettings: { data: Record<string, string>; expiresAt: number } | null = null;
+
+export async function invalidateSettingsCache() {
+  cachedSettings = null;
+}
 
 export async function saveSystemSettingAction(formData: FormData) {
   try {
@@ -25,6 +31,7 @@ export async function saveSystemSettingAction(formData: FormData) {
       create: { key, value, category }
     });
 
+    cachedSettings = null;
     revalidatePath("/dashboard/admin/settings");
     return { success: true };
   } catch (error: unknown) {
@@ -52,6 +59,7 @@ export async function saveSystemSettingsBatchAction(settings: { key: string; val
 
     await prisma.$transaction(upserts);
 
+    cachedSettings = null;
     revalidatePath("/dashboard/admin/settings");
     return { success: true };
   } catch (error: unknown) {
@@ -65,6 +73,7 @@ export async function deleteSystemSettingAction(key: string) {
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
     await prisma.systemSetting.delete({ where: { key } });
+    cachedSettings = null;
     revalidatePath("/dashboard/admin/settings");
     return { success: true };
   } catch (error: unknown) {
@@ -75,14 +84,22 @@ export async function deleteSystemSettingAction(key: string) {
   }
 }
 
-export const getSystemSettings = cache(async () => {
-  const settings = await prisma.systemSetting.findMany();
+export async function getSystemSettings(): Promise<Record<string, string>> {
+  const now = Date.now();
+  if (cachedSettings && cachedSettings.expiresAt > now) {
+    return cachedSettings.data;
+  }
+
+  const settings = await prisma.systemSetting.findMany({
+    select: { key: true, value: true }
+  });
   const settingsMap: Record<string, string> = {};
   settings.forEach(s => { settingsMap[s.key] = s.value; });
+  cachedSettings = { data: settingsMap, expiresAt: now + 300_000 }; // 5 min TTL
   return settingsMap;
-});
+}
 
 export async function getSystemSetting(key: string, defaultValue: string = "") {
-  const setting = await prisma.systemSetting.findUnique({ where: { key } });
-  return setting?.value || defaultValue;
+  const settings = await getSystemSettings();
+  return settings[key] || defaultValue;
 }

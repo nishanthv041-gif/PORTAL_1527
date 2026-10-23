@@ -31,31 +31,33 @@ export default function NotificationPopupModal({
   useEffect(() => {
     let isMounted = true;
 
-    // Load fresh notifications from server action on mount
-    getUnifiedNotificationsAction()
-      .then((fresh) => {
-        if (!isMounted) return;
-        if (fresh && fresh.length > 0) {
-          setNotifications(fresh);
+    // Only load fresh notifications from server if initialNotifications is not already provided
+    if (!initialNotifications || initialNotifications.length === 0) {
+      getUnifiedNotificationsAction()
+        .then((fresh) => {
+          if (!isMounted) return;
+          if (fresh && fresh.length > 0) {
+            setNotifications(fresh);
 
-          const isFreshLogin = sessionStorage.getItem("srt_portal_fresh_login") === "true";
-          const isDismissed = sessionStorage.getItem("srt_portal_popup_notif_dismissed") === "true";
+            const isFreshLogin = sessionStorage.getItem("srt_portal_fresh_login") === "true";
+            const isDismissed = sessionStorage.getItem("srt_portal_popup_notif_dismissed") === "true";
 
-          // If user just logged in or hasn't dismissed yet, pop up automatically!
-          if (isFreshLogin) {
-            sessionStorage.removeItem("srt_portal_fresh_login");
-            sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
-            setTimeout(() => {
-              if (isMounted) setIsOpen(true);
-            }, 350);
-          } else if (!isDismissed) {
-            setTimeout(() => {
-              if (isMounted) setIsOpen(true);
-            }, 500);
+            // If user just logged in or hasn't dismissed yet, pop up automatically!
+            if (isFreshLogin) {
+              sessionStorage.removeItem("srt_portal_fresh_login");
+              sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
+              setTimeout(() => {
+                if (isMounted) setIsOpen(true);
+              }, 350);
+            } else if (!isDismissed) {
+              setTimeout(() => {
+                if (isMounted) setIsOpen(true);
+              }, 500);
+            }
           }
-        }
-      })
-      .catch(() => {});
+        })
+        .catch(() => {});
+    }
 
     // Also check immediately if initialNotifications already present
     const isFreshLogin = sessionStorage.getItem("srt_portal_fresh_login") === "true";

@@ -24,7 +24,7 @@ export default async function DashboardLayout({
   }
 
   let displayName = session.user.name;
-  if (session?.user?.id) {
+  if (!displayName && session?.user?.id) {
     try {
       const dbUser = await prisma.user.findUnique({
         where: { id: session.user.id },
@@ -34,7 +34,7 @@ export default async function DashboardLayout({
         displayName = dbUser.name.trim();
       }
     } catch {
-      // Fall back to session.user.name
+      // Fall back
     }
   }
 

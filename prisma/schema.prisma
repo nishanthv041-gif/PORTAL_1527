@@ -35,6 +35,8 @@ model User {
   sentMessages     Message[]      @relation("SentMessages")
   receivedMessages Message[]      @relation("ReceivedMessages")
   notifications    Notification[]
+
+  @@index([role, status])
 }
 
 model Student {
@@ -64,6 +66,9 @@ model Student {
   achievements  Achievement[]
   leaveRequests LeaveRequest[]
   complaints    Complaint[]
+
+  @@index([classId])
+  @@index([isActive])
 }
 
 model Teacher {
@@ -119,6 +124,7 @@ model ParentStudent {
   student   Student @relation(fields: [studentId], references: [id])
 
   @@id([parentId, studentId])
+  @@index([studentId])
 }
 
 model Class {
@@ -140,6 +146,9 @@ model Class {
   examRequests   ExamRequest[]
   assignments    Assignment[]
   attendances    Attendance[]
+
+  @@index([isActive])
+  @@index([teacherId])
 }
 
 model Subject {
@@ -158,6 +167,9 @@ model Subject {
   marks        Mark[]
   timetable    Timetable[]
   examRequests ExamRequest[]
+
+  @@index([classId])
+  @@index([teacherId])
 }
 
 model Attendance {
@@ -173,6 +185,8 @@ model Attendance {
   class     Class?  @relation(fields: [classId], references: [id])
 
   @@unique([studentId, date])
+  @@index([classId, date])
+  @@index([date])
 }
 
 model Exam {
@@ -186,6 +200,8 @@ model Exam {
   class       Class        @relation(fields: [classId], references: [id])
   marks       Mark[]
   reportCards ReportCard[]
+
+  @@index([classId])
 }
 
 model Mark {
@@ -205,6 +221,8 @@ model Mark {
   history MarkHistory[]
 
   @@unique([studentId, examId, subjectId])
+  @@index([examId])
+  @@index([subjectId])
 }
 
 model MarkHistory {
@@ -215,6 +233,8 @@ model MarkHistory {
   newScore  Float
   changedBy String // ID of the user who made the change
   changedAt DateTime @default(now())
+
+  @@index([markId])
 }
 
 model ReportCard {
@@ -251,6 +271,9 @@ model Timetable {
   class     Class    @relation(fields: [classId], references: [id])
   subjectId String?
   subject   Subject? @relation(fields: [subjectId], references: [id])
+
+  @@index([classId, dayOfWeek])
+  @@index([subjectId])
 }
 
 model Assignment {
@@ -266,6 +289,9 @@ model Assignment {
   teacherId   String
   teacher     Teacher      @relation(fields: [teacherId], references: [id])
   submissions Submission[]
+
+  @@index([classId])
+  @@index([teacherId])
 }
 
 model Submission {
@@ -280,6 +306,9 @@ model Submission {
   assignmentId String
   assignment   Assignment @relation(fields: [assignmentId], references: [id])
   studentId    String
+
+  @@index([assignmentId])
+  @@index([studentId])
 }
 
 model Complaint {
@@ -297,6 +326,9 @@ model Complaint {
   teacher   Teacher @relation(fields: [teacherId], references: [id])
   studentId String
   student   Student @relation(fields: [studentId], references: [id])
+
+  @@index([studentId])
+  @@index([teacherId])
 }
 
 model DisciplineRecord {
@@ -311,6 +343,8 @@ model DisciplineRecord {
   // Relationships
   studentId String
   student   Student @relation(fields: [studentId], references: [id])
+
+  @@index([studentId])
 }
 
 model Achievement {
@@ -325,6 +359,8 @@ model Achievement {
   // Relationships
   studentId String
   student   Student @relation(fields: [studentId], references: [id])
+
+  @@index([studentId])
 }
 
 model LeaveRequest {
@@ -338,6 +374,8 @@ model LeaveRequest {
   // Relationships
   studentId String
   student   Student @relation(fields: [studentId], references: [id])
+
+  @@index([studentId])
 }
 
 model Meeting {
@@ -352,6 +390,8 @@ model Meeting {
   // Relationships
   teachers Teacher[]
   parents  Parent[]
+
+  @@index([date])
 }
 
 model Announcement {
@@ -365,6 +405,8 @@ model Announcement {
   fileUrl    String?
   createdAt  DateTime  @default(now())
   authorId   String
+
+  @@index([targetType, createdAt])
 }
 
 model CalendarEvent {
@@ -384,6 +426,8 @@ model CalendarEvent {
   status        String    @default("UPCOMING") // UPCOMING, COMPLETED, CANCELLED
   isPublished   Boolean   @default(false)
   createdAt     DateTime  @default(now())
+
+  @@index([date, isPublished])
 }
 
 model SchoolProgram {
@@ -400,6 +444,8 @@ model SchoolProgram {
   audience        String   @default("ALL") // STUDENT, TEACHER, ALL
   status          String   @default("PLANNED")
   createdAt       DateTime @default(now())
+
+  @@index([date])
 }
 
 model SystemSetting {
@@ -422,6 +468,9 @@ model Message {
   fileUrl    String?
   editedAt   DateTime?
   createdAt  DateTime  @default(now())
+
+  @@index([receiverId, isRead])
+  @@index([senderId])
 }
 
 model Notification {
@@ -434,6 +483,8 @@ model Notification {
   link      String?
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model AuditLog {
@@ -444,6 +495,8 @@ model AuditLog {
   targetId    String?
   details     String?
   createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model Rating {
@@ -454,6 +507,8 @@ model Rating {
   user      User     @relation(fields: [userId], references: [id])
   role      String
   createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model ExamRequest {
@@ -471,6 +526,10 @@ model ExamRequest {
   status        String   @default("PENDING") // PENDING, APPROVED, DECLINED
   declineReason String?
   createdAt     DateTime @default(now())
+
+  @@index([classId])
+  @@index([teacherId])
+  @@index([status])
 }
 
 model LoginAttempt {
@@ -480,4 +539,6 @@ model LoginAttempt {
   userAgent String?
   success   Boolean
   timestamp DateTime @default(now())
+
+  @@index([timestamp])
 }

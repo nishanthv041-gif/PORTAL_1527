@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Search, Eye, CheckCircle2, XCircle, MoreVertical, Trash2, Download } from "lucide-react";
 import Link from "next/link";
 import { deactivateParent, activateParent, deleteParent } from "@/backend/api/actions/dashboard/admin/parents/actions";
@@ -31,26 +31,29 @@ export default function ParentListClient({
     ? totalStudentsCount 
     : new Set(parents.flatMap(p => p.children.map(c => c.studentId))).size;
 
-  const filteredParents = parents.filter((parent) => {
-    const fullName = parent.user.name.toLowerCase();
-    
-    const matchesSearch = fullName.includes(searchTerm.toLowerCase()) || 
-                          parent.user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (parent.phone || "").includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter ? (statusFilter === "ACTIVE" ? parent.isActive : !parent.isActive) : true;
-    const matchesClass = classFilter ? parent.children.some(c => c.student.classId === classFilter) : true;
-    
-    let matchesStudentCount = true;
-    if (studentCountFilter === "has_students") {
-      matchesStudentCount = parent.children.length > 0;
-    } else if (studentCountFilter === "no_students") {
-      matchesStudentCount = parent.children.length === 0;
-    } else if (studentCountFilter === "multiple") {
-      matchesStudentCount = parent.children.length > 1;
-    }
-    
-    return matchesSearch && matchesStatus && matchesClass && matchesStudentCount;
-  });
+  const filteredParents = useMemo(() => {
+    const term = searchTerm.toLowerCase().trim();
+    return parents.filter((parent) => {
+      const fullName = parent.user.name.toLowerCase();
+      
+      const matchesSearch = !term || fullName.includes(term) || 
+                            parent.user.email.toLowerCase().includes(term) ||
+                            (parent.phone || "").includes(term);
+      const matchesStatus = statusFilter ? (statusFilter === "ACTIVE" ? parent.isActive : !parent.isActive) : true;
+      const matchesClass = classFilter ? parent.children.some(c => c.student.classId === classFilter) : true;
+      
+      let matchesStudentCount = true;
+      if (studentCountFilter === "has_students") {
+        matchesStudentCount = parent.children.length > 0;
+      } else if (studentCountFilter === "no_students") {
+        matchesStudentCount = parent.children.length === 0;
+      } else if (studentCountFilter === "multiple") {
+        matchesStudentCount = parent.children.length > 1;
+      }
+      
+      return matchesSearch && matchesStatus && matchesClass && matchesStudentCount;
+    });
+  }, [parents, searchTerm, statusFilter, classFilter, studentCountFilter]);
 
 
   return (
