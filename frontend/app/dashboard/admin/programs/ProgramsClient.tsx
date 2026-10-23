@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { Plus, Eye, EyeOff, Calendar as CalendarIcon, MapPin, Clock, Trash2, ChevronDown, ChevronUp, History, Bell, Send } from "lucide-react";
 import { createProgramAction, updateProgramStatusAction, deleteProgramAction, sendProgramNotificationToAllAction } from "@/backend/api/actions/dashboard/admin/programs/actions";
