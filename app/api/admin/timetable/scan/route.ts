@@ -4,8 +4,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import * as XLSX from "xlsx";
 import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
-import { createWorker } from "tesseract.js";
+import { extractText, getDocumentProxy } from "unpdf";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -88,7 +87,6 @@ function matchSubject(
   const clean = rawName.trim().toLowerCase();
   if (!clean) return { subjectId: "", subjectName: "", isMatched: false };
 
-  // 1. Exact or partial name match
   for (const s of availableSubjects) {
     const sName = s.name.trim().toLowerCase();
     if (sName === clean || clean.includes(sName) || sName.includes(clean)) {
@@ -96,7 +94,6 @@ function matchSubject(
     }
   }
 
-  // 2. Synonyms match
   for (const [canonical, synonyms] of Object.entries(COMMON_SUBJECT_SYNONYMS)) {
     if (clean === canonical || synonyms.some(syn => clean === syn || clean.includes(syn))) {
       const found = availableSubjects.find(s => {
@@ -109,7 +106,6 @@ function matchSubject(
     }
   }
 
-  // 3. Fallback: if availableSubjects has at least one subject, suggest raw name
   return {
     subjectId: availableSubjects[0]?.id || "",
     subjectName: rawName.trim(),
@@ -311,55 +307,34 @@ export async function POST(req: NextRequest) {
         }
       } else {
         const textResult = await mammoth.extractRawText({ buffer });
-        parseTextIntoSlots(textResult.value, availableSubjects, scannedSlots, warnings);
+        parseTextIntoSlots(textResult.value, availableSubjects, scannedSlots);
       }
     }
-    // 3. PDF DOCUMENT (.pdf)
+    // 3. PDF DOCUMENT (.pdf) using unpdf (pure JS/WASM, zero native canvas dependencies)
     else if (extension === "pdf" || mimeType.includes("pdf")) {
       fileType = "PDF Document";
       try {
-        const parser = new PDFParse({ data: buffer });
-        const pdfData = await parser.getText();
-        const text = pdfData.text || "";
-        await parser.destroy();
-        parseTextIntoSlots(text, availableSubjects, scannedSlots, warnings);
+        const uint8 = new Uint8Array(buffer);
+        const pdf = await getDocumentProxy(uint8);
+        const { text } = await extractText(pdf, { mergePages: true });
+        parseTextIntoSlots(text || "", availableSubjects, scannedSlots);
       } catch (pdfErr) {
-        console.warn("PDF stream parse fallback:", pdfErr);
+        console.warn("PDF parse fallback:", pdfErr);
         const textFallback = buffer.toString("utf-8");
-        parseTextIntoSlots(textFallback, availableSubjects, scannedSlots, warnings);
+        parseTextIntoSlots(textFallback, availableSubjects, scannedSlots);
       }
     }
-    // 4. PHOTO / IMAGE (.png, .jpg, .jpeg, .webp, .bmp)
-    else if (
-      ["png", "jpg", "jpeg", "webp", "bmp"].includes(extension) ||
-      mimeType.startsWith("image/")
-    ) {
-      fileType = "Photo / Image";
-      try {
-        const worker = await createWorker("eng");
-        const ret = await worker.recognize(buffer);
-        await worker.terminate();
-
-        const ocrText = ret.data.text || "";
-        parseTextIntoSlots(ocrText, availableSubjects, scannedSlots, warnings);
-      } catch (ocrErr) {
-        console.warn("Server OCR failed, returning error with manual edit option:", ocrErr);
-        return NextResponse.json({
-          success: false,
-          error: "Could not auto-read text from this image directly on the server. Please click '+ Add Slots Manually' or '⚡ Load Schedule Template' to set up the timetable quickly, or upload as Excel/Word/PDF.",
-          fileName,
-          fileType
-        }, { status: 200 });
-      }
-    } else {
+    // 4. IMAGE or other files
+    else {
+      fileType = "Image / Document";
       const textContent = buffer.toString("utf-8");
-      parseTextIntoSlots(textContent, availableSubjects, scannedSlots, warnings);
+      parseTextIntoSlots(textContent, availableSubjects, scannedSlots);
     }
 
     if (scannedSlots.length === 0) {
       return NextResponse.json({
         success: false,
-        error: `No recognizable schedule slots found in "${fileName}". Please ensure the file has days (Monday - Saturday) and periods, or use "+ Add Slots Manually" / "⚡ Load Template".`,
+        error: `Could not automatically detect period slots from "${fileName}". Please click '⚡ Load Standard 8-Period Template' or '+ Add Slots Manually' to set up the timetable easily.`,
         fileName,
         fileType
       }, { status: 200 });
@@ -386,8 +361,7 @@ export async function POST(req: NextRequest) {
 function parseTextIntoSlots(
   text: string,
   availableSubjects: Array<{ id: string; name: string }>,
-  scannedSlots: any[],
-  warnings: string[]
+  scannedSlots: any[]
 ) {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   let currentDay: string | null = null;
@@ -401,7 +375,6 @@ function parseTextIntoSlots(
 
     if (!currentDay) continue;
 
-    // Check for period format: "1. Math", "P1: Science", "Period 2 English 09:00-09:45"
     const periodMatch = line.match(/(?:period|p)?\s*([1-8])[\s:.\-\)\/]+(.*)/i);
     if (periodMatch) {
       const period = parseInt(periodMatch[1], 10);

@@ -5,8 +5,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import * as XLSX from "xlsx";
 import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
-import { createWorker } from "tesseract.js";
+import { extractText, getDocumentProxy } from "unpdf";
 import type { ScannedSlot, ScanResult } from "./scanTimetableTypes";
 
 const DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
@@ -316,43 +315,24 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
       }
     }
 
-    // ────────────────────────────────────────────────────────────────
-    // 3. PDF DOCUMENT (.pdf)
-    // ────────────────────────────────────────────────────────────────
+    // 3. PDF DOCUMENT (.pdf) using unpdf
     else if (extension === "pdf" || mimeType.includes("pdf")) {
       fileType = "PDF Document";
-      const parser = new PDFParse({ data: buffer });
-      const pdfData = await parser.getText();
-      const text = pdfData.text || "";
-      await parser.destroy();
-      parseTextLinesIntoSlots(text, availableSubjects, scannedSlots, warnings);
+      try {
+        const uint8 = new Uint8Array(buffer);
+        const pdf = await getDocumentProxy(uint8);
+        const { text } = await extractText(pdf, { mergePages: true });
+        parseTextLinesIntoSlots(text || "", availableSubjects, scannedSlots, warnings);
+      } catch (pdfErr) {
+        console.warn("PDF parse fallback:", pdfErr);
+        const textFallback = buffer.toString("utf-8");
+        parseTextLinesIntoSlots(textFallback, availableSubjects, scannedSlots, warnings);
+      }
     }
 
-    // ────────────────────────────────────────────────────────────────
-    // 4. PHOTO / IMAGE (.png, .jpg, .jpeg, .webp, .bmp)
-    // ────────────────────────────────────────────────────────────────
-    else if (
-      ["png", "jpg", "jpeg", "webp", "bmp"].includes(extension) ||
-      mimeType.startsWith("image/")
-    ) {
-      fileType = "Photo / Image";
-      try {
-        const worker = await createWorker("eng");
-        const ret = await worker.recognize(buffer);
-        await worker.terminate();
-
-        const ocrText = ret.data.text || "";
-        parseTextLinesIntoSlots(ocrText, availableSubjects, scannedSlots, warnings);
-      } catch (ocrErr) {
-        console.warn("Server OCR failed, returning friendly notice:", ocrErr);
-        return {
-          error: "Could not auto-read text from this image directly on the server. Please click '+ Add Slots Manually' or '⚡ Load Schedule Template' to set up the timetable quickly, or upload as Excel/Word/PDF.",
-          fileName,
-          fileType
-        };
-      }
-    } else {
-      // General text fallback
+    // 4. PHOTO / IMAGE / OTHER
+    else {
+      fileType = "Image / Document";
       const textContent = buffer.toString("utf-8");
       parseTextLinesIntoSlots(textContent, availableSubjects, scannedSlots, warnings);
     }

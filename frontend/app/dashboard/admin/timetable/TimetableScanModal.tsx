@@ -161,6 +161,46 @@ export default function TimetableScanModal({
     }
   };
 
+  const parseTextClientSide = (text: string): ScannedSlot[] => {
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    let currentDay: string | null = null;
+    const slots: ScannedSlot[] = [];
+
+    for (const line of lines) {
+      const rawUpper = line.toUpperCase().replace(/[^A-Z]/g, "");
+      const foundDay = DAYS.find(d => rawUpper.startsWith(d.slice(0, 3)));
+      if (foundDay) {
+        currentDay = foundDay;
+        continue;
+      }
+
+      if (!currentDay) continue;
+
+      const periodMatch = line.match(/(?:period|p)?\s*([1-8])[\s:.\-\)\/]+(.*)/i);
+      if (periodMatch) {
+        const period = parseInt(periodMatch[1], 10);
+        const rest = periodMatch[2].trim();
+        const isBreak = rest.toLowerCase().includes("break") || rest.toLowerCase().includes("lunch") || rest.toLowerCase().includes("recess");
+        const matchedSub = availableSubjects.find(s => s.name.toLowerCase() === rest.toLowerCase()) 
+          || availableSubjects.find(s => rest.toLowerCase().includes(s.name.toLowerCase())) 
+          || availableSubjects[0];
+
+        slots.push({
+          id: `text-${currentDay}-${period}-${Date.now()}-${Math.random()}`,
+          dayOfWeek: currentDay,
+          period,
+          subjectId: isBreak ? "" : (matchedSub?.id || ""),
+          subjectName: isBreak ? "Break" : (matchedSub?.name || rest),
+          startTime: DEFAULT_TIMES[period]?.start || "08:00",
+          endTime: DEFAULT_TIMES[period]?.end || "08:45",
+          classroom: "",
+          isBreak
+        });
+      }
+    }
+    return slots;
+  };
+
   const triggerScan = async (fileToScan: File) => {
     setIsScanning(true);
     setScanProgress("Analyzing document format...");
@@ -182,7 +222,29 @@ export default function TimetableScanModal({
         }
       }
 
-      // 2. Call /api/admin/timetable/scan Route Handler via HTTP fetch (immune to React Error #441)
+      // 2. Client-side OCR for Photos / Images via Tesseract.js (runs in browser)
+      if (["png", "jpg", "jpeg", "webp", "bmp"].includes(ext) || fileToScan.type.startsWith("image/")) {
+        setScanProgress("Scanning image text with browser OCR engine...");
+        try {
+          const { createWorker } = await import("tesseract.js");
+          const worker = await createWorker("eng");
+          const ret = await worker.recognize(fileToScan);
+          await worker.terminate();
+
+          const ocrText = ret.data?.text || "";
+          const slots = parseTextClientSide(ocrText);
+          if (slots.length > 0) {
+            setScannedSlots(slots);
+            setFileDetails({ name: fileToScan.name, type: "Photo / Image" });
+            setIsScanning(false);
+            return;
+          }
+        } catch (ocrErr) {
+          console.warn("Client-side OCR fallback:", ocrErr);
+        }
+      }
+
+      // 3. Call /api/admin/timetable/scan Route Handler for PDFs, Word docs & fallbacks
       setScanProgress("Scanning timetable layout and extracting slots...");
       const formData = new FormData();
       formData.set("classId", selectedClassId);
@@ -193,13 +255,14 @@ export default function TimetableScanModal({
         body: formData
       });
 
-      if (!res.ok) {
-        throw new Error(`Server returned status ${res.status}. Please try another file or load the template.`);
+      let result: any = null;
+      try {
+        result = await res.json();
+      } catch {
+        result = null;
       }
 
-      const result = await res.json();
-
-      if (result.success && result.scannedSlots && result.scannedSlots.length > 0) {
+      if (res.ok && result && result.success && result.scannedSlots && result.scannedSlots.length > 0) {
         setScannedSlots(result.scannedSlots);
         setWarnings(result.warnings || []);
         setFileDetails({
@@ -207,19 +270,15 @@ export default function TimetableScanModal({
           type: result.fileType || "Document"
         });
       } else {
-        const errorMsg = result.error || "Could not detect period slots automatically from this file.";
+        const errorMsg = result?.error || "Could not automatically extract timetable periods from this file. You can load our pre-filled 8-period template or add slots manually.";
         setScanError(errorMsg);
-        if (result.fileName && result.fileType) {
+        if (result?.fileName && result?.fileType) {
           setFileDetails({ name: result.fileName, type: result.fileType });
         }
       }
     } catch (err: unknown) {
-      let rawMsg = err instanceof Error ? err.message : "An unexpected error occurred while scanning.";
-      // Clean up any minified React or generic codes
-      if (rawMsg.includes("441") || rawMsg.includes("Minified")) {
-        rawMsg = "Could not extract timetable layout from this file format automatically. You can load our standard 8-period schedule template or add slots manually below.";
-      }
-      setScanError(rawMsg);
+      console.warn("Scan processing notice:", err);
+      setScanError("Could not automatically detect timetable layout from this file. You can load our standard 8-period schedule template or add slots manually below.");
     } finally {
       setIsScanning(false);
     }
