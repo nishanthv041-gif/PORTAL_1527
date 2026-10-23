@@ -163,42 +163,131 @@ export default function TimetableScanModal({
 
   const parseTextClientSide = (text: string): ScannedSlot[] => {
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const slotsMap = new Map<string, ScannedSlot>();
+
+    const sortedNames = [
+      ...availableSubjects.map(s => s.name),
+      "Tamil", "English", "Maths", "Mathematics", "Science", "Social", "Social Studies",
+      "Computer Science", "Physics", "Chemistry", "Biology", "Hindi", "Break", "Recess", "Lunch"
+    ].sort((a, b) => b.length - a.length);
+
+    const tokenize = (content: string): string[] => {
+      if (content.includes("\t") || content.includes("|") || content.includes(",") || content.includes(";")) {
+        return content.split(/[\t|,;]+/).map(c => c.trim()).filter(Boolean);
+      }
+      if (/\s{2,}/.test(content)) {
+        return content.split(/\s{2,}/).map(c => c.trim()).filter(Boolean);
+      }
+      let remaining = content.trim();
+      const tokens: string[] = [];
+      while (remaining.length > 0) {
+        remaining = remaining.trim();
+        let matched = false;
+        for (const sub of sortedNames) {
+          if (remaining.toLowerCase().startsWith(sub.toLowerCase())) {
+            const nextChar = remaining.charAt(sub.length);
+            if (!nextChar || /[\s,;|\-]/.test(nextChar)) {
+              tokens.push(sub);
+              remaining = remaining.slice(sub.length).replace(/^[\s,;|\-]+/, "");
+              matched = true;
+              break;
+            }
+          }
+        }
+        if (!matched) {
+          const spaceIdx = remaining.indexOf(" ");
+          if (spaceIdx === -1) {
+            tokens.push(remaining);
+            break;
+          } else {
+            tokens.push(remaining.slice(0, spaceIdx));
+            remaining = remaining.slice(spaceIdx + 1);
+          }
+        }
+      }
+      return tokens.filter(Boolean);
+    };
+
+    const addSlot = (day: string, period: number, rawSub: string, start?: string, end?: string) => {
+      if (period < 1 || period > 8) return;
+      const cleanDay = day.trim().toUpperCase();
+      const normDay = DAYS.find(d => cleanDay.startsWith(d.slice(0, 3))) || (DAYS.includes(cleanDay) ? cleanDay : null);
+      if (!normDay) return;
+
+      const isBreak = rawSub.toLowerCase().includes("break") || rawSub.toLowerCase().includes("lunch") || rawSub.toLowerCase().includes("recess");
+      const matchedSub = availableSubjects.find(s => s.name.toLowerCase() === rawSub.toLowerCase()) 
+        || availableSubjects.find(s => rawSub.toLowerCase().includes(s.name.toLowerCase())) 
+        || availableSubjects[0];
+
+      slotsMap.set(`${normDay}-${period}`, {
+        id: `slot-${normDay}-${period}-${Date.now()}-${Math.random()}`,
+        dayOfWeek: normDay,
+        period,
+        subjectId: isBreak ? "" : (matchedSub?.id || ""),
+        subjectName: isBreak ? "Break" : (matchedSub?.name || rawSub),
+        startTime: start || DEFAULT_TIMES[period]?.start || "08:00",
+        endTime: end || DEFAULT_TIMES[period]?.end || "08:45",
+        classroom: "",
+        isBreak
+      });
+    };
+
     let currentDay: string | null = null;
-    const slots: ScannedSlot[] = [];
+    let autoPeriod = 1;
 
     for (const line of lines) {
-      const rawUpper = line.toUpperCase().replace(/[^A-Z]/g, "");
-      const foundDay = DAYS.find(d => rawUpper.startsWith(d.slice(0, 3)));
-      if (foundDay) {
-        currentDay = foundDay;
-        continue;
+      const dayPrefixMatch = line.match(/^(MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|MON|TUE|TUES|WED|THU|THUR|THURS|FRI|SAT)\b[\s:|\-,]*(.*)$/i);
+      if (dayPrefixMatch) {
+        const rawDay = dayPrefixMatch[1].toUpperCase();
+        const detectedDay = DAYS.find(d => rawDay.startsWith(d.slice(0, 3)));
+        const restOfLine = dayPrefixMatch[2].trim();
+
+        if (detectedDay) {
+          currentDay = detectedDay;
+          autoPeriod = 1;
+
+          if (restOfLine) {
+            const cells = tokenize(restOfLine);
+            let pNum = 1;
+            for (const cell of cells) {
+              if (pNum > 8) break;
+              const cellPeriodMatch = cell.match(/^(?:p|period)?\s*([1-8])[\s:.\-\)](.*)/i);
+              if (cellPeriodMatch) {
+                const cp = parseInt(cellPeriodMatch[1], 10);
+                const sub = cellPeriodMatch[2].trim() || cell;
+                addSlot(currentDay, cp, sub);
+                pNum = cp + 1;
+              } else {
+                addSlot(currentDay, pNum, cell);
+                pNum++;
+              }
+            }
+            continue;
+          }
+          continue;
+        }
       }
 
-      if (!currentDay) continue;
+      if (currentDay) {
+        const periodMatch = line.match(/^(?:period|p)?\s*([1-8])[\s:.\-\)\/]+(.*)/i);
+        if (periodMatch) {
+          const period = parseInt(periodMatch[1], 10);
+          const rest = periodMatch[2].trim();
+          addSlot(currentDay, period, rest);
+          autoPeriod = period + 1;
+          continue;
+        }
 
-      const periodMatch = line.match(/(?:period|p)?\s*([1-8])[\s:.\-\)\/]+(.*)/i);
-      if (periodMatch) {
-        const period = parseInt(periodMatch[1], 10);
-        const rest = periodMatch[2].trim();
-        const isBreak = rest.toLowerCase().includes("break") || rest.toLowerCase().includes("lunch") || rest.toLowerCase().includes("recess");
-        const matchedSub = availableSubjects.find(s => s.name.toLowerCase() === rest.toLowerCase()) 
-          || availableSubjects.find(s => rest.toLowerCase().includes(s.name.toLowerCase())) 
-          || availableSubjects[0];
-
-        slots.push({
-          id: `text-${currentDay}-${period}-${Date.now()}-${Math.random()}`,
-          dayOfWeek: currentDay,
-          period,
-          subjectId: isBreak ? "" : (matchedSub?.id || ""),
-          subjectName: isBreak ? "Break" : (matchedSub?.name || rest),
-          startTime: DEFAULT_TIMES[period]?.start || "08:00",
-          endTime: DEFAULT_TIMES[period]?.end || "08:45",
-          classroom: "",
-          isBreak
-        });
+        const subMatched = availableSubjects.find(s => s.name.toLowerCase() === line.toLowerCase());
+        if (subMatched && autoPeriod <= 8) {
+          addSlot(currentDay, autoPeriod, line);
+          autoPeriod++;
+          continue;
+        }
       }
     }
-    return slots;
+
+    return Array.from(slotsMap.values());
   };
 
   const triggerScan = async (fileToScan: File) => {
@@ -270,7 +359,7 @@ export default function TimetableScanModal({
           type: result.fileType || "Document"
         });
       } else {
-        const errorMsg = result?.error || "Could not automatically extract timetable periods from this file. You can load our pre-filled 8-period template or add slots manually.";
+        const errorMsg = result?.error || "Could not automatically extract timetable periods from this file. You can load our pre-filled Saturday schedule template or add slots manually.";
         setScanError(errorMsg);
         if (result?.fileName && result?.fileType) {
           setFileDetails({ name: result.fileName, type: result.fileType });
@@ -278,20 +367,21 @@ export default function TimetableScanModal({
       }
     } catch (err: unknown) {
       console.warn("Scan processing notice:", err);
-      setScanError("Could not automatically detect timetable layout from this file. You can load our standard 8-period schedule template or add slots manually below.");
+      setScanError("Could not automatically detect timetable layout from this file. You can load our standard Monday-Saturday schedule template or add slots manually below.");
     } finally {
       setIsScanning(false);
     }
   };
 
-  const handleLoadTemplate = (includeSaturday = false) => {
+  const handleLoadTemplate = (includeSaturday = true, periodCount = 8) => {
     const targetDays = includeSaturday ? DAYS : DAYS.slice(0, 5);
+    const targetPeriods = PERIODS.slice(0, periodCount);
     const slots: ScannedSlot[] = [];
     const defaultSub = availableSubjects[0] || { id: "", name: "General Subject" };
 
     targetDays.forEach(day => {
-      PERIODS.forEach(period => {
-        const isBreak = period === 4 || period === 6;
+      targetPeriods.forEach(period => {
+        const isBreak = periodCount === 8 ? (period === 4 || period === 6) : (period === 3);
         const sub = isBreak ? null : (availableSubjects[(period - 1) % availableSubjects.length] || defaultSub);
 
         slots.push({
@@ -311,7 +401,7 @@ export default function TimetableScanModal({
     setScannedSlots(slots);
     setScanError(null);
     setFileDetails({ 
-      name: `Standard 8-Period Template (${includeSaturday ? "Mon - Sat" : "Mon - Fri"})`, 
+      name: `Standard ${periodCount}-Period Template (${includeSaturday ? "Mon - Sat" : "Mon - Fri"})`, 
       type: "Ready-to-Edit Template" 
     });
   };
@@ -390,7 +480,24 @@ export default function TimetableScanModal({
       return;
     }
 
-    const slotsPayload = scannedSlots.map(s => ({
+    // Deduplicate slots strictly by (dayOfWeek, period) to prevent duplicate submissions
+    const uniqueMap = new Map<string, typeof scannedSlots[0]>();
+    for (const s of scannedSlots) {
+      const normDay = s.dayOfWeek.trim().toUpperCase();
+      if (!DAYS.includes(normDay) || s.period < 1 || s.period > 8) continue;
+      uniqueMap.set(`${normDay}-${s.period}`, {
+        ...s,
+        dayOfWeek: normDay
+      });
+    }
+
+    const deduplicated = Array.from(uniqueMap.values());
+    if (deduplicated.length === 0) {
+      alert("No valid timetable slots to save.");
+      return;
+    }
+
+    const slotsPayload = deduplicated.map(s => ({
       dayOfWeek: s.dayOfWeek,
       period: s.period,
       subjectId: s.isBreak ? null : (s.subjectId || null),
@@ -405,7 +512,7 @@ export default function TimetableScanModal({
       if (res.error) {
         alert("Failed to update timetable: " + res.error);
       } else {
-        alert(`✅ Timetable updated successfully with ${slotsPayload.length} slots for ${selectedClassName}!`);
+        alert(`✅ Timetable updated successfully with ${slotsPayload.length} slots (including Saturday) for ${selectedClassName}!`);
         onSaveSuccess();
         onClose();
       }
@@ -414,11 +521,11 @@ export default function TimetableScanModal({
 
   const visibleSlots = activeDayFilter === "ALL" 
     ? scannedSlots 
-    : scannedSlots.filter(s => s.dayOfWeek === activeDayFilter);
+    : scannedSlots.filter(s => s.dayOfWeek?.toUpperCase() === activeDayFilter.toUpperCase());
 
   visibleSlots.sort((a, b) => {
-    const dayA = DAYS.indexOf(a.dayOfWeek);
-    const dayB = DAYS.indexOf(b.dayOfWeek);
+    const dayA = DAYS.indexOf(a.dayOfWeek?.toUpperCase());
+    const dayB = DAYS.indexOf(b.dayOfWeek?.toUpperCase());
     if (dayA !== dayB) return dayA - dayB;
     return a.period - b.period;
   });
@@ -554,20 +661,27 @@ export default function TimetableScanModal({
                   </p>
                 </div>
 
-                <div style={{ display: "flex", gap: "0.5rem" }}>
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                   <button
                     type="button"
-                    onClick={() => handleLoadTemplate(false)}
-                    style={{ padding: "0.5rem 1rem", borderRadius: "6px", background: "var(--card-bg)", border: "1px solid var(--border-color)", fontSize: "0.825rem", fontWeight: 600, cursor: "pointer", color: "inherit" }}
+                    onClick={() => handleLoadTemplate(true, 8)}
+                    style={{ padding: "0.5rem 1rem", borderRadius: "6px", background: "var(--primary)", border: "none", fontSize: "0.825rem", fontWeight: 600, cursor: "pointer", color: "var(--primary-fg)" }}
                   >
-                    ⚡ Load Mon - Fri (8 Periods)
+                    ⚡ Load Mon - Sat (8 Periods)
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleLoadTemplate(true)}
+                    onClick={() => handleLoadTemplate(true, 5)}
                     style={{ padding: "0.5rem 1rem", borderRadius: "6px", background: "var(--card-bg)", border: "1px solid var(--border-color)", fontSize: "0.825rem", fontWeight: 600, cursor: "pointer", color: "inherit" }}
                   >
-                    ⚡ Load Mon - Sat (8 Periods)
+                    ⚡ Load Mon - Sat (5 Periods)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleLoadTemplate(false, 8)}
+                    style={{ padding: "0.5rem 1rem", borderRadius: "6px", background: "var(--card-bg)", border: "1px solid var(--border-color)", fontSize: "0.825rem", fontWeight: 600, cursor: "pointer", color: "inherit" }}
+                  >
+                    ⚡ Mon - Fri Only (8 Periods)
                   </button>
                 </div>
               </div>
@@ -619,7 +733,7 @@ export default function TimetableScanModal({
                       <RefreshCw size={14} /> Scan Another File
                     </button>
                     <button
-                      onClick={() => handleLoadTemplate(false)}
+                      onClick={() => handleLoadTemplate(true, 8)}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -634,7 +748,25 @@ export default function TimetableScanModal({
                         fontWeight: 600
                       }}
                     >
-                      <Zap size={14} style={{ color: "#f59e0b" }} /> Load Standard 8-Period Template
+                      <Zap size={14} style={{ color: "#f59e0b" }} /> ⚡ Load 8-Period Mon - Sat Template
+                    </button>
+                    <button
+                      onClick={() => handleLoadTemplate(true, 5)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        padding: "0.45rem 0.9rem",
+                        borderRadius: "6px",
+                        border: "1px solid var(--border-color)",
+                        background: "var(--card-bg, #ffffff)",
+                        color: "inherit",
+                        cursor: "pointer",
+                        fontSize: "0.85rem",
+                        fontWeight: 600
+                      }}
+                    >
+                      <Zap size={14} style={{ color: "#10b981" }} /> ⚡ Load 5-Period Mon - Sat Template
                     </button>
                     <button
                       onClick={() => {
@@ -760,7 +892,8 @@ export default function TimetableScanModal({
                   All Days ({scannedSlots.length})
                 </button>
                 {DAYS.map(day => {
-                  const count = scannedSlots.filter(s => s.dayOfWeek === day).length;
+                  const count = scannedSlots.filter(s => s.dayOfWeek?.toUpperCase() === day.toUpperCase()).length;
+                  const isActive = activeDayFilter.toUpperCase() === day.toUpperCase();
                   return (
                     <button
                       key={day}
@@ -770,8 +903,8 @@ export default function TimetableScanModal({
                         padding: "0.4rem 0.9rem",
                         borderRadius: "6px",
                         border: "none",
-                        background: activeDayFilter === day ? "var(--primary)" : "rgba(0,0,0,0.05)",
-                        color: activeDayFilter === day ? "var(--primary-fg)" : "inherit",
+                        background: isActive ? "var(--primary)" : "rgba(0,0,0,0.05)",
+                        color: isActive ? "var(--primary-fg)" : "inherit",
                         fontWeight: 600,
                         fontSize: "0.8rem",
                         cursor: "pointer",

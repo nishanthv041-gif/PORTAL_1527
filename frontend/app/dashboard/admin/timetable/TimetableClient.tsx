@@ -224,8 +224,8 @@ export default function TimetableClient({
                         </div>
                       </td>
                       {PERIODS.map(p => {
-                        const slot = timetableData.find(t => t.dayOfWeek === day && t.period === p);
-                        const isEditing = editingSlot?.day === day && editingSlot?.period === p;
+                        const slot = timetableData.find(t => t.dayOfWeek?.toUpperCase() === day.toUpperCase() && t.period === p);
+                        const isEditing = editingSlot?.day?.toUpperCase() === day.toUpperCase() && editingSlot?.period === p;
                         const hasEventOverlap = dayEvents.length > 0;
 
                         return (

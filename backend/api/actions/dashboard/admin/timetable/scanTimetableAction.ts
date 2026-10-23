@@ -311,7 +311,8 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
       } else {
         // Fallback to raw text parsing
         const textResult = await mammoth.extractRawText({ buffer });
-        parseTextLinesIntoSlots(textResult.value, availableSubjects, scannedSlots, warnings);
+        const wordSlots = parseUniversalTimetable(textResult.value, availableSubjects);
+        scannedSlots.push(...wordSlots);
       }
     }
 
@@ -322,11 +323,13 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
         const uint8 = new Uint8Array(buffer);
         const pdf = await getDocumentProxy(uint8);
         const { text } = await extractText(pdf, { mergePages: true });
-        parseTextLinesIntoSlots(text || "", availableSubjects, scannedSlots, warnings);
+        const pdfSlots = parseUniversalTimetable(text || "", availableSubjects);
+        scannedSlots.push(...pdfSlots);
       } catch (pdfErr) {
         console.warn("PDF parse fallback:", pdfErr);
         const textFallback = buffer.toString("utf-8");
-        parseTextLinesIntoSlots(textFallback, availableSubjects, scannedSlots, warnings);
+        const fallbackSlots = parseUniversalTimetable(textFallback, availableSubjects);
+        scannedSlots.push(...fallbackSlots);
       }
     }
 
@@ -334,10 +337,30 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
     else {
       fileType = "Image / Document";
       const textContent = buffer.toString("utf-8");
-      parseTextLinesIntoSlots(textContent, availableSubjects, scannedSlots, warnings);
+      const docSlots = parseUniversalTimetable(textContent, availableSubjects);
+      scannedSlots.push(...docSlots);
     }
 
-    if (scannedSlots.length === 0) {
+    // Deduplicate slots strictly by (dayOfWeek, period)
+    const uniqueMap = new Map<string, ScannedSlot>();
+    for (const slot of scannedSlots) {
+      const normDay = normalizeDay(slot.dayOfWeek);
+      if (!normDay || slot.period < 1 || slot.period > 8) continue;
+      uniqueMap.set(`${normDay}-${slot.period}`, {
+        ...slot,
+        dayOfWeek: normDay
+      });
+    }
+
+    const finalSlots = Array.from(uniqueMap.values());
+    finalSlots.sort((a, b) => {
+      const dayA = DAYS.indexOf(a.dayOfWeek);
+      const dayB = DAYS.indexOf(b.dayOfWeek);
+      if (dayA !== dayB) return dayA - dayB;
+      return a.period - b.period;
+    });
+
+    if (finalSlots.length === 0) {
       return {
         error: `Could not detect timetable data from "${fileName}". Please ensure the file contains Days (e.g., Monday to Saturday) and Periods with Subject names, or enter them manually.`,
         fileName,
@@ -349,9 +372,9 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
       success: true,
       fileName,
       fileType,
-      scannedSlots,
+      scannedSlots: finalSlots,
       warnings,
-      totalScanned: scannedSlots.length
+      totalScanned: finalSlots.length
     };
   } catch (error: unknown) {
     console.error("Error scanning timetable document:", error);
@@ -361,86 +384,143 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
   }
 }
 
-/**
- * Universal text line parser for PDF, OCR Images, and plain text
- */
-function parseTextLinesIntoSlots(
-  text: string,
-  availableSubjects: Array<{ id: string; name: string }>,
-  scannedSlots: ScannedSlot[],
-  warnings: string[]
-) {
-  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-  let currentDay: string | null = null;
+function tokenizeSubjects(text: string, availableSubjects: Array<{ id: string; name: string }>): string[] {
+  if (text.includes("\t") || text.includes("|") || text.includes(",") || text.includes(";")) {
+    return text.split(/[\t|,;]+/).map(c => c.trim()).filter(Boolean);
+  }
+  if (/\s{2,}/.test(text)) {
+    return text.split(/\s{2,}/).map(c => c.trim()).filter(Boolean);
+  }
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  const sortedNames = [
+    ...availableSubjects.map(s => s.name),
+    "Tamil", "English", "Maths", "Mathematics", "Science", "Social", "Social Studies",
+    "Computer Science", "Physics", "Chemistry", "Biology", "Hindi", "Break", "Recess", "Lunch"
+  ].sort((a, b) => b.length - a.length);
 
-    // Check if line specifies day
-    const normDay = normalizeDay(line);
-    if (normDay) {
-      currentDay = normDay;
-      continue;
-    }
+  let remaining = text.trim();
+  const tokens: string[] = [];
 
-    // If day is set, check if line contains periods or subjects
-    if (currentDay) {
-      // E.g., "Period 1: Math (08:00 - 08:45) Room 101" or "1. Mathematics" or "P1 - Science"
-      const periodMatch = line.match(/(?:period\s*|p\s*|^)([1-8])\s*[:\.\-\)]\s*(.*)/i);
-      if (periodMatch) {
-        const periodNum = parseInt(periodMatch[1], 10);
-        const rest = periodMatch[2].trim();
-        const isBreak = normalizeBreak(rest);
-        const matched = isBreak ? { subjectId: "", subjectName: "Break", isMatched: true } : matchSubject(rest, availableSubjects);
-
-        scannedSlots.push({
-          id: `slot-${currentDay}-${periodNum}-${Date.now()}-${Math.random()}`,
-          dayOfWeek: currentDay,
-          period: periodNum,
-          subjectId: isBreak ? "" : matched.subjectId,
-          subjectName: isBreak ? "Break" : matched.subjectName,
-          startTime: DEFAULT_TIMES[periodNum]?.start || "08:00",
-          endTime: DEFAULT_TIMES[periodNum]?.end || "08:45",
-          classroom: "",
-          isBreak
-        });
-        continue;
-      }
-
-      // Check if line contains tab-separated or pipe-separated columns:
-      const parts = line.split(/[\t|]+/).map(p => p.trim()).filter(Boolean);
-      if (parts.length >= 2) {
-        const firstAsDay = normalizeDay(parts[0]);
-        const dayToUse = firstAsDay || currentDay;
-        const startIndex = firstAsDay ? 1 : 0;
-
-        for (let pIndex = 0; pIndex < 8 && (startIndex + pIndex) < parts.length; pIndex++) {
-          const rawCell = parts[startIndex + pIndex];
-          const period = pIndex + 1;
-          const isBreak = normalizeBreak(rawCell);
-          const matched = isBreak ? { subjectId: "", subjectName: "Break", isMatched: true } : matchSubject(rawCell, availableSubjects);
-
-          scannedSlots.push({
-            id: `slot-${dayToUse}-${period}-${Date.now()}-${Math.random()}`,
-            dayOfWeek: dayToUse,
-            period,
-            subjectId: isBreak ? "" : matched.subjectId,
-            subjectName: isBreak ? "Break" : matched.subjectName,
-            startTime: DEFAULT_TIMES[period]?.start || "08:00",
-            endTime: DEFAULT_TIMES[period]?.end || "08:45",
-            classroom: "",
-            isBreak
-          });
+  while (remaining.length > 0) {
+    remaining = remaining.trim();
+    let matched = false;
+    for (const sub of sortedNames) {
+      if (remaining.toLowerCase().startsWith(sub.toLowerCase())) {
+        const nextChar = remaining.charAt(sub.length);
+        if (!nextChar || /[\s,;|\-]/.test(nextChar)) {
+          tokens.push(sub);
+          remaining = remaining.slice(sub.length).replace(/^[\s,;|\-]+/, "");
+          matched = true;
+          break;
         }
       }
     }
+    if (!matched) {
+      const spaceIdx = remaining.indexOf(" ");
+      if (spaceIdx === -1) {
+        tokens.push(remaining);
+        break;
+      } else {
+        tokens.push(remaining.slice(0, spaceIdx));
+        remaining = remaining.slice(spaceIdx + 1);
+      }
+    }
   }
 
-  // Deduplicate slots by dayOfWeek + period (keep last)
-  const uniqueMap = new Map<string, ScannedSlot>();
-  for (const s of scannedSlots) {
-    uniqueMap.set(`${s.dayOfWeek}-${s.period}`, s);
+  return tokens.filter(Boolean);
+}
+
+function parseUniversalTimetable(
+  rawText: string,
+  availableSubjects: Array<{ id: string; name: string }>
+): ScannedSlot[] {
+  const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const slotsMap = new Map<string, ScannedSlot>();
+
+  const addSlot = (day: string, period: number, rawSubject: string, startTime?: string, endTime?: string, room?: string) => {
+    if (period < 1 || period > 8) return;
+    const normDay = normalizeDay(day);
+    if (!normDay) return;
+
+    const isBreak = normalizeBreak(rawSubject);
+    const matched = isBreak ? { subjectId: "", subjectName: "Break", isMatched: true } : matchSubject(rawSubject, availableSubjects);
+
+    slotsMap.set(`${normDay}-${period}`, {
+      id: `slot-${normDay}-${period}-${Date.now()}-${Math.random()}`,
+      dayOfWeek: normDay,
+      period,
+      subjectId: isBreak ? "" : matched.subjectId,
+      subjectName: isBreak ? "Break" : matched.subjectName,
+      startTime: startTime || DEFAULT_TIMES[period]?.start || "08:00",
+      endTime: endTime || DEFAULT_TIMES[period]?.end || "08:45",
+      classroom: room || "",
+      isBreak
+    });
+  };
+
+  let currentDay: string | null = null;
+  let autoPeriod = 1;
+
+  for (const line of lines) {
+    // 1. Check if line starts with a Day (e.g. "Monday Tamil English Maths Science Social" or "Saturday Tamil Maths English Science Social")
+    const dayPrefixMatch = line.match(/^(MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|MON|TUE|TUES|WED|THU|THUR|THURS|FRI|SAT)\b[\s:|\-,]*(.*)$/i);
+    if (dayPrefixMatch) {
+      const detectedDay = normalizeDay(dayPrefixMatch[1]);
+      const restOfLine = dayPrefixMatch[2].trim();
+
+      if (detectedDay) {
+        currentDay = detectedDay;
+        autoPeriod = 1;
+
+        if (restOfLine) {
+          const cells = tokenizeSubjects(restOfLine, availableSubjects);
+          let pNum = 1;
+          for (const cell of cells) {
+            if (pNum > 8) break;
+            const cellPeriodMatch = cell.match(/^(?:p|period)?\s*([1-8])[\s:.\-\)](.*)/i);
+            if (cellPeriodMatch) {
+              const cp = parseInt(cellPeriodMatch[1], 10);
+              const sub = cellPeriodMatch[2].trim() || cell;
+              addSlot(currentDay, cp, sub);
+              pNum = cp + 1;
+            } else {
+              addSlot(currentDay, pNum, cell);
+              pNum++;
+            }
+          }
+          continue;
+        }
+        continue;
+      }
+    }
+
+    // 2. If current day is set:
+    if (currentDay) {
+      // Period format: "Period 1: Tamil" or "1. English" or "P1 Tamil"
+      const periodMatch = line.match(/^(?:period|p)?\s*([1-8])[\s:.\-\)\/]+(.*)/i);
+      if (periodMatch) {
+        const period = parseInt(periodMatch[1], 10);
+        const rest = periodMatch[2].trim();
+        const timeMatch = rest.match(/(\d{1,2}:\d{2})\s*(?:-|to)\s*(\d{1,2}:\d{2})/i);
+        const startTime = timeMatch ? timeMatch[1] : undefined;
+        const endTime = timeMatch ? timeMatch[2] : undefined;
+        let cleanSub = rest.replace(/(\d{1,2}:\d{2})\s*(?:-|to)\s*(\d{1,2}:\d{2})/i, "").trim();
+        cleanSub = cleanSub.replace(/(?:room|classroom|rm)[\s:]*([a-zA-Z0-9\-]+)/i, "").trim();
+
+        addSlot(currentDay, period, cleanSub, startTime, endTime);
+        autoPeriod = period + 1;
+        continue;
+      }
+
+      // Check if line is a subject name directly under day heading
+      const subjectCheck = matchSubject(line, availableSubjects);
+      if (subjectCheck.isMatched && autoPeriod <= 8) {
+        addSlot(currentDay, autoPeriod, line);
+        autoPeriod++;
+        continue;
+      }
+    }
   }
-  scannedSlots.length = 0;
-  scannedSlots.push(...Array.from(uniqueMap.values()));
+
+  return Array.from(slotsMap.values());
 }

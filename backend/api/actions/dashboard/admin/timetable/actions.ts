@@ -73,42 +73,68 @@ export async function deleteTimetableSlotAction(id: string) {
   }
 }
 
-export async function bulkCreateTimetableSlotsAction(classId: string, slots: Array<{ dayOfWeek: string; period: number; subjectId: string | null; startTime: string; endTime: string; classroom: string; isBreak: boolean }>) {
+export async function bulkCreateTimetableSlotsAction(
+  classId: string, 
+  slots: Array<{ dayOfWeek: string; period: number; subjectId: string | null; startTime: string; endTime: string; classroom: string; isBreak: boolean }>
+) {
+  if (!classId) return { error: "Class ID is required" };
+  if (!slots || slots.length === 0) return { error: "No slots to save." };
+
   try {
+    // Deduplicate slots by dayOfWeek + period (prevents duplicate rows and ensures fast saving)
+    const uniqueMap = new Map<string, typeof slots[0]>();
     for (const slot of slots) {
-      const existing = await prisma.timetable.findFirst({
-        where: { classId, dayOfWeek: slot.dayOfWeek, period: slot.period }
+      if (!slot.dayOfWeek) continue;
+      const normDay = slot.dayOfWeek.trim().toUpperCase();
+      const period = Number(slot.period);
+      if (isNaN(period) || period < 1 || period > 8) continue;
+
+      const key = `${normDay}-${period}`;
+      uniqueMap.set(key, {
+        ...slot,
+        dayOfWeek: normDay,
+        period
+      });
+    }
+
+    const deduplicatedSlots = Array.from(uniqueMap.values());
+    if (deduplicatedSlots.length === 0) {
+      return { error: "No valid timetable slots found to save." };
+    }
+
+    const daysToUpdate = Array.from(new Set(deduplicatedSlots.map(s => s.dayOfWeek)));
+
+    // Perform atomic batch replacement in a single Prisma transaction (2 queries, < 200ms!)
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete existing slots for these days for this class
+      await tx.timetable.deleteMany({
+        where: {
+          classId,
+          dayOfWeek: { in: daysToUpdate }
+        }
       });
 
-      if (existing) {
-        await prisma.timetable.update({
-          where: { id: existing.id },
-          data: {
-            subjectId: slot.isBreak ? null : slot.subjectId,
-            startTime: slot.startTime,
-            endTime: slot.endTime,
-            classroom: slot.classroom,
-            isBreak: slot.isBreak
-          }
-        });
-      } else {
-        await prisma.timetable.create({
-          data: {
-            classId,
-            dayOfWeek: slot.dayOfWeek,
-            period: slot.period,
-            subjectId: slot.isBreak ? null : slot.subjectId,
-            startTime: slot.startTime,
-            endTime: slot.endTime,
-            classroom: slot.classroom,
-            isBreak: slot.isBreak
-          }
-        });
-      }
-    }
+      // 2. Insert all deduplicated slots in ONE batch insert
+      await tx.timetable.createMany({
+        data: deduplicatedSlots.map(slot => ({
+          classId,
+          dayOfWeek: slot.dayOfWeek,
+          period: slot.period,
+          subjectId: slot.isBreak ? null : (slot.subjectId || null),
+          startTime: slot.startTime || "08:00",
+          endTime: slot.endTime || "08:45",
+          classroom: slot.classroom || "",
+          isBreak: Boolean(slot.isBreak)
+        }))
+      });
+    });
+
     revalidatePath("/dashboard/admin/timetable");
-    return { success: true };
+    revalidatePath("/dashboard/parent/timetable");
+    revalidatePath("/dashboard/teacher/timetable");
+    return { success: true, count: deduplicatedSlots.length };
   } catch (error: unknown) {
+    console.error("bulkCreateTimetableSlotsAction error:", error);
     if (error instanceof Error) {
       return { error: error.message };
     }
