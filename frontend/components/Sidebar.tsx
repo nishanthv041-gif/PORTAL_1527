@@ -56,6 +56,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
 
   let teacherLinks = [
     { href: "/dashboard/teacher", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
+    { href: "/dashboard/teacher/programs", label: "School Programs", icon: <Star size={20} /> },
     { href: "/dashboard/teacher/classes", label: "My Classes", icon: <GraduationCap size={20} /> },
     { href: "/dashboard/teacher/attendance", label: "Attendance", icon: <Users size={20} /> },
     { href: "/dashboard/teacher/exams", label: "Exams", icon: <BookOpen size={20} /> },

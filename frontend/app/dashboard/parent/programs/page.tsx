@@ -4,9 +4,16 @@ import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import ProgramsParentClient from "./ProgramsParentClient";
 
+import { redirect } from "next/navigation";
+
 export default async function ParentProgramsPage() {
   const session = await getServerSession(getAuthOptions());
-  if (!session || session.user.role !== "PARENT") return null;
+  if (!session) {
+    redirect("/login");
+  }
+  if (session.user.role.toUpperCase() !== "PARENT") {
+    redirect("/dashboard");
+  }
 
   // Parents view published school programs
   const programs = await prisma.calendarEvent.findMany({

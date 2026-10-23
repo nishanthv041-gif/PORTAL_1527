@@ -2,7 +2,8 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../dashboard.module.css";
-import { GraduationCap, Users, Clock, MessageSquare, Calendar as CalendarIcon, MapPin } from "lucide-react";
+import { GraduationCap, Users, Clock, MessageSquare, Calendar as CalendarIcon, MapPin, Star, ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 const DAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 
@@ -69,10 +70,10 @@ export default async function TeacherDashboard() {
     prisma.calendarEvent.findMany({
       where: {
         date: { gte: new Date() },
-        OR: [{ audience: "ALL" }, { audience: "TEACHER" }]
+        OR: [{ audience: "ALL" }, { audience: "TEACHER" }, { type: "PROGRAM" }]
       },
       orderBy: { date: 'asc' },
-      take: 3
+      take: 4
     }),
     prisma.meeting.findMany({
       where: { 
@@ -89,8 +90,8 @@ export default async function TeacherDashboard() {
     id: `e-${e.id}`,
     title: e.title,
     date: e.date,
-    type: 'EVENT',
-    icon: <CalendarIcon size={18} />
+    type: e.type === "PROGRAM" ? 'PROGRAM' : 'EVENT',
+    icon: e.type === "PROGRAM" ? <Star size={18} style={{ color: '#eab308' }} /> : <CalendarIcon size={18} />
   })), ...upcomingMeetings.map(m => ({
     id: `m-${m.id}`,
     title: `Meeting with ${m.parents.length > 0 ? m.parents.map(p => p.user.name).join(', ') : 'Parents'}`,
@@ -101,7 +102,31 @@ export default async function TeacherDashboard() {
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title}>Teacher Dashboard</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <h1 className={styles.title} style={{ margin: 0 }}>Teacher Dashboard</h1>
+        <Link 
+          href="/dashboard/teacher/programs" 
+          prefetch={true}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.6rem 1.1rem',
+            borderRadius: '10px',
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15))',
+            border: '1px solid rgba(99, 102, 241, 0.3)',
+            color: 'var(--primary)',
+            fontWeight: 700,
+            fontSize: '0.875rem',
+            textDecoration: 'none',
+            boxShadow: '0 2px 8px rgba(99, 102, 241, 0.08)'
+          }}
+        >
+          <Star size={18} />
+          <span>School Programs</span>
+          <ArrowRight size={16} />
+        </Link>
+      </div>
       
       <div className={styles.statsGrid}>
         <div className={styles.statCard}>
