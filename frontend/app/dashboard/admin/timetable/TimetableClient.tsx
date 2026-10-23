@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar as CalendarIcon, Clock, Edit, Save, Trash2, X, MapPin, Coffee, Loader2, Upload, FileSpreadsheet } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Edit, Save, Trash2, X, MapPin, Coffee, Loader2, Upload, FileSpreadsheet, Sparkles } from "lucide-react";
 import { createTimetableSlotAction, deleteTimetableSlotAction, bulkCreateTimetableSlotsAction } from "@/backend/api/actions/dashboard/admin/timetable/actions";
 import { Class, Timetable, Subject, Teacher, User, CalendarEvent } from "@prisma/client";
-import * as XLSX from "xlsx";
+import TimetableScanModal from "./TimetableScanModal";
 
 const DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -47,6 +47,10 @@ export default function TimetableClient({
   const [editData, setEditData] = useState({ subjectId: "", startTime: "", endTime: "", classroom: "", isBreak: false });
   const [actionError, setActionError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(timetableData.length > 0);
+  const [showScanModal, setShowScanModal] = useState(false);
+
+  const selectedClassObj = classes.find(c => c.id === selectedClass);
+  const selectedClassName = selectedClassObj ? `${selectedClassObj.name} - ${selectedClassObj.section}` : "";
 
   const handleClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const classId = e.target.value;
@@ -107,106 +111,6 @@ export default function TimetableClient({
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!selectedClass) {
-      alert("Please select a class first before uploading.");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
-
-        if (data.length === 0) {
-          alert("The uploaded file is empty.");
-          return;
-        }
-
-        const validSlots: Array<{ dayOfWeek: string; period: number; subjectId: string | null; startTime: string; endTime: string; classroom: string; isBreak: boolean }> = [];
-        let rowCount = 0;
-        let successCount = 0;
-        const errors: string[] = [];
-
-        for (const row of data) {
-          rowCount++;
-          const day = (row['Day'] || '').toString().trim().toUpperCase();
-          const period = parseInt(String(row['Period']));
-          const subjectName = (row['Subject'] || '').toString().trim();
-          const startTime = (row['Start Time'] || '').toString().trim();
-          const endTime = (row['End Time'] || '').toString().trim();
-          const classroom = (row['Classroom'] || '').toString().trim();
-          const isBreakStr = (row['Is Break'] || '').toString().trim().toLowerCase();
-          const isBreak = isBreakStr === 'yes' || isBreakStr === 'true' || isBreakStr === '1';
-
-          if (!day || isNaN(period) || (!isBreak && !subjectName)) {
-            errors.push(`Row ${rowCount}: Missing required fields (Day, Period, Subject).`);
-            continue;
-          }
-
-          if (!DAYS.includes(day)) {
-            errors.push(`Row ${rowCount}: Invalid Day '${day}'.`);
-            continue;
-          }
-
-          if (period < 1 || period > 8) {
-            errors.push(`Row ${rowCount}: Invalid Period '${period}' (must be 1-8).`);
-            continue;
-          }
-
-          let subjectId = "";
-          if (!isBreak) {
-            const subject = availableSubjects.find(s => s.name.toLowerCase() === subjectName.toLowerCase());
-            if (!subject) {
-              errors.push(`Row ${rowCount}: Subject '${subjectName}' not found for this class.`);
-              continue;
-            }
-            subjectId = subject.id;
-          }
-
-          validSlots.push({
-            dayOfWeek: day,
-            period,
-            subjectId: isBreak ? null : subjectId,
-            startTime: startTime || DEFAULT_TIMES[period as keyof typeof DEFAULT_TIMES].start,
-            endTime: endTime || DEFAULT_TIMES[period as keyof typeof DEFAULT_TIMES].end,
-            classroom,
-            isBreak
-          });
-          successCount++;
-        }
-
-        if (errors.length > 0) {
-          const proceed = confirm(`Found ${errors.length} errors in the file:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? `\n...and ${errors.length - 5} more.` : ''}\n\nDo you want to proceed saving the ${successCount} valid slots?`);
-          if (!proceed) return;
-        }
-
-        if (validSlots.length > 0) {
-          startTransition(async () => {
-            const res = await bulkCreateTimetableSlotsAction(selectedClass, validSlots);
-            if (res.error) {
-              alert(res.error);
-            } else {
-              alert(`Successfully uploaded ${successCount} slots.`);
-            }
-          });
-        }
-      } catch {
-        alert("Failed to parse the file. Ensure it is a valid Excel/CSV file.");
-      }
-    };
-    reader.readAsBinaryString(file);
-    // Reset file input
-    e.target.value = '';
-  };
-
   return (
     <div style={{ position: 'relative' }}>
       {isPending && (
@@ -245,26 +149,32 @@ export default function TimetableClient({
           <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)', background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
             <CalendarIcon size={48} style={{ opacity: 0.2, margin: '0 auto 1rem' }} />
             <p style={{ marginBottom: '1rem' }}>No timetable set up for this class yet.</p>
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
               <button 
                 onClick={() => setIsInitialized(true)}
                 style={{ padding: '0.75rem 1.5rem', background: "var(--primary)", color: "var(--primary-fg)", border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 500 }}
               >
                 Create Timetable
               </button>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem', background: 'var(--card-bg)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer', fontWeight: 500 }}>
-                <Upload size={18} /> Upload Excel
-                <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} style={{ display: 'none' }} />
-              </label>
+              <button
+                type="button"
+                onClick={() => setShowScanModal(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem', background: 'var(--card-bg)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer', fontWeight: 500 }}
+              >
+                <Sparkles size={18} style={{ color: 'var(--primary)' }} /> Upload & Scan Timetable
+              </button>
             </div>
           </div>
         ) : (
           <div style={{ overflowX: 'auto', background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
             <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', background: 'rgba(0,0,0,0.01)' }}>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--card-bg)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '6px', cursor: 'pointer', fontWeight: 500, fontSize: '0.875rem' }}>
-                <FileSpreadsheet size={16} /> Bulk Upload
-                <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} style={{ display: 'none' }} />
-              </label>
+              <button
+                type="button"
+                onClick={() => setShowScanModal(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--primary)', color: 'var(--primary-fg)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 500, fontSize: '0.875rem' }}
+              >
+                <Sparkles size={16} /> Upload & Scan File (Photo, PDF, Excel, Word)
+              </button>
             </div>
             {actionError && (
               <div style={{ background: 'var(--danger-bg)', color: "var(--danger)", padding: '1rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -409,6 +319,20 @@ export default function TimetableClient({
           <CalendarIcon size={48} style={{ opacity: 0.2, margin: '0 auto 1rem' }} />
           <p>Please select a class to manage its timetable.</p>
         </div>
+      )}
+
+      {showScanModal && selectedClass && (
+        <TimetableScanModal
+          isOpen={showScanModal}
+          selectedClassId={selectedClass}
+          selectedClassName={selectedClassName}
+          availableSubjects={availableSubjects}
+          onClose={() => setShowScanModal(false)}
+          onSaveSuccess={() => {
+            setIsInitialized(true);
+            router.refresh();
+          }}
+        />
       )}
     </div>
   );

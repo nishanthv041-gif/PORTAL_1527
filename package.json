@@ -16,13 +16,16 @@
     "@vercel/speed-insights": "^2.0.0",
     "bcryptjs": "^3.0.3",
     "lucide-react": "^1.38.0",
+    "mammoth": "^1.13.0",
     "next": "16.3.4",
     "next-auth": "^4.24.15",
     "nodemailer": "^7.0.13",
+    "pdf-parse": "^2.4.5",
     "pdfkit": "^0.20.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "recharts": "^3.10.1",
+    "tesseract.js": "^7.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

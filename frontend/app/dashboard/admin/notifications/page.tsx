@@ -22,12 +22,23 @@ export default async function AdminNotificationsPage() {
     orderBy: { createdAt: 'desc' }
   }) : [];
 
+  const [classes, activeUsers] = await Promise.all([
+    prisma.class.findMany({ where: { isActive: true }, select: { id: true, name: true, section: true }, orderBy: { name: 'asc' } }),
+    prisma.user.findMany({ where: { status: 'ACTIVE' }, select: { id: true, name: true, role: true }, orderBy: { name: 'asc' }, take: 100 })
+  ]);
+
   return (
     <div className={styles.dashboard}>
       <h1 className={styles.title} style={{ margin: 0, marginBottom: '1rem' }}>Notifications</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Your personal notifications and alerts.</p>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Manage, create, and view notifications and alerts.</p>
 
-      <NotificationsClient notifications={notifications} adminUserId={adminUser?.id ?? ''} initialEnabled={isEnabled} />
+      <NotificationsClient 
+        notifications={notifications} 
+        adminUserId={adminUser?.id ?? ''} 
+        initialEnabled={isEnabled}
+        classes={classes}
+        users={activeUsers}
+      />
     </div>
   );
 }

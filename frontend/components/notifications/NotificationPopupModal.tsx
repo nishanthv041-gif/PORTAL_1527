@@ -333,29 +333,6 @@ export default function NotificationPopupModal({
             <span>Close</span>
           </button>
         </div>
-
-        {/* Clear All & Don't Show Again — secondary row */}
-        <div className={styles.clearAllRow}>
-          <button
-            type="button"
-            onClick={handleClearAll}
-            disabled={isClearing}
-            className={styles.clearAllBtn}
-            title="Mark all notifications as read and stop auto-showing this popup"
-          >
-            {isClearing ? (
-              <>
-                <span className={styles.spinner} />
-                <span>Clearing...</span>
-              </>
-            ) : (
-              <>
-                <CheckCheck size={14} />
-                <span>Clear All &amp; Don&apos;t Show Again</span>
-              </>
-            )}
-          </button>
-        </div>
       </div>
     </div>
   );
