@@ -23,9 +23,17 @@ export function getAuthOptions(): NextAuthOptions {
 
         const rawIp = (req?.headers?.['x-vercel-ip'] || req?.headers?.['x-forwarded-for'] || req?.headers?.['x-real-ip'] || req?.headers?.['cf-connecting-ip'] || 'unknown') as string;
         const ip = rawIp.includes(',') ? rawIp.split(',')[0].trim() : rawIp;
-        if (!loginRateLimiter.check(ip)) {
+        const userAgent = req?.headers?.['user-agent'] as string | undefined;
+
+        if (!loginRateLimiter.checkPair(ip, credentials.email)) {
           throw new Error("Too many login attempts. Please try again later.");
         }
+
+        const logAttempt = (success: boolean) => {
+          prisma.loginAttempt.create({
+            data: { email: credentials.email, success, ipAddress: ip, userAgent }
+          }).catch((err) => console.error("[NextAuth] Failed to log login attempt:", err));
+        };
 
         let user;
         try {
@@ -38,9 +46,7 @@ export function getAuthOptions(): NextAuthOptions {
         }
 
         if (!user || !user.password) {
-          await prisma.loginAttempt.create({
-            data: { email: credentials.email, success: false, ipAddress: ip, userAgent: req?.headers?.['user-agent'] as string | undefined }
-          });
+          logAttempt(false);
           return null;
         }
 
@@ -48,9 +54,7 @@ export function getAuthOptions(): NextAuthOptions {
 
         if (isPasswordValid) {
           if (user.status === "INACTIVE") {
-            await prisma.loginAttempt.create({
-              data: { email: credentials.email, success: false, ipAddress: ip, userAgent: req?.headers?.['user-agent'] as string | undefined }
-            });
+            logAttempt(false);
             throw new Error(
               "Your account has been deactivated. Please contact the administrator."
             );
@@ -61,17 +65,13 @@ export function getAuthOptions(): NextAuthOptions {
             credentials.expectedRole &&
             credentials.expectedRole.toUpperCase() !== user.role.toUpperCase()
           ) {
-            await prisma.loginAttempt.create({
-              data: { email: credentials.email, success: false, ipAddress: ip, userAgent: req?.headers?.['user-agent'] as string | undefined }
-            });
+            logAttempt(false);
             throw new Error(
               `This is a ${user.role.toLowerCase()} account. Please use the correct login page.`
             );
           }
 
-          await prisma.loginAttempt.create({
-            data: { email: credentials.email, success: true, ipAddress: ip, userAgent: req?.headers?.['user-agent'] as string | undefined }
-          });
+          logAttempt(true);
 
           return {
             id: user.id,
@@ -83,9 +83,7 @@ export function getAuthOptions(): NextAuthOptions {
           };
         }
 
-        await prisma.loginAttempt.create({
-          data: { email: credentials.email, success: false, ipAddress: ip, userAgent: req?.headers?.['user-agent'] as string | undefined }
-        });
+        logAttempt(false);
         return null;
       },
     }),

@@ -12,8 +12,20 @@ export default async function AdminStudentsPage() {
     orderBy: { firstName: 'asc' },
     include: {
       class: true,
-      parents: { include: { parent: { include: { user: true } } } },
-      attendances: true
+      parents: {
+        include: {
+          parent: {
+            include: {
+              user: {
+                select: { name: true, email: true }
+              }
+            }
+          }
+        }
+      },
+      attendances: {
+        select: { status: true }
+      }
     }
   });
 

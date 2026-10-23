@@ -27,18 +27,22 @@ export default async function AdminAttendancePage({
     orderBy: [{ name: 'asc' }, { section: 'asc' }]
   });
 
-  // Fetch school-wide summary for the selected date
-  const allAttendances = await prisma.attendance.findMany({
+  // Fetch school-wide summary for the selected date using efficient database aggregation
+  const attendanceCounts = await prisma.attendance.groupBy({
+    by: ['status'],
     where: {
       date: { gte: today, lt: tomorrow }
+    },
+    _count: {
+      status: true
     }
   });
 
   const summary = { present: 0, absent: 0, late: 0, leave: 0, half_day: 0 };
-  allAttendances.forEach(a => {
-    const s = a.status.toLowerCase();
+  attendanceCounts.forEach(c => {
+    const s = c.status.toLowerCase();
     if (summary[s as keyof typeof summary] !== undefined) {
-      summary[s as keyof typeof summary]++;
+      summary[s as keyof typeof summary] = c._count.status;
     }
   });
 

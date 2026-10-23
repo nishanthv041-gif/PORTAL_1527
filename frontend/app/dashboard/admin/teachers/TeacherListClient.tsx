@@ -20,6 +20,8 @@ export default function TeacherListClient({ teachers, allClasses, allSubjects }:
   const [statusFilter, setStatusFilter] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 25;
   const router = useRouter();
 
   const filteredTeachers = teachers.filter((teacher) => {
@@ -35,6 +37,10 @@ export default function TeacherListClient({ teachers, allClasses, allSubjects }:
 
     return matchesSearch && matchesStatus && matchesSubject;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredTeachers.length / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedTeachers = filteredTeachers.slice(startIndex, startIndex + pageSize);
 
   const handleDeactivate = async (id: string) => {
     if (confirm("Are you sure you want to deactivate this teacher?")) {
@@ -101,7 +107,7 @@ export default function TeacherListClient({ teachers, allClasses, allSubjects }:
             </tr>
           </thead>
           <tbody>
-            {filteredTeachers.map((teacher) => {
+            {paginatedTeachers.map((teacher) => {
               const subjectNames = Array.from(new Set(teacher.subjects.map((s) => s.name))).join(", ");
               const classNames = teacher.classes.map((c) => `${c.name}-${c.section}`).join(", ");
               const classTeacherRole = teacher.classTeacherOf ? `${teacher.classTeacherOf.name}-${teacher.classTeacherOf.section}` : null;
@@ -214,6 +220,51 @@ export default function TeacherListClient({ teachers, allClasses, allSubjects }:
         
         {filteredTeachers.length === 0 && (
           <p style={{ textAlign: 'center', opacity: 0.7, padding: '2rem' }}>No teachers found.</p>
+        )}
+
+        {filteredTeachers.length > pageSize && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderTop: '1px solid var(--border-color)', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.875rem' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>
+              Showing {startIndex + 1} to {Math.min(startIndex + pageSize, filteredTeachers.length)} of {filteredTeachers.length} teachers
+            </span>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                style={{
+                  padding: '0.4rem 0.8rem',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border-color)',
+                  background: 'transparent',
+                  color: 'inherit',
+                  cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
+                  opacity: currentPage <= 1 ? 0.4 : 1
+                }}
+              >
+                Previous
+              </button>
+              <span style={{ padding: '0.4rem 0.7rem', fontWeight: 600 }}>
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                style={{
+                  padding: '0.4rem 0.8rem',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border-color)',
+                  background: 'transparent',
+                  color: 'inherit',
+                  cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                  opacity: currentPage >= totalPages ? 0.4 : 1
+                }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

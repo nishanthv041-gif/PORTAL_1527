@@ -47,37 +47,53 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { name, email, password, role, phone, status } = body;
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newUser = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role,
-        status: status || "ACTIVE",
-      }
-    });
-
-    // Create associated role record
-    if (role === "TEACHER") {
-      await prisma.teacher.create({
-        data: {
-          userId: newUser.id,
-          phone: phone || null,
-        }
-      });
-    } else if (role === "PARENT") {
-      await prisma.parent.create({
-        data: {
-          userId: newUser.id,
-          phone: phone || null,
-        }
-      });
+    if (!email || !password || !name) {
+      return NextResponse.json({ error: "Name, email, and password are required" }, { status: 400 });
     }
 
-    return NextResponse.json(newUser, { status: 201 });
-  } catch {
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const createdUser = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name,
+          email,
+          password: hashedPassword,
+          role: role || "PARENT",
+          status: status || "ACTIVE",
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          status: true,
+          createdAt: true
+        }
+      });
+
+      if (user.role === "TEACHER") {
+        await tx.teacher.create({
+          data: {
+            userId: user.id,
+            phone: phone || null,
+          }
+        });
+      } else if (user.role === "PARENT") {
+        await tx.parent.create({
+          data: {
+            userId: user.id,
+            phone: phone || null,
+          }
+        });
+      }
+
+      return user;
+    });
+
+    return NextResponse.json(createdUser, { status: 201 });
+  } catch (error: unknown) {
+    console.error("[UsersAPI] User creation error:", error);
     return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
   }
 }

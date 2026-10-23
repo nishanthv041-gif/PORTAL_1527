@@ -37,6 +37,7 @@ model User {
   notifications    Notification[]
 
   @@index([role, status])
+  @@index([googleEmail])
 }
 
 model Student {
@@ -187,6 +188,8 @@ model Attendance {
   @@unique([studentId, date])
   @@index([classId, date])
   @@index([date])
+  @@index([date, status])
+  @@index([studentId, status])
 }
 
 model Exam {
@@ -428,6 +431,7 @@ model CalendarEvent {
   createdAt     DateTime  @default(now())
 
   @@index([date, isPublished])
+  @@index([type, isPublished, date])
 }
 
 model SchoolProgram {
@@ -471,6 +475,7 @@ model Message {
 
   @@index([receiverId, isRead])
   @@index([senderId])
+  @@index([receiverId, isDeleted, isRead])
 }
 
 model Notification {
@@ -485,6 +490,7 @@ model Notification {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+  @@index([userId, isRead, createdAt])
 }
 
 model AuditLog {
@@ -541,4 +547,5 @@ model LoginAttempt {
   timestamp DateTime @default(now())
 
   @@index([timestamp])
+  @@index([email, timestamp])
 }

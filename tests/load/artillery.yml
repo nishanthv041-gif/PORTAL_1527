@@ -1,0 +1,63 @@
+config:
+  target: "{{ $processEnvironment.TARGET_URL || 'http://localhost:3000' }}"
+  phases:
+    - name: "Phase 1: Baseline (50 VUs)"
+      duration: 30
+      arrivalRate: 10
+      rampTo: 50
+    - name: "Phase 2: Growing Morning Influx (100 VUs)"
+      duration: 45
+      arrivalRate: 50
+      rampTo: 100
+    - name: "Phase 3: Class Opening (250 VUs)"
+      duration: 60
+      arrivalRate: 100
+      rampTo: 250
+    - name: "Phase 4: High Concurrency (500 VUs)"
+      duration: 60
+      arrivalRate: 250
+      rampTo: 500
+    - name: "Phase 5: Peak Concurrent Spike (1000 VUs)"
+      duration: 60
+      arrivalRate: 500
+      rampTo: 1000
+    - name: "Phase 6: Target Peak Concurrency (2000 VUs)"
+      duration: 60
+      arrivalRate: 1000
+      rampTo: 2000
+  defaults:
+    headers:
+      User-Agent: "Artillery-LoadTest/SchoolPortal"
+      Accept: "application/json, text/html"
+
+scenarios:
+  - name: "School Portal Navigation and Probes"
+    flow:
+      # Step 1: Health Readiness Probe
+      - get:
+          url: "/api/health"
+          capture:
+            - json: "$.database.status"
+              as: "dbStatus"
+          expect:
+            - statusCode: 200
+
+      - think: 1
+
+      # Step 2: Homepage Load
+      - get:
+          url: "/"
+          expect:
+            - statusCode: 200
+
+      - think: 1
+
+      # Step 3: Login Callback Simulation
+      - post:
+          url: "/api/auth/callback/credentials"
+          json:
+            email: "student_test_user@schoolportal.test"
+            password: "SyntheticPassword123!"
+            expectedRole: "PARENT"
+          expect:
+            - statusCode: [200, 302, 401, 429]

@@ -24,12 +24,30 @@ export type UnifiedNotification = {
   };
 };
 
+// 15-second per-user TTL cache to prevent bombardment of PostgreSQL on every tab navigation
+const userNotifCache = new Map<string, { data: UnifiedNotification[]; expiresAt: number }>();
+
+export async function invalidateUserNotifCache(userId?: string) {
+  if (userId) {
+    userNotifCache.delete(`${userId}:unread`);
+    userNotifCache.delete(`${userId}:all`);
+  } else {
+    userNotifCache.clear();
+  }
+}
+
 export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boolean }): Promise<UnifiedNotification[]> {
   try {
     const session = await getServerSession(getAuthOptions());
     if (!session || !session.user) return [];
 
     const userId = session.user.id;
+    const cacheKey = `${userId}:${options?.unreadOnly ? "unread" : "all"}`;
+    const cached = userNotifCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
+    }
+
     const userRole = (session.user.role || "").toUpperCase();
 
     const items: UnifiedNotification[] = [];
@@ -391,11 +409,10 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
     // Sort all notifications by timestamp descending (newest first)
     uniqueItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-    if (options?.unreadOnly) {
-      return uniqueItems.filter(i => !i.isRead);
-    }
+    const result = options?.unreadOnly ? uniqueItems.filter(i => !i.isRead) : uniqueItems;
+    userNotifCache.set(cacheKey, { data: result, expiresAt: Date.now() + 15000 });
 
-    return uniqueItems;
+    return result;
   } catch (error) {
     console.error("Error fetching unified notifications:", error);
     return [];
@@ -404,6 +421,9 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
 
 export async function markNotificationReadAction(notificationId: string) {
   try {
+    const session = await getServerSession(getAuthOptions());
+    if (session?.user?.id) invalidateUserNotifCache(session.user.id);
+
     if (notificationId.startsWith("notif-")) {
       const realId = notificationId.replace("notif-", "");
       await prisma.notification.updateMany({
@@ -439,6 +459,7 @@ export async function clearAllNotificationsAction(): Promise<{ success?: boolean
     if (!session || !session.user) return { error: "Unauthorized" };
 
     const userId = session.user.id;
+    invalidateUserNotifCache(userId);
 
     // Mark all direct DB notifications as read
     await prisma.notification.updateMany({
@@ -473,6 +494,7 @@ export async function deleteAllNotificationsAction(): Promise<{ success?: boolea
     if (!session || !session.user) return { error: "Unauthorized" };
 
     const userId = session.user.id;
+    invalidateUserNotifCache(userId);
 
     await prisma.notification.deleteMany({
       where: { userId }

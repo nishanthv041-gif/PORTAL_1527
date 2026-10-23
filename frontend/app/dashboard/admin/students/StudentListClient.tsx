@@ -12,8 +12,8 @@ import { activateStudent, deactivateStudent, deleteStudent } from "@/backend/api
 
 type StudentWithRelations = Student & {
   class: Class | null;
-  parents: (ParentStudent & { parent: Parent & { user: User } })[];
-  attendances: Attendance[];
+  parents: (ParentStudent & { parent: Parent & { user: { name: string; email: string } } })[];
+  attendances: { status: string }[];
 };
 
 export default function StudentListClient({ students, classes }: { students: StudentWithRelations[], classes: Class[] }) {
@@ -23,6 +23,8 @@ export default function StudentListClient({ students, classes }: { students: Stu
   const [batchFilter, setBatchFilter] = useState("");
   const [residenceFilter, setResidenceFilter] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 25;
   const router = useRouter();
 
   const filteredStudents = students.filter((student) => {
@@ -39,6 +41,10 @@ export default function StudentListClient({ students, classes }: { students: Stu
     
     return matchesSearch && matchesStatus && matchesClass && matchesBatch && matchesResidence;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedStudents = filteredStudents.slice(startIndex, startIndex + pageSize);
 
   const uniqueBatches = Array.from(new Set(students.map(s => s.batch).filter((b): b is string => Boolean(b))));
 
@@ -113,7 +119,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
             </tr>
           </thead>
           <tbody>
-            {filteredStudents.map((student) => {
+            {paginatedStudents.map((student) => {
               const parent = student.parents[0]?.parent;
               const totalDays = student.attendances.length;
               const presentDays = student.attendances.filter((a) => a.status === 'PRESENT').length;
@@ -246,6 +252,51 @@ export default function StudentListClient({ students, classes }: { students: Stu
         
         {filteredStudents.length === 0 && (
           <p style={{ textAlign: 'center', opacity: 0.7, padding: '2rem' }}>No students found.</p>
+        )}
+
+        {filteredStudents.length > pageSize && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderTop: '1px solid var(--border-color)', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.875rem' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>
+              Showing {startIndex + 1} to {Math.min(startIndex + pageSize, filteredStudents.length)} of {filteredStudents.length} students
+            </span>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                style={{
+                  padding: '0.4rem 0.8rem',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border-color)',
+                  background: 'transparent',
+                  color: 'inherit',
+                  cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
+                  opacity: currentPage <= 1 ? 0.4 : 1
+                }}
+              >
+                Previous
+              </button>
+              <span style={{ padding: '0.4rem 0.7rem', fontWeight: 600 }}>
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                style={{
+                  padding: '0.4rem 0.8rem',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border-color)',
+                  background: 'transparent',
+                  color: 'inherit',
+                  cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                  opacity: currentPage >= totalPages ? 0.4 : 1
+                }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
