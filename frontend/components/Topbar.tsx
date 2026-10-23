@@ -31,15 +31,6 @@ export default function Topbar({
     return () => window.removeEventListener("notifications-cleared", handleCleared);
   }, []);
 
-  // Create a readable title from pathname
-  const getPageTitle = () => {
-    if (pathname === "/dashboard") return "Overview";
-    const segment = pathname.split("/").pop();
-    return segment
-      ? segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, " ")
-      : "Dashboard";
-  };
-
   // Determine if we should show the back button
   // Typically, show it if we are deeper than the main dashboard level.
   // /dashboard is 2 segments (['', 'dashboard'])
@@ -77,7 +68,6 @@ export default function Topbar({
             <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>Back</span>
           </button>
         )}
-        <h2 className={styles.title}>{getPageTitle()}</h2>
       </div>
       <div className={styles.userInfo}>
         <button

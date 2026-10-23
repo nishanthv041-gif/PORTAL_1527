@@ -9,12 +9,6 @@
   flex-shrink: 0;
 }
 
-.title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--foreground);
-}
-
 .userInfo {
   display: flex;
   align-items: center;
@@ -59,9 +53,6 @@
 @media (max-width: 768px) {
   .topbar {
     padding: 0 1rem 0 3.5rem; /* Space for hamburger */
-  }
-  .title {
-    font-size: 1.1rem;
   }
   .userDetails {
     display: none;
