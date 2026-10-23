@@ -507,16 +507,16 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
       )}
 
       {/* Table */}
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: "8px" }}>
+        <table style={{ width: "100%", minWidth: "920px", borderCollapse: "collapse", textAlign: "left" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border-color)", backgroundColor: "rgba(0,0,0,0.02)" }}>
-              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem" }}>Account User</th>
-              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem" }}>Date & Timing</th>
-              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem" }}>Status</th>
-              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem" }}>IP Address</th>
-              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem" }}>Login System & Device</th>
-              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem", textAlign: "center" }}>Action</th>
+              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem", width: "26%", minWidth: "220px", whiteSpace: "nowrap" }}>Account User</th>
+              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem", width: "18%", minWidth: "175px", whiteSpace: "nowrap" }}>Date & Timing</th>
+              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem", width: "11%", minWidth: "105px", whiteSpace: "nowrap" }}>Status</th>
+              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem", width: "17%", minWidth: "160px", whiteSpace: "nowrap" }}>IP Address</th>
+              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem", width: "18%", minWidth: "175px", whiteSpace: "nowrap" }}>Login System & Device</th>
+              <th style={{ padding: "0.85rem 1rem", fontWeight: 600, fontSize: "0.85rem", width: "10%", minWidth: "115px", textAlign: "center", whiteSpace: "nowrap" }}>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -527,7 +527,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
               return (
                 <tr key={record.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
                   {/* Account User */}
-                  <td style={{ padding: "0.85rem 1rem", fontSize: "0.875rem", fontWeight: 500 }}>
+                  <td style={{ padding: "0.85rem 1rem", fontSize: "0.875rem", fontWeight: 500, whiteSpace: "nowrap" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                       <div
                         style={{
@@ -546,7 +546,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                       >
                         {record.email.charAt(0).toUpperCase()}
                       </div>
-                      <div style={{ wordBreak: "break-all" }}>{record.email}</div>
+                      <span style={{ fontWeight: 500 }}>{record.email}</span>
                     </div>
                   </td>
 
@@ -596,7 +596,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                   </td>
 
                   {/* Real IP Address Column */}
-                  <td style={{ padding: "0.85rem 1rem", fontSize: "0.875rem" }}>
+                  <td style={{ padding: "0.85rem 1rem", fontSize: "0.875rem", whiteSpace: "nowrap" }}>
                     <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
                       <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
                         <span
@@ -657,7 +657,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                   </td>
 
                   {/* System & Device Column */}
-                  <td style={{ padding: "0.85rem 1rem", fontSize: "0.85rem" }}>
+                  <td style={{ padding: "0.85rem 1rem", fontSize: "0.85rem", whiteSpace: "nowrap" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }} title={record.userAgent || ""}>
                       <div
                         style={{
@@ -693,7 +693,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                   </td>
 
                   {/* Actions Column */}
-                  <td style={{ padding: "0.85rem 1rem", fontSize: "0.875rem", textAlign: "center" }}>
+                  <td style={{ padding: "0.85rem 1rem", fontSize: "0.875rem", textAlign: "center", whiteSpace: "nowrap" }}>
                     <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
                       {/* Direct Report Button */}
                       <button
