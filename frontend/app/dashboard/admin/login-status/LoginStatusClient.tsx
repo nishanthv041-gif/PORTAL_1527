@@ -95,16 +95,6 @@ export function parseSystemInfo(ua?: string | null): {
   };
 }
 
-// Classify IP address type (Real Public vs Localhost)
-export function getIpClassification(ip?: string | null): { isRealPublic: boolean; label: string } {
-  if (!ip || ip === "Unknown" || ip === "N/A" || ip === "Google OAuth") {
-    return { isRealPublic: false, label: "OAuth / Unknown" };
-  }
-  if (ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.")) {
-    return { isRealPublic: false, label: "Local / Dev" };
-  }
-  return { isRealPublic: true, label: "Real Public IP" };
-}
 
 export default function LoginStatusClient({ records }: { records: LoginAttempt[] }) {
   const router = useRouter();
@@ -522,7 +512,6 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
           <tbody>
             {filteredRecords.map((record) => {
               const sys = parseSystemInfo(record.userAgent);
-              const ipType = getIpClassification(record.ipAddress);
 
               return (
                 <tr key={record.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
@@ -595,65 +584,39 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                     )}
                   </td>
 
-                  {/* Real IP Address Column */}
+                  {/* IP Address Column */}
                   <td style={{ padding: "0.85rem 1rem", fontSize: "0.875rem", whiteSpace: "nowrap" }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
-                        <span
-                          onClick={() => handleCopyIp(record.ipAddress)}
-                          title="Click to copy IP address"
-                          style={{
-                            fontFamily: "monospace",
-                            fontSize: "0.85rem",
-                            fontWeight: 600,
-                            padding: "0.25rem 0.6rem",
-                            borderRadius: "6px",
-                            background: ipType.isRealPublic ? "rgba(99, 102, 241, 0.1)" : "rgba(255, 255, 255, 0.05)",
-                            border: `1px solid ${ipType.isRealPublic ? "rgba(99, 102, 241, 0.3)" : "var(--border-color)"}`,
-                            color: ipType.isRealPublic ? "var(--primary)" : "inherit",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {record.ipAddress || "Unknown"}
-                        </span>
-                        {record.ipAddress && record.ipAddress !== "N/A" && record.ipAddress !== "Unknown" && (
-                          <button
-                            type="button"
-                            onClick={() => handleCopyIp(record.ipAddress)}
-                            title={`Copy IP address ${record.ipAddress}`}
-                            style={{
-                              background: copiedIp === record.ipAddress ? "rgba(34, 197, 94, 0.15)" : "rgba(255, 255, 255, 0.06)",
-                              color: copiedIp === record.ipAddress ? "#22c55e" : "inherit",
-                              border: `1px solid ${copiedIp === record.ipAddress ? "#22c55e" : "var(--border-color)"}`,
-                              borderRadius: "6px",
-                              padding: "0.25rem 0.5rem",
-                              fontSize: "0.75rem",
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.3rem",
-                              transition: "all 0.15s ease",
-                            }}
-                          >
-                            {copiedIp === record.ipAddress ? (
-                              <>
-                                <Check size={12} style={{ color: "#22c55e" }} />
-                                <span>Copied!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy size={12} />
-                                <span>Copy</span>
-                              </>
-                            )}
-                          </button>
-                        )}
-                      </div>
-                      <span style={{ fontSize: "0.72rem", opacity: 0.6, letterSpacing: "0.02em" }}>
-                        {ipType.label}
-                      </span>
-                    </div>
+                    <span
+                      onClick={() => handleCopyIp(record.ipAddress)}
+                      title="Click to copy IP address"
+                      style={{
+                        fontFamily: "monospace",
+                        fontSize: "0.85rem",
+                        fontWeight: 600,
+                        padding: "0.25rem 0.6rem",
+                        borderRadius: "6px",
+                        background: copiedIp === record.ipAddress
+                          ? "rgba(34, 197, 94, 0.15)"
+                          : record.ipAddress && record.ipAddress !== "Google OAuth" && record.ipAddress !== "Unknown"
+                          ? "rgba(99, 102, 241, 0.08)"
+                          : "rgba(255, 255, 255, 0.04)",
+                        border: `1px solid ${
+                          copiedIp === record.ipAddress
+                            ? "#22c55e"
+                            : "var(--border-color)"
+                        }`,
+                        color: copiedIp === record.ipAddress
+                          ? "#22c55e"
+                          : record.ipAddress && record.ipAddress !== "Google OAuth" && record.ipAddress !== "Unknown"
+                          ? "var(--primary)"
+                          : "inherit",
+                        cursor: record.ipAddress && record.ipAddress !== "Unknown" && record.ipAddress !== "N/A" ? "pointer" : "default",
+                        display: "inline-block",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {copiedIp === record.ipAddress ? "Copied!" : (record.ipAddress || "Unknown")}
+                    </span>
                   </td>
 
                   {/* System & Device Column */}
