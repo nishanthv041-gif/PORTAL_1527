@@ -336,12 +336,21 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
       mimeType.startsWith("image/")
     ) {
       fileType = "Photo / Image";
-      const worker = await createWorker("eng");
-      const ret = await worker.recognize(buffer);
-      await worker.terminate();
+      try {
+        const worker = await createWorker("eng");
+        const ret = await worker.recognize(buffer);
+        await worker.terminate();
 
-      const ocrText = ret.data.text || "";
-      parseTextLinesIntoSlots(ocrText, availableSubjects, scannedSlots, warnings);
+        const ocrText = ret.data.text || "";
+        parseTextLinesIntoSlots(ocrText, availableSubjects, scannedSlots, warnings);
+      } catch (ocrErr) {
+        console.warn("Server OCR failed, returning friendly notice:", ocrErr);
+        return {
+          error: "Could not auto-read text from this image directly on the server. Please click '+ Add Slots Manually' or '⚡ Load Schedule Template' to set up the timetable quickly, or upload as Excel/Word/PDF.",
+          fileName,
+          fileType
+        };
+      }
     } else {
       // General text fallback
       const textContent = buffer.toString("utf-8");

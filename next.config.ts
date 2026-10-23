@@ -4,8 +4,10 @@ const cspHeader = `
     default-src 'self';
     script-src 'self' 'unsafe-eval' 'unsafe-inline' https://va.vercel-scripts.com;
     style-src 'self' 'unsafe-inline';
-    img-src 'self' blob: data:;
+    img-src 'self' blob: data: https:;
     font-src 'self' data:;
+    connect-src 'self' blob: data: https: http:;
+    worker-src 'self' blob:;
     object-src 'none';
     base-uri 'self';
     form-action 'self';
@@ -20,6 +22,9 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts'],
+    serverActions: {
+      bodySizeLimit: '25mb',
+    },
   },
   async headers() {
     return [
