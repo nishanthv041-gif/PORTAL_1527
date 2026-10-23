@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/backend/db/prisma";
+import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 
@@ -23,7 +24,7 @@ export type UnifiedNotification = {
   };
 };
 
-export async function getUnifiedNotificationsAction(): Promise<UnifiedNotification[]> {
+export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boolean }): Promise<UnifiedNotification[]> {
   try {
     const session = await getServerSession(getAuthOptions());
     if (!session || !session.user) return [];
@@ -35,9 +36,12 @@ export async function getUnifiedNotificationsAction(): Promise<UnifiedNotificati
 
     // 1. Direct Notifications from Notification table
     const dbNotifications = await prisma.notification.findMany({
-      where: { userId },
+      where: { 
+        userId,
+        ...(options?.unreadOnly ? { isRead: false } : {})
+      },
       orderBy: { createdAt: "desc" },
-      take: 15
+      take: 20
     });
 
     for (const notif of dbNotifications) {
@@ -49,7 +53,11 @@ export async function getUnifiedNotificationsAction(): Promise<UnifiedNotificati
       let badgeLabel = "Notification";
       let badgeColors = { bg: "rgba(99, 102, 241, 0.12)", text: "#6366f1", border: "rgba(99, 102, 241, 0.25)" };
 
-      if (typeStr.includes("MEETING") || titleLower.includes("meeting") || contentLower.includes("meeting")) {
+      if (typeStr.includes("PROGRAM") || titleLower.includes("program")) {
+        category = "GENERAL";
+        badgeLabel = "School Program";
+        badgeColors = { bg: "rgba(168, 85, 247, 0.14)", text: "#9333ea", border: "rgba(168, 85, 247, 0.3)" };
+      } else if (typeStr.includes("MEETING") || titleLower.includes("meeting") || contentLower.includes("meeting")) {
         category = "MEETING";
         badgeLabel = "Meeting";
         badgeColors = { bg: "rgba(245, 158, 11, 0.12)", text: "#d97706", border: "rgba(245, 158, 11, 0.3)" };
@@ -88,13 +96,18 @@ export async function getUnifiedNotificationsAction(): Promise<UnifiedNotificati
         badgeColors = { bg: "rgba(6, 182, 212, 0.12)", text: "#0284c7", border: "rgba(6, 182, 212, 0.25)" };
       }
 
+      let defaultLink = userRole === "PARENT" ? "/dashboard/parent/notifications" : userRole === "TEACHER" ? "/dashboard/teacher/notifications" : "/dashboard/admin/notifications";
+      if (typeStr.includes("PROGRAM")) {
+        defaultLink = userRole === "PARENT" ? "/dashboard/parent/programs" : userRole === "ADMIN" ? "/dashboard/admin/programs" : "/dashboard/teacher/calendar";
+      }
+
       items.push({
         id: `notif-${notif.id}`,
         category,
         title: notif.title,
         description: notif.content,
         timestamp: notif.createdAt.toISOString(),
-        link: notif.link || (userRole === "PARENT" ? "/dashboard/parent/notifications" : userRole === "TEACHER" ? "/dashboard/teacher/notifications" : "/dashboard/admin/notifications"),
+        link: notif.link || defaultLink,
         isRead: notif.isRead,
         badgeLabel,
         badgeColors
@@ -378,6 +391,10 @@ export async function getUnifiedNotificationsAction(): Promise<UnifiedNotificati
     // Sort all notifications by timestamp descending (newest first)
     uniqueItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
+    if (options?.unreadOnly) {
+      return uniqueItems.filter(i => !i.isRead);
+    }
+
     return uniqueItems;
   } catch (error) {
     console.error("Error fetching unified notifications:", error);
@@ -413,8 +430,8 @@ export async function markNotificationReadAction(notificationId: string) {
 }
 
 /**
- * Marks ALL notifications as read for the current user.
- * Called when user clicks "Clear All / Don't Show Again" in the popup.
+ * Marks ALL notifications as read for the current user across the entire portal.
+ * Called when user clicks "Clear All / Don't Show Again" in the popup or on notification pages.
  */
 export async function clearAllNotificationsAction(): Promise<{ success?: boolean; error?: string }> {
   try {
@@ -435,9 +452,40 @@ export async function clearAllNotificationsAction(): Promise<{ success?: boolean
       data: { isRead: true }
     });
 
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/parent/notifications");
+    revalidatePath("/dashboard/teacher/notifications");
+    revalidatePath("/dashboard/admin/notifications");
+
     return { success: true };
   } catch (error) {
     console.error("Error clearing all notifications:", error);
     return { error: "Failed to clear notifications." };
+  }
+}
+
+/**
+ * Deletes all notifications for the current user.
+ */
+export async function deleteAllNotificationsAction(): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session || !session.user) return { error: "Unauthorized" };
+
+    const userId = session.user.id;
+
+    await prisma.notification.deleteMany({
+      where: { userId }
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/parent/notifications");
+    revalidatePath("/dashboard/teacher/notifications");
+    revalidatePath("/dashboard/admin/notifications");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting all notifications:", error);
+    return { error: "Failed to delete notifications." };
   }
 }

@@ -82,11 +82,14 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
 
   let parentLinks = [
     { href: "/dashboard/parent", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
+    { href: "/dashboard/parent/programs", label: "School Programs", icon: <Star size={20} /> },
     { href: "/dashboard/parent/classes", label: "Classes", icon: <GraduationCap size={20} /> },
     { href: "/dashboard/parent/attendance", label: "Attendance", icon: <Users size={20} /> },
     { href: "/dashboard/parent/exams", label: "Exams", icon: <BookOpen size={20} /> },
     { href: "/dashboard/parent/assignments", label: "Assignments", icon: <BookOpen size={20} /> },
     { href: "/dashboard/parent/report-cards", label: "Report Cards", icon: <BookOpen size={20} /> },
+    { href: "/dashboard/parent/announcements", label: "Announcements", icon: <Megaphone size={20} /> },
+    { href: "/dashboard/parent/notifications", label: "Notifications", icon: <Bell size={20} /> },
     { href: "/dashboard/parent/messages", label: "Messages", icon: <MessageSquare size={20} /> },
     { href: "/dashboard/parent/fees", label: "Fees", icon: <BookOpen size={20} /> },
     { href: "/dashboard/parent/timetable", label: "Timetable", icon: <Calendar size={20} /> },

@@ -55,7 +55,7 @@ export default async function DashboardLayout({
 
   const [settings, notifications] = await Promise.all([
     getSystemSettings(),
-    notificationsEnabled ? getUnifiedNotificationsAction() : Promise.resolve([])
+    notificationsEnabled ? getUnifiedNotificationsAction({ unreadOnly: true }) : Promise.resolve([])
   ]);
 
   if (false && settings.MAINTENANCE_MODE === "true" && session?.user?.role !== "ADMIN") {

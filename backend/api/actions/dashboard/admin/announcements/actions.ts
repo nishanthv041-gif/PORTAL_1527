@@ -81,13 +81,24 @@ export async function createAnnouncementAction(formData: FormData) {
           ? "INSTRUCTION" 
           : "ANNOUNCEMENT";
 
+        // Query user roles to set destination links accurately
+        const targetUsers = await prisma.user.findMany({
+          where: { id: { in: targetUserIds } },
+          select: { id: true, role: true }
+        });
+
         await prisma.notification.createMany({
-          data: targetUserIds.map(uid => ({
-            userId: uid,
+          data: targetUsers.map(u => ({
+            userId: u.id,
             title,
             content,
             type: notifType,
-            link: "/dashboard"
+            link: u.role === "PARENT"
+              ? "/dashboard/parent/announcements"
+              : u.role === "TEACHER"
+                ? "/dashboard/teacher/announcements"
+                : "/dashboard/admin/announcements",
+            isRead: false
           }))
         });
       }
@@ -96,6 +107,12 @@ export async function createAnnouncementAction(formData: FormData) {
     }
 
     revalidatePath("/dashboard/admin/announcements");
+    revalidatePath("/dashboard/parent/announcements");
+    revalidatePath("/dashboard/teacher/announcements");
+    revalidatePath("/dashboard/parent/notifications");
+    revalidatePath("/dashboard/teacher/notifications");
+    revalidatePath("/dashboard/admin/notifications");
+    revalidatePath("/dashboard");
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {

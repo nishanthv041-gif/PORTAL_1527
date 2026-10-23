@@ -5,6 +5,7 @@ import styles from "../../dashboard.module.css";
 import { Bell, CheckCircle, Clock, Trash2 } from "lucide-react";
 import MarkReadButton from "./MarkReadButton";
 import ToggleNotifications from "@/frontend/components/ToggleNotifications";
+import ClearAllNotificationsButton from "@/frontend/components/ClearAllNotificationsButton";
 import { toggleNotificationsEnabled, deleteNotificationAction } from "@/backend/api/actions/dashboard/parent/notifications/actions";
 
 export default async function ParentNotificationsPage() {
@@ -24,8 +25,15 @@ export default async function ParentNotificationsPage() {
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1rem' }}>Notifications</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Stay updated with your latest alerts and messages regarding your children.</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+        <div>
+          <h1 className={styles.title} style={{ margin: 0, marginBottom: '0.5rem' }}>Notifications</h1>
+          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>Stay updated with your latest alerts and messages regarding your children.</p>
+        </div>
+        {isEnabled && notifications.length > 0 && (
+          <ClearAllNotificationsButton />
+        )}
+      </div>
 
       <ToggleNotifications 
         userId={session.user.id} 

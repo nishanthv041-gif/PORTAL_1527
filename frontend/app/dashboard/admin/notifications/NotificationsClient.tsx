@@ -4,6 +4,7 @@ import { Bell, Info, AlertTriangle, CheckCircle, XCircle, Clock, Trash2, CheckCh
 import { Notification, User } from "@prisma/client";
 import { deleteNotification, markAllNotificationsRead, toggleNotificationsEnabled } from "@/backend/api/actions/dashboard/admin/notifications/actions";
 import ToggleNotifications from "@/frontend/components/ToggleNotifications";
+import ClearAllNotificationsButton from "@/frontend/components/ClearAllNotificationsButton";
 import { useRouter } from "next/navigation";
 
 type NotificationWithUser = Notification & { user: User };
@@ -31,27 +32,40 @@ export default function NotificationsClient({ notifications, adminUserId, initia
   const handleMarkAllRead = async () => {
     const res = await markAllNotificationsRead(adminUserId);
     if (res.error) alert(res.error);
+    else {
+      localStorage.setItem("srt_portal_notif_cleared_v1", "true");
+      localStorage.setItem("srt_portal_notif_cleared_time", new Date().toISOString());
+      window.dispatchEvent(new CustomEvent("notifications-cleared"));
+      router.refresh();
+    }
   };
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
     <div>
-      <ToggleNotifications 
-        userId={adminUserId} 
-        initialEnabled={initialEnabled} 
-        toggleAction={toggleNotificationsEnabled} 
-      />
-      {unreadCount > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
-          <button
-            onClick={handleMarkAllRead}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: "var(--primary)", color: "var(--primary-fg)", border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500 }}
-          >
-            <CheckCheck size={16} /> Mark All as Read ({unreadCount})
-          </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+        <div style={{ flex: 1, minWidth: '280px' }}>
+          <ToggleNotifications 
+            userId={adminUserId} 
+            initialEnabled={initialEnabled} 
+            toggleAction={toggleNotificationsEnabled} 
+          />
         </div>
-      )}
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          {notifications.length > 0 && (
+            <ClearAllNotificationsButton />
+          )}
+          {unreadCount > 0 && (
+            <button
+              onClick={handleMarkAllRead}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: "var(--primary)", color: "var(--primary-fg)", border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500 }}
+            >
+              <CheckCheck size={16} /> Mark All Read ({unreadCount})
+            </button>
+          )}
+        </div>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '1.5rem' }}>
         {notifications.map(notif => (

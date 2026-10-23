@@ -12,6 +12,7 @@ import { UnifiedNotification, getUnifiedNotificationsAction, markNotificationRea
 
 // Key used in localStorage — unique per portal so it doesn't clash with other apps
 const CLEARED_KEY = "srt_portal_notif_cleared_v1";
+const CLEARED_TIMESTAMP_KEY = "srt_portal_notif_cleared_time";
 const DISMISSED_KEY = "srt_portal_popup_notif_dismissed";
 const FRESH_LOGIN_KEY = "srt_portal_fresh_login";
 
@@ -28,10 +29,19 @@ export default function NotificationPopupModal({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isClearing, setIsClearing] = useState(false);
 
+  // Helper to filter out already-read or already-cleared notifications
+  const filterActiveUnread = (items: UnifiedNotification[]) => {
+    if (!items || items.length === 0) return [];
+    const clearedTimeStr = typeof window !== "undefined" ? localStorage.getItem(CLEARED_TIMESTAMP_KEY) : null;
+    const clearedTime = clearedTimeStr ? new Date(clearedTimeStr).getTime() : 0;
+    return items.filter(n => !n.isRead && new Date(n.timestamp).getTime() > clearedTime);
+  };
+
   // Sync if prop updates
   useEffect(() => {
     if (initialNotifications && initialNotifications.length > 0) {
-      setNotifications(initialNotifications);
+      const activeUnread = filterActiveUnread(initialNotifications);
+      setNotifications(activeUnread);
     }
   }, [initialNotifications]);
 
@@ -42,17 +52,14 @@ export default function NotificationPopupModal({
     // If notifications are disabled by the user's preference, never auto-show
     if (!notificationsEnabled) return;
 
-    // If user has permanently cleared all notifications, never auto-show
-    const isClearedForever = localStorage.getItem(CLEARED_KEY) === "true";
-    if (isClearedForever) return;
-
     // Only load fresh notifications from server if initialNotifications is not already provided
     if (!initialNotifications || initialNotifications.length === 0) {
-      getUnifiedNotificationsAction()
+      getUnifiedNotificationsAction({ unreadOnly: true })
         .then((fresh) => {
           if (!isMounted) return;
-          if (fresh && fresh.length > 0) {
-            setNotifications(fresh);
+          const activeFresh = filterActiveUnread(fresh);
+          if (activeFresh.length > 0) {
+            setNotifications(activeFresh);
 
             const isFreshLogin = sessionStorage.getItem(FRESH_LOGIN_KEY) === "true";
             const isDismissed = sessionStorage.getItem(DISMISSED_KEY) === "true";
@@ -77,8 +84,9 @@ export default function NotificationPopupModal({
     // Also check immediately if initialNotifications already present
     const isFreshLogin = sessionStorage.getItem(FRESH_LOGIN_KEY) === "true";
     const isDismissed = sessionStorage.getItem(DISMISSED_KEY) === "true";
+    const activeInitial = filterActiveUnread(initialNotifications);
 
-    if (initialNotifications && initialNotifications.length > 0) {
+    if (activeInitial.length > 0) {
       if (isFreshLogin) {
         sessionStorage.removeItem(FRESH_LOGIN_KEY);
         sessionStorage.removeItem(DISMISSED_KEY);
@@ -106,11 +114,12 @@ export default function NotificationPopupModal({
         .then((fresh) => {
           if (fresh && fresh.length > 0) {
             setNotifications(fresh);
+            setIsOpen(true);
+          } else {
+            alert("No notifications available right now.");
           }
         })
         .catch(() => {});
-      setIsOpen(true);
-      // When manually opened, clear any dismissed state so user sees fresh list
       sessionStorage.removeItem(DISMISSED_KEY);
     };
 
@@ -176,8 +185,9 @@ export default function NotificationPopupModal({
       setIsClearing(false);
     }
 
-    // Permanently suppress auto-popup for this user on this device
+    // Permanently suppress auto-popup for this user on this device for currently cleared notifications
     localStorage.setItem(CLEARED_KEY, "true");
+    localStorage.setItem(CLEARED_TIMESTAMP_KEY, new Date().toISOString());
     sessionStorage.setItem(DISMISSED_KEY, "true");
 
     // Clear local state and close

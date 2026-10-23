@@ -3,7 +3,7 @@ import { prisma } from "@/backend/db/prisma";
 import styles from "../dashboard.module.css";
 import { 
   BookOpen, Calendar, Bell, FileText, 
-  GraduationCap, Clock, Building2, Home 
+  GraduationCap, Clock, Building2, Home, Star 
 } from "lucide-react";
 import ParentChildBanner from "./ParentChildBanner";
 import Link from "next/link";
@@ -156,6 +156,18 @@ export default async function ParentDashboard({
                 <span className={styles.statLabel}>Notices & Updates</span>
                 <span className={styles.statValue} style={{ fontSize: '1rem', marginTop: '0.25rem', color: 'var(--text-secondary)' }}>
                   School Announcements
+                </span>
+              </div>
+            </div>
+          </Link>
+
+          <Link href="/dashboard/parent/programs" prefetch={true} style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className={styles.statCard} style={{ cursor: 'pointer', transition: 'transform 0.2s', border: '1px solid rgba(168, 85, 247, 0.25)' }}>
+              <div className={styles.statIcon} style={{ color: '#9333ea' }}><Star size={24} /></div>
+              <div className={styles.statInfo}>
+                <span className={styles.statLabel}>School Programs</span>
+                <span className={styles.statValue} style={{ fontSize: '1rem', marginTop: '0.25rem', color: '#9333ea', fontWeight: 600 }}>
+                  Events &amp; Intimations
                 </span>
               </div>
             </div>

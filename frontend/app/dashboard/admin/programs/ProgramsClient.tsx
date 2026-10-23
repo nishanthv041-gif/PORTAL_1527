@@ -1,8 +1,6 @@
-"use client";
-
 import { useState } from "react";
-import { Plus, Eye, EyeOff, Calendar as CalendarIcon, MapPin, Clock, Trash2, ChevronDown, ChevronUp, History } from "lucide-react";
-import { createProgramAction, updateProgramStatusAction, deleteProgramAction } from "@/backend/api/actions/dashboard/admin/programs/actions";
+import { Plus, Eye, EyeOff, Calendar as CalendarIcon, MapPin, Clock, Trash2, ChevronDown, ChevronUp, History, Bell, Send } from "lucide-react";
+import { createProgramAction, updateProgramStatusAction, deleteProgramAction, sendProgramNotificationToAllAction } from "@/backend/api/actions/dashboard/admin/programs/actions";
 import { CalendarEvent } from "@prisma/client";
 
 export default function ProgramsClient({ programs }: { programs: CalendarEvent[] }) {
@@ -12,6 +10,7 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
   // Track which card has its action menu open
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [notifyingId, setNotifyingId] = useState<string | null>(null);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -29,6 +28,19 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
       alert(res.error);
     } else {
       setShowCreate(false);
+    }
+  };
+
+  const handleSendNotification = async (id: string, title: string) => {
+    if (!confirm(`Send school program notification for "${title}" to everyone (all parents, teachers & staff)?`)) return;
+    setNotifyingId(id);
+    setOpenMenuId(null);
+    const res = await sendProgramNotificationToAllAction(id);
+    setNotifyingId(null);
+    if (res.error) {
+      alert(res.error);
+    } else {
+      alert(`✅ Notification sent to everyone! (${res.count ?? "all"} users notified)`);
     }
   };
 
@@ -137,6 +149,34 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
                       overflow: 'hidden'
                     }}
                   >
+                    {/* Send Notification to All */}
+                    <button
+                      onClick={() => handleSendNotification(prog.id, prog.title)}
+                      disabled={notifyingId === prog.id}
+                      style={{
+                        width: '100%',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '0.6rem 1rem',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.6rem',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        color: 'var(--primary)',
+                        transition: 'background 0.12s ease'
+                      }}
+                      onMouseOver={e => e.currentTarget.style.background = 'var(--primary-bg)'}
+                      onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <Bell size={15} />
+                      {notifyingId === prog.id ? 'Sending...' : 'Send Notification to All'}
+                    </button>
+
+                    <div style={{ height: '1px', background: 'var(--border-color)', margin: '0 0.5rem' }} />
+
                     {/* Publish / Unpublish */}
                     <button
                       onClick={() => togglePublish(prog.id, prog.isPublished)}
@@ -218,6 +258,7 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
         <div style={{ padding: '0.75rem 1.5rem', background: 'rgba(0,0,0,0.02)', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: prog.isPublished ? 'var(--success)' : 'var(--text-secondary)' }}>
           {prog.isPublished ? <Eye size={14} /> : <EyeOff size={14} />}
           <span style={{ fontWeight: 600 }}>{prog.isPublished ? 'Published' : 'Draft — Not visible to parents/teachers'}</span>
+          {notifyingId === prog.id && <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>Notifying all...</span>}
           {isDeleting && <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 600 }}>Deleting...</span>}
         </div>
       </div>
@@ -270,6 +311,12 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingTop: '1.5rem' }}>
               <input type="checkbox" name="isPublished" value="true" defaultChecked style={{ width: '1rem', height: '1rem' }} />
               <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>Publish immediately</label>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', gridColumn: '1 / -1', padding: '0.75rem 1rem', background: 'rgba(99, 102, 241, 0.06)', borderRadius: '8px', border: '1px solid rgba(99, 102, 241, 0.15)' }}>
+              <input type="checkbox" id="notifyAllCheck" name="notifyAll" value="true" defaultChecked style={{ width: '1.1rem', height: '1.1rem', cursor: 'pointer' }} />
+              <label htmlFor="notifyAllCheck" style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Bell size={16} /> Send notification to everyone (all parents, teachers &amp; staff)
+              </label>
             </div>
             <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
               <button disabled={isSubmitting} type="submit" style={{ padding: '0.75rem 2rem', backgroundColor: "var(--success)", color: "var(--success-fg)", border: 'none', borderRadius: '8px', fontWeight: 500, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
