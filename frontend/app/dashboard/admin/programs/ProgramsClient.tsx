@@ -1,13 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Eye, EyeOff, Calendar as CalendarIcon, MapPin, Clock, Trash2 } from "lucide-react";
+import { Plus, Eye, EyeOff, Calendar as CalendarIcon, MapPin, Clock, Trash2, ChevronDown, ChevronUp, History } from "lucide-react";
 import { createProgramAction, updateProgramStatusAction, deleteProgramAction } from "@/backend/api/actions/dashboard/admin/programs/actions";
 import { CalendarEvent } from "@prisma/client";
 
 export default function ProgramsClient({ programs }: { programs: CalendarEvent[] }) {
   const [showCreate, setShowCreate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPrevious, setShowPrevious] = useState(false);
+  // Track which card has its action menu open
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const upcomingPrograms = programs.filter(p => new Date(p.date) >= today);
+  const previousPrograms = programs.filter(p => new Date(p.date) < today);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -25,20 +35,200 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
   const togglePublish = async (id: string, currentStatus: boolean) => {
     const res = await updateProgramStatusAction(id, !currentStatus);
     if (res.error) alert(res.error);
+    setOpenMenuId(null);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this program?")) {
-      const res = await deleteProgramAction(id);
-      if (res.error) alert(res.error);
-    }
+  const handleDelete = async (id: string, title: string) => {
+    if (!confirm(`Delete "${title}"?\n\nThis action cannot be undone.`)) return;
+    setDeletingId(id);
+    setOpenMenuId(null);
+    const res = await deleteProgramAction(id);
+    setDeletingId(null);
+    if (res.error) alert(res.error);
+  };
+
+  const toggleMenu = (id: string) => {
+    setOpenMenuId(prev => (prev === id ? null : id));
+  };
+
+  const ProgramCard = ({ prog }: { prog: CalendarEvent }) => {
+    const isPast = new Date(prog.date) < today;
+    const isMenuOpen = openMenuId === prog.id;
+    const isDeleting = deletingId === prog.id;
+
+    return (
+      <div
+        key={prog.id}
+        style={{
+          background: 'var(--card-bg)',
+          borderRadius: '12px',
+          border: `1px solid ${isPast ? 'var(--border-color)' : 'var(--border-color)'}`,
+          overflow: 'visible',
+          display: 'flex',
+          flexDirection: 'column',
+          opacity: isDeleting ? 0.5 : 1,
+          transition: 'opacity 0.2s ease',
+          position: 'relative'
+        }}
+      >
+        <div style={{ padding: '1.5rem', flex: 1 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, flex: 1, marginRight: '0.75rem' }}>{prog.title}</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+              <span style={{
+                fontSize: '0.72rem',
+                padding: '0.2rem 0.55rem',
+                borderRadius: '12px',
+                background: isPast
+                  ? 'rgba(107, 114, 128, 0.1)'
+                  : prog.status === 'UPCOMING'
+                    ? 'var(--primary-bg)'
+                    : 'rgba(107, 114, 128, 0.1)',
+                color: isPast
+                  ? 'var(--text-secondary)'
+                  : prog.status === 'UPCOMING'
+                    ? 'var(--primary)'
+                    : 'var(--text-secondary)',
+                fontWeight: 600,
+                textTransform: 'uppercase' as const,
+                letterSpacing: '0.03em'
+              }}>
+                {isPast ? 'Past' : prog.status}
+              </span>
+
+              {/* Options Menu Button */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => toggleMenu(prog.id)}
+                  title="Options"
+                  disabled={isDeleting}
+                  style={{
+                    background: isMenuOpen ? 'var(--primary-bg)' : 'rgba(0,0,0,0.04)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    color: isMenuOpen ? 'var(--primary)' : 'var(--text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.2rem',
+                    padding: '0.3rem 0.55rem',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  Options
+                  {isMenuOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                </button>
+
+                {/* Dropdown menu */}
+                {isMenuOpen && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 6px)',
+                      right: 0,
+                      background: 'var(--card-bg)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '10px',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                      zIndex: 50,
+                      minWidth: '180px',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {/* Publish / Unpublish */}
+                    <button
+                      onClick={() => togglePublish(prog.id, prog.isPublished)}
+                      style={{
+                        width: '100%',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '0.6rem 1rem',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.6rem',
+                        fontSize: '0.85rem',
+                        fontWeight: 500,
+                        color: prog.isPublished ? 'var(--success)' : 'var(--text-secondary)',
+                        transition: 'background 0.12s ease'
+                      }}
+                      onMouseOver={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
+                      onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      {prog.isPublished ? <><Eye size={15} /> Unpublish</> : <><EyeOff size={15} /> Publish</>}
+                    </button>
+
+                    <div style={{ height: '1px', background: 'var(--border-color)', margin: '0 0.5rem' }} />
+
+                    {/* Delete */}
+                    <button
+                      onClick={() => handleDelete(prog.id, prog.title)}
+                      style={{
+                        width: '100%',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '0.6rem 1rem',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.6rem',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        color: 'var(--danger)',
+                        transition: 'background 0.12s ease'
+                      }}
+                      onMouseOver={e => e.currentTarget.style.background = 'rgba(239,68,68,0.07)'}
+                      onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <Trash2 size={15} />
+                      Delete Program
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: prog.description ? '1rem' : 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+              <CalendarIcon size={15} /> {new Date(prog.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+              <Clock size={15} /> {prog.startTime} – {prog.endTime}
+            </div>
+            {prog.location && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                <MapPin size={15} /> {prog.location}
+              </div>
+            )}
+          </div>
+
+          {prog.description && (
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.55, background: 'rgba(0,0,0,0.02)', padding: '0.85rem 1rem', borderRadius: '8px', margin: '1rem 0 0 0' }}>
+              {prog.description}
+            </p>
+          )}
+        </div>
+
+        {/* Card Footer — publish status indicator */}
+        <div style={{ padding: '0.75rem 1.5rem', background: 'rgba(0,0,0,0.02)', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: prog.isPublished ? 'var(--success)' : 'var(--text-secondary)' }}>
+          {prog.isPublished ? <Eye size={14} /> : <EyeOff size={14} />}
+          <span style={{ fontWeight: 600 }}>{prog.isPublished ? 'Published' : 'Draft — Not visible to parents/teachers'}</span>
+          {isDeleting && <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 600 }}>Deleting...</span>}
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div>
+    <div onClick={() => { if (openMenuId) setOpenMenuId(null); }}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '2rem' }}>
-        <button 
-          onClick={() => setShowCreate(!showCreate)}
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowCreate(!showCreate); }}
           style={{ padding: '0.75rem 1.5rem', backgroundColor: "var(--primary)", color: "var(--primary-fg)", border: 'none', borderRadius: '8px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
         >
           {showCreate ? "Cancel" : <><Plus size={18} /> Add Program</>}
@@ -46,7 +236,7 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
       </div>
 
       {showCreate && (
-        <div style={{ background: 'var(--card-bg)', borderRadius: '12px', padding: '2rem', border: '1px solid var(--border-color)', marginBottom: '2rem' }}>
+        <div onClick={e => e.stopPropagation()} style={{ background: 'var(--card-bg)', borderRadius: '12px', padding: '2rem', border: '1px solid var(--border-color)', marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem' }}>Add New Program</h2>
           <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
             <div>
@@ -90,69 +280,58 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
-        {programs.map(prog => (
-          <div key={prog.id} style={{ background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '1.5rem', flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>{prog.title}</h3>
-                <span style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', borderRadius: '12px', background: prog.status === 'UPCOMING' ? 'var(--primary-bg)' : 'rgba(107, 114, 128, 0.1)', color: prog.status === 'UPCOMING' ? 'var(--primary)' : "var(--text-secondary)", fontWeight: 600 }}>
-                  {prog.status}
-                </span>
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                  <CalendarIcon size={16} /> {new Date(prog.date).toLocaleDateString()}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                  <Clock size={16} /> {prog.startTime} - {prog.endTime}
-                </div>
-                {prog.location && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                    <MapPin size={16} /> {prog.location}
-                  </div>
-                )}
-              </div>
-              
-              {prog.description && (
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.5, background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '8px', margin: 0 }}>
-                  {prog.description}
-                </p>
-              )}
-            </div>
-            
-            <div style={{ padding: '1rem 1.5rem', background: 'rgba(0,0,0,0.02)', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <button 
-                onClick={() => togglePublish(prog.id, prog.isPublished)}
-                style={{ 
-                  background: 'transparent', 
-                  color: prog.isPublished ? "var(--success)" : "var(--text-secondary)", 
-                  border: 'none', 
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  cursor: 'pointer',
-                  padding: 0
-                }}
-              >
-                {prog.isPublished ? <><Eye size={16} /> Published</> : <><EyeOff size={16} /> Draft</>}
-              </button>
-              
-              <button onClick={() => handleDelete(prog.id)} style={{ background: 'transparent', border: 'none', color: "var(--danger)", cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                <Trash2 size={16} />
-              </button>
-            </div>
+      {/* ── Upcoming Programs ─────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.5rem' }}>
+        {upcomingPrograms.map(prog => (
+          <div key={prog.id} onClick={e => e.stopPropagation()}>
+            <ProgramCard prog={prog} />
           </div>
         ))}
-        {programs.length === 0 && (
+        {upcomingPrograms.length === 0 && (
           <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)', background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-            <p>No programs scheduled.</p>
+            <p>No upcoming programs scheduled.</p>
           </div>
         )}
       </div>
+
+      {/* ── Previous / Past Programs ──────────────────────────── */}
+      {previousPrograms.length > 0 && (
+        <div style={{ marginTop: '3rem' }}>
+          <button
+            onClick={e => { e.stopPropagation(); setShowPrevious(v => !v); }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.6rem',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              fontSize: '1rem',
+              fontWeight: 700,
+              padding: '0.5rem 0',
+              marginBottom: '1.25rem',
+              transition: 'color 0.15s ease'
+            }}
+            onMouseOver={e => e.currentTarget.style.color = 'var(--foreground)'}
+            onMouseOut={e => e.currentTarget.style.color = 'var(--text-secondary)'}
+          >
+            <History size={18} />
+            Previous Programs ({previousPrograms.length})
+            {showPrevious ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+
+          {showPrevious && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.5rem' }}>
+              {previousPrograms.map(prog => (
+                <div key={prog.id} onClick={e => e.stopPropagation()}>
+                  <ProgramCard prog={prog} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

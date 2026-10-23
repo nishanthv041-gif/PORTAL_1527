@@ -411,3 +411,33 @@ export async function markNotificationReadAction(notificationId: string) {
     return { error: "Failed to mark as read" };
   }
 }
+
+/**
+ * Marks ALL notifications as read for the current user.
+ * Called when user clicks "Clear All / Don't Show Again" in the popup.
+ */
+export async function clearAllNotificationsAction(): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session || !session.user) return { error: "Unauthorized" };
+
+    const userId = session.user.id;
+
+    // Mark all direct DB notifications as read
+    await prisma.notification.updateMany({
+      where: { userId, isRead: false },
+      data: { isRead: true }
+    });
+
+    // Mark all direct messages as read
+    await prisma.message.updateMany({
+      where: { receiverId: userId, isRead: false },
+      data: { isRead: true }
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error clearing all notifications:", error);
+    return { error: "Failed to clear notifications." };
+  }
+}

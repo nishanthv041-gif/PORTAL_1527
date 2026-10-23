@@ -4,6 +4,10 @@ import styles from "./Topbar.module.css";
 import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
 import { ArrowLeft, Bell } from "lucide-react";
+import { useEffect, useState } from "react";
+
+// Matches the key used in NotificationPopupModal
+const CLEARED_KEY = "srt_portal_notif_cleared_v1";
 
 export default function Topbar({
   user,
@@ -12,6 +16,20 @@ export default function Topbar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [showRedDot, setShowRedDot] = useState(false);
+
+  // On mount, check if notifications have been permanently cleared
+  useEffect(() => {
+    const isClearedForever = localStorage.getItem(CLEARED_KEY) === "true";
+    setShowRedDot(!isClearedForever);
+
+    // Listen for the event dispatched by NotificationPopupModal on "Clear All"
+    const handleCleared = () => {
+      setShowRedDot(false);
+    };
+    window.addEventListener("notifications-cleared", handleCleared);
+    return () => window.removeEventListener("notifications-cleared", handleCleared);
+  }, []);
 
   // Create a readable title from pathname
   const getPageTitle = () => {
@@ -64,7 +82,10 @@ export default function Topbar({
       <div className={styles.userInfo}>
         <button
           type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent("open-notification-popup"))}
+          onClick={() => {
+            // Re-enable popup for this manual click by removing the session dismissed flag
+            window.dispatchEvent(new CustomEvent("open-notification-popup"));
+          }}
           title="View Notifications"
           aria-label="View Notifications"
           style={{
@@ -94,16 +115,18 @@ export default function Topbar({
           }}
         >
           <Bell size={18} />
-          <span style={{
-            position: 'absolute',
-            top: '4px',
-            right: '4px',
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            backgroundColor: '#ef4444',
-            border: '1.5px solid var(--card-bg, #ffffff)'
-          }} />
+          {showRedDot && (
+            <span style={{
+              position: 'absolute',
+              top: '4px',
+              right: '4px',
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: '#ef4444',
+              border: '1.5px solid var(--card-bg, #ffffff)'
+            }} />
+          )}
         </button>
 
         <ThemeToggle style={{ marginRight: "0.25rem" }} />

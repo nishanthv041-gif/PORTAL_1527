@@ -38,9 +38,24 @@ export default async function DashboardLayout({
     }
   }
 
+  // Fetch notificationsEnabled directly from DB to ensure it's always fresh
+  // (session token might be stale after toggle)
+  let notificationsEnabled = true;
+  try {
+    if (session?.user?.id) {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { notificationsEnabled: true }
+      });
+      notificationsEnabled = dbUser?.notificationsEnabled ?? true;
+    }
+  } catch {
+    // fall back to true
+  }
+
   const [settings, notifications] = await Promise.all([
     getSystemSettings(),
-    getUnifiedNotificationsAction()
+    notificationsEnabled ? getUnifiedNotificationsAction() : Promise.resolve([])
   ]);
 
   if (false && settings.MAINTENANCE_MODE === "true" && session?.user?.role !== "ADMIN") {
@@ -135,7 +150,7 @@ export default async function DashboardLayout({
   return (
     <SettingsProvider settings={settings}>
       <NavigationProgressBar />
-      <NotificationPopupModal initialNotifications={notifications} />
+      <NotificationPopupModal initialNotifications={notifications} notificationsEnabled={notificationsEnabled} />
       <div className={styles.container}>
         {settings.SCHOOL_LOGO && (
           <>

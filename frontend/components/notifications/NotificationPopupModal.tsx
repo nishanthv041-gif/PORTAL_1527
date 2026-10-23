@@ -5,20 +5,28 @@ import { useRouter } from "next/navigation";
 import { 
   Bell, ChevronLeft, ChevronRight, ExternalLink, 
   Megaphone, MessageSquare, Award, BookOpen, Calendar, Info,
-  FileText, Clock, Users, AlertCircle
+  FileText, Clock, Users, AlertCircle, BellOff, CheckCheck, Trash2
 } from "lucide-react";
 import styles from "./NotificationPopupModal.module.css";
-import { UnifiedNotification, getUnifiedNotificationsAction, markNotificationReadAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { UnifiedNotification, getUnifiedNotificationsAction, markNotificationReadAction, clearAllNotificationsAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+
+// Key used in localStorage — unique per portal so it doesn't clash with other apps
+const CLEARED_KEY = "srt_portal_notif_cleared_v1";
+const DISMISSED_KEY = "srt_portal_popup_notif_dismissed";
+const FRESH_LOGIN_KEY = "srt_portal_fresh_login";
 
 export default function NotificationPopupModal({
-  initialNotifications = []
+  initialNotifications = [],
+  notificationsEnabled = true,
 }: {
   initialNotifications?: UnifiedNotification[];
+  notificationsEnabled?: boolean;
 }) {
   const router = useRouter();
   const [notifications, setNotifications] = useState<UnifiedNotification[]>(initialNotifications);
   const [isOpen, setIsOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isClearing, setIsClearing] = useState(false);
 
   // Sync if prop updates
   useEffect(() => {
@@ -31,6 +39,13 @@ export default function NotificationPopupModal({
   useEffect(() => {
     let isMounted = true;
 
+    // If notifications are disabled by the user's preference, never auto-show
+    if (!notificationsEnabled) return;
+
+    // If user has permanently cleared all notifications, never auto-show
+    const isClearedForever = localStorage.getItem(CLEARED_KEY) === "true";
+    if (isClearedForever) return;
+
     // Only load fresh notifications from server if initialNotifications is not already provided
     if (!initialNotifications || initialNotifications.length === 0) {
       getUnifiedNotificationsAction()
@@ -39,13 +54,13 @@ export default function NotificationPopupModal({
           if (fresh && fresh.length > 0) {
             setNotifications(fresh);
 
-            const isFreshLogin = sessionStorage.getItem("srt_portal_fresh_login") === "true";
-            const isDismissed = sessionStorage.getItem("srt_portal_popup_notif_dismissed") === "true";
+            const isFreshLogin = sessionStorage.getItem(FRESH_LOGIN_KEY) === "true";
+            const isDismissed = sessionStorage.getItem(DISMISSED_KEY) === "true";
 
             // If user just logged in or hasn't dismissed yet, pop up automatically!
             if (isFreshLogin) {
-              sessionStorage.removeItem("srt_portal_fresh_login");
-              sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
+              sessionStorage.removeItem(FRESH_LOGIN_KEY);
+              sessionStorage.removeItem(DISMISSED_KEY);
               setTimeout(() => {
                 if (isMounted) setIsOpen(true);
               }, 350);
@@ -60,13 +75,13 @@ export default function NotificationPopupModal({
     }
 
     // Also check immediately if initialNotifications already present
-    const isFreshLogin = sessionStorage.getItem("srt_portal_fresh_login") === "true";
-    const isDismissed = sessionStorage.getItem("srt_portal_popup_notif_dismissed") === "true";
+    const isFreshLogin = sessionStorage.getItem(FRESH_LOGIN_KEY) === "true";
+    const isDismissed = sessionStorage.getItem(DISMISSED_KEY) === "true";
 
     if (initialNotifications && initialNotifications.length > 0) {
       if (isFreshLogin) {
-        sessionStorage.removeItem("srt_portal_fresh_login");
-        sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
+        sessionStorage.removeItem(FRESH_LOGIN_KEY);
+        sessionStorage.removeItem(DISMISSED_KEY);
         const timer = setTimeout(() => {
           if (isMounted) setIsOpen(true);
         }, 350);
@@ -82,7 +97,7 @@ export default function NotificationPopupModal({
     return () => {
       isMounted = false;
     };
-  }, [initialNotifications]);
+  }, [initialNotifications, notificationsEnabled]);
 
   // Listen for manual open trigger from Topbar Bell button
   useEffect(() => {
@@ -95,6 +110,8 @@ export default function NotificationPopupModal({
         })
         .catch(() => {});
       setIsOpen(true);
+      // When manually opened, clear any dismissed state so user sees fresh list
+      sessionStorage.removeItem(DISMISSED_KEY);
     };
 
     window.addEventListener("open-notification-popup", handleManualOpen);
@@ -110,7 +127,7 @@ export default function NotificationPopupModal({
   const handleClose = () => {
     setIsOpen(false);
     // Mark as dismissed for the current session so it doesn't pop up on every route change
-    sessionStorage.setItem("srt_portal_popup_notif_dismissed", "true");
+    sessionStorage.setItem(DISMISSED_KEY, "true");
   };
 
   const handleOpen = async () => {
@@ -123,7 +140,7 @@ export default function NotificationPopupModal({
 
     // Dismiss modal and navigate directly to target action
     setIsOpen(false);
-    sessionStorage.setItem("srt_portal_popup_notif_dismissed", "true");
+    sessionStorage.setItem(DISMISSED_KEY, "true");
 
     if (current.link) {
       router.push(current.link);
@@ -140,6 +157,38 @@ export default function NotificationPopupModal({
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
     }
+  };
+
+  /**
+   * Clears ALL notifications permanently:
+   * - Marks all as read on the server
+   * - Sets localStorage flag so the popup never auto-shows again
+   * - Closes the modal
+   * User can still manually click the bell to open it.
+   */
+  const handleClearAll = async () => {
+    setIsClearing(true);
+    try {
+      await clearAllNotificationsAction();
+    } catch {
+      // Silent fail — still clear locally
+    } finally {
+      setIsClearing(false);
+    }
+
+    // Permanently suppress auto-popup for this user on this device
+    localStorage.setItem(CLEARED_KEY, "true");
+    sessionStorage.setItem(DISMISSED_KEY, "true");
+
+    // Clear local state and close
+    setNotifications([]);
+    setIsOpen(false);
+
+    // Dispatch event to hide the red dot on the bell
+    window.dispatchEvent(new CustomEvent("notifications-cleared"));
+
+    // Refresh the page so notification counts update
+    router.refresh();
   };
 
   // Icon for category
@@ -253,7 +302,7 @@ export default function NotificationPopupModal({
           </div>
         )}
 
-        {/* Action Buttons exactly matching the user mockup (Blue Open, Red Close) */}
+        {/* Action Buttons: Open (Blue), Close (Red) */}
         <div className={styles.actionButtonGroup}>
           <button
             type="button"
@@ -272,6 +321,29 @@ export default function NotificationPopupModal({
             title="Close this notification"
           >
             <span>Close</span>
+          </button>
+        </div>
+
+        {/* Clear All & Don't Show Again — secondary row */}
+        <div className={styles.clearAllRow}>
+          <button
+            type="button"
+            onClick={handleClearAll}
+            disabled={isClearing}
+            className={styles.clearAllBtn}
+            title="Mark all notifications as read and stop auto-showing this popup"
+          >
+            {isClearing ? (
+              <>
+                <span className={styles.spinner} />
+                <span>Clearing...</span>
+              </>
+            ) : (
+              <>
+                <CheckCheck size={14} />
+                <span>Clear All &amp; Don&apos;t Show Again</span>
+              </>
+            )}
           </button>
         </div>
       </div>
