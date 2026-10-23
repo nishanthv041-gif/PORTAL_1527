@@ -54,7 +54,7 @@ export async function sendSecurityReportEmail({
   timestamp,
   success,
   recipientEmail,
-  ccAdmin = true,
+  ccAdmin = false,
 }: {
   accountEmail: string;
   ipAddress: string | null;
@@ -211,7 +211,7 @@ export async function sendStudentReportCardEmail({
   subjectMarks = [],
   remarks,
   reportCardUrl = "https://nipoportal.vercel.app/dashboard/parent/report-cards",
-  ccAdmin = true,
+  ccAdmin = false,
 }: {
   parentEmail: string;
   parentName?: string | null;

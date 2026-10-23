@@ -110,7 +110,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
   // Modal State
   const [selectedRecord, setSelectedRecord] = useState<LoginAttempt | null>(null);
   const [recipientEmail, setRecipientEmail] = useState("");
-  const [modalCcAdmin, setModalCcAdmin] = useState(true);
+  const [modalCcAdmin, setModalCcAdmin] = useState(false);
   const [isSendingModal, setIsSendingModal] = useState(false);
   const [modalFeedback, setModalFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -210,7 +210,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
         record.timestamp,
         record.success,
         record.email,
-        true, // ccAdmin: always keep admin in loop
+        false, // ccAdmin: false - send exclusively to the reporting person, not to me/admin
         record.userAgent
       );
 
@@ -224,8 +224,8 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
         setSentSuccessRowId(record.id);
         setGlobalBanner({
           type: "success",
-          message: `Security report email sent to ${record.email}!`,
-          details: "Delivered via SMTP (a confirmation copy was also sent to nishanthv041@gmail.com). Note: Institutional accounts (@bitsathy.ac.in) may place external emails in Spam/Junk folder.",
+          message: `Security report email sent directly to ${record.email}!`,
+          details: `Dispatched directly to ${record.email} via SMTP. Note: Institutional accounts (@bitsathy.ac.in) may place external emails in Spam/Junk folder.`,
         });
         // Automatically sync fresh data
         router.refresh();
@@ -248,7 +248,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
     setSelectedRecord(record);
     const isValid = record.email && record.email.includes("@") && !record.email.includes("unknown");
     setRecipientEmail(isValid ? record.email : "");
-    setModalCcAdmin(true);
+    setModalCcAdmin(false);
     setModalFeedback(null);
   };
 
@@ -284,13 +284,13 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
       } else {
         setModalFeedback({
           type: "success",
-          message: `Security report sent to ${targetRecipient}! ${modalCcAdmin ? "(Copy sent to nishanthv041@gmail.com)" : ""}`,
+          message: `Security report sent directly to ${targetRecipient}!`,
         });
         setSentSuccessRowId(selectedRecord.id);
         setGlobalBanner({
           type: "success",
-          message: `Security report sent to ${targetRecipient}!`,
-          details: `Delivered via SMTP${modalCcAdmin ? " (confirmation copy sent to nishanthv041@gmail.com)" : ""}. Note: If not seen in Inbox, check Spam/Junk folder.`,
+          message: `Security report sent directly to ${targetRecipient}!`,
+          details: `Delivered via SMTP directly to ${targetRecipient}. Note: If not seen in Inbox, check Spam/Junk folder.`,
         });
         // Auto sync
         router.refresh();
@@ -663,7 +663,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                         type="button"
                         disabled={sendingRowId === record.id}
                         onClick={() => handleDirectReport(record)}
-                        title={`Send security report email directly to ${record.email} and admin`}
+                        title={`Send security report email directly to ${record.email}`}
                         style={{
                           padding: "0.45rem 0.85rem",
                           backgroundColor: sentSuccessRowId === record.id ? "#16a34a" : "var(--primary)",
@@ -838,7 +838,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                   fontSize: "0.9rem",
                 }}
               />
-              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
                 {selectedRecord.email && !selectedRecord.email.includes("unknown") && (
                   <button
                     type="button"
@@ -847,35 +847,23 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                       fontSize: "0.75rem",
                       padding: "0.3rem 0.6rem",
                       borderRadius: "4px",
-                      background: "rgba(255,255,255,0.06)",
-                      border: "1px solid var(--border-color)",
-                      color: "inherit",
+                      background: "rgba(99, 102, 241, 0.1)",
+                      border: "1px solid var(--primary)",
+                      color: "var(--primary)",
                       cursor: "pointer",
+                      fontWeight: 600,
                     }}
                   >
-                    Use Account Email ({selectedRecord.email})
+                    Reset to Reporting Person ({selectedRecord.email})
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setRecipientEmail("nishanthv041@gmail.com")}
-                  style={{
-                    fontSize: "0.75rem",
-                    padding: "0.3rem 0.6rem",
-                    borderRadius: "4px",
-                    background: "rgba(99, 102, 241, 0.1)",
-                    border: "1px solid var(--primary)",
-                    color: "var(--primary)",
-                    cursor: "pointer",
-                    fontWeight: 500,
-                  }}
-                >
-                  Send to Admin (nishanthv041@gmail.com)
-                </button>
+                <span style={{ fontSize: "0.75rem", opacity: 0.7 }}>
+                  Report will be delivered directly to the reporting person.
+                </span>
               </div>
             </div>
 
-            {/* CC Admin Checkbox */}
+            {/* CC Admin Checkbox (Disabled/Off by default) */}
             <div style={{ marginBottom: "1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <input
                 type="checkbox"
@@ -884,8 +872,8 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
                 onChange={(e) => setModalCcAdmin(e.target.checked)}
                 style={{ cursor: "pointer", width: 16, height: 16 }}
               />
-              <label htmlFor="modalCcAdmin" style={{ fontSize: "0.825rem", cursor: "pointer", opacity: 0.9 }}>
-                Send confirmation copy to Admin (<code>nishanthv041@gmail.com</code>)
+              <label htmlFor="modalCcAdmin" style={{ fontSize: "0.825rem", cursor: "pointer", opacity: 0.8 }}>
+                Also send a copy to Admin (<code>nishanthv041@gmail.com</code>)
               </label>
             </div>
 

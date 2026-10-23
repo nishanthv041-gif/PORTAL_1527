@@ -8,7 +8,7 @@ export async function sendReportEmailAction(
   timestamp: Date | string,
   success: boolean,
   customRecipient?: string,
-  ccAdmin: boolean = true,
+  ccAdmin: boolean = false,
   userAgent?: string | null
 ) {
   try {

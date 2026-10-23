@@ -126,7 +126,8 @@ export async function sendReportCardToParentAction(studentId: string) {
             percentage,
             grade,
             subjectMarks,
-            reportCardUrl: `https://nipoportal.vercel.app/dashboard/parent/report-cards/${student.id}`
+            reportCardUrl: `https://nipoportal.vercel.app/dashboard/parent/report-cards/${student.id}`,
+            ccAdmin: false,
           });
           if (emailRes.success) {
             sentRecipients.push(parentUser.email);
@@ -284,7 +285,8 @@ export async function sendClassReportCardsToAllParentsAction(classId: string) {
               percentage,
               grade,
               subjectMarks,
-              reportCardUrl: `https://nipoportal.vercel.app/dashboard/parent/report-cards/${student.id}`
+              reportCardUrl: `https://nipoportal.vercel.app/dashboard/parent/report-cards/${student.id}`,
+              ccAdmin: false,
             });
             if (emailRes.success) {
               totalEmailsSent++;
