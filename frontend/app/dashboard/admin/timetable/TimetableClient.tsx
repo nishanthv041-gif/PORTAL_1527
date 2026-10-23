@@ -216,12 +216,40 @@ export default function TimetableClient({
                   });
 
                   return (
-                    <tr key={day}>
-                      <td style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)', fontWeight: 600, background: 'rgba(0,0,0,0.02)' }}>
-                        {day}
-                        <div style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-secondary)' }}>
+                    <tr key={day} style={{ backgroundColor: dayEvents.length > 0 ? 'rgba(99, 102, 241, 0.02)' : 'transparent' }}>
+                      <td style={{ padding: '0.85rem 1rem', borderBottom: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)', fontWeight: 600, background: dayEvents.length > 0 ? 'rgba(99, 102, 241, 0.05)' : 'rgba(0,0,0,0.02)', verticalAlign: 'top' }}>
+                        <div>{day}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
                           {currentDayDate.toLocaleDateString()}
                         </div>
+                        {dayEvents.length > 0 && (
+                          <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                            {dayEvents.map(e => (
+                              <div
+                                key={e.id}
+                                title={`${e.title} (${e.startTime} - ${e.endTime || ''})`}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem',
+                                  fontSize: '0.72rem',
+                                  padding: '0.25rem 0.5rem',
+                                  borderRadius: '6px',
+                                  background: 'rgba(99, 102, 241, 0.12)',
+                                  color: 'var(--primary)',
+                                  border: '1px solid rgba(99, 102, 241, 0.25)',
+                                  fontWeight: 600,
+                                  lineHeight: 1.2
+                                }}
+                              >
+                                <span>📅</span>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100px' }}>
+                                  {e.title}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </td>
                       {PERIODS.map(p => {
                         const slot = timetableData.find(t => t.dayOfWeek?.toUpperCase() === day.toUpperCase() && t.period === p);
@@ -229,9 +257,18 @@ export default function TimetableClient({
                         const hasEventOverlap = dayEvents.length > 0;
 
                         return (
-                          <td key={p} style={{ padding: '0.75rem', borderBottom: '1px solid var(--border-color)', borderRight: p < 8 ? '1px solid var(--border-color)' : 'none', verticalAlign: 'top', position: 'relative', height: '110px' }}>
+                          <td key={p} style={{
+                            padding: '0.75rem',
+                            borderBottom: '1px solid var(--border-color)',
+                            borderRight: p < 8 ? '1px solid var(--border-color)' : 'none',
+                            verticalAlign: 'top',
+                            position: 'relative',
+                            height: '110px',
+                            background: hasEventOverlap ? 'rgba(99, 102, 241, 0.02)' : 'transparent'
+                          }}>
+                            {/* Delicate light accent for event day */}
                             {hasEventOverlap && (
-                              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(239, 68, 68, 0.05)', pointerEvents: 'none', zIndex: 0, border: '1px dashed rgba(239, 68, 68, 0.3)' }} />
+                              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'rgba(99, 102, 241, 0.35)', pointerEvents: 'none' }} />
                             )}
                             
                             <div style={{ position: 'relative', zIndex: 1, height: '100%' }}>
@@ -298,12 +335,6 @@ export default function TimetableClient({
                             </div>
                             )}
                             </div>
-                            
-                            {hasEventOverlap && p === 1 && (
-                              <div style={{ position: 'absolute', top: '2px', left: '2px', background: "var(--danger)", color: "var(--danger-fg)", fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', zIndex: 2, whiteSpace: 'nowrap' }}>
-                                {dayEvents[0].title}
-                              </div>
-                            )}
                           </td>
                         );
                       })}

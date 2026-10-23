@@ -107,6 +107,24 @@ export default function ProgramsParentClient({ programs }: { programs: CalendarE
             <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
               {eventDate.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
             </div>
+
+            {/* Target Class Badge */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem' }}>
+              <span style={{
+                fontSize: '0.72rem',
+                padding: '0.15rem 0.5rem',
+                borderRadius: '6px',
+                background: (!prog.targetClass || prog.targetClass === 'ALL') ? 'rgba(99, 102, 241, 0.08)' : 'rgba(16, 185, 129, 0.08)',
+                color: (!prog.targetClass || prog.targetClass === 'ALL') ? 'var(--primary)' : '#10b981',
+                border: `1px solid ${(!prog.targetClass || prog.targetClass === 'ALL') ? 'rgba(99, 102, 241, 0.2)' : 'rgba(16, 185, 129, 0.2)'}`,
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem'
+              }}>
+                {(!prog.targetClass || prog.targetClass === 'ALL') ? '🌐 All Classes' : `🏫 ${prog.targetClass}`}
+              </span>
+            </div>
           </div>
         </div>
 

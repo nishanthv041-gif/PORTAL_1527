@@ -27,8 +27,11 @@ export async function sendProgramNotificationToAllAction(programId: string) {
       year: "numeric"
     });
 
-    const notifTitle = `School Program: ${prog.title}`;
-    const notifContent = `📅 Program Scheduled: "${prog.title}" on ${dateFormatted} at ${prog.startTime}${prog.endTime ? ` - ${prog.endTime}` : ""}${prog.location ? ` | Venue: ${prog.location}` : ""}. ${prog.description || "All are cordially invited."}`;
+    const targetLabel = (!prog.targetClass || prog.targetClass === "ALL") ? "All Classes" : prog.targetClass;
+    const notifTitle = prog.targetClass && prog.targetClass !== "ALL"
+      ? `School Program (${prog.targetClass}): ${prog.title}`
+      : `School Program: ${prog.title}`;
+    const notifContent = `📅 Program Scheduled for ${targetLabel}: "${prog.title}" on ${dateFormatted} at ${prog.startTime}${prog.endTime ? ` - ${prog.endTime}` : ""}${prog.location ? ` | Venue: ${prog.location}` : ""}. ${prog.description || "All are cordially invited."}`;
 
     // Create notifications for all active users with role-specific link
     await prisma.notification.createMany({
@@ -74,6 +77,7 @@ export async function createProgramAction(formData: FormData) {
     const location = formData.get("location") as string;
     const description = formData.get("description") as string;
     const organizer = formData.get("organizer") as string;
+    const targetClass = ((formData.get("targetClass") as string) || "ALL").trim();
     const isPublished = formData.get("isPublished") === "true";
     const notifyAll = formData.get("notifyAll") !== "false"; // Default true
 
@@ -91,6 +95,7 @@ export async function createProgramAction(formData: FormData) {
         location,
         description,
         organizer,
+        targetClass: targetClass || "ALL",
         isPublished,
         status: 'UPCOMING'
       }
@@ -112,12 +117,16 @@ export async function createProgramAction(formData: FormData) {
             year: "numeric"
           });
 
-          const notifContent = `📅 New School Program: "${title}" on ${dateFormatted} at ${startTime}${endTime ? ` - ${endTime}` : ""}${location ? ` | Venue: ${location}` : ""}. ${description || "All are cordially invited."}`;
+          const targetLabel = (!targetClass || targetClass === "ALL") ? "All Classes" : targetClass;
+          const notifTitle = targetClass && targetClass !== "ALL"
+            ? `School Program (${targetClass}): ${title}`
+            : `School Program: ${title}`;
+          const notifContent = `📅 New School Program for ${targetLabel}: "${title}" on ${dateFormatted} at ${startTime}${endTime ? ` - ${endTime}` : ""}${location ? ` | Venue: ${location}` : ""}. ${description || "All are cordially invited."}`;
 
           await prisma.notification.createMany({
             data: activeUsers.map(u => ({
               userId: u.id,
-              title: `School Program: ${title}`,
+              title: notifTitle,
               content: notifContent,
               type: "PROGRAM",
               link: u.role === "PARENT" ? "/dashboard/parent/programs" : u.role === "ADMIN" ? "/dashboard/admin/programs" : "/dashboard/teacher/calendar",

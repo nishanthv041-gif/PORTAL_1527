@@ -5,10 +5,17 @@ import { Plus, Eye, EyeOff, Calendar as CalendarIcon, MapPin, Clock, Trash2, Che
 import { createProgramAction, updateProgramStatusAction, deleteProgramAction, sendProgramNotificationToAllAction } from "@/backend/api/actions/dashboard/admin/programs/actions";
 import { CalendarEvent } from "@prisma/client";
 
-export default function ProgramsClient({ programs }: { programs: CalendarEvent[] }) {
+export default function ProgramsClient({ 
+  programs,
+  classes = []
+}: { 
+  programs: CalendarEvent[];
+  classes?: Array<{ id: string; name: string; section: string }>;
+}) {
   const [showCreate, setShowCreate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPrevious, setShowPrevious] = useState(false);
+  const [selectedClassFilter, setSelectedClassFilter] = useState<string>("ALL");
   // Track which card has its action menu open
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -17,8 +24,13 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const upcomingPrograms = programs.filter(p => new Date(p.date) >= today);
-  const previousPrograms = programs.filter(p => new Date(p.date) < today);
+  const filteredPrograms = programs.filter(p => {
+    if (selectedClassFilter === "ALL") return true;
+    return p.targetClass === selectedClassFilter || p.targetClass === "ALL" || !p.targetClass;
+  });
+
+  const upcomingPrograms = filteredPrograms.filter(p => new Date(p.date) >= today);
+  const previousPrograms = filteredPrograms.filter(p => new Date(p.date) < today);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -86,57 +98,58 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
         }}
       >
         <div style={{ padding: '1.5rem', flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, flex: 1, marginRight: '0.75rem' }}>{prog.title}</h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-              <span style={{
-                fontSize: '0.72rem',
-                padding: '0.2rem 0.55rem',
-                borderRadius: '12px',
-                background: isPast
-                  ? 'rgba(107, 114, 128, 0.1)'
-                  : prog.status === 'UPCOMING'
-                    ? 'var(--primary-bg)'
-                    : 'rgba(107, 114, 128, 0.1)',
-                color: isPast
-                  ? 'var(--text-secondary)'
-                  : prog.status === 'UPCOMING'
-                    ? 'var(--primary)'
-                    : 'var(--text-secondary)',
-                fontWeight: 600,
-                textTransform: 'uppercase' as const,
-                letterSpacing: '0.03em'
-              }}>
-                {isPast ? 'Past' : prog.status}
-              </span>
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, flex: 1, marginRight: '0.75rem' }}>{prog.title}</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                <span style={{
+                  fontSize: '0.72rem',
+                  padding: '0.2rem 0.55rem',
+                  borderRadius: '12px',
+                  background: isPast
+                    ? 'rgba(107, 114, 128, 0.1)'
+                    : prog.status === 'UPCOMING'
+                      ? 'var(--primary-bg)'
+                      : 'rgba(107, 114, 128, 0.1)',
+                  color: isPast
+                    ? 'var(--text-secondary)'
+                    : prog.status === 'UPCOMING'
+                      ? 'var(--primary)'
+                      : 'var(--text-secondary)',
+                  fontWeight: 600,
+                  textTransform: 'uppercase' as const,
+                  letterSpacing: '0.03em'
+                }}>
+                  {isPast ? 'Past' : prog.status}
+                </span>
 
-              {/* Options Menu Button */}
-              <div style={{ position: 'relative' }}>
-                <button
-                  onClick={() => toggleMenu(prog.id)}
-                  title="Options"
-                  disabled={isDeleting}
-                  style={{
-                    background: isMenuOpen ? 'var(--primary-bg)' : 'rgba(0,0,0,0.04)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    color: isMenuOpen ? 'var(--primary)' : 'var(--text-secondary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.2rem',
-                    padding: '0.3rem 0.55rem',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  Options
-                  {isMenuOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                </button>
+                {/* Options Menu Button */}
+                <div style={{ position: 'relative' }}>
+                  <button
+                    onClick={() => toggleMenu(prog.id)}
+                    title="Options"
+                    disabled={isDeleting}
+                    style={{
+                      background: isMenuOpen ? 'var(--primary-bg)' : 'rgba(0,0,0,0.04)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      color: isMenuOpen ? 'var(--primary)' : 'var(--text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.2rem',
+                      padding: '0.3rem 0.55rem',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    Options
+                    {isMenuOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  </button>
 
-                {/* Dropdown menu */}
-                {isMenuOpen && (
+                  {/* Dropdown menu */}
+                  {isMenuOpen && (
                   <div
                     style={{
                       position: 'absolute',
@@ -234,6 +247,24 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
               </div>
             </div>
           </div>
+        </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.45rem', marginBottom: '0.85rem' }}>
+            <span style={{
+              fontSize: '0.75rem',
+              padding: '0.2rem 0.55rem',
+              borderRadius: '6px',
+              background: (!prog.targetClass || prog.targetClass === 'ALL') ? 'rgba(99, 102, 241, 0.08)' : 'rgba(16, 185, 129, 0.08)',
+              color: (!prog.targetClass || prog.targetClass === 'ALL') ? 'var(--primary)' : '#10b981',
+              border: `1px solid ${(!prog.targetClass || prog.targetClass === 'ALL') ? 'rgba(99, 102, 241, 0.2)' : 'rgba(16, 185, 129, 0.2)'}`,
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem'
+            }}>
+              {(!prog.targetClass || prog.targetClass === 'ALL') ? '🌐 All Classes' : `🏫 ${prog.targetClass}`}
+            </span>
+          </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: prog.description ? '1rem' : 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
@@ -269,7 +300,56 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
 
   return (
     <div onClick={() => { if (openMenuId) setOpenMenuId(null); }}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.75rem' }}>
+        {/* Class Filter Bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginRight: '0.25rem' }}>
+            Filter by Class:
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedClassFilter("ALL")}
+            style={{
+              padding: '0.45rem 0.9rem',
+              borderRadius: '8px',
+              border: 'none',
+              background: selectedClassFilter === "ALL" ? 'var(--primary)' : 'var(--card-bg)',
+              color: selectedClassFilter === "ALL" ? 'var(--primary-fg)' : 'inherit',
+              boxShadow: selectedClassFilter === "ALL" ? '0 2px 6px rgba(99,102,241,0.25)' : 'none',
+              fontSize: '0.825rem',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            All Classes ({programs.length})
+          </button>
+          {classes.map(c => {
+            const cName = `${c.name} - ${c.section}`;
+            const count = programs.filter(p => p.targetClass === cName).length;
+            const isSelected = selectedClassFilter === cName;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setSelectedClassFilter(cName)}
+                style={{
+                  padding: '0.45rem 0.9rem',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: isSelected ? 'var(--primary)' : 'var(--card-bg)',
+                  color: isSelected ? 'var(--primary-fg)' : 'inherit',
+                  boxShadow: isSelected ? '0 2px 6px rgba(99,102,241,0.25)' : 'none',
+                  fontSize: '0.825rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                {cName} {count > 0 ? `(${count})` : ''}
+              </button>
+            );
+          })}
+        </div>
+
         <button
           onClick={(e) => { e.stopPropagation(); setShowCreate(!showCreate); }}
           style={{ padding: '0.75rem 1.5rem', backgroundColor: "var(--primary)", color: "var(--primary-fg)", border: 'none', borderRadius: '8px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
@@ -284,7 +364,7 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
           <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Program Title *</label>
-              <input required name="title" type="text" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
+              <input required name="title" type="text" placeholder="e.g. Annual Day, Science Exhibition" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Date *</label>
@@ -298,17 +378,41 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>End Time *</label>
               <input required name="endTime" type="time" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
             </div>
-            <div style={{ gridColumn: '1 / -1' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>
+                Class Selection (Target Audience) *
+              </label>
+              <select
+                name="targetClass"
+                defaultValue="ALL"
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'inherit', fontWeight: 500 }}
+              >
+                <option value="ALL">🌐 All Classes (Entire School)</option>
+                {classes.length > 0 && (
+                  <optgroup label="Select Individual Class">
+                    {classes.map(c => {
+                      const cName = `${c.name} - ${c.section}`;
+                      return (
+                        <option key={c.id} value={cName}>
+                          🏫 {cName}
+                        </option>
+                      );
+                    })}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+            <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Location / Venue</label>
-              <input name="location" type="text" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
+              <input name="location" type="text" placeholder="e.g. School Auditorium, Ground" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Description</label>
-              <textarea name="description" rows={3} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', resize: 'vertical' }} />
+              <textarea name="description" rows={3} placeholder="Program details, instructions, or agenda..." style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', resize: 'vertical' }} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Organizer (Optional)</label>
-              <input name="organizer" type="text" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
+              <input name="organizer" type="text" placeholder="e.g. Cultural Committee" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingTop: '1.5rem' }}>
               <input type="checkbox" name="isPublished" value="true" defaultChecked style={{ width: '1rem', height: '1rem' }} />
@@ -317,7 +421,7 @@ export default function ProgramsClient({ programs }: { programs: CalendarEvent[]
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', gridColumn: '1 / -1', padding: '0.75rem 1rem', background: 'rgba(99, 102, 241, 0.06)', borderRadius: '8px', border: '1px solid rgba(99, 102, 241, 0.15)' }}>
               <input type="checkbox" id="notifyAllCheck" name="notifyAll" value="true" defaultChecked style={{ width: '1.1rem', height: '1.1rem', cursor: 'pointer' }} />
               <label htmlFor="notifyAllCheck" style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <Bell size={16} /> Send notification to everyone (all parents, teachers &amp; staff)
+                <Bell size={16} /> Send notification to parents, teachers &amp; staff
               </label>
             </div>
             <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>

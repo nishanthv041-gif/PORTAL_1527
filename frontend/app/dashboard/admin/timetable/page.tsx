@@ -56,8 +56,12 @@ export default async function AdminTimetablePage({
     });
   }
 
+  const selectedClassObj = classes.find(c => c.id === classId);
+  const selectedClassName = selectedClassObj ? `${selectedClassObj.name} - ${selectedClassObj.section}` : "";
+  const selectedClassGrade = selectedClassObj ? selectedClassObj.name : "";
+
   // Fetch events for this week
-  const events = await prisma.calendarEvent.findMany({
+  const rawEvents = await prisma.calendarEvent.findMany({
     where: {
       OR: [
         { date: { gte: currentWeekStart, lt: currentWeekEnd } },
@@ -70,6 +74,21 @@ export default async function AdminTimetablePage({
         }
       ]
     }
+  });
+
+  // Filter events to only those relevant to this class (or All Classes)
+  const events = rawEvents.filter(e => {
+    if (!e.targetClass || e.targetClass === "ALL" || e.targetClass.toUpperCase() === "ALL CLASSES") {
+      return true;
+    }
+    if (!selectedClassObj) return true;
+    const tc = e.targetClass.trim().toLowerCase();
+    return (
+      tc === selectedClassObj.id.toLowerCase() ||
+      tc === selectedClassName.toLowerCase() ||
+      tc === selectedClassGrade.toLowerCase() ||
+      selectedClassName.toLowerCase().includes(tc)
+    );
   });
 
   return (
