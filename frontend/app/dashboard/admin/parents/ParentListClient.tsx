@@ -35,33 +35,23 @@ export default function ParentListClient({ parents, classes }: { parents: Parent
       {/* Parent Count & Metrics Bar */}
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', 
-        gap: '1rem', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+        gap: '1.25rem', 
         marginBottom: '1.5rem',
-        padding: '1rem',
+        padding: '1.25rem',
         background: 'rgba(0,0,0,0.02)',
         borderRadius: '10px',
         border: '1px solid var(--border-color)'
       }}>
         <div>
           <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Total Parents</span>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>{parents.length}</div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>{parents.length}</div>
         </div>
         <div>
           <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Active Parents</span>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--success)' }}>
+          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--success)' }}>
             {parents.filter(p => p.isActive && p.user.status === 'ACTIVE').length}
           </div>
-        </div>
-        <div>
-          <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Linked to Students</span>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary)' }}>
-            {parents.filter(p => p.children && p.children.length > 0).length}
-          </div>
-        </div>
-        <div>
-          <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Showing / Filtered</span>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>{filteredParents.length}</div>
         </div>
       </div>
 
