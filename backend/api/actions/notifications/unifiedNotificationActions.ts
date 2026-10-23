@@ -6,7 +6,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 
 export type UnifiedNotification = {
   id: string;
-  category: "ANNOUNCEMENT" | "MESSAGE" | "REPORT_CARD" | "ASSIGNMENT" | "ATTENDANCE" | "SYSTEM" | "GENERAL";
+  category: "ANNOUNCEMENT" | "INSTRUCTION" | "MEETING" | "MESSAGE" | "REPORT_CARD" | "ASSIGNMENT" | "ATTENDANCE" | "SYSTEM" | "GENERAL";
   title: string;
   description: string;
   senderOrAuthor?: string;
@@ -37,22 +37,42 @@ export async function getUnifiedNotificationsAction(): Promise<UnifiedNotificati
     const dbNotifications = await prisma.notification.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
-      take: 8
+      take: 15
     });
 
     for (const notif of dbNotifications) {
       const typeStr = (notif.type || "").toUpperCase();
+      const titleLower = notif.title.toLowerCase();
+      const contentLower = notif.content.toLowerCase();
+
       let category: UnifiedNotification["category"] = "GENERAL";
       let badgeLabel = "Notification";
       let badgeColors = { bg: "rgba(99, 102, 241, 0.12)", text: "#6366f1", border: "rgba(99, 102, 241, 0.25)" };
 
-      if (typeStr.includes("REPORT") || typeStr.includes("CARD")) {
+      if (typeStr.includes("MEETING") || titleLower.includes("meeting") || contentLower.includes("meeting")) {
+        category = "MEETING";
+        badgeLabel = "Meeting";
+        badgeColors = { bg: "rgba(245, 158, 11, 0.12)", text: "#d97706", border: "rgba(245, 158, 11, 0.3)" };
+      } else if (
+        typeStr.includes("INSTRUCT") || 
+        typeStr.includes("CIRCULAR") || 
+        titleLower.includes("instruction") || 
+        contentLower.includes("instruction") ||
+        titleLower.includes("circular") ||
+        contentLower.includes("circular") ||
+        titleLower.includes("notice") ||
+        contentLower.includes("notice")
+      ) {
+        category = "INSTRUCTION";
+        badgeLabel = "Instruction";
+        badgeColors = { bg: "rgba(16, 185, 129, 0.12)", text: "#059669", border: "rgba(16, 185, 129, 0.3)" };
+      } else if (typeStr.includes("REPORT") || typeStr.includes("CARD")) {
         category = "REPORT_CARD";
         badgeLabel = "Report Card";
         badgeColors = { bg: "rgba(37, 99, 235, 0.12)", text: "#2563eb", border: "rgba(37, 99, 235, 0.25)" };
-      } else if (typeStr.includes("ASSIGN") || typeStr.includes("HOMEWORK") || typeStr.includes("EXAM")) {
+      } else if (typeStr.includes("ASSIGN") || typeStr.includes("HOMEWORK") || titleLower.includes("homework")) {
         category = "ASSIGNMENT";
-        badgeLabel = "Assessment";
+        badgeLabel = "Assessment / Task";
         badgeColors = { bg: "rgba(16, 185, 129, 0.12)", text: "#059669", border: "rgba(16, 185, 129, 0.25)" };
       } else if (typeStr.includes("ATTEND")) {
         category = "ATTENDANCE";
@@ -81,37 +101,168 @@ export async function getUnifiedNotificationsAction(): Promise<UnifiedNotificati
       });
     }
 
-    // 2. Active School Announcements
-    const targetTypeCondition = userRole === "PARENT" 
-      ? [{ targetType: "ALL" }, { targetType: "PARENTS" }]
-      : userRole === "TEACHER"
-      ? [{ targetType: "ALL" }, { targetType: "TEACHERS" }]
-      : [{ targetType: "ALL" }];
+    // 2. Scheduled Meetings for this user
+    try {
+      let userMeetings: any[] = [];
+      if (userRole === "ADMIN") {
+        // Admin sees all recent/upcoming meetings
+        userMeetings = await prisma.meeting.findMany({
+          orderBy: { date: "desc" },
+          take: 6,
+          include: {
+            teachers: { include: { user: { select: { name: true } } } },
+            parents: { include: { user: { select: { name: true } } } }
+          }
+        });
+      } else if (userRole === "TEACHER") {
+        const teacher = await prisma.teacher.findUnique({ where: { userId } });
+        if (teacher) {
+          userMeetings = await prisma.meeting.findMany({
+            where: { teachers: { some: { id: teacher.id } } },
+            orderBy: { date: "desc" },
+            take: 6,
+            include: {
+              parents: { include: { user: { select: { name: true } } } }
+            }
+          });
+        }
+      } else if (userRole === "PARENT") {
+        const parent = await prisma.parent.findUnique({ where: { userId } });
+        if (parent) {
+          userMeetings = await prisma.meeting.findMany({
+            where: { parents: { some: { id: parent.id } } },
+            orderBy: { date: "desc" },
+            take: 6,
+            include: {
+              teachers: { include: { user: { select: { name: true } } } }
+            }
+          });
+        }
+      }
 
-    const announcements = await prisma.announcement.findMany({
-      where: {
-        OR: targetTypeCondition
-      },
-      orderBy: { createdAt: "desc" },
-      take: 4
-    });
+      for (const m of userMeetings) {
+        const dateFormatted = new Date(m.date).toLocaleDateString(undefined, {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          year: "numeric"
+        });
 
-    for (const ann of announcements) {
-      items.push({
-        id: `ann-${ann.id}`,
-        category: "ANNOUNCEMENT",
-        title: ann.title,
-        description: ann.content,
-        timestamp: ann.createdAt.toISOString(),
-        link: userRole === "PARENT" ? "/dashboard/parent/announcements" : userRole === "TEACHER" ? "/dashboard/teacher/announcements" : "/dashboard/admin/announcements",
-        isRead: false,
-        priority: ann.priority,
-        badgeLabel: "Announcement",
-        badgeColors: { bg: "rgba(139, 92, 246, 0.12)", text: "#7c3aed", border: "rgba(139, 92, 246, 0.25)" }
-      });
+        const locationText = m.location ? ` | Location: ${m.location}` : "";
+        const linkText = m.link ? ` | Link: ${m.link}` : "";
+        const desc = `Scheduled for ${dateFormatted} at ${m.time}.${locationText}${linkText} Agenda: ${m.agenda}`;
+
+        items.push({
+          id: `meeting-${m.id}`,
+          category: "MEETING",
+          title: `Meeting: ${m.agenda}`,
+          description: desc,
+          timestamp: m.date.toISOString(),
+          link: userRole === "PARENT" ? "/dashboard/parent/meetings" : userRole === "TEACHER" ? "/dashboard/teacher/meetings" : "/dashboard/admin/meetings",
+          isRead: false,
+          priority: "HIGH",
+          badgeLabel: "Meeting",
+          badgeColors: { bg: "rgba(245, 158, 11, 0.12)", text: "#d97706", border: "rgba(245, 158, 11, 0.3)" }
+        });
+      }
+    } catch (meetingErr) {
+      console.error("Error fetching meetings for notifications:", meetingErr);
     }
 
-    // 3. Direct Messages sent to this user
+    // 3. School Announcements & Instructions
+    try {
+      let announcementCondition: any = {};
+
+      if (userRole === "ADMIN") {
+        // Admin sees all announcements, instructions, and circulars
+        announcementCondition = {};
+      } else if (userRole === "TEACHER") {
+        const teacher = await prisma.teacher.findUnique({
+          where: { userId },
+          include: { classes: { select: { id: true } } }
+        });
+        const teacherClassIds = teacher?.classes.map(c => c.id) || [];
+
+        announcementCondition = {
+          OR: [
+            { targetType: "ALL" },
+            { targetType: "TEACHERS" },
+            { targetType: "CLASS", targetId: { in: teacherClassIds } }
+          ]
+        };
+      } else if (userRole === "PARENT") {
+        const parent = await prisma.parent.findUnique({
+          where: { userId },
+          include: { children: { select: { student: { select: { classId: true } } } } }
+        });
+        const childClassIds = parent?.children
+          .map(c => c.student.classId)
+          .filter(Boolean) as string[] || [];
+
+        announcementCondition = {
+          OR: [
+            { targetType: "ALL" },
+            { targetType: "PARENTS" },
+            { targetType: "CLASS", targetId: { in: childClassIds } }
+          ]
+        };
+      } else {
+        announcementCondition = { targetType: "ALL" };
+      }
+
+      const announcements = await prisma.announcement.findMany({
+        where: announcementCondition,
+        orderBy: { createdAt: "desc" },
+        take: 10
+      });
+
+      for (const ann of announcements) {
+        const titleLower = ann.title.toLowerCase();
+        const contentLower = ann.content.toLowerCase();
+
+        let category: UnifiedNotification["category"] = "ANNOUNCEMENT";
+        let badgeLabel = "Announcement";
+        let badgeColors = { bg: "rgba(139, 92, 246, 0.12)", text: "#7c3aed", border: "rgba(139, 92, 246, 0.25)" };
+
+        if (titleLower.includes("meeting") || contentLower.includes("meeting")) {
+          category = "MEETING";
+          badgeLabel = "Meeting Notice";
+          badgeColors = { bg: "rgba(245, 158, 11, 0.12)", text: "#d97706", border: "rgba(245, 158, 11, 0.3)" };
+        } else if (
+          titleLower.includes("instruction") || 
+          contentLower.includes("instruction") ||
+          titleLower.includes("circular") || 
+          contentLower.includes("circular") ||
+          titleLower.includes("guideline") ||
+          titleLower.includes("rule") ||
+          titleLower.includes("notice") ||
+          titleLower.includes("welfare") ||
+          titleLower.includes("homework") ||
+          titleLower.includes("home work")
+        ) {
+          category = "INSTRUCTION";
+          badgeLabel = "Instruction";
+          badgeColors = { bg: "rgba(16, 185, 129, 0.12)", text: "#059669", border: "rgba(16, 185, 129, 0.3)" };
+        }
+
+        items.push({
+          id: `ann-${ann.id}`,
+          category,
+          title: ann.title,
+          description: ann.content,
+          timestamp: ann.createdAt.toISOString(),
+          link: userRole === "PARENT" ? "/dashboard/parent/announcements" : userRole === "TEACHER" ? "/dashboard/teacher/announcements" : "/dashboard/admin/announcements",
+          isRead: false,
+          priority: ann.priority,
+          badgeLabel,
+          badgeColors
+        });
+      }
+    } catch (annErr) {
+      console.error("Error fetching announcements for notifications:", annErr);
+    }
+
+    // 4. Direct Messages sent to this user
     const messages = await prisma.message.findMany({
       where: { receiverId: userId },
       include: { sender: { select: { name: true, role: true } } },
@@ -134,7 +285,7 @@ export async function getUnifiedNotificationsAction(): Promise<UnifiedNotificati
       });
     }
 
-    // 4. Role-Specific Alerts: If Parent, check children's published report cards and assignments
+    // 5. Role-Specific Alerts: If Parent, check children's published report cards and assignments
     if (userRole === "PARENT") {
       const parentRecord = await prisma.parent.findUnique({
         where: { userId },
@@ -164,7 +315,6 @@ export async function getUnifiedNotificationsAction(): Promise<UnifiedNotificati
           });
 
           for (const rc of reportCards) {
-            // Avoid duplicate if notification already exists
             const alreadyHasNotif = items.some(i => i.title.includes(rc.exam.name) && i.title.includes(student.firstName));
             if (!alreadyHasNotif) {
               items.push({
@@ -188,7 +338,7 @@ export async function getUnifiedNotificationsAction(): Promise<UnifiedNotificati
               where: { classId: student.classId },
               include: { teacher: { include: { user: true } } },
               orderBy: { deadline: "desc" },
-              take: 2
+              take: 3
             });
 
             for (const asg of assignments) {
@@ -197,13 +347,13 @@ export async function getUnifiedNotificationsAction(): Promise<UnifiedNotificati
                 items.push({
                   id: `asg-${asg.id}`,
                   category: "ASSIGNMENT",
-                  title: `Assessment: ${asg.title}`,
-                  description: `${asg.description || "New homework/assignment assigned."} Assigned by: ${asg.teacher.user.name}. Due Date: ${new Date(asg.deadline).toLocaleDateString()}`,
+                  title: `Instruction/Task: ${asg.title}`,
+                  description: `${asg.description || "Academic assignment task."} Teacher: ${asg.teacher.user.name}. Due: ${new Date(asg.deadline).toLocaleDateString()}`,
                   targetName: student.class?.name || "Class",
                   timestamp: asg.deadline.toISOString(),
                   link: `/dashboard/parent/assignments?childId=${student.id}`,
                   isRead: false,
-                  badgeLabel: "Assessment",
+                  badgeLabel: "Task / Instruction",
                   badgeColors: { bg: "rgba(16, 185, 129, 0.12)", text: "#059669", border: "rgba(16, 185, 129, 0.25)" }
                 });
               }
@@ -213,10 +363,22 @@ export async function getUnifiedNotificationsAction(): Promise<UnifiedNotificati
       }
     }
 
-    // Sort all notifications by timestamp descending (newest first)
-    items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    // 6. Deduplicate items by title or ID
+    const seenKeys = new Set<string>();
+    const uniqueItems: UnifiedNotification[] = [];
 
-    return items;
+    for (const item of items) {
+      const dedupeKey = `${item.category}-${item.title.trim().toLowerCase()}`;
+      if (!seenKeys.has(dedupeKey)) {
+        seenKeys.add(dedupeKey);
+        uniqueItems.push(item);
+      }
+    }
+
+    // Sort all notifications by timestamp descending (newest first)
+    uniqueItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    return uniqueItems;
   } catch (error) {
     console.error("Error fetching unified notifications:", error);
     return [];

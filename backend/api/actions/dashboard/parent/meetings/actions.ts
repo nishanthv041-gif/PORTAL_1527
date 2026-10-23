@@ -35,21 +35,15 @@ export async function requestMeetingAction(formData: FormData) {
     });
 
     if (meeting.teachers.length > 0) {
-      const teacherUser = await prisma.user.findUnique({
-        where: { id: meeting.teachers[0].userId },
-        select: { notificationsEnabled: true }
-      });
-      if (teacherUser?.notificationsEnabled) {
-        await prisma.notification.create({
-          data: {
-            userId: meeting.teachers[0].userId,
-            title: "New Meeting Request",
-            content: `A parent has requested a meeting: ${agenda} on ${dateStr} at ${time}.`,
-            type: "MEETING",
-            link: "/dashboard/teacher/meetings"
-          }
-        });
-      }
+      await prisma.notification.create({
+        data: {
+          userId: meeting.teachers[0].userId,
+          title: "New Meeting Request",
+          content: `A parent has requested a meeting: ${agenda} on ${dateStr} at ${time}.`,
+          type: "MEETING",
+          link: "/dashboard/teacher/meetings"
+        }
+      }).catch(() => {});
     }
 
     revalidatePath("/dashboard/parent/meetings");

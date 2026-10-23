@@ -42,6 +42,45 @@ export async function createTeacherAnnouncementAction(formData: FormData) {
       }
     });
 
+    // Notify targeted parents
+    try {
+      let targetUserIds: string[] = [];
+      if (targetType === "PARENTS") {
+        const parents = await prisma.parent.findMany({
+          where: { isActive: true },
+          select: { userId: true }
+        });
+        targetUserIds = parents.map(p => p.userId);
+      } else if (targetType === "CLASS" && targetId) {
+        const parents = await prisma.parent.findMany({
+          where: { children: { some: { student: { classId: targetId } } } },
+          select: { userId: true }
+        });
+        targetUserIds = parents.map(p => p.userId);
+      }
+
+      if (targetUserIds.length > 0) {
+        const lower = (title + " " + content).toLowerCase();
+        const notifType = lower.includes("meeting") 
+          ? "MEETING" 
+          : lower.includes("instruction") || lower.includes("circular") 
+          ? "INSTRUCTION" 
+          : "ANNOUNCEMENT";
+
+        await prisma.notification.createMany({
+          data: targetUserIds.map(uid => ({
+            userId: uid,
+            title,
+            content,
+            type: notifType,
+            link: "/dashboard"
+          }))
+        });
+      }
+    } catch (notifErr) {
+      console.error("Failed to dispatch notifications for teacher announcement:", notifErr);
+    }
+
     revalidatePath("/dashboard/teacher/announcements");
     return { success: true };
   } catch (error) {

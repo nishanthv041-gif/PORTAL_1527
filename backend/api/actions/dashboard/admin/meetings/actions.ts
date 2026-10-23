@@ -67,14 +67,8 @@ export async function createMeetingAction(formData: FormData) {
     });
 
     // Create notifications for all teachers
-    if (teacherIds.length > 0) {
-      const eligibleUsers = await prisma.user.findMany({
-        where: { id: { in: meeting.teachers.map(t => t.userId) }, notificationsEnabled: true },
-        select: { id: true }
-      });
-      const eligibleUserIds = new Set(eligibleUsers.map(u => u.id));
-      
-      const notifyData = meeting.teachers.filter(t => eligibleUserIds.has(t.userId)).map(t => ({
+    if (meeting.teachers.length > 0) {
+      const notifyData = meeting.teachers.map(t => ({
         userId: t.userId,
         title: "New Meeting Scheduled",
         content: `You have been scheduled for a meeting: ${agenda} on ${date} at ${time}.`,
@@ -83,19 +77,13 @@ export async function createMeetingAction(formData: FormData) {
       }));
 
       if (notifyData.length > 0) {
-        await prisma.notification.createMany({ data: notifyData });
+        await prisma.notification.createMany({ data: notifyData }).catch(() => {});
       }
     }
 
     // Create notifications for all parents
-    if (parentsToConnect.length > 0) {
-      const eligibleUsers = await prisma.user.findMany({
-        where: { id: { in: meeting.parents.map(p => p.userId) }, notificationsEnabled: true },
-        select: { id: true }
-      });
-      const eligibleUserIds = new Set(eligibleUsers.map(u => u.id));
-
-      const notifyData = meeting.parents.filter(p => eligibleUserIds.has(p.userId)).map(p => ({
+    if (meeting.parents.length > 0) {
+      const notifyData = meeting.parents.map(p => ({
         userId: p.userId,
         title: "New Meeting Scheduled",
         content: `A meeting has been scheduled: ${agenda} on ${date} at ${time}.`,
@@ -104,7 +92,7 @@ export async function createMeetingAction(formData: FormData) {
       }));
 
       if (notifyData.length > 0) {
-        await prisma.notification.createMany({ data: notifyData });
+        await prisma.notification.createMany({ data: notifyData }).catch(() => {});
       }
     }
 

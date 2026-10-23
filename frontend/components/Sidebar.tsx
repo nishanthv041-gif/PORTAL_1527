@@ -168,7 +168,13 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
       </nav>
       <div className={styles.logoutWrapper}>
         <button 
-          onClick={() => signOut({ callbackUrl: '/' })} 
+          onClick={() => {
+            try {
+              sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
+              sessionStorage.removeItem("srt_portal_fresh_login");
+            } catch {}
+            signOut({ callbackUrl: '/' });
+          }} 
           className={styles.logoutBtn}
           title={isCollapsed ? "Logout" : undefined}
         >

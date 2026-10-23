@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Bell, ChevronLeft, ChevronRight, ExternalLink, 
-  Megaphone, MessageSquare, Award, BookOpen, Calendar, Info
+  Megaphone, MessageSquare, Award, BookOpen, Calendar, Info,
+  FileText, Clock, Users, AlertCircle
 } from "lucide-react";
 import styles from "./NotificationPopupModal.module.css";
-import { UnifiedNotification, markNotificationReadAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { UnifiedNotification, getUnifiedNotificationsAction, markNotificationReadAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
 
 export default function NotificationPopupModal({
   initialNotifications = []
@@ -21,27 +22,76 @@ export default function NotificationPopupModal({
 
   // Sync if prop updates
   useEffect(() => {
-    setNotifications(initialNotifications);
+    if (initialNotifications && initialNotifications.length > 0) {
+      setNotifications(initialNotifications);
+    }
   }, [initialNotifications]);
 
-  // Automatic popup on portal login / entry
+  // Automatic popup on portal login / entry & client-side hydration
   useEffect(() => {
-    // Check if dismissed in the current browser session
-    const hasSeen = sessionStorage.getItem("srt_portal_popup_notif_dismissed");
-    
-    // Auto-display if not dismissed yet and there are notifications
-    if (!hasSeen && initialNotifications && initialNotifications.length > 0) {
-      // Delay slightly for smooth entrance animation after page paint
-      const timer = setTimeout(() => {
-        setIsOpen(true);
-      }, 500);
-      return () => clearTimeout(timer);
+    let isMounted = true;
+
+    // Load fresh notifications from server action on mount
+    getUnifiedNotificationsAction()
+      .then((fresh) => {
+        if (!isMounted) return;
+        if (fresh && fresh.length > 0) {
+          setNotifications(fresh);
+
+          const isFreshLogin = sessionStorage.getItem("srt_portal_fresh_login") === "true";
+          const isDismissed = sessionStorage.getItem("srt_portal_popup_notif_dismissed") === "true";
+
+          // If user just logged in or hasn't dismissed yet, pop up automatically!
+          if (isFreshLogin) {
+            sessionStorage.removeItem("srt_portal_fresh_login");
+            sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
+            setTimeout(() => {
+              if (isMounted) setIsOpen(true);
+            }, 350);
+          } else if (!isDismissed) {
+            setTimeout(() => {
+              if (isMounted) setIsOpen(true);
+            }, 500);
+          }
+        }
+      })
+      .catch(() => {});
+
+    // Also check immediately if initialNotifications already present
+    const isFreshLogin = sessionStorage.getItem("srt_portal_fresh_login") === "true";
+    const isDismissed = sessionStorage.getItem("srt_portal_popup_notif_dismissed") === "true";
+
+    if (initialNotifications && initialNotifications.length > 0) {
+      if (isFreshLogin) {
+        sessionStorage.removeItem("srt_portal_fresh_login");
+        sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
+        const timer = setTimeout(() => {
+          if (isMounted) setIsOpen(true);
+        }, 350);
+        return () => clearTimeout(timer);
+      } else if (!isDismissed) {
+        const timer = setTimeout(() => {
+          if (isMounted) setIsOpen(true);
+        }, 500);
+        return () => clearTimeout(timer);
+      }
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [initialNotifications]);
 
   // Listen for manual open trigger from Topbar Bell button
   useEffect(() => {
     const handleManualOpen = () => {
+      getUnifiedNotificationsAction()
+        .then((fresh) => {
+          if (fresh && fresh.length > 0) {
+            setNotifications(fresh);
+          }
+        })
+        .catch(() => {});
       setIsOpen(true);
     };
 
@@ -93,6 +143,10 @@ export default function NotificationPopupModal({
   // Icon for category
   const getCategoryIcon = (category: string) => {
     switch (category) {
+      case "MEETING":
+        return <Calendar size={13} />;
+      case "INSTRUCTION":
+        return <FileText size={13} />;
       case "ANNOUNCEMENT":
         return <Megaphone size={13} />;
       case "MESSAGE":
@@ -102,7 +156,7 @@ export default function NotificationPopupModal({
       case "ASSIGNMENT":
         return <BookOpen size={13} />;
       case "ATTENDANCE":
-        return <Calendar size={13} />;
+        return <Clock size={13} />;
       default:
         return <Info size={13} />;
     }

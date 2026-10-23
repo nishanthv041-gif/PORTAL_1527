@@ -9,6 +9,10 @@ export default function GoogleSignInButton() {
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
+    try {
+      sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
+      sessionStorage.setItem("srt_portal_fresh_login", "true");
+    } catch {}
     await signIn("google", { callbackUrl: "/" });
   };
 

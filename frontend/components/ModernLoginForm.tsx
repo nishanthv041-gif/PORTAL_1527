@@ -97,6 +97,10 @@ export default function ModernLoginForm({
         setError(res.error || "Invalid email or password. Please verify your credentials.");
         setLoading(false);
       } else {
+        try {
+          sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
+          sessionStorage.setItem("srt_portal_fresh_login", "true");
+        } catch {}
         router.push("/dashboard");
       }
     } catch {
@@ -107,6 +111,10 @@ export default function ModernLoginForm({
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
+    try {
+      sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
+      sessionStorage.setItem("srt_portal_fresh_login", "true");
+    } catch {}
     try {
       await signIn("google", { callbackUrl: "/dashboard" });
     } catch {
