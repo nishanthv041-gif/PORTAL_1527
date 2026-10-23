@@ -81,13 +81,21 @@ export default async function ParentDetailsPage({
                 <p style={{ margin: 0, fontSize: '0.875rem' }}>{parent.phone || 'Not provided'}</p>
               </div>
             </div>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+              <GraduationCap size={18} style={{ color: 'var(--text-secondary)', marginTop: '0.125rem' }} />
+              <div>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0 0 0.125rem 0' }}>Total Student Count</p>
+                <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600 }}>{parent.children.length} {parent.children.length === 1 ? 'Student' : 'Students'}</p>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Children Info Card */}
         <div style={{ background: 'var(--card-bg)', borderRadius: '12px', padding: '1.5rem', border: '1px solid var(--border-color)', gridColumn: '1 / -1' }}>
           <h3 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <GraduationCap size={20} /> Linked Students
+            <GraduationCap size={20} /> Linked Students ({parent.children.length})
           </h3>
 
           {parent.children.length > 0 ? (

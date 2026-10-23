@@ -8,22 +8,26 @@ export default async function AdminParentsPage() {
   const session = await getServerSession(getAuthOptions());
   if (!session || session.user.role !== 'ADMIN') return null;
 
-  const parents = await prisma.parent.findMany({
-    orderBy: { user: { name: 'asc' } },
-    include: {
-      user: true,
-      children: {
-        include: {
-          student: { include: { class: true } }
+  const [parents, classes, totalStudentsCount] = await Promise.all([
+    prisma.parent.findMany({
+      orderBy: { user: { name: 'asc' } },
+      include: {
+        user: true,
+        children: {
+          include: {
+            student: { include: { class: true } }
+          }
         }
       }
-    }
-  });
-
-  const classes = await prisma.class.findMany({
-    where: { isActive: true },
-    orderBy: [{ name: 'asc' }, { section: 'asc' }]
-  });
+    }),
+    prisma.class.findMany({
+      where: { isActive: true },
+      orderBy: [{ name: 'asc' }, { section: 'asc' }]
+    }),
+    prisma.student.count({
+      where: { isActive: true }
+    })
+  ]);
 
   return (
     <div className={styles.dashboard}>
@@ -32,7 +36,7 @@ export default async function AdminParentsPage() {
         <p style={{ color: 'var(--text-secondary)' }}>To create new parents, please use the &quot;Create New Roles&quot; section in the sidebar.</p>
       </div>
 
-      <ParentListClient parents={parents} classes={classes} />
+      <ParentListClient parents={parents} classes={classes} totalStudentsCount={totalStudentsCount} />
     </div>
   );
 }

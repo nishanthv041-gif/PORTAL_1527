@@ -11,11 +11,25 @@ type ParentWithRelations = Parent & {
   children: (ParentStudent & { student: Student & { class: Class | null } })[];
 };
 
-export default function ParentListClient({ parents, classes }: { parents: ParentWithRelations[], classes: Class[] }) {
+export default function ParentListClient({ 
+  parents, 
+  classes,
+  totalStudentsCount
+}: { 
+  parents: ParentWithRelations[]; 
+  classes: Class[];
+  totalStudentsCount?: number;
+}) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [classFilter, setClassFilter] = useState("");
+  const [studentCountFilter, setStudentCountFilter] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  // Compute total student count across all parents or DB
+  const totalStudents = totalStudentsCount !== undefined 
+    ? totalStudentsCount 
+    : new Set(parents.flatMap(p => p.children.map(c => c.studentId))).size;
 
   const filteredParents = parents.filter((parent) => {
     const fullName = parent.user.name.toLowerCase();
@@ -26,7 +40,16 @@ export default function ParentListClient({ parents, classes }: { parents: Parent
     const matchesStatus = statusFilter ? (statusFilter === "ACTIVE" ? parent.isActive : !parent.isActive) : true;
     const matchesClass = classFilter ? parent.children.some(c => c.student.classId === classFilter) : true;
     
-    return matchesSearch && matchesStatus && matchesClass;
+    let matchesStudentCount = true;
+    if (studentCountFilter === "has_students") {
+      matchesStudentCount = parent.children.length > 0;
+    } else if (studentCountFilter === "no_students") {
+      matchesStudentCount = parent.children.length === 0;
+    } else if (studentCountFilter === "multiple") {
+      matchesStudentCount = parent.children.length > 1;
+    }
+    
+    return matchesSearch && matchesStatus && matchesClass && matchesStudentCount;
   });
 
 
@@ -51,6 +74,12 @@ export default function ParentListClient({ parents, classes }: { parents: Parent
           <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Active Parents</span>
           <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--success)' }}>
             {parents.filter(p => p.isActive && p.user.status === 'ACTIVE').length}
+          </div>
+        </div>
+        <div>
+          <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Total Student Count</span>
+          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--primary)' }}>
+            {totalStudents}
           </div>
         </div>
       </div>
@@ -86,6 +115,16 @@ export default function ParentListClient({ parents, classes }: { parents: Parent
               <option key={c.id} value={c.id}>{c.name} - {c.section}</option>
             ))}
           </select>
+          <select 
+            value={studentCountFilter}
+            onChange={(e) => setStudentCountFilter(e.target.value)}
+            style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
+          >
+            <option value="">All Student Counts</option>
+            <option value="has_students">With Students (1+)</option>
+            <option value="no_students">No Students (0)</option>
+            <option value="multiple">Multiple (2+)</option>
+          </select>
         </div>
       </div>
 
@@ -96,6 +135,7 @@ export default function ParentListClient({ parents, classes }: { parents: Parent
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Name</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Email & Google SSO</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Phone</th>
+              <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Student Count</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Linked Students</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Status</th>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem', textAlign: 'right' }}>Actions</th>
@@ -128,6 +168,23 @@ export default function ParentListClient({ parents, classes }: { parents: Parent
                   </td>
                   <td style={{ padding: "1rem", fontSize: '0.875rem' }}>
                     {parent.phone || '-'}
+                  </td>
+                  <td style={{ padding: "1rem", fontSize: '0.875rem' }}>
+                    <span style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      minWidth: '28px',
+                      height: '24px',
+                      padding: '0 0.5rem',
+                      borderRadius: '12px',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      background: parent.children.length > 0 ? 'rgba(59, 130, 246, 0.12)' : 'rgba(0,0,0,0.05)',
+                      color: parent.children.length > 0 ? 'var(--primary)' : 'var(--text-secondary)'
+                    }}>
+                      {parent.children.length}
+                    </span>
                   </td>
                   <td style={{ padding: "1rem", fontSize: '0.875rem' }}>
                     {studentsList || '-'}
