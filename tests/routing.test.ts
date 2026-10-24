@@ -34,8 +34,8 @@ async function runTests() {
     
     const csp = globalHeader?.headers?.find((h: any) => h.key === 'Content-Security-Policy');
     assert(!!csp, "Content-Security-Policy header is configured");
-    assert(csp?.value?.includes("default-src 'self'"), "CSP restricts default-src to 'self'");
-    assert(!csp?.value?.includes("techblazing.com"), "CSP does not whitelist techblazing.com");
+    assert(Boolean(csp?.value?.includes("default-src 'self'")), "CSP restricts default-src to 'self'");
+    assert(Boolean(!csp?.value?.includes("techblazing.com")), "CSP does not whitelist techblazing.com");
   } else {
     assert(false, "nextConfig.headers should be defined");
   }
