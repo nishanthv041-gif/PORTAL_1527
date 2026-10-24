@@ -6,7 +6,7 @@ import { ThemeProvider } from "@/frontend/components/ThemeProvider";
 import Script from "next/script";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
-import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
+import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/settings/actions";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -18,15 +18,79 @@ export const viewport: Viewport = {
   ],
 };
 
+const CANONICAL_URL = "https://nipoportal.vercel.app";
+const DEFAULT_TITLE = "School Portal | School Information and Student Services";
+const DEFAULT_DESCRIPTION =
+  "Access school information, announcements, academic resources, and authorized student, parent, and teacher services through our school portal.";
+
 export async function generateMetadata(): Promise<Metadata> {
   let schoolName = "School Portal";
+  let schoolLogo = `${CANONICAL_URL}/images/school_3d_moss_campus.jpg`;
   try {
-    schoolName = await getSystemSetting("SCHOOL_NAME", "SRT School Portal");
+    const settings = await getSystemSettings();
+    if (settings.SCHOOL_NAME) schoolName = settings.SCHOOL_NAME;
+    if (settings.SCHOOL_LOGO) schoolLogo = settings.SCHOOL_LOGO;
   } catch (err) {}
-  
+
+  const dynamicTitle = `${schoolName} | School Information and Student Services`;
+
   return {
-    title: schoolName,
-    description: "School management portal for teachers, parents, and admins",
+    metadataBase: new URL(CANONICAL_URL),
+    title: {
+      default: dynamicTitle || DEFAULT_TITLE,
+      template: `%s | ${schoolName}`,
+    },
+    description: DEFAULT_DESCRIPTION,
+    applicationName: schoolName,
+    authors: [{ name: schoolName }],
+    creator: schoolName,
+    publisher: schoolName,
+    referrer: "strict-origin-when-cross-origin",
+    formatDetection: {
+      email: false,
+      address: false,
+      telephone: false,
+    },
+    alternates: {
+      canonical: "/",
+    },
+    openGraph: {
+      title: dynamicTitle || DEFAULT_TITLE,
+      description: DEFAULT_DESCRIPTION,
+      url: CANONICAL_URL,
+      siteName: schoolName,
+      locale: "en_US",
+      type: "website",
+      images: [
+        {
+          url: schoolLogo,
+          width: 1200,
+          height: 630,
+          alt: `${schoolName} Campus and Student Services Portal`,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: dynamicTitle || DEFAULT_TITLE,
+      description: DEFAULT_DESCRIPTION,
+      images: [schoolLogo],
+    },
+    icons: {
+      icon: [{ url: "/favicon.ico" }],
+      apple: [{ url: "/favicon.ico" }],
+    },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-video-preview": -1,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+      },
+    },
     verification: {
       google: "qVtRH0vqbgqX_w0_sDfrgHF91IaAL9EvKq3i2KplAj4",
     },
@@ -46,8 +110,10 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   let defaultThemeMode = "light";
+  let settings: Record<string, string> = {};
   try {
-    const rawMode = await getSystemSetting("THEME_MODE", "System");
+    settings = await getSystemSettings();
+    const rawMode = settings.THEME_MODE || "System";
     if (rawMode === "Dark") defaultThemeMode = "dark";
     if (rawMode === "Light") defaultThemeMode = "light";
     if (rawMode === "System") defaultThemeMode = "system";
@@ -89,6 +155,38 @@ export default async function RootLayout({
     }
   }
 
+  // Verified JSON-LD structured data
+  const orgName = settings.SCHOOL_NAME || "School Portal";
+  const orgLogo = settings.SCHOOL_LOGO || `${CANONICAL_URL}/images/school_3d_moss_campus.jpg`;
+
+  const structuredData = [
+    {
+      "@context": "https://schema.org",
+      "@type": "EducationalOrganization",
+      "name": orgName,
+      "url": CANONICAL_URL,
+      "description": DEFAULT_DESCRIPTION,
+      "logo": orgLogo,
+      ...(settings.SCHOOL_EMAIL ? { "email": settings.SCHOOL_EMAIL } : {}),
+      ...(settings.SCHOOL_CONTACT ? { "telephone": settings.SCHOOL_CONTACT } : {}),
+      ...(settings.SCHOOL_ADDRESS
+        ? {
+            "address": {
+              "@type": "PostalAddress",
+              "streetAddress": settings.SCHOOL_ADDRESS,
+            },
+          }
+        : {}),
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": orgName,
+      "url": CANONICAL_URL,
+      "description": DEFAULT_DESCRIPTION,
+    },
+  ];
+
   return (
     <html lang="en" data-theme={initialTheme} suppressHydrationWarning>
       <head>
@@ -97,6 +195,11 @@ export default async function RootLayout({
           id="flash-prevention-script"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: flashPreventionScript }}
+        />
+        {/* Verified JSON-LD Structured Data */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
       </head>
       <body suppressHydrationWarning>

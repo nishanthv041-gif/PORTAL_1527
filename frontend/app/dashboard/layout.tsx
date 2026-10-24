@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { redirect } from "next/navigation";
@@ -11,6 +12,19 @@ import NavigationProgressBar from "@/frontend/components/NavigationProgressBar";
 import { getUnifiedNotificationsAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
 import NotificationPopupModal from "@/frontend/components/notifications/NotificationPopupModal";
 import { prisma } from "@/backend/db/prisma";
+
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
+  },
+};
 
 export default async function DashboardLayout({
   children,

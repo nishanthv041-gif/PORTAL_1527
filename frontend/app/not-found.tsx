@@ -1,5 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { GraduationCap, ArrowLeft, Home } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "404 - Page Not Found | School Portal",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function NotFound() {
   return (

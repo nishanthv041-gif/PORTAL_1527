@@ -61,6 +61,29 @@ async function runTests() {
     );
   }
 
+  // 4. Verify Technical SEO: robots.ts and sitemap.ts
+  const robotsModule = await import('../app/robots');
+  const robotsConfig = robotsModule.default();
+  assert(robotsConfig.sitemap === 'https://nipoportal.vercel.app/sitemap.xml', 'robots.txt specifies canonical sitemap');
+  const rules = Array.isArray(robotsConfig.rules) ? robotsConfig.rules[0] : robotsConfig.rules;
+  assert(Boolean(rules?.disallow?.includes('/dashboard/')), 'robots.txt disallows /dashboard/');
+  assert(Boolean(rules?.disallow?.includes('/api/')), 'robots.txt disallows /api/');
+  assert(rules?.allow === '/' || (Array.isArray(rules?.allow) && rules.allow.includes('/')), 'robots.txt allows root homepage /');
+
+  const sitemapModule = await import('../app/sitemap');
+  const sitemapConfig = sitemapModule.default();
+  assert(Array.isArray(sitemapConfig) && sitemapConfig.length > 0, 'sitemap returns non-empty array');
+  assert(sitemapConfig[0].url === 'https://nipoportal.vercel.app', 'sitemap points to canonical production domain');
+  assert(!sitemapConfig.some(entry => entry.url.includes('/dashboard')), 'sitemap does not contain private dashboard routes');
+  assert(!sitemapConfig.some(entry => entry.url.includes('/api')), 'sitemap does not contain api routes');
+
+  // 5. Verify Dashboard Layout robots metadata
+  const fs = await import('fs');
+  const path = await import('path');
+  const layoutContent = fs.readFileSync(path.join(__dirname, '../frontend/app/dashboard/layout.tsx'), 'utf-8');
+  assert(layoutContent.includes('export const metadata: Metadata = {'), 'Dashboard layout defines metadata');
+  assert(layoutContent.includes('index: false') && layoutContent.includes('follow: false'), 'Dashboard layout enforces robots index: false (noindex)');
+
   console.log(`\nTest Summary: ${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);
