@@ -1,9 +1,9 @@
 import { getParentAndSelectedChild } from "./parentChildHelper";
 import { prisma } from "@/backend/db/prisma";
-import styles from "../dashboard.module.css";
+import styles from "./ParentDashboard.module.css";
 import { 
-  BookOpen, Calendar, Bell, FileText, 
-  GraduationCap, Clock, Building2, Home, Star 
+  Percent, CheckCircle2, AlertCircle, CalendarCheck, 
+  GraduationCap, Clock, ArrowRight, CalendarDays 
 } from "lucide-react";
 import ParentChildBanner from "./ParentChildBanner";
 import Link from "next/link";
@@ -18,8 +18,8 @@ export default async function ParentDashboard({
 
   if (!parent || children.length === 0) {
     return (
-      <div className={styles.dashboard}>
-        <h1 className={styles.title}>Parent Dashboard</h1>
+      <div className={styles.container}>
+        <h1 className={styles.pageTitle}>Parent Dashboard</h1>
         <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '2rem', textAlign: 'center' }}>
           <p style={{ color: 'var(--text-secondary)' }}>No children linked to your parent account.</p>
         </div>
@@ -29,24 +29,12 @@ export default async function ParentDashboard({
 
   if (!selectedChild) return null;
 
-  // Fetch data for selected child
-  const [attendance, assignments, reportCards, timetableToday] = await Promise.all([
+  // Fetch selected student's attendance records and daily timetable
+  const [attendanceRecords, timetableToday] = await Promise.all([
     prisma.attendance.findMany({
       where: { studentId: selectedChild.id },
       orderBy: { date: 'desc' },
-      take: 5
-    }),
-    prisma.submission.findMany({
-      where: { studentId: selectedChild.id },
-      include: { assignment: true },
-      orderBy: { submittedAt: 'desc' },
-      take: 5
-    }),
-    prisma.reportCard.findMany({
-      where: { studentId: selectedChild.id, published: true },
-      include: { exam: true },
-      orderBy: { exam: { date: 'desc' } },
-      take: 2
+      take: 60
     }),
     selectedChild.classId ? prisma.timetable.findMany({
       where: { classId: selectedChild.classId },
@@ -56,123 +44,230 @@ export default async function ParentDashboard({
   ]);
 
   const childClass = selectedChild.class;
-  const isHostel = selectedChild.residenceType?.toUpperCase().includes("HOSTEL");
+
+  // Compute student-specific statistics
+  const totalSessions = attendanceRecords.length;
+  const presentedDays = attendanceRecords.filter((a) => a.status === "PRESENT").length;
+  const absentedDays = attendanceRecords.filter((a) => a.status === "ABSENT" || a.status === "LEAVE").length;
+  const attendancePercentage = totalSessions > 0
+    ? ((presentedDays / totalSessions) * 100).toFixed(1)
+    : "100.0";
+
+  // Recent attendance entries (last 5 recorded days)
+  const recentAttendance = attendanceRecords.slice(0, 5);
+
+  const formatDisplayDate = (d: Date) => {
+    try {
+      return new Date(d).toLocaleDateString("en-GB", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return new Date(d).toLocaleDateString();
+    }
+  };
 
   return (
-    <div className={styles.dashboard}>
-      {/* Header with ChildSwitcher */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+    <div className={styles.container}>
+      {/* Header */}
+      <div className={styles.header}>
         <div>
-          <h1 className={styles.title} style={{ margin: 0 }}>Parent Dashboard</h1>
-          <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
+          <h1 className={styles.pageTitle}>Parent Dashboard</h1>
+          <p className={styles.pageSubtitle}>
             Viewing academic records for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong>
           </p>
         </div>
       </div>
 
-      <div style={{ marginTop: '1.25rem' }}>
-        {/* Child Profile & Class Banner with Child Switching Option */}
-        <ParentChildBanner 
-          selectedChild={selectedChild} 
-          studentList={children} 
-          activePage="dashboard" 
-        />
+      {/* Child Profile Banner with Multi-Child Switcher (viewable only for parents with 2+ children) */}
+      <ParentChildBanner 
+        selectedChild={selectedChild} 
+        studentList={children} 
+        activePage="dashboard" 
+      />
 
-        {/* Stats Grid */}
-        <div className={styles.statsGrid}>
-          <Link href={`/dashboard/parent/classes?childId=${selectedChild.id}`} prefetch={true} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className={styles.statCard} style={{ cursor: 'pointer', transition: 'transform 0.2s', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
-              <div className={styles.statIcon}><GraduationCap size={24} /></div>
-              <div className={styles.statInfo}>
-                <span className={styles.statLabel}>Enrolled Class</span>
-                <span className={styles.statValue} style={{ fontSize: '1.15rem', marginTop: '0.25rem' }}>
-                  {childClass ? `${childClass.name} - ${childClass.section}` : 'N/A'}
-                </span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600, marginTop: '0.25rem', display: 'block' }}>
-                  {childClass?.subjects ? `${childClass.subjects.length} Subjects` : 'View Class'}
-                </span>
-              </div>
-            </div>
-          </Link>
+      {/* 5 Stats Cards Grid: Percentage, Presented Days, Absented Days, Class Details, Timetable */}
+      <div className={styles.statsGrid}>
+        {/* 1. Student Attendance Percentage */}
+        <Link 
+          href={`/dashboard/parent/attendance?childId=${selectedChild.id}`} 
+          prefetch={true} 
+          className={`${styles.statCard} ${styles.statPercentage}`}
+        >
+          <div className={styles.statIcon}>
+            <Percent size={22} />
+          </div>
+          <div className={styles.statInfo}>
+            <span className={styles.statLabel}>Attendance %</span>
+            <span className={styles.statValue}>{attendancePercentage}%</span>
+            <span className={styles.statSubtext}>Based on recorded sessions</span>
+          </div>
+        </Link>
 
-          <Link href={`/dashboard/parent/attendance?childId=${selectedChild.id}`} prefetch={true} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className={styles.statCard} style={{ cursor: 'pointer', transition: 'transform 0.2s' }}>
-              <div className={styles.statIcon}><Calendar size={24} /></div>
-              <div className={styles.statInfo}>
-                <span className={styles.statLabel}>Recent Attendance</span>
-                <span className={styles.statValue} style={{ fontSize: '1rem', marginTop: '0.35rem' }}>
-                  {attendance.length > 0 ? (
-                    <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
-                      {attendance.map(a => (
-                        <span key={a.id} title={`${new Date(a.date).toLocaleDateString()} - ${a.status}`} style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: a.status === 'PRESENT' ? "var(--success)" : a.status === 'ABSENT' ? "var(--danger)" : "var(--warning)", flexShrink: 0 }}></span>
-                      ))}
-                    </div>
-                  ) : 'No records'}
-                </span>
-              </div>
-            </div>
-          </Link>
+        {/* 2. Total Presented Days */}
+        <Link 
+          href={`/dashboard/parent/attendance?childId=${selectedChild.id}`} 
+          prefetch={true} 
+          className={`${styles.statCard} ${styles.statPresent}`}
+        >
+          <div className={styles.statIcon}>
+            <CheckCircle2 size={22} />
+          </div>
+          <div className={styles.statInfo}>
+            <span className={styles.statLabel}>Total Presented Days</span>
+            <span className={styles.statValue}>{presentedDays} Days</span>
+            <span className={styles.statSubtext}>Attended school sessions</span>
+          </div>
+        </Link>
 
-          <Link href={`/dashboard/parent/assignments?childId=${selectedChild.id}`} prefetch={true} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className={styles.statCard} style={{ cursor: 'pointer', transition: 'transform 0.2s' }}>
-              <div className={styles.statIcon}><BookOpen size={24} /></div>
-              <div className={styles.statInfo}>
-                <span className={styles.statLabel}>Assignments</span>
-                <span className={styles.statValue} style={{ fontSize: '1.25rem' }}>
-                  {assignments.length} Submissions
-                </span>
-              </div>
-            </div>
-          </Link>
+        {/* 3. Absented Days */}
+        <Link 
+          href={`/dashboard/parent/attendance?childId=${selectedChild.id}`} 
+          prefetch={true} 
+          className={`${styles.statCard} ${styles.statAbsent}`}
+        >
+          <div className={styles.statIcon}>
+            <AlertCircle size={22} />
+          </div>
+          <div className={styles.statInfo}>
+            <span className={styles.statLabel}>Absented Days</span>
+            <span className={styles.statValue}>{absentedDays} Days</span>
+            <span className={styles.statSubtext}>Approved leaves &amp; absences</span>
+          </div>
+        </Link>
 
-          <Link href={`/dashboard/parent/report-cards?childId=${selectedChild.id}`} prefetch={true} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className={styles.statCard} style={{ cursor: 'pointer', transition: 'transform 0.2s' }}>
-              <div className={styles.statIcon}><FileText size={24} /></div>
-              <div className={styles.statInfo}>
-                <span className={styles.statLabel}>Latest Grade</span>
-                <span className={styles.statValue} style={{ fontSize: '1.5rem', color: 'var(--primary)' }}>
-                  {reportCards.length > 0 ? reportCards[0].grade : 'N/A'}
-                </span>
-              </div>
-            </div>
-          </Link>
+        {/* 4. Enrolled Class (Class Details) */}
+        <Link 
+          href={`/dashboard/parent/classes?childId=${selectedChild.id}`} 
+          prefetch={true} 
+          className={`${styles.statCard} ${styles.statClass}`}
+        >
+          <div className={styles.statIcon}>
+            <GraduationCap size={22} />
+          </div>
+          <div className={styles.statInfo}>
+            <span className={styles.statLabel}>Class Details</span>
+            <span className={styles.statValue}>
+              {childClass ? `${childClass.name} - ${childClass.section}` : "N/A"}
+            </span>
+            <span className={styles.statSubtext}>
+              {childClass?.subjects ? `${childClass.subjects.length} Subjects • View Class` : "View Class Details"}
+            </span>
+          </div>
+        </Link>
 
-          <Link href={`/dashboard/parent/timetable?childId=${selectedChild.id}`} prefetch={true} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className={styles.statCard} style={{ cursor: 'pointer', transition: 'transform 0.2s' }}>
-              <div className={styles.statIcon}><Clock size={24} /></div>
-              <div className={styles.statInfo}>
-                <span className={styles.statLabel}>Class Timetable</span>
-                <span className={styles.statValue} style={{ fontSize: '1rem', marginTop: '0.25rem' }}>
-                  {timetableToday.length > 0 ? `${timetableToday.length} Periods` : 'View Schedule'}
-                </span>
-              </div>
-            </div>
-          </Link>
+        {/* 5. Class Timetable */}
+        <Link 
+          href={`/dashboard/parent/timetable?childId=${selectedChild.id}`} 
+          prefetch={true} 
+          className={`${styles.statCard} ${styles.statTimetable}`}
+        >
+          <div className={styles.statIcon}>
+            <Clock size={22} />
+          </div>
+          <div className={styles.statInfo}>
+            <span className={styles.statLabel}>Class Timetable</span>
+            <span className={styles.statValue}>
+              {timetableToday.length > 0 ? `${timetableToday.length} Periods` : "View Schedule"}
+            </span>
+            <span className={styles.statSubtext}>Daily periods &amp; timing</span>
+          </div>
+        </Link>
+      </div>
 
-          <Link href="/dashboard/parent/announcements" prefetch={true} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className={styles.statCard} style={{ cursor: 'pointer', transition: 'transform 0.2s' }}>
-              <div className={styles.statIcon}><Bell size={24} /></div>
-              <div className={styles.statInfo}>
-                <span className={styles.statLabel}>Notices & Updates</span>
-                <span className={styles.statValue} style={{ fontSize: '1rem', marginTop: '0.25rem', color: 'var(--text-secondary)' }}>
-                  School Announcements
-                </span>
-              </div>
-            </div>
-          </Link>
+      {/* Recent Attendance Section with direct View Attendance action */}
+      <div className={styles.recentAttendanceCard}>
+        <div className={styles.sectionHeader}>
+          <div className={styles.sectionTitleGroup}>
+            <h3 className={styles.sectionTitle}>
+              <CalendarDays size={20} color="var(--primary)" />
+              Recent Attendance
+            </h3>
+            <p className={styles.sectionSubtext}>
+              Latest recorded school attendance for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong>
+            </p>
+          </div>
 
-          <Link href="/dashboard/parent/programs" prefetch={true} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className={styles.statCard} style={{ cursor: 'pointer', transition: 'transform 0.2s', border: '1px solid rgba(168, 85, 247, 0.25)' }}>
-              <div className={styles.statIcon} style={{ color: '#9333ea' }}><Star size={24} /></div>
-              <div className={styles.statInfo}>
-                <span className={styles.statLabel}>School Programs</span>
-                <span className={styles.statValue} style={{ fontSize: '1rem', marginTop: '0.25rem', color: '#9333ea', fontWeight: 600 }}>
-                  Events &amp; Intimations
-                </span>
-              </div>
-            </div>
+          <Link 
+            href={`/dashboard/parent/attendance?childId=${selectedChild.id}`}
+            prefetch={true}
+            className={styles.viewAttendanceBtn}
+          >
+            <span>View Full Attendance</span>
+            <ArrowRight size={15} />
           </Link>
         </div>
+
+        {recentAttendance.length > 0 ? (
+          <div className={styles.attendanceTableWrapper}>
+            <table className={styles.attendanceTable}>
+              <thead>
+                <tr>
+                  <th className={styles.thDate}>Date</th>
+                  <th className={styles.thStatus}>Status</th>
+                  <th className={styles.thRemarks}>Remarks / Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentAttendance.map((record) => {
+                  const isPresent = record.status === "PRESENT";
+                  const isLeave = record.status === "LEAVE" || record.status === "ABSENT";
+
+                  return (
+                    <tr key={record.id} className={styles.tableRow}>
+                      <td className={styles.tdDate}>
+                        {formatDisplayDate(record.date)}
+                      </td>
+
+                      <td className={styles.tdStatus}>
+                        {isPresent && (
+                          <span className={styles.badgePresent}>
+                            <CheckCircle2 size={13} />
+                            Present
+                          </span>
+                        )}
+                        {isLeave && (
+                          <span className={styles.badgeLeave}>
+                            <CalendarCheck size={13} />
+                            Leave / Absent
+                          </span>
+                        )}
+                        {!isPresent && !isLeave && (
+                          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                            {record.status}
+                          </span>
+                        )}
+                      </td>
+
+                      <td className={styles.tdRemarks}>
+                        {record.remarks || (isPresent ? "Regular class attendance" : "Reported leave / absent")}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className={styles.emptyState}>
+            <CalendarDays size={36} style={{ opacity: 0.3, margin: "0 auto 0.5rem" }} />
+            <p style={{ margin: 0, fontWeight: 500 }}>No attendance records recorded yet.</p>
+            <p style={{ margin: "0.25rem 0 1rem 0", fontSize: "0.85rem", opacity: 0.7 }}>
+              Attendance will be updated as the Class Teacher registers daily attendance.
+            </p>
+            <Link 
+              href={`/dashboard/parent/attendance?childId=${selectedChild.id}`} 
+              prefetch={true}
+              className={styles.viewAttendanceBtn}
+              style={{ display: "inline-flex" }}
+            >
+              <span>Open Attendance Page</span>
+              <ArrowRight size={14} />
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

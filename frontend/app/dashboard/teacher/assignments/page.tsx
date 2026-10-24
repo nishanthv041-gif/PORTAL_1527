@@ -64,8 +64,8 @@ export default async function TeacherAssignmentsPage() {
                       <CalendarIcon size={14} />
                       Due: {new Date(assignment.deadline).toLocaleDateString()}
                     </div>
-                    <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: assignment._count.submissions > 0 ? 'var(--primary-bg)' : 'rgba(156, 163, 175, 0.1)', color: assignment._count.submissions > 0 ? 'var(--primary)' : 'var(--foreground)' }}>
-                      {assignment._count.submissions} Submissions
+                    <span style={{ fontSize: '0.75rem', padding: '3px 9px', borderRadius: '12px', backgroundColor: 'rgba(99, 102, 241, 0.12)', color: 'var(--primary)', fontWeight: 600 }}>
+                      Class Assignment
                     </span>
                   </div>
                 </div>

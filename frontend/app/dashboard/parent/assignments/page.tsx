@@ -1,7 +1,8 @@
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
-import { BookOpen, Calendar as CalendarIcon, CheckCircle, Clock } from "lucide-react";
+import { BookOpen, Calendar as CalendarIcon, CheckCircle2, FileText } from "lucide-react";
 import { getParentAndSelectedChild } from "../parentChildHelper";
+import ParentChildBanner from "../ParentChildBanner";
 
 export default async function ParentAssignmentsPage({
   searchParams
@@ -15,21 +16,20 @@ export default async function ParentAssignmentsPage({
   if (!parent || children.length === 0 || !selectedChild) {
     return (
       <div className={styles.dashboard}>
-        <h1 className={styles.title}>Assignments</h1>
+        <h1 className={styles.title}>School Assignments</h1>
         <p>No children linked to your account.</p>
       </div>
     );
   }
 
+  // School Portal Assignments (Homework / tasks assigned to the child's class)
   const assignments = selectedChild.classId ? await prisma.assignment.findMany({
     where: { classId: selectedChild.classId },
     include: {
-      submissions: {
-        where: { studentId: selectedChild.id }
-      },
       teacher: {
         include: { user: true }
-      }
+      },
+      class: true
     },
     orderBy: { deadline: 'desc' }
   }) : [];
@@ -38,71 +38,107 @@ export default async function ParentAssignmentsPage({
     <div className={styles.dashboard}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 className={styles.title} style={{ margin: 0 }}>Assignments</h1>
+          <h1 className={styles.title} style={{ margin: 0 }}>School Assignments</h1>
           <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
-            Viewing assignments for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong>
+            Classwork and homework assigned for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong>
           </p>
         </div>
       </div>
 
-      <div className={styles.chartsContainer} style={{ marginTop: '2rem' }}>
+      <div style={{ marginTop: '1.25rem' }}>
+        <ParentChildBanner 
+          selectedChild={selectedChild} 
+          studentList={children} 
+          activePage="other" 
+        />
+      </div>
+
+      <div className={styles.chartsContainer} style={{ marginTop: '1.5rem' }}>
         <div className={styles.chartCard} style={{ gridColumn: '1 / -1' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {assignments.map((assignment) => {
-              const sub = assignment.submissions[0];
-              const isSubmitted = !!sub;
+              const isPastDue = new Date(assignment.deadline) < new Date();
 
               return (
-                <div key={assignment.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', border: '1px solid var(--border)', borderRadius: '8px', backgroundColor: 'var(--background)', transition: 'border-color 0.2s', flexWrap: 'wrap', gap: '1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ width: 40, height: 40, borderRadius: '8px', backgroundColor: 'var(--primary-bg)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <BookOpen size={20} />
+                <div 
+                  key={assignment.id} 
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between', 
+                    padding: '1.25rem', 
+                    border: '1px solid var(--border)', 
+                    borderRadius: '10px', 
+                    backgroundColor: 'var(--background)', 
+                    transition: 'border-color 0.2s', 
+                    flexWrap: 'wrap', 
+                    gap: '1rem' 
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', minWidth: '240px', flex: '1 1 300px' }}>
+                    <div style={{ 
+                      width: 44, 
+                      height: 44, 
+                      borderRadius: '10px', 
+                      backgroundColor: 'rgba(99, 102, 241, 0.12)', 
+                      color: 'var(--primary)', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <BookOpen size={22} />
                     </div>
                     <div>
-                      <h4 style={{ margin: 0, color: 'var(--foreground)' }}>{assignment.title}</h4>
-                      <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.7, color: 'var(--foreground)' }}>
-                        Teacher: {assignment.teacher.user.name}
+                      <h4 style={{ margin: 0, color: 'var(--foreground)', fontSize: '1rem', fontWeight: 600 }}>
+                        {assignment.title}
+                      </h4>
+                      <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                        Assigned by {assignment.teacher?.user?.name || 'Class Teacher'} • {assignment.class.name} - {assignment.class.section}
                       </p>
+                      {assignment.description && (
+                        <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.85rem', color: 'var(--foreground)', opacity: 0.85 }}>
+                          {assignment.description}
+                        </p>
+                      )}
                     </div>
                   </div>
                   
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', opacity: 0.8, color: 'var(--foreground)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.35rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                         <CalendarIcon size={14} />
-                        Due: {new Date(assignment.deadline).toLocaleDateString()}
+                        Due: {new Date(assignment.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </div>
                       
-                      {!isSubmitted && (
-                        <span style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: '12px', backgroundColor: 'var(--danger-bg)', color: "var(--danger)", display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <Clock size={12} /> Missing / Pending
-                        </span>
-                      )}
-                      {isSubmitted && sub.status === 'SUBMITTED' && (
-                        <span style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: '12px', backgroundColor: 'var(--warning-bg)', color: "var(--warning)", display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <CheckCircle size={12} /> Submitted (Not Graded)
-                        </span>
-                      )}
-                      {isSubmitted && sub.status === 'GRADED' && (
-                        <span style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: '12px', backgroundColor: 'var(--success-bg)', color: "var(--success)", display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <CheckCircle size={12} /> Graded
-                        </span>
-                      )}
+                      <span style={{ 
+                        fontSize: '0.75rem', 
+                        padding: '4px 10px', 
+                        borderRadius: '12px', 
+                        backgroundColor: isPastDue ? 'rgba(156, 163, 175, 0.15)' : 'rgba(16, 185, 129, 0.15)', 
+                        color: isPastDue ? 'var(--text-secondary)' : 'var(--success)', 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '0.25rem',
+                        fontWeight: 600 
+                      }}>
+                        <CheckCircle2 size={12} />
+                        {isPastDue ? 'Completed / Past Due' : 'Active Homework'}
+                      </span>
                     </div>
-
-                    {isSubmitted && sub.status === 'GRADED' && sub.remarks && (
-                      <div style={{ padding: '0.5rem 1rem', backgroundColor: 'rgba(16, 185, 129, 0.05)', borderRadius: '6px', border: '1px dashed rgba(16, 185, 129, 0.3)', minWidth: '150px' }}>
-                        <span style={{ fontSize: '0.75rem', opacity: 0.7, display: 'block', marginBottom: '0.25rem' }}>Grade / Remarks</span>
-                        <span style={{ fontSize: '0.875rem', fontWeight: 500, color: "var(--success)" }}>{sub.remarks}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               );
             })}
 
             {assignments.length === 0 && (
-              <p style={{ textAlign: 'center', padding: '2rem', opacity: 0.7 }}>No assignments found for this class.</p>
+              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                <FileText size={40} style={{ opacity: 0.3, margin: '0 auto 0.75rem' }} />
+                <p style={{ margin: 0, fontWeight: 500 }}>No assignments scheduled for this class.</p>
+                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', opacity: 0.7 }}>
+                  New homework assigned by teachers will appear here.
+                </p>
+              </div>
             )}
           </div>
         </div>

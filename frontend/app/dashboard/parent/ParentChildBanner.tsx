@@ -75,8 +75,8 @@ export default function ParentChildBanner({
 
   return (
     <div className={styles.banner}>
-      {/* 1-Tap Multi-Child Switcher Tabs (Shown ONLY on main dashboard when parent has 2+ registered children) */}
-      {hasMultipleChildren && activePage === "dashboard" && (
+      {/* 1-Tap Multi-Child Switcher Tabs (Shown ONLY for parents with 2+ registered children) */}
+      {hasMultipleChildren && (
         <div className={styles.switchSection}>
           <div className={styles.switchHeaderRow}>
             <span className={styles.switchLabel}>
