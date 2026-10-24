@@ -3,6 +3,8 @@ import styles from "../../dashboard.module.css";
 import { BookOpen, Calendar as CalendarIcon } from "lucide-react";
 import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
 import { getParentAndSelectedChild } from "../parentChildHelper";
+import ParentChildBanner from "../ParentChildBanner";
+import ExamClassPerformancePieChart from "../ExamClassPerformancePieChart";
 
 export default async function ParentExamsPage({
   searchParams
@@ -17,7 +19,7 @@ export default async function ParentExamsPage({
   if (canView === "false") {
     return (
       <div className={styles.dashboard}>
-        <h1 className={styles.title}>Exams & Marks</h1>
+        <h1 className={styles.title}>Exams &amp; Marks</h1>
         <p style={{ color: "var(--danger)" }}>Exam results are currently hidden by the administrator.</p>
       </div>
     );
@@ -26,35 +28,176 @@ export default async function ParentExamsPage({
   if (!parent || children.length === 0 || !selectedChild) {
     return (
       <div className={styles.dashboard}>
-        <h1 className={styles.title}>Exams & Marks</h1>
+        <h1 className={styles.title}>Exams &amp; Marks</h1>
         <p>No children linked to your account.</p>
       </div>
     );
   }
 
-  const exams = selectedChild.classId ? await prisma.exam.findMany({
-    where: { classId: selectedChild.classId },
-    include: {
-      marks: {
-        where: { studentId: selectedChild.id },
-        include: { subject: true }
+  // 1. Fetch exams for this child and the last exam with full class marks
+  const [exams, lastExamWithMarks] = await Promise.all([
+    selectedChild.classId ? prisma.exam.findMany({
+      where: { classId: selectedChild.classId },
+      include: {
+        marks: {
+          where: { studentId: selectedChild.id },
+          include: { subject: true }
+        }
+      },
+      orderBy: { date: 'desc' }
+    }) : Promise.resolve([]),
+    selectedChild.classId ? (
+      await prisma.exam.findFirst({
+        where: { 
+          classId: selectedChild.classId,
+          marks: { some: {} }
+        },
+        orderBy: { date: 'desc' },
+        include: {
+          marks: {
+            include: { subject: true, student: true }
+          }
+        }
+      }) || await prisma.exam.findFirst({
+        where: { classId: selectedChild.classId },
+        orderBy: { date: 'desc' },
+        include: {
+          marks: {
+            include: { subject: true, student: true }
+          }
+        }
+      })
+    ) : Promise.resolve(null)
+  ]);
+
+  const childClass = selectedChild.class;
+
+  // 2. Compute last test mark calculation & class overall percentage
+  let hasExamData = false;
+  let classOverallPercentage = 0;
+  let totalStudentsAppeared = 0;
+  let passedStudents = 0;
+  let failedStudents = 0;
+  let passRatePercentage = 0;
+  let childPercentage: number | null = null;
+  let childScore = 0;
+  let childMaxScore = 0;
+  let examName = "";
+  let examDate = "";
+  const subjectBreakdown: { name: string; avgPercentage: number }[] = [];
+
+  if (lastExamWithMarks) {
+    examName = lastExamWithMarks.name;
+    try {
+      examDate = new Date(lastExamWithMarks.date).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric"
+      });
+    } catch {
+      examDate = new Date(lastExamWithMarks.date).toLocaleDateString();
+    }
+
+    if (lastExamWithMarks.marks.length > 0) {
+      hasExamData = true;
+
+      // Class total score & max score
+      const classTotalScore = lastExamWithMarks.marks.reduce((acc, m) => acc + m.score, 0);
+      const classTotalMax = lastExamWithMarks.marks.reduce((acc, m) => acc + m.maxScore, 0);
+      classOverallPercentage = classTotalMax > 0 
+        ? Number(((classTotalScore / classTotalMax) * 100).toFixed(1)) 
+        : 0;
+
+      // Group marks by student for pass/fail calculation
+      const studentMap = new Map<string, { score: number; maxScore: number }>();
+      lastExamWithMarks.marks.forEach(m => {
+        const cur = studentMap.get(m.studentId) || { score: 0, maxScore: 0 };
+        cur.score += m.score;
+        cur.maxScore += m.maxScore;
+        studentMap.set(m.studentId, cur);
+      });
+
+      totalStudentsAppeared = studentMap.size;
+      studentMap.forEach(s => {
+        const pct = s.maxScore > 0 ? (s.score / s.maxScore) * 100 : 0;
+        if (pct >= 40) {
+          passedStudents++;
+        } else {
+          failedStudents++;
+        }
+      });
+
+      passRatePercentage = totalStudentsAppeared > 0 
+        ? Number(((passedStudents / totalStudentsAppeared) * 100).toFixed(1)) 
+        : 0;
+
+      // Child's specific score on this test
+      const childMarks = lastExamWithMarks.marks.filter(m => m.studentId === selectedChild.id);
+      if (childMarks.length > 0) {
+        childScore = childMarks.reduce((acc, m) => acc + m.score, 0);
+        childMaxScore = childMarks.reduce((acc, m) => acc + m.maxScore, 0);
+        childPercentage = childMaxScore > 0 
+          ? Number(((childScore / childMaxScore) * 100).toFixed(1)) 
+          : 0;
       }
-    },
-    orderBy: { date: 'desc' }
-  }) : [];
+
+      // Subject performance breakdown
+      const subjectMap = new Map<string, { name: string; score: number; maxScore: number }>();
+      lastExamWithMarks.marks.forEach(m => {
+        const cur = subjectMap.get(m.subjectId) || { name: m.subject.name, score: 0, maxScore: 0 };
+        cur.score += m.score;
+        cur.maxScore += m.maxScore;
+        subjectMap.set(m.subjectId, cur);
+      });
+
+      subjectMap.forEach(sub => {
+        const pct = sub.maxScore > 0 ? Number(((sub.score / sub.maxScore) * 100).toFixed(1)) : 0;
+        subjectBreakdown.push({ name: sub.name, avgPercentage: pct });
+      });
+    }
+  }
 
   return (
     <div className={styles.dashboard}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
         <div>
-          <h1 className={styles.title} style={{ margin: 0 }}>Exams & Marks</h1>
+          <h1 className={styles.title} style={{ margin: 0 }}>Exams &amp; Marks</h1>
           <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
             Viewing exams and marks for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong>
           </p>
         </div>
       </div>
 
-      <div className={styles.chartsContainer} style={{ marginTop: '2rem' }}>
+      {/* Child Profile Banner */}
+      <ParentChildBanner 
+        selectedChild={selectedChild} 
+        studentList={children} 
+        activePage="other" 
+      />
+
+      {/* Exam Overall Percentage (Last Test Mark Calculation with Pie Chart) */}
+      <div style={{ margin: '1rem 0' }}>
+        <ExamClassPerformancePieChart
+          hasExamData={hasExamData}
+          examName={examName}
+          examDate={examDate}
+          classNameStr={childClass ? `${childClass.name} - ${childClass.section}` : "Class"}
+          classOverallPercentage={classOverallPercentage}
+          totalStudentsAppeared={totalStudentsAppeared}
+          passedStudents={passedStudents}
+          failedStudents={failedStudents}
+          passRatePercentage={passRatePercentage}
+          childPercentage={childPercentage}
+          childScore={childScore}
+          childMaxScore={childMaxScore}
+          childName={selectedChild.firstName}
+          childId={selectedChild.id}
+          subjectBreakdown={subjectBreakdown}
+        />
+      </div>
+
+      {/* Historical Exams List */}
+      <div className={styles.chartsContainer} style={{ marginTop: '1.5rem' }}>
         {exams.map((exam) => (
           <div key={exam.id} className={styles.chartCard}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>

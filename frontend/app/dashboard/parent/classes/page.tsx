@@ -52,7 +52,7 @@ export default async function ParentClassesPage({
             <span>Child Class &amp; Subjects</span>
           </h1>
           <p className={parentStyles.pageSubtitle}>
-            Viewing academic class, faculty and subjects for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong>.
+            Viewing academic class curriculum and subjects for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong>.
           </p>
         </div>
       </div>

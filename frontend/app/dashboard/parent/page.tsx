@@ -3,10 +3,11 @@ import { prisma } from "@/backend/db/prisma";
 import styles from "./ParentDashboard.module.css";
 import { 
   Percent, CheckCircle2, AlertCircle, CalendarCheck, 
-  GraduationCap, Clock, ArrowRight, CalendarDays 
+  GraduationCap, BookOpen, ArrowRight, CalendarDays 
 } from "lucide-react";
 import ParentChildBanner from "./ParentChildBanner";
 import Link from "next/link";
+import ExamClassPerformancePieChart from "./ExamClassPerformancePieChart";
 
 export default async function ParentDashboard({
   searchParams
@@ -29,23 +30,40 @@ export default async function ParentDashboard({
 
   if (!selectedChild) return null;
 
-  // Fetch selected student's attendance records and daily timetable
-  const [attendanceRecords, timetableToday] = await Promise.all([
+  // 1. Fetch selected student's attendance records and the latest class exam with marks
+  const [attendanceRecords, lastExamWithMarks] = await Promise.all([
     prisma.attendance.findMany({
       where: { studentId: selectedChild.id },
       orderBy: { date: 'desc' },
       take: 60
     }),
-    selectedChild.classId ? prisma.timetable.findMany({
-      where: { classId: selectedChild.classId },
-      include: { subject: true },
-      take: 4
-    }) : Promise.resolve([])
+    selectedChild.classId ? (
+      await prisma.exam.findFirst({
+        where: { 
+          classId: selectedChild.classId,
+          marks: { some: {} }
+        },
+        orderBy: { date: 'desc' },
+        include: {
+          marks: {
+            include: { subject: true, student: true }
+          }
+        }
+      }) || await prisma.exam.findFirst({
+        where: { classId: selectedChild.classId },
+        orderBy: { date: 'desc' },
+        include: {
+          marks: {
+            include: { subject: true, student: true }
+          }
+        }
+      })
+    ) : Promise.resolve(null)
   ]);
 
   const childClass = selectedChild.class;
 
-  // Compute student-specific statistics
+  // 2. Compute student attendance statistics
   const totalSessions = attendanceRecords.length;
   const presentedDays = attendanceRecords.filter((a) => a.status === "PRESENT").length;
   const absentedDays = attendanceRecords.filter((a) => a.status === "ABSENT" || a.status === "LEAVE").length;
@@ -69,6 +87,91 @@ export default async function ParentDashboard({
     }
   };
 
+  // 3. Compute last test mark calculation & class overall percentage
+  let hasExamData = false;
+  let classOverallPercentage = 0;
+  let totalStudentsAppeared = 0;
+  let passedStudents = 0;
+  let failedStudents = 0;
+  let passRatePercentage = 0;
+  let childPercentage: number | null = null;
+  let childScore = 0;
+  let childMaxScore = 0;
+  let examName = "";
+  let examDate = "";
+  const subjectBreakdown: { name: string; avgPercentage: number }[] = [];
+
+  if (lastExamWithMarks) {
+    examName = lastExamWithMarks.name;
+    try {
+      examDate = new Date(lastExamWithMarks.date).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric"
+      });
+    } catch {
+      examDate = new Date(lastExamWithMarks.date).toLocaleDateString();
+    }
+
+    if (lastExamWithMarks.marks.length > 0) {
+      hasExamData = true;
+
+      // Total class score vs max score
+      const classTotalScore = lastExamWithMarks.marks.reduce((acc, m) => acc + m.score, 0);
+      const classTotalMax = lastExamWithMarks.marks.reduce((acc, m) => acc + m.maxScore, 0);
+      classOverallPercentage = classTotalMax > 0 
+        ? Number(((classTotalScore / classTotalMax) * 100).toFixed(1)) 
+        : 0;
+
+      // Group by student for pass/fail calculation
+      const studentMap = new Map<string, { score: number; maxScore: number }>();
+      lastExamWithMarks.marks.forEach(m => {
+        const cur = studentMap.get(m.studentId) || { score: 0, maxScore: 0 };
+        cur.score += m.score;
+        cur.maxScore += m.maxScore;
+        studentMap.set(m.studentId, cur);
+      });
+
+      totalStudentsAppeared = studentMap.size;
+      studentMap.forEach(s => {
+        const pct = s.maxScore > 0 ? (s.score / s.maxScore) * 100 : 0;
+        if (pct >= 40) {
+          passedStudents++;
+        } else {
+          failedStudents++;
+        }
+      });
+
+      passRatePercentage = totalStudentsAppeared > 0 
+        ? Number(((passedStudents / totalStudentsAppeared) * 100).toFixed(1)) 
+        : 0;
+
+      // Child's specific score on this test
+      const childMarks = lastExamWithMarks.marks.filter(m => m.studentId === selectedChild.id);
+      if (childMarks.length > 0) {
+        childScore = childMarks.reduce((acc, m) => acc + m.score, 0);
+        childMaxScore = childMarks.reduce((acc, m) => acc + m.maxScore, 0);
+        childPercentage = childMaxScore > 0 
+          ? Number(((childScore / childMaxScore) * 100).toFixed(1)) 
+          : 0;
+      }
+
+      // Subject performance breakdown
+      const subjectMap = new Map<string, { name: string; score: number; maxScore: number }>();
+      lastExamWithMarks.marks.forEach(m => {
+        const cur = subjectMap.get(m.subjectId) || { name: m.subject.name, score: 0, maxScore: 0 };
+        cur.score += m.score;
+        cur.maxScore += m.maxScore;
+        subjectMap.set(m.subjectId, cur);
+      });
+
+      subjectMap.forEach(sub => {
+        const pct = sub.maxScore > 0 ? Number(((sub.score / sub.maxScore) * 100).toFixed(1)) : 0;
+        subjectBreakdown.push({ name: sub.name, avgPercentage: pct });
+      });
+    }
+  }
+
   return (
     <div className={styles.container}>
       {/* Header */}
@@ -88,7 +191,7 @@ export default async function ParentDashboard({
         activePage="dashboard" 
       />
 
-      {/* 5 Stats Cards Grid: Percentage, Presented Days, Absented Days, Class Details, Timetable */}
+      {/* 5 Stats Cards Grid: Percentage, Presented Days, Absented Days, Class Details, Total Subjects */}
       <div className={styles.statsGrid}>
         {/* 1. Student Attendance Percentage */}
         <Link 
@@ -158,24 +261,43 @@ export default async function ParentDashboard({
           </div>
         </Link>
 
-        {/* 5. Class Timetable */}
+        {/* 5. Total Subjects (Replaced timetable option as requested) */}
         <Link 
-          href={`/dashboard/parent/timetable?childId=${selectedChild.id}`} 
+          href={`/dashboard/parent/classes?childId=${selectedChild.id}`} 
           prefetch={true} 
-          className={`${styles.statCard} ${styles.statTimetable}`}
+          className={`${styles.statCard} ${styles.statSubjects}`}
         >
           <div className={styles.statIcon}>
-            <Clock size={22} />
+            <BookOpen size={22} />
           </div>
           <div className={styles.statInfo}>
-            <span className={styles.statLabel}>Class Timetable</span>
+            <span className={styles.statLabel}>Total Subjects</span>
             <span className={styles.statValue}>
-              {timetableToday.length > 0 ? `${timetableToday.length} Periods` : "View Schedule"}
+              {childClass?.subjects ? `${childClass.subjects.length} Subjects` : "0 Subjects"}
             </span>
-            <span className={styles.statSubtext}>Daily periods &amp; timing</span>
+            <span className={styles.statSubtext}>Curriculum subjects</span>
           </div>
         </Link>
       </div>
+
+      {/* Exam Overall Percentage (Last Test Mark Calculation with Pie Chart) */}
+      <ExamClassPerformancePieChart
+        hasExamData={hasExamData}
+        examName={examName}
+        examDate={examDate}
+        classNameStr={childClass ? `${childClass.name} - ${childClass.section}` : "Class"}
+        classOverallPercentage={classOverallPercentage}
+        totalStudentsAppeared={totalStudentsAppeared}
+        passedStudents={passedStudents}
+        failedStudents={failedStudents}
+        passRatePercentage={passRatePercentage}
+        childPercentage={childPercentage}
+        childScore={childScore}
+        childMaxScore={childMaxScore}
+        childName={selectedChild.firstName}
+        childId={selectedChild.id}
+        subjectBreakdown={subjectBreakdown}
+      />
 
       {/* Recent Attendance Section with direct View Attendance action */}
       <div className={styles.recentAttendanceCard}>

@@ -94,7 +94,6 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     { href: "/dashboard/parent/notifications", label: "Notifications", icon: <Bell size={20} /> },
     { href: "/dashboard/parent/messages", label: "Messages", icon: <MessageSquare size={20} /> },
     { href: "/dashboard/parent/fees", label: "Fees", icon: <BookOpen size={20} /> },
-    { href: "/dashboard/parent/timetable", label: "Timetable", icon: <Calendar size={20} /> },
     { href: "/dashboard/parent/calendar", label: "Calendar", icon: <Calendar size={20} /> },
     { href: "/dashboard/parent/meetings", label: "Meetings", icon: <Video size={20} /> },
     { href: "/dashboard/parent/complaints", label: "Complaints", icon: <FileWarning size={20} /> },

@@ -156,14 +156,14 @@
   font-size: clamp(1.1rem, 1.6vw, 1.35rem);
 }
 
-.statTimetable {
+.statSubjects {
   border-left: 4px solid var(--warning);
 }
-.statTimetable .statIcon {
+.statSubjects .statIcon {
   background: rgba(245, 158, 11, 0.12);
   color: var(--warning);
 }
-.statTimetable .statValue {
+.statSubjects .statValue {
   font-size: clamp(1.1rem, 1.6vw, 1.35rem);
 }
 

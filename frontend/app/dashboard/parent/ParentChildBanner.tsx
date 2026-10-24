@@ -4,7 +4,7 @@ import { useState, useEffect, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { 
-  Building2, Home, GraduationCap, Clock, 
+  Building2, Home, GraduationCap, 
   ArrowLeftRight, Check, LayoutDashboard, Loader2
 } from "lucide-react";
 import styles from "./ParentChildBanner.module.css";
@@ -185,21 +185,10 @@ export default function ParentChildBanner({
             <Link
               href={`/dashboard/parent/classes?childId=${currentChild.id}`}
               prefetch={true}
-              className={`${styles.actionBtn} ${styles.actionBtnSecondary}`}
+              className={`${styles.actionBtn} ${styles.actionBtnPrimary}`}
             >
               <GraduationCap size={16} />
               <span>Class Details</span>
-            </Link>
-          )}
-
-          {activePage !== "timetable" && (
-            <Link
-              href={`/dashboard/parent/timetable?childId=${currentChild.id}`}
-              prefetch={true}
-              className={`${styles.actionBtn} ${styles.actionBtnPrimary}`}
-            >
-              <Clock size={16} />
-              <span>Timetable</span>
             </Link>
           )}
 
