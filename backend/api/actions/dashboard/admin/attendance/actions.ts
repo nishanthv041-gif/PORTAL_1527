@@ -11,9 +11,9 @@ export async function adminUpdateAttendance(studentId: string, dateStr: string, 
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
     if (!dateStr) return { error: "Date is required to mark attendance." };
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return { error: "Invalid date format." };
-    date.setHours(0, 0, 0, 0);
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
     
     const student = await prisma.student.findUnique({ where: { id: studentId } });
     if (!student || !student.classId) return { error: 'Student or class not found' };
@@ -27,7 +27,7 @@ export async function adminUpdateAttendance(studentId: string, dateStr: string, 
     const existing = await prisma.attendance.findFirst({
       where: {
         studentId,
-        date
+        date: { gte: startOfDay, lte: endOfDay }
       }
     });
 
@@ -36,6 +36,7 @@ export async function adminUpdateAttendance(studentId: string, dateStr: string, 
         where: { id: existing.id },
         data: {
           status,
+          date: startOfDay,
           remarks: finalRemarks
         }
       });
@@ -44,7 +45,7 @@ export async function adminUpdateAttendance(studentId: string, dateStr: string, 
         data: {
           studentId,
           classId: student.classId,
-          date,
+          date: startOfDay,
           status,
           remarks: finalRemarks
         }
@@ -69,24 +70,32 @@ export async function adminBulkAttendance(data: { studentId: string; date: strin
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
     for (const item of data) {
-      const date = new Date(item.date);
-      date.setHours(0, 0, 0, 0);
+      const [year, month, day] = item.date.split("-").map(Number);
+      const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
 
       const existing = await prisma.attendance.findFirst({
-        where: { studentId: item.studentId, date }
+        where: {
+          studentId: item.studentId,
+          date: { gte: startOfDay, lte: endOfDay }
+        }
       });
 
       if (existing) {
         await prisma.attendance.update({
           where: { id: existing.id },
-          data: { status: item.status, remarks: "Admin Bulk Mark" }
+          data: {
+            status: item.status,
+            date: startOfDay,
+            remarks: "Admin Bulk Mark"
+          }
         });
       } else {
         await prisma.attendance.create({
           data: {
             studentId: item.studentId,
             classId: item.classId,
-            date,
+            date: startOfDay,
             status: item.status,
             remarks: "Admin Bulk Mark"
           }
@@ -105,4 +114,3 @@ export async function adminBulkAttendance(data: { studentId: string; date: strin
     return { error: "Failed to save bulk attendance." };
   }
 }
-

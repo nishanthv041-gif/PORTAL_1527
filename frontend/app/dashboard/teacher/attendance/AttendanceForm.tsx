@@ -52,7 +52,6 @@ export default function AttendanceForm({
   calendarStats,
   initialDate,
   initialAttendanceMap,
-  initialLeaveCount,
 }: AttendanceFormProps) {
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [attendanceMap, setAttendanceMap] = useState(initialAttendanceMap);
@@ -63,7 +62,10 @@ export default function AttendanceForm({
   // Check if current date is within the allowed week for Class Teachers
   const isEditable = isDateInCurrentWeek(selectedDate);
 
-  // Calculate live counts dynamically from attendanceMap
+  // Check if selected date is today
+  const isToday = selectedDate === new Date().toISOString().split("T")[0];
+
+  // Calculate live counts dynamically for the selected date only
   const totalStudents = myClass.students.length;
   const presentCount = Object.values(attendanceMap).filter(
     (a) => a.status === "PRESENT"
@@ -85,7 +87,7 @@ export default function AttendanceForm({
     }
   };
 
-  // Date change handler: loads data for selected date and recalculates
+  // Date change handler: loads data for the selected date and calculates leaves for that day only
   const handleDateChange = (newDate: string) => {
     setSelectedDate(newDate);
     setSaveStatus("saving");
@@ -103,8 +105,8 @@ export default function AttendanceForm({
     });
   };
 
-  // Live Auto-Register: Toggle Present, Absent, or Leave for a single student
-  const handleToggleStatus = (studentId: string, newStatus: "PRESENT" | "ABSENT" | "LEAVE") => {
+  // Live Auto-Register: Toggle Present or Leave for a single student (Absent removed)
+  const handleToggleStatus = (studentId: string, newStatus: "PRESENT" | "LEAVE") => {
     if (!isEditable) return;
 
     const prevAtt = attendanceMap[studentId];
@@ -149,16 +151,13 @@ export default function AttendanceForm({
     const bulkData: { studentId: string; status: string; date: string; classId: string }[] = [];
 
     myClass.students.forEach((student) => {
-      // Do not overwrite students who have an approved leave request!
-      if (!newMap[student.id]?.isLeaveApproved) {
-        newMap[student.id] = { status: "PRESENT", isLeaveApproved: false };
-        bulkData.push({
-          studentId: student.id,
-          classId: myClass.id,
-          date: selectedDate,
-          status: "PRESENT",
-        });
-      }
+      newMap[student.id] = { status: "PRESENT", isLeaveApproved: false };
+      bulkData.push({
+        studentId: student.id,
+        classId: myClass.id,
+        date: selectedDate,
+        status: "PRESENT",
+      });
     });
 
     setAttendanceMap(newMap);
@@ -176,24 +175,21 @@ export default function AttendanceForm({
     });
   };
 
-  // Quick Mark: All Absent
-  const handleAllAbsent = () => {
+  // Quick Mark: All Leave
+  const handleAllLeave = () => {
     if (!isEditable) return;
 
     const newMap = { ...attendanceMap };
     const bulkData: { studentId: string; status: string; date: string; classId: string }[] = [];
 
     myClass.students.forEach((student) => {
-      // Do not overwrite students who have an approved leave request!
-      if (!newMap[student.id]?.isLeaveApproved) {
-        newMap[student.id] = { status: "ABSENT", isLeaveApproved: false };
-        bulkData.push({
-          studentId: student.id,
-          classId: myClass.id,
-          date: selectedDate,
-          status: "ABSENT",
-        });
-      }
+      newMap[student.id] = { status: "LEAVE", isLeaveApproved: true };
+      bulkData.push({
+        studentId: student.id,
+        classId: myClass.id,
+        date: selectedDate,
+        status: "LEAVE",
+      });
     });
 
     setAttendanceMap(newMap);
@@ -213,21 +209,23 @@ export default function AttendanceForm({
 
   return (
     <div className={styles.container}>
-      {/* 1. TOP 5 CARDS (Matching the drawing layout) */}
+      {/* 1. TOP 5 METRIC CARDS (Matching user sketch with optimized desktop sizes) */}
       <div className={styles.topCardsGrid}>
-        {/* Card 1: Present total - today */}
+        {/* Card 1: Present total */}
         <div className={`${styles.metricCard} ${styles.metricPresent}`}>
           <div className={styles.metricHeader}>
-            <span className={styles.metricLabel}>Present total - today</span>
+            <span className={styles.metricLabel}>
+              {isToday ? "Present total - today" : `Present total (${formatDisplayDate(selectedDate)})`}
+            </span>
             <CheckCircle2 size={18} color="var(--success)" />
           </div>
           <div className={styles.metricValue}>{presentCount}</div>
           <div className={styles.metricSubtext}>
-            {totalStudents > 0 ? `${((presentCount / totalStudents) * 100).toFixed(0)}% attendance` : "No students"}
+            {totalStudents > 0 ? `${((presentCount / totalStudents) * 100).toFixed(0)}% in attendance` : "No students"}
           </div>
         </div>
 
-        {/* Card 2: No. of. student in Class */}
+        {/* Card 2: No. of student in Class */}
         <div className={`${styles.metricCard} ${styles.metricTotalStudents}`}>
           <div className={styles.metricHeader}>
             <span className={styles.metricLabel}>No. of. student in Class</span>
@@ -237,14 +235,18 @@ export default function AttendanceForm({
           <div className={styles.metricSubtext}>{myClass.name} - {myClass.section}</div>
         </div>
 
-        {/* Card 3: Leave total today */}
+        {/* Card 3: Leave total (shows for that specific day only) */}
         <div className={`${styles.metricCard} ${styles.metricLeaveToday}`}>
           <div className={styles.metricHeader}>
-            <span className={styles.metricLabel}>Leave total today</span>
+            <span className={styles.metricLabel}>
+              {isToday ? "Leave total today" : `Leave total (${formatDisplayDate(selectedDate)})`}
+            </span>
             <CalendarCheck size={18} color="#8b5cf6" />
           </div>
           <div className={styles.metricValue}>{leaveCount}</div>
-          <div className={styles.metricSubtext}>Accepted teacher leaves</div>
+          <div className={styles.metricSubtext}>
+            {isToday ? "Accepted leave requests today" : `Leaves on ${formatDisplayDate(selectedDate)} only`}
+          </div>
         </div>
 
         {/* Card 4: Total School active days */}
@@ -329,7 +331,7 @@ export default function AttendanceForm({
           </div>
         </div>
 
-        {/* Quick Mark Row: [All Present] [All Absent] */}
+        {/* Quick Mark Row: [All Present] [All Leave] (Absent removed) */}
         <div className={styles.quickMarkRow}>
           <div className={styles.quickMarkActions}>
             <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>Quick Mark :-</span>
@@ -338,36 +340,36 @@ export default function AttendanceForm({
               onClick={handleAllPresent}
               disabled={!isEditable || isPending || totalStudents === 0}
               className={styles.quickBtnPresent}
-              title={!isEditable ? "Editing locked for this date" : "Mark all active students as present"}
+              title={!isEditable ? "Editing locked for this date" : "Mark all students as present"}
             >
               <CheckCircle2 size={15} />
               All Present
             </button>
             <button
               type="button"
-              onClick={handleAllAbsent}
+              onClick={handleAllLeave}
               disabled={!isEditable || isPending || totalStudents === 0}
-              className={styles.quickBtnAbsent}
-              title={!isEditable ? "Editing locked for this date" : "Mark all active students as absent"}
+              className={styles.quickBtnLeave}
+              title={!isEditable ? "Editing locked for this date" : "Mark all students as leave"}
             >
-              <AlertCircle size={15} />
-              All Absent
+              <CalendarCheck size={15} />
+              All Leave
             </button>
           </div>
 
           <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-            * Instant auto-registration enabled. Changes apply immediately.
+            * Instant auto-registration. Changes apply immediately without manual saving.
           </div>
         </div>
 
-        {/* 3. ATTENDANCE TABLE (Roll No | Student Name | Status) */}
-        <div style={{ overflowX: "auto", width: "100%", maxWidth: "100%", minWidth: 0, WebkitOverflowScrolling: "touch" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "480px" }}>
+        {/* 3. ATTENDANCE TABLE (Roll No | Student Name | Status) with optimized PC Desktop Sizing */}
+        <div className={styles.attendanceTableWrapper}>
+          <table className={styles.attendanceTable}>
             <thead>
-              <tr style={{ borderBottom: "2px solid var(--border-color)", background: "rgba(0,0,0,0.02)" }}>
-                <th style={{ padding: "0.85rem 1rem", fontWeight: 600, width: "120px" }}>Roll No</th>
-                <th style={{ padding: "0.85rem 1rem", fontWeight: 600 }}>Student Name</th>
-                <th style={{ padding: "0.85rem 1rem", fontWeight: 600, width: "300px" }}>Status</th>
+              <tr className={styles.tableHeaderRow}>
+                <th className={styles.thRoll}>Roll No</th>
+                <th className={styles.thName}>Student Name</th>
+                <th className={styles.thStatus}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -375,38 +377,30 @@ export default function AttendanceForm({
                 const studentAtt = attendanceMap[student.id];
                 const isLeave = studentAtt?.status === "LEAVE";
                 const isPresent = studentAtt?.status === "PRESENT";
-                const isAbsent = studentAtt?.status === "ABSENT";
                 const hasLeaveRequest = studentAtt?.isLeaveApproved;
 
                 return (
-                  <tr key={student.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
-                    <td style={{ padding: "0.85rem 1rem", fontWeight: 500, color: "var(--text-secondary)" }}>
+                  <tr key={student.id} className={styles.tableRow}>
+                    <td className={styles.tdRoll}>
                       {student.rollNumber || "-"}
                     </td>
 
-                    <td style={{ padding: "0.85rem 1rem", fontWeight: 600 }}>
+                    <td className={styles.tdName}>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                         <span>{student.firstName} {student.lastName}</span>
                         {hasLeaveRequest && (
                           <span
-                            style={{
-                              fontSize: "0.7rem",
-                              fontWeight: 600,
-                              padding: "2px 7px",
-                              borderRadius: "12px",
-                              backgroundColor: "rgba(139, 92, 246, 0.12)",
-                              color: "#8b5cf6",
-                              border: "1px solid rgba(139, 92, 246, 0.25)",
-                            }}
+                            className={styles.leaveBadge}
                             title={studentAtt?.remarks || "Leave Request Accepted"}
                           >
+                            <CalendarCheck size={12} />
                             Leave Approved
                           </span>
                         )}
                       </div>
                     </td>
 
-                    <td style={{ padding: "0.85rem 1rem" }}>
+                    <td className={styles.tdStatus}>
                       <div className={styles.statusButtonGroup}>
                         <button
                           type="button"
@@ -417,17 +411,6 @@ export default function AttendanceForm({
                         >
                           <CheckCircle2 size={14} />
                           Present
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={!isEditable || isPending}
-                          onClick={() => handleToggleStatus(student.id, "ABSENT")}
-                          className={`${styles.statusBtn} ${isAbsent ? styles.statusBtnAbsentActive : ""}`}
-                          title={!isEditable ? "Editing locked for this date" : "Mark Absent"}
-                        >
-                          <AlertCircle size={14} />
-                          Absent
                         </button>
 
                         <button

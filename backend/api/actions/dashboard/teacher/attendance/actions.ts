@@ -45,13 +45,14 @@ export async function updateSingleAttendance(data: {
       }
     }
 
-    const date = new Date(data.date);
-    date.setHours(0, 0, 0, 0);
+    const [year, month, day] = data.date.split("-").map(Number);
+    const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
 
     const existing = await prisma.attendance.findFirst({
       where: {
         studentId: data.studentId,
-        date,
+        date: { gte: startOfDay, lte: endOfDay },
       },
     });
 
@@ -60,6 +61,7 @@ export async function updateSingleAttendance(data: {
         where: { id: existing.id },
         data: {
           status: data.status,
+          date: startOfDay,
           remarks: data.remarks !== undefined ? data.remarks : existing.remarks,
         },
       });
@@ -68,7 +70,7 @@ export async function updateSingleAttendance(data: {
         data: {
           studentId: data.studentId,
           classId: data.classId,
-          date,
+          date: startOfDay,
           status: data.status,
           remarks: data.remarks || null,
         },
@@ -90,7 +92,7 @@ export async function updateSingleAttendance(data: {
 }
 
 /**
- * Bulk auto-registers attendance (e.g. Quick Mark: All Present / All Absent).
+ * Bulk auto-registers attendance (e.g. Quick Mark: All Present).
  */
 export async function saveBulkAttendance(
   data: { studentId: string; status: string; date: string; classId: string; remarks?: string }[]
@@ -132,13 +134,14 @@ export async function saveBulkAttendance(
     }
 
     for (const record of data) {
-      const date = new Date(record.date);
-      date.setHours(0, 0, 0, 0);
+      const [year, month, day] = record.date.split("-").map(Number);
+      const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
 
       const existing = await prisma.attendance.findFirst({
         where: {
           studentId: record.studentId,
-          date,
+          date: { gte: startOfDay, lte: endOfDay },
         },
       });
 
@@ -147,6 +150,7 @@ export async function saveBulkAttendance(
           where: { id: existing.id },
           data: {
             status: record.status,
+            date: startOfDay,
             remarks: record.remarks !== undefined ? record.remarks : existing.remarks,
           },
         });
@@ -155,7 +159,7 @@ export async function saveBulkAttendance(
           data: {
             studentId: record.studentId,
             classId: record.classId,
-            date,
+            date: startOfDay,
             status: record.status,
             remarks: record.remarks || null,
           },
@@ -179,14 +183,13 @@ export async function saveBulkAttendance(
 
 /**
  * Fetches attendance records, approved leave requests, and student data for a class on a specific date.
+ * Accurately calculates leaves for that specific day only.
  */
 export async function getClassAttendanceDetails(classId: string, dateStr: string) {
   try {
-    const targetDate = new Date(dateStr);
-    targetDate.setHours(0, 0, 0, 0);
-
-    const nextDay = new Date(targetDate);
-    nextDay.setDate(nextDay.getDate() + 1);
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
 
     // 1. Fetch Students in class
     const students = await prisma.student.findMany({
@@ -202,29 +205,28 @@ export async function getClassAttendanceDetails(classId: string, dateStr: string
 
     const studentIds = students.map((s) => s.id);
 
-    // 2. Fetch existing attendance for this date
+    // 2. Fetch existing attendance records strictly for this date
     const attendances = await prisma.attendance.findMany({
       where: {
         studentId: { in: studentIds },
-        date: { gte: targetDate, lt: nextDay },
+        date: { gte: startOfDay, lte: endOfDay },
       },
     });
 
-    // 3. Fetch approved leave requests that cover this date
+    // 3. Fetch approved leave requests that cover this exact date
     const approvedLeaves = await prisma.leaveRequest.findMany({
       where: {
         studentId: { in: studentIds },
         status: "APPROVED",
-        startDate: { lte: nextDay },
-        endDate: { gte: targetDate },
+        startDate: { lte: endOfDay },
+        endDate: { gte: startOfDay },
       },
     });
 
     const approvedLeaveStudentIds = new Set(approvedLeaves.map((l) => l.studentId));
 
-    // Map each student's current status:
-    // If student has an approved leave request covering today, their status is LEAVE.
-    // Otherwise use recorded attendance, or default to PRESENT.
+    // Map each student's status for this date:
+    // Any existing ABSENT is normalized to LEAVE (since Absent option is removed)
     const attendanceMap: Record<string, { status: string; isLeaveApproved: boolean; remarks?: string }> = {};
 
     for (const student of students) {
@@ -232,9 +234,11 @@ export async function getClassAttendanceDetails(classId: string, dateStr: string
       const existing = attendances.find((a) => a.studentId === student.id);
 
       if (existing) {
+        // Normalize: if legacy status was ABSENT or LEAVE, treat as LEAVE
+        const effectiveStatus = (existing.status === "LEAVE" || existing.status === "ABSENT") ? "LEAVE" : "PRESENT";
         attendanceMap[student.id] = {
-          status: existing.status,
-          isLeaveApproved: hasApprovedLeave || existing.status === "LEAVE",
+          status: effectiveStatus,
+          isLeaveApproved: hasApprovedLeave || effectiveStatus === "LEAVE",
           remarks: existing.remarks || (hasApprovedLeave ? "Leave Approved by Class Teacher" : undefined),
         };
       } else if (hasApprovedLeave) {
@@ -244,7 +248,7 @@ export async function getClassAttendanceDetails(classId: string, dateStr: string
           remarks: "Leave Approved by Class Teacher",
         };
       } else {
-        // Unmarked -> default to PRESENT
+        // Unmarked default to PRESENT
         attendanceMap[student.id] = {
           status: "PRESENT",
           isLeaveApproved: false,
@@ -252,6 +256,7 @@ export async function getClassAttendanceDetails(classId: string, dateStr: string
       }
     }
 
+    // Leave count for this specific selected day ONLY
     const calculatedLeaveCount = Object.values(attendanceMap).filter(
       (a) => a.status === "LEAVE"
     ).length;

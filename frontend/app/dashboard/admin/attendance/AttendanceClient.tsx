@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { 
   Users, 
   CheckCircle2, 
-  XCircle, 
   AlertCircle, 
   CalendarDays, 
   CalendarCheck, 
@@ -30,7 +29,6 @@ export default function AttendanceClient({
   initialClassId,
   initialDate,
   calendarStats,
-  initialLeaveCount,
 }: {
   classes: Class[];
   students: Student[];
@@ -47,22 +45,36 @@ export default function AttendanceClient({
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("saved");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Local attendance state mapping studentId -> status
+  // Local attendance state mapping studentId -> status (normalize ABSENT to LEAVE)
   const [localAttendance, setLocalAttendance] = useState<Record<string, { status: string; remarks?: string }>>(() => {
     const map: Record<string, { status: string; remarks?: string }> = {};
     students.forEach((s) => {
       const att = attendances.find((a) => a.studentId === s.id);
+      const effectiveStatus = (att?.status === "LEAVE" || att?.status === "ABSENT") ? "LEAVE" : (att?.status || "NOT_MARKED");
       map[s.id] = {
-        status: att?.status || "NOT_MARKED",
+        status: effectiveStatus,
         remarks: att?.remarks || "",
       };
     });
     return map;
   });
 
+  const isToday = selectedDate === new Date().toISOString().split("T")[0];
+
   const totalStudents = students.length;
   const presentCount = Object.values(localAttendance).filter((a) => a.status === "PRESENT").length;
   const leaveCount = Object.values(localAttendance).filter((a) => a.status === "LEAVE").length;
+
+  // Format date as DD-MM-YYYY
+  const formatDisplayDate = (isoStr: string) => {
+    try {
+      const parts = isoStr.split("-");
+      if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      return isoStr;
+    } catch {
+      return isoStr;
+    }
+  };
 
   const handleFilter = (newClassId: string, newDate: string) => {
     setSelectedClass(newClassId);
@@ -71,8 +83,8 @@ export default function AttendanceClient({
     router.push(url);
   };
 
-  // Live Auto-Register for Admin: click Present or Absent
-  const handleToggleStatus = (studentId: string, newStatus: string) => {
+  // Live Auto-Register for Admin: click Present or Leave (Absent removed)
+  const handleToggleStatus = (studentId: string, newStatus: "PRESENT" | "LEAVE") => {
     // Optimistic UI update
     setLocalAttendance((prev) => ({
       ...prev,
@@ -93,7 +105,7 @@ export default function AttendanceClient({
         setSaveStatus("saved");
       } else {
         setSaveStatus("error");
-        setErrorMessage(res.error || "Failed to save attendance.");
+        setErrorMessage(res.error || "Failed to update attendance.");
       }
     });
   };
@@ -130,20 +142,20 @@ export default function AttendanceClient({
     });
   };
 
-  // Quick Mark for Admin: All Absent
-  const handleAllAbsent = () => {
+  // Quick Mark for Admin: All Leave
+  const handleAllLeave = () => {
     if (students.length === 0) return;
 
     const newMap = { ...localAttendance };
     const bulkData: { studentId: string; status: string; date: string; classId: string }[] = [];
 
     students.forEach((s) => {
-      newMap[s.id] = { ...newMap[s.id], status: "ABSENT" };
+      newMap[s.id] = { ...newMap[s.id], status: "LEAVE" };
       bulkData.push({
         studentId: s.id,
         classId: selectedClass,
         date: selectedDate,
-        status: "ABSENT",
+        status: "LEAVE",
       });
     });
 
@@ -164,12 +176,14 @@ export default function AttendanceClient({
 
   return (
     <div className={styles.container}>
-      {/* 1. TOP 5 CARDS (Matching the drawing layout) */}
+      {/* 1. TOP 5 CARDS (Matching user sketch with optimized desktop sizes) */}
       <div className={styles.topCardsGrid}>
-        {/* Card 1: Present total - today */}
+        {/* Card 1: Present total */}
         <div className={`${styles.metricCard} ${styles.metricPresent}`}>
           <div className={styles.metricHeader}>
-            <span className={styles.metricLabel}>Present total - today</span>
+            <span className={styles.metricLabel}>
+              {isToday ? "Present total - today" : `Present total (${formatDisplayDate(selectedDate)})`}
+            </span>
             <CheckCircle2 size={18} color="var(--success)" />
           </div>
           <div className={styles.metricValue}>{presentCount}</div>
@@ -188,14 +202,18 @@ export default function AttendanceClient({
           <div className={styles.metricSubtext}>Selected Class strength</div>
         </div>
 
-        {/* Card 3: Leave total today */}
+        {/* Card 3: Leave total for selected date only */}
         <div className={`${styles.metricCard} ${styles.metricLeaveToday}`}>
           <div className={styles.metricHeader}>
-            <span className={styles.metricLabel}>Leave total today</span>
+            <span className={styles.metricLabel}>
+              {isToday ? "Leave total today" : `Leave total (${formatDisplayDate(selectedDate)})`}
+            </span>
             <CalendarCheck size={18} color="#8b5cf6" />
           </div>
           <div className={styles.metricValue}>{leaveCount}</div>
-          <div className={styles.metricSubtext}>Approved leave requests</div>
+          <div className={styles.metricSubtext}>
+            {isToday ? "Approved leave requests today" : `Leaves on ${formatDisplayDate(selectedDate)} only`}
+          </div>
         </div>
 
         {/* Card 4: Total School active days */}
@@ -282,7 +300,9 @@ export default function AttendanceClient({
           </div>
 
           <div className={styles.fieldGroup} style={{ flex: "1 1 220px" }}>
-            <label className={styles.fieldLabel}>Date</label>
+            <label className={styles.fieldLabel}>
+              Date <span style={{ fontSize: "0.75rem", opacity: 0.6, fontWeight: 400 }}>({formatDisplayDate(selectedDate)})</span>
+            </label>
             <input
               type="date"
               value={selectedDate}
@@ -292,7 +312,7 @@ export default function AttendanceClient({
           </div>
         </div>
 
-        {/* Quick Mark: All Present & All Absent */}
+        {/* Quick Mark: All Present & All Leave (Absent removed) */}
         {selectedClass && students.length > 0 && (
           <div className={styles.quickMarkRow}>
             <div className={styles.quickMarkActions}>
@@ -307,11 +327,11 @@ export default function AttendanceClient({
               </button>
               <button
                 type="button"
-                onClick={handleAllAbsent}
+                onClick={handleAllLeave}
                 disabled={isPending}
-                className={styles.quickBtnAbsent}
+                className={styles.quickBtnLeave}
               >
-                <AlertCircle size={15} /> All Absent
+                <CalendarCheck size={15} /> All Leave
               </button>
             </div>
 
@@ -321,33 +341,32 @@ export default function AttendanceClient({
           </div>
         )}
 
-        {/* Attendance Table */}
+        {/* Attendance Table with Desktop Layout */}
         {selectedClass && students.length > 0 ? (
-          <div style={{ overflowX: "auto", width: "100%", maxWidth: "100%", minWidth: 0, WebkitOverflowScrolling: "touch" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "550px" }}>
+          <div className={styles.attendanceTableWrapper}>
+            <table className={styles.attendanceTable}>
               <thead>
-                <tr style={{ borderBottom: "2px solid var(--border-color)", background: "rgba(0,0,0,0.02)" }}>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 600, width: "120px" }}>Roll No</th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 600 }}>Student Name</th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 600, width: "280px" }}>Status</th>
+                <tr className={styles.tableHeaderRow}>
+                  <th className={styles.thRoll}>Roll No</th>
+                  <th className={styles.thName}>Student Name</th>
+                  <th className={styles.thStatus}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {students.map((student) => {
                   const currentStatus = localAttendance[student.id]?.status || "NOT_MARKED";
                   const isPresent = currentStatus === "PRESENT";
-                  const isAbsent = currentStatus === "ABSENT";
                   const isLeave = currentStatus === "LEAVE";
 
                   return (
-                    <tr key={student.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
-                      <td style={{ padding: "0.85rem 1rem", fontWeight: 500, color: "var(--text-secondary)" }}>
+                    <tr key={student.id} className={styles.tableRow}>
+                      <td className={styles.tdRoll}>
                         {student.rollNumber || "-"}
                       </td>
-                      <td style={{ padding: "0.85rem 1rem", fontWeight: 600 }}>
+                      <td className={styles.tdName}>
                         {student.firstName} {student.lastName}
                       </td>
-                      <td style={{ padding: "0.85rem 1rem" }}>
+                      <td className={styles.tdStatus}>
                         <div className={styles.statusButtonGroup}>
                           <button
                             type="button"
@@ -356,14 +375,6 @@ export default function AttendanceClient({
                             className={`${styles.statusBtn} ${isPresent ? styles.statusBtnPresentActive : ""}`}
                           >
                             <CheckCircle2 size={14} /> Present
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isPending}
-                            onClick={() => handleToggleStatus(student.id, "ABSENT")}
-                            className={`${styles.statusBtn} ${isAbsent ? styles.statusBtnAbsentActive : ""}`}
-                          >
-                            <XCircle size={14} /> Absent
                           </button>
                           <button
                             type="button"
