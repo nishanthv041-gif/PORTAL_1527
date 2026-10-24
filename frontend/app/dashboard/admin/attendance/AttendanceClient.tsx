@@ -62,6 +62,7 @@ export default function AttendanceClient({
 
   const totalStudents = students.length;
   const presentCount = Object.values(localAttendance).filter((a) => a.status === "PRESENT").length;
+  const leaveCount = Object.values(localAttendance).filter((a) => a.status === "LEAVE").length;
 
   const handleFilter = (newClassId: string, newDate: string) => {
     setSelectedClass(newClassId);
@@ -193,7 +194,7 @@ export default function AttendanceClient({
             <span className={styles.metricLabel}>Leave total today</span>
             <CalendarCheck size={18} color="#8b5cf6" />
           </div>
-          <div className={styles.metricValue}>{initialLeaveCount}</div>
+          <div className={styles.metricValue}>{leaveCount}</div>
           <div className={styles.metricSubtext}>Approved leave requests</div>
         </div>
 
@@ -368,8 +369,7 @@ export default function AttendanceClient({
                             type="button"
                             disabled={isPending}
                             onClick={() => handleToggleStatus(student.id, "LEAVE")}
-                            className={`${styles.statusBtn} ${isLeave ? styles.leaveBadge : ""}`}
-                            style={isLeave ? { background: "rgba(139, 92, 246, 0.15)", color: "#8b5cf6" } : {}}
+                            className={`${styles.statusBtn} ${isLeave ? styles.statusBtnLeaveActive : ""}`}
                           >
                             <CalendarCheck size={14} /> Leave
                           </button>

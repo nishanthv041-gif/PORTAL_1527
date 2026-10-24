@@ -228,20 +228,20 @@ export async function getClassAttendanceDetails(classId: string, dateStr: string
     const attendanceMap: Record<string, { status: string; isLeaveApproved: boolean; remarks?: string }> = {};
 
     for (const student of students) {
-      const isLeave = approvedLeaveStudentIds.has(student.id);
+      const hasApprovedLeave = approvedLeaveStudentIds.has(student.id);
       const existing = attendances.find((a) => a.studentId === student.id);
 
-      if (isLeave) {
+      if (existing) {
+        attendanceMap[student.id] = {
+          status: existing.status,
+          isLeaveApproved: hasApprovedLeave || existing.status === "LEAVE",
+          remarks: existing.remarks || (hasApprovedLeave ? "Leave Approved by Class Teacher" : undefined),
+        };
+      } else if (hasApprovedLeave) {
         attendanceMap[student.id] = {
           status: "LEAVE",
           isLeaveApproved: true,
-          remarks: existing?.remarks || "Leave Approved by Class Teacher",
-        };
-      } else if (existing) {
-        attendanceMap[student.id] = {
-          status: existing.status,
-          isLeaveApproved: false,
-          remarks: existing.remarks || undefined,
+          remarks: "Leave Approved by Class Teacher",
         };
       } else {
         // Unmarked -> default to PRESENT
@@ -252,11 +252,15 @@ export async function getClassAttendanceDetails(classId: string, dateStr: string
       }
     }
 
+    const calculatedLeaveCount = Object.values(attendanceMap).filter(
+      (a) => a.status === "LEAVE"
+    ).length;
+
     return {
       success: true,
       students,
       attendanceMap,
-      leaveCountToday: approvedLeaveStudentIds.size,
+      leaveCountToday: calculatedLeaveCount,
       isEditable: isDateInCurrentWeek(dateStr),
     };
   } catch (error) {

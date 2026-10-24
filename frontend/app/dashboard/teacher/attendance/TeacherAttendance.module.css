@@ -304,6 +304,12 @@
   box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
 }
 
+.statusBtnLeaveActive {
+  background: #8b5cf6;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
+}
+
 .leaveBadge {
   display: inline-flex;
   align-items: center;

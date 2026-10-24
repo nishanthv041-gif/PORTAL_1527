@@ -56,7 +56,6 @@ export default function AttendanceForm({
 }: AttendanceFormProps) {
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [attendanceMap, setAttendanceMap] = useState(initialAttendanceMap);
-  const [leaveCount, setLeaveCount] = useState(initialLeaveCount);
   const [isPending, startTransition] = useTransition();
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("saved");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -64,10 +63,13 @@ export default function AttendanceForm({
   // Check if current date is within the allowed week for Class Teachers
   const isEditable = isDateInCurrentWeek(selectedDate);
 
-  // Calculate live counts from attendanceMap
+  // Calculate live counts dynamically from attendanceMap
   const totalStudents = myClass.students.length;
   const presentCount = Object.values(attendanceMap).filter(
-    (a) => a.status === "PRESENT" && !a.isLeaveApproved
+    (a) => a.status === "PRESENT"
+  ).length;
+  const leaveCount = Object.values(attendanceMap).filter(
+    (a) => a.status === "LEAVE"
   ).length;
 
   // Format date display as DD-MM-YYYY
@@ -93,7 +95,6 @@ export default function AttendanceForm({
       const res = await getClassAttendanceDetails(myClass.id, newDate);
       if (res.success && res.attendanceMap) {
         setAttendanceMap(res.attendanceMap);
-        setLeaveCount(res.leaveCountToday || 0);
         setSaveStatus("saved");
       } else {
         setSaveStatus("error");
@@ -102,22 +103,20 @@ export default function AttendanceForm({
     });
   };
 
-  // Live Auto-Register: Toggle Present or Absent for a single student
-  const handleToggleStatus = (studentId: string, newStatus: "PRESENT" | "ABSENT") => {
+  // Live Auto-Register: Toggle Present, Absent, or Leave for a single student
+  const handleToggleStatus = (studentId: string, newStatus: "PRESENT" | "ABSENT" | "LEAVE") => {
     if (!isEditable) return;
 
-    // Check if student is on approved leave
-    if (attendanceMap[studentId]?.isLeaveApproved) {
-      alert("This student has an approved leave request accepted by the Class Teacher for this date.");
-      return;
-    }
+    const prevAtt = attendanceMap[studentId];
+    const willBeLeave = newStatus === "LEAVE";
 
     // Optimistic UI update
     setAttendanceMap((prev) => ({
       ...prev,
       [studentId]: {
+        ...prev[studentId],
         status: newStatus,
-        isLeaveApproved: false,
+        isLeaveApproved: willBeLeave ? (prev[studentId]?.isLeaveApproved ?? true) : false,
       },
     }));
 
@@ -130,6 +129,7 @@ export default function AttendanceForm({
         classId: myClass.id,
         date: selectedDate,
         status: newStatus,
+        remarks: willBeLeave ? (prevAtt?.remarks || "Leave marked by Class Teacher") : "",
       });
 
       if (res.success) {
@@ -367,15 +367,16 @@ export default function AttendanceForm({
               <tr style={{ borderBottom: "2px solid var(--border-color)", background: "rgba(0,0,0,0.02)" }}>
                 <th style={{ padding: "0.85rem 1rem", fontWeight: 600, width: "120px" }}>Roll No</th>
                 <th style={{ padding: "0.85rem 1rem", fontWeight: 600 }}>Student Name</th>
-                <th style={{ padding: "0.85rem 1rem", fontWeight: 600, width: "240px" }}>Status</th>
+                <th style={{ padding: "0.85rem 1rem", fontWeight: 600, width: "300px" }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {myClass.students.map((student) => {
                 const studentAtt = attendanceMap[student.id];
-                const isLeave = studentAtt?.isLeaveApproved;
-                const isPresent = studentAtt?.status === "PRESENT" && !isLeave;
-                const isAbsent = studentAtt?.status === "ABSENT" && !isLeave;
+                const isLeave = studentAtt?.status === "LEAVE";
+                const isPresent = studentAtt?.status === "PRESENT";
+                const isAbsent = studentAtt?.status === "ABSENT";
+                const hasLeaveRequest = studentAtt?.isLeaveApproved;
 
                 return (
                   <tr key={student.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
@@ -384,40 +385,62 @@ export default function AttendanceForm({
                     </td>
 
                     <td style={{ padding: "0.85rem 1rem", fontWeight: 600 }}>
-                      {student.firstName} {student.lastName}
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                        <span>{student.firstName} {student.lastName}</span>
+                        {hasLeaveRequest && (
+                          <span
+                            style={{
+                              fontSize: "0.7rem",
+                              fontWeight: 600,
+                              padding: "2px 7px",
+                              borderRadius: "12px",
+                              backgroundColor: "rgba(139, 92, 246, 0.12)",
+                              color: "#8b5cf6",
+                              border: "1px solid rgba(139, 92, 246, 0.25)",
+                            }}
+                            title={studentAtt?.remarks || "Leave Request Accepted"}
+                          >
+                            Leave Approved
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     <td style={{ padding: "0.85rem 1rem" }}>
-                      {isLeave ? (
-                        <span className={styles.leaveBadge} title={studentAtt?.remarks || "Approved Leave"}>
-                          <CalendarCheck size={14} />
-                          Leave (Approved)
-                        </span>
-                      ) : (
-                        <div className={styles.statusButtonGroup}>
-                          <button
-                            type="button"
-                            disabled={!isEditable || isPending}
-                            onClick={() => handleToggleStatus(student.id, "PRESENT")}
-                            className={`${styles.statusBtn} ${isPresent ? styles.statusBtnPresentActive : ""}`}
-                            title={!isEditable ? "Editing locked for this date" : "Mark Present"}
-                          >
-                            <CheckCircle2 size={14} />
-                            Present
-                          </button>
+                      <div className={styles.statusButtonGroup}>
+                        <button
+                          type="button"
+                          disabled={!isEditable || isPending}
+                          onClick={() => handleToggleStatus(student.id, "PRESENT")}
+                          className={`${styles.statusBtn} ${isPresent ? styles.statusBtnPresentActive : ""}`}
+                          title={!isEditable ? "Editing locked for this date" : "Mark Present"}
+                        >
+                          <CheckCircle2 size={14} />
+                          Present
+                        </button>
 
-                          <button
-                            type="button"
-                            disabled={!isEditable || isPending}
-                            onClick={() => handleToggleStatus(student.id, "ABSENT")}
-                            className={`${styles.statusBtn} ${isAbsent ? styles.statusBtnAbsentActive : ""}`}
-                            title={!isEditable ? "Editing locked for this date" : "Mark Absent"}
-                          >
-                            <AlertCircle size={14} />
-                            Absent
-                          </button>
-                        </div>
-                      )}
+                        <button
+                          type="button"
+                          disabled={!isEditable || isPending}
+                          onClick={() => handleToggleStatus(student.id, "ABSENT")}
+                          className={`${styles.statusBtn} ${isAbsent ? styles.statusBtnAbsentActive : ""}`}
+                          title={!isEditable ? "Editing locked for this date" : "Mark Absent"}
+                        >
+                          <AlertCircle size={14} />
+                          Absent
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={!isEditable || isPending}
+                          onClick={() => handleToggleStatus(student.id, "LEAVE")}
+                          className={`${styles.statusBtn} ${isLeave ? styles.statusBtnLeaveActive : ""}`}
+                          title={!isEditable ? "Editing locked for this date" : "Mark Leave"}
+                        >
+                          <CalendarCheck size={14} />
+                          Leave
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
