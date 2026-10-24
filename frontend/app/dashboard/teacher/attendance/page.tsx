@@ -4,6 +4,8 @@ import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import AttendanceForm from "./AttendanceForm";
 import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
+import { getSchoolCalendarStats } from "@/backend/api/actions/dashboard/attendance/calendarStats";
+import { getClassAttendanceDetails } from "@/backend/api/actions/dashboard/teacher/attendance/actions";
 
 export default async function TeacherAttendancePage() {
   const session = await getServerSession(getAuthOptions());
@@ -25,11 +27,18 @@ export default async function TeacherAttendancePage() {
       classTeacherOf: {
         include: {
           students: {
-            orderBy: { firstName: 'asc' }
-          }
-        }
-      }
-    }
+            where: { isActive: true },
+            orderBy: { rollNumber: "asc" },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              rollNumber: true,
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!teacher || !teacher.classTeacherOf) {
@@ -42,59 +51,30 @@ export default async function TeacherAttendancePage() {
   }
 
   const myClass = teacher.classTeacherOf;
+  const todayStr = new Date().toISOString().split("T")[0];
 
-  // Calculate today's summary across all their classes
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  
-  const endOfDay = new Date();
-  endOfDay.setHours(23, 59, 59, 999);
+  // Fetch school active days and leave days from Admin Calendar
+  const calendarStats = await getSchoolCalendarStats();
 
-  const todaysAttendance = await prisma.attendance.findMany({
-    where: {
-      date: {
-        gte: startOfDay,
-        lte: endOfDay
-      },
-      student: {
-        classId: myClass.id
-      }
-    }
-  });
-
-  const presentCount = todaysAttendance.filter(a => a.status === "PRESENT").length;
-  const absentCount = todaysAttendance.filter(a => a.status === "ABSENT").length;
-  const lateCount = todaysAttendance.filter(a => a.status === "LATE").length;
+  // Fetch today's class attendance details & approved leaves
+  const initialDetails = await getClassAttendanceDetails(myClass.id, todayStr);
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title}>Attendance</h1>
-      
-      <div className={styles.statsGrid}>
-        <div className={styles.statCard}>
-          <div className={styles.statInfo}>
-            <span className={styles.statLabel}>Present Today</span>
-            <span className={styles.statValue} style={{ color: "var(--success)" }}>{presentCount}</span>
-          </div>
-        </div>
-        <div className={styles.statCard}>
-          <div className={styles.statInfo}>
-            <span className={styles.statLabel}>Absent Today</span>
-            <span className={styles.statValue} style={{ color: "var(--danger)" }}>{absentCount}</span>
-          </div>
-        </div>
-        <div className={styles.statCard}>
-          <div className={styles.statInfo}>
-            <span className={styles.statLabel}>Late Today</span>
-            <span className={styles.statValue} style={{ color: "var(--warning)" }}>{lateCount}</span>
-          </div>
-        </div>
-      </div>
+      <h1 className={styles.title} style={{ margin: 0, marginBottom: "0.25rem" }}>
+        Attendance
+      </h1>
+      <p style={{ color: "var(--text-secondary)", marginTop: 0, marginBottom: "1.75rem" }}>
+        Real-time class attendance register for {myClass.name} - {myClass.section}. Changes save automatically.
+      </p>
 
-      <div className={styles.chartCard}>
-        <h3 className={styles.chartHeader}>Mark Attendance</h3>
-        <AttendanceForm myClass={myClass} />
-      </div>
+      <AttendanceForm
+        myClass={myClass}
+        calendarStats={calendarStats}
+        initialDate={todayStr}
+        initialAttendanceMap={initialDetails.attendanceMap || {}}
+        initialLeaveCount={initialDetails.leaveCountToday || 0}
+      />
     </div>
   );
 }

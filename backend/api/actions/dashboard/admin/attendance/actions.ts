@@ -52,12 +52,57 @@ export async function adminUpdateAttendance(studentId: string, dateStr: string, 
     }
 
     revalidatePath("/dashboard/admin/attendance");
+    revalidatePath("/dashboard/teacher/attendance");
+    revalidatePath("/dashboard/parent/attendance");
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {
       return { error: error.message || "Failed to update attendance." };
     }
     return { error: "Failed to update attendance." };
+  }
+}
+
+export async function adminBulkAttendance(data: { studentId: string; date: string; status: string; classId: string }[]) {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
+
+    for (const item of data) {
+      const date = new Date(item.date);
+      date.setHours(0, 0, 0, 0);
+
+      const existing = await prisma.attendance.findFirst({
+        where: { studentId: item.studentId, date }
+      });
+
+      if (existing) {
+        await prisma.attendance.update({
+          where: { id: existing.id },
+          data: { status: item.status, remarks: "Admin Bulk Mark" }
+        });
+      } else {
+        await prisma.attendance.create({
+          data: {
+            studentId: item.studentId,
+            classId: item.classId,
+            date,
+            status: item.status,
+            remarks: "Admin Bulk Mark"
+          }
+        });
+      }
+    }
+
+    revalidatePath("/dashboard/admin/attendance");
+    revalidatePath("/dashboard/teacher/attendance");
+    revalidatePath("/dashboard/parent/attendance");
+    return { success: true };
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      return { error: error.message || "Failed to save bulk attendance." };
+    }
+    return { error: "Failed to save bulk attendance." };
   }
 }
 
