@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Shield, CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
@@ -23,10 +23,39 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const router = useRouter();
 
+  // Close action menu when clicking outside anywhere on the page or pressing Escape
+  useEffect(() => {
+    if (!openMenuId) return;
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[data-action-menu-container]')) {
+        return;
+      }
+      setOpenMenuId(null);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenMenuId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openMenuId]);
+
   // Keep userList in sync when props refresh
-  useState(() => {
+  useEffect(() => {
     setUserList(users);
-  });
+  }, [users]);
 
   const filteredUsers = userList.filter((user) => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -160,9 +189,11 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
                 <td style={{ padding: "1rem", fontSize: '0.875rem', opacity: 0.8 }}>
                   {new Date(user.createdAt).toLocaleDateString()}
                 </td>
-                <td style={{ padding: "1rem", textAlign: 'right', position: 'relative' }}>
+                <td data-action-menu-container={user.id} style={{ padding: "1rem", textAlign: 'right', position: 'relative' }}>
                   <button 
                     onClick={() => setOpenMenuId(openMenuId === user.id ? null : user.id)}
+                    aria-label="Actions"
+                    title="Actions"
                     style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem' }}
                   >
                     <MoreVertical size={20} color="var(--text-secondary)" />
@@ -175,18 +206,29 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
                       display: 'flex', flexDirection: 'column', padding: '0.5rem', textAlign: 'left'
                     }}>
                       {user.role === 'TEACHER' && user.teacher && (
-                        <Link href={`/dashboard/admin/teachers?id=${user.teacher.id}`} style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}>
+                        <Link 
+                          href={`/dashboard/admin/teachers?id=${user.teacher.id}`} 
+                          onClick={() => setOpenMenuId(null)}
+                          style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}
+                        >
                           <Eye size={16} /> View Details
                         </Link>
                       )}
                       {user.role === 'PARENT' && user.parent && (
-                        <Link href={`/dashboard/admin/parents?id=${user.parent.id}`} style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}>
+                        <Link 
+                          href={`/dashboard/admin/parents?id=${user.parent.id}`} 
+                          onClick={() => setOpenMenuId(null)}
+                          style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}
+                        >
                           <Eye size={16} /> View Details
                         </Link>
                       )}
                       {user.status === 'ACTIVE' && user.role !== 'ADMIN' && (
                         <button 
-                          onClick={() => handleDeactivate(user.id)}
+                          onClick={() => {
+                            setOpenMenuId(null);
+                            handleDeactivate(user.id);
+                          }}
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--warning)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
                         >
                           <XCircle size={16} /> Deactivate

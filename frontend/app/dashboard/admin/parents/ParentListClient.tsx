@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Search, Eye, CheckCircle2, XCircle, MoreVertical, Trash2, Download } from "lucide-react";
 import Link from "next/link";
 import { deactivateParent, activateParent, deleteParent } from "@/backend/api/actions/dashboard/admin/parents/actions";
@@ -27,6 +27,35 @@ export default function ParentListClient({
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
+
+  // Close action menu when clicking outside anywhere on the page or pressing Escape
+  useEffect(() => {
+    if (!openMenuId) return;
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[data-action-menu-container]')) {
+        return;
+      }
+      setOpenMenuId(null);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenMenuId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openMenuId]);
 
   // Compute total student count across all parents or DB
   const totalStudents = totalStudentsCount !== undefined 
@@ -209,9 +238,11 @@ export default function ParentListClient({
                       </span>
                     )}
                   </td>
-                  <td style={{ padding: "1rem", textAlign: 'right', position: 'relative' }}>
+                  <td data-action-menu-container={parent.id} style={{ padding: "1rem", textAlign: 'right', position: 'relative' }}>
                     <button 
                       onClick={() => setOpenMenuId(openMenuId === parent.id ? null : parent.id)}
+                      aria-label="Actions"
+                      title="Actions"
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem' }}
                     >
                       <MoreVertical size={20} color="var(--text-secondary)" />
@@ -223,10 +254,20 @@ export default function ParentListClient({
                         boxShadow: '0 4px 6px rgba(0,0,0,0.1)', zIndex: 10, minWidth: '150px',
                         display: 'flex', flexDirection: 'column', padding: '0.5rem', textAlign: 'left'
                       }}>
-                        <Link href={`/dashboard/admin/parents/${parent.id}`} style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}>
+                        <Link 
+                          href={`/dashboard/admin/parents/${parent.id}`} 
+                          onClick={() => setOpenMenuId(null)}
+                          style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}
+                        >
                           <Eye size={16} /> View Details
                         </Link>
-                        <a href={`/api/pdf/parent/${parent.id}`} target="_blank" rel="noopener noreferrer" style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}>
+                        <a 
+                          href={`/api/pdf/parent/${parent.id}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          onClick={() => setOpenMenuId(null)}
+                          style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}
+                        >
                           <Download size={16} /> Download PDF
                         </a>
                         {parent.isActive ? (

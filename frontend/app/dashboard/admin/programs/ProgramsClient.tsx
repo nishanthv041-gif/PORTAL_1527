@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Eye, EyeOff, Calendar as CalendarIcon, MapPin, Clock, Trash2, ChevronDown, ChevronUp, History, Bell, Send } from "lucide-react";
 import { createProgramAction, updateProgramStatusAction, deleteProgramAction, sendProgramNotificationToAllAction } from "@/backend/api/actions/dashboard/admin/programs/actions";
 import { CalendarEvent } from "@prisma/client";
@@ -20,6 +20,35 @@ export default function ProgramsClient({
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [notifyingId, setNotifyingId] = useState<string | null>(null);
+
+  // Close action menu when clicking outside anywhere on the page or pressing Escape
+  useEffect(() => {
+    if (!openMenuId) return;
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[data-action-menu-container]')) {
+        return;
+      }
+      setOpenMenuId(null);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenMenuId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openMenuId]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -124,7 +153,7 @@ export default function ProgramsClient({
                 </span>
 
                 {/* Options Menu Button */}
-                <div style={{ position: 'relative' }}>
+                <div data-action-menu-container={prog.id} style={{ position: 'relative' }}>
                   <button
                     onClick={() => toggleMenu(prog.id)}
                     title="Options"
