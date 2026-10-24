@@ -171,11 +171,10 @@ export default async function DashboardLayout({
             {/* Ambient color aurora from logo */}
             <div style={{
               position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: '100vw',
-              height: '100vh',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
               backgroundImage: `url(${settings.SCHOOL_LOGO})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
@@ -191,10 +190,8 @@ export default async function DashboardLayout({
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              width: '60vw',
-              height: '60vw',
-              maxWidth: '700px',
-              maxHeight: '700px',
+              width: 'min(60vw, 600px)',
+              height: 'min(60vw, 600px)',
               backgroundImage: `url(${settings.SCHOOL_LOGO})`,
               backgroundSize: 'contain',
               backgroundPosition: 'center',
@@ -212,11 +209,13 @@ export default async function DashboardLayout({
         <div className={styles.sidebarWrapper}>
           <Sidebar role={session.user.role} settings={settings} />
         </div>
+
+        {/* Global touch backdrop overlay for mobile menu drawer */}
+        <label htmlFor="mobile-menu-toggle" className={styles.menuOverlay} aria-label="Close Navigation Drawer"></label>
         
         <div className={styles.mainContent}>
           <div className={styles.topbarContainer}>
-            <label htmlFor="mobile-menu-toggle" className={styles.menuOverlay}></label>
-            <label htmlFor="mobile-menu-toggle" className={styles.hamburger}>
+            <label htmlFor="mobile-menu-toggle" className={styles.hamburger} aria-label="Toggle Navigation Menu">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="3" y1="12" x2="21" y2="12"></line>
                 <line x1="3" y1="6" x2="21" y2="6"></line>

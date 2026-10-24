@@ -165,21 +165,21 @@ export default async function TeacherDashboard() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             {todaysSchedule.length > 0 ? (
               todaysSchedule.map(slot => (
-                <div key={slot.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: 'var(--background)', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                  <div style={{ background: "var(--primary)", color: "var(--primary-fg)", padding: '0.5rem 1rem', borderRadius: '6px', fontWeight: 600, minWidth: '80px', textAlign: 'center' }}>
+                <div key={slot.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: 'var(--background)', borderRadius: '8px', border: '1px solid var(--border)', flexWrap: 'wrap', minWidth: 0 }}>
+                  <div style={{ background: "var(--primary)", color: "var(--primary-fg)", padding: '0.45rem 0.85rem', borderRadius: '6px', fontWeight: 600, minWidth: '60px', textAlign: 'center', flexShrink: 0 }}>
                     P{slot.period}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <h4 style={{ margin: '0 0 0.25rem 0', color: 'var(--foreground)' }}>{slot.subject?.name}</h4>
-                    <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Class {slot.class.name} - {slot.class.section}</p>
+                  <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+                    <h4 style={{ margin: '0 0 0.25rem 0', color: 'var(--foreground)', overflowWrap: 'anywhere' }}>{slot.subject?.name}</h4>
+                    <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)', overflowWrap: 'anywhere' }}>Class {slot.class.name} - {slot.class.section}</p>
                   </div>
-                  <div style={{ textAlign: 'right', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                  <div style={{ textAlign: 'right', fontSize: '0.85rem', color: 'var(--text-secondary)', marginLeft: 'auto', flexShrink: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'flex-end', marginBottom: '0.25rem' }}>
-                      <Clock size={14} /> {slot.startTime} - {slot.endTime}
+                      <Clock size={14} style={{ flexShrink: 0 }} /> {slot.startTime} - {slot.endTime}
                     </div>
                     {slot.classroom && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'flex-end' }}>
-                        <MapPin size={14} /> {slot.classroom}
+                        <MapPin size={14} style={{ flexShrink: 0 }} /> {slot.classroom}
                       </div>
                     )}
                   </div>

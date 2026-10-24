@@ -56,8 +56,8 @@ export default function AttendanceForm({ myClass }: { myClass: ClassData }) {
   if (!myClass) return null;
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: 'flex-end' }}>
+    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.5rem", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: 'flex-end', width: "100%" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           <label style={{ fontSize: "0.875rem", fontWeight: 500 }}>Class</label>
           <div style={{ padding: "0.5rem", borderRadius: "6px", border: "1px solid var(--border)", backgroundColor: "var(--background)", color: "var(--foreground)", minWidth: '150px' }}>
@@ -79,14 +79,14 @@ export default function AttendanceForm({ myClass }: { myClass: ClassData }) {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>Quick Mark:</span>
-        <button type="button" onClick={() => handleMarkAll("PRESENT")} style={{ padding: "0.25rem 0.75rem", fontSize: "0.875rem", borderRadius: "4px", border: "1px solid #10b981", backgroundColor: "var(--success-bg)", color: "var(--success)", cursor: "pointer" }}>All Present</button>
-        <button type="button" onClick={() => handleMarkAll("ABSENT")} style={{ padding: "0.25rem 0.75rem", fontSize: "0.875rem", borderRadius: "4px", border: "1px solid #ef4444", backgroundColor: "var(--danger-bg)", color: "var(--danger)", cursor: "pointer" }}>All Absent</button>
+        <button type="button" onClick={() => handleMarkAll("PRESENT")} style={{ padding: "0.35rem 0.75rem", fontSize: "0.875rem", borderRadius: "4px", border: "1px solid #10b981", backgroundColor: "var(--success-bg)", color: "var(--success)", cursor: "pointer" }}>All Present</button>
+        <button type="button" onClick={() => handleMarkAll("ABSENT")} style={{ padding: "0.35rem 0.75rem", fontSize: "0.875rem", borderRadius: "4px", border: "1px solid #ef4444", backgroundColor: "var(--danger-bg)", color: "var(--danger)", cursor: "pointer" }}>All Absent</button>
       </div>
 
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+      <div style={{ overflowX: "auto", width: "100%", maxWidth: "100%", minWidth: 0, WebkitOverflowScrolling: "touch" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "500px" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border)" }}>
               <th style={{ padding: "0.75rem", fontWeight: 600 }}>Roll No</th>

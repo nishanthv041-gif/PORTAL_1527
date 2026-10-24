@@ -112,13 +112,13 @@ export default function TimetableClient({
   };
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
       {isPending && (
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: "var(--primary)", animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite', zIndex: 50 }} />
       )}
       
-      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '2rem', background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-        <div style={{ flex: 1 }}>
+      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '2rem', background: 'var(--card-bg)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-color)', flexWrap: 'wrap', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ flex: '1 1 200px', minWidth: 0 }}>
           <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Select Class</label>
           <select 
             value={selectedClass} 
@@ -132,14 +132,14 @@ export default function TimetableClient({
             ))}
           </select>
         </div>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: '1 1 200px', minWidth: 0 }}>
           <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Week Of (Monday)</label>
           <input 
             type="date"
             value={selectedWeek}
             onChange={handleWeekChange}
             disabled={isPending}
-            style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'var(--input-bg)', color: 'inherit' }}
+            style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'var(--input-bg)', color: 'inherit', boxSizing: 'border-box' }}
           />
         </div>
       </div>
@@ -166,7 +166,7 @@ export default function TimetableClient({
             </div>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto', background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+          <div style={{ overflowX: 'auto', background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box', WebkitOverflowScrolling: 'touch' }}>
             <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', background: 'rgba(0,0,0,0.01)' }}>
               <button
                 type="button"

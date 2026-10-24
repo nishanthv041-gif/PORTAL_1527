@@ -463,7 +463,7 @@ export default function ProgramsClient({
       )}
 
       {/* ── Upcoming Programs ─────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))', gap: '1.25rem', width: '100%', minWidth: 0 }}>
         {upcomingPrograms.map(prog => (
           <div key={prog.id} onClick={e => e.stopPropagation()}>
             <ProgramCard prog={prog} />
@@ -504,7 +504,7 @@ export default function ProgramsClient({
           </button>
 
           {showPrevious && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))', gap: '1.25rem', width: '100%', minWidth: 0 }}>
               {previousPrograms.map(prog => (
                 <div key={prog.id} onClick={e => e.stopPropagation()}>
                   <ProgramCard prog={prog} />

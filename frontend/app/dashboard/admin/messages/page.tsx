@@ -21,7 +21,7 @@ export default async function AdminMessagesPage() {
 
       <div style={{ marginBottom: '3rem' }}>
         <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Contact Teachers</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 240px), 1fr))', gap: '1rem', width: '100%', minWidth: 0 }}>
           {teachers.map(teacher => (
             <Link href={`/dashboard/admin/messages/${teacher.id}`} key={teacher.id} style={{ textDecoration: 'none' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '12px', transition: 'border-color 0.2s' }}>

@@ -248,27 +248,29 @@ export default async function AdminDashboardPage({
           <div className={styles.chartsContainer}>
             {/* Class Teacher Card */}
             {selectedClassData.teacher && (
-              <div style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+              <div style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)', minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
                 <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Briefcase size={20} className="text-indigo-500" />
                   Class Teacher Profile
                 </h3>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'center' }}>
-                  <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--primary-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', color: 'var(--primary)' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.25rem', alignItems: 'center' }}>
+                  <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'var(--primary-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.75rem', color: 'var(--primary)', flexShrink: 0 }}>
                     {selectedClassData.teacher.user.name.charAt(0)}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <h4 style={{ fontSize: '1.25rem', fontWeight: 600 }}>{selectedClassData.teacher.user.name}</h4>
-                    <p style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
-                      <Mail size={16} /> {selectedClassData.teacher.user.email}
+                  <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+                    <h4 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0, overflowWrap: 'anywhere' }}>{selectedClassData.teacher.user.name}</h4>
+                    <p style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem', marginBottom: 0, minWidth: 0, overflowWrap: 'anywhere' }}>
+                      <Mail size={16} style={{ flexShrink: 0 }} />
+                      <span style={{ minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-all' }}>{selectedClassData.teacher.user.email}</span>
                     </p>
                     {selectedClassData.teacher.phone && (
-                      <p style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
-                        <Phone size={16} /> {selectedClassData.teacher.phone}
+                      <p style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem', marginBottom: 0, minWidth: 0 }}>
+                        <Phone size={16} style={{ flexShrink: 0 }} />
+                        <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{selectedClassData.teacher.phone}</span>
                       </p>
                     )}
                   </div>
-                  <Link href={`/dashboard/admin/teachers?id=${selectedClassData.teacher.id}`} style={{ padding: '0.5rem 1rem', background: "var(--primary)", color: "var(--primary-fg)", borderRadius: '6px', textDecoration: 'none', fontSize: '0.875rem' }}>
+                  <Link href={`/dashboard/admin/teachers?id=${selectedClassData.teacher.id}`} style={{ padding: '0.5rem 1rem', background: "var(--primary)", color: "var(--primary-fg)", borderRadius: '6px', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 500, whiteSpace: 'nowrap' }}>
                     View Teacher Details
                   </Link>
                 </div>
@@ -276,27 +278,27 @@ export default async function AdminDashboardPage({
             )}
 
             {/* Test Overview Chart */}
-            <div style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            <div style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)', minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
               <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem' }}>Test Performance Overview</h3>
-              <div style={{ height: '200px' }}>
+              <div style={{ height: '200px', minWidth: 0 }}>
                 <PassFailChart data={passFailStats} />
               </div>
             </div>
           </div>
 
           {/* Student Table */}
-          <div style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-            <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem' }}>Students in {selectedClassData.name} - {selectedClassData.section}</h3>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)', minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
+            <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem', overflowWrap: 'anywhere' }}>Students in {selectedClassData.name} - {selectedClassData.section}</h3>
+            <div style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid var(--border-color)', textAlign: 'left' }}>
-                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>Roll No.</th>
-                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>Name</th>
-                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>Linked Parent(s)</th>
-                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>Parent Contact</th>
-                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>Attendance %</th>
-                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>Status</th>
+                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Roll No.</th>
+                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Name</th>
+                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Linked Parent(s)</th>
+                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Parent Contact</th>
+                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Attendance %</th>
+                    <th style={{ padding: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Status</th>
                   </tr>
                 </thead>
                 <tbody>

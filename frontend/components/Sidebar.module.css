@@ -136,13 +136,38 @@
   background-color: rgba(255, 255, 255, 0.05);
 }
 
+.mobileCloseBtn {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .sidebar {
     height: 100%;
     width: 260px !important;
+    max-width: 85vw !important;
   }
   
   .toggleBtn {
     display: none;
+  }
+
+  .mobileCloseBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    cursor: pointer;
+    border: none;
+    margin-left: auto;
+    flex-shrink: 0;
+    transition: background-color 0.2s;
+  }
+
+  .mobileCloseBtn:hover {
+    background-color: rgba(255, 255, 255, 0.2);
   }
 }

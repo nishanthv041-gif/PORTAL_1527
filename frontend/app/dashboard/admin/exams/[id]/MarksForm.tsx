@@ -117,8 +117,8 @@ export default function MarksForm({ exam, classData }: { exam: ExamData; classDa
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.5rem", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", width: "100%" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           <label style={{ fontSize: "0.875rem", fontWeight: 500 }}>Select Subject</label>
           <select
@@ -143,8 +143,8 @@ export default function MarksForm({ exam, classData }: { exam: ExamData; classDa
         </div>
       </div>
 
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+      <div style={{ overflowX: "auto", width: "100%", maxWidth: "100%", minWidth: 0, WebkitOverflowScrolling: "touch" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "550px" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border)", backgroundColor: "rgba(0,0,0,0.02)" }}>
               <th style={{ padding: "1rem", fontWeight: 600 }}>Roll No</th>

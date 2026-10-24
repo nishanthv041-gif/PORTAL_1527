@@ -28,7 +28,8 @@ import {
   TrendingUp,
   Clock,
   Star,
-  AlertOctagon
+  AlertOctagon,
+  X
 } from "lucide-react";
 
 export default function Sidebar({ role, settings = {} }: { role: string; settings?: Record<string, string> }) {
@@ -145,6 +146,9 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
             <span className={styles.logoText} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{schoolName}</span>
           </div>
         )}
+        <label htmlFor="mobile-menu-toggle" className={styles.mobileCloseBtn} title="Close Menu" aria-label="Close Navigation Drawer">
+          <X size={20} />
+        </label>
       </div>
       <nav className={styles.nav}>
         {links.map((link) => {

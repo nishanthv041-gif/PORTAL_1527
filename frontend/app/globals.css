@@ -31,7 +31,7 @@
   --warning-bg: rgba(245, 158, 11, 0.1);
   --warning-fg: #ffffff;
   --danger: #ef4444;
-  --danger-bg: var(--danger-bg);
+  --danger-bg: rgba(239, 68, 68, 0.1);
   --danger-fg: #ffffff;
 
   /* Input / form */
@@ -82,7 +82,7 @@
   --warning: #fbbf24;
   --warning-bg: rgba(251, 191, 36, 0.15);
   --warning-fg: #0f172a;
-  --danger: var(--danger);
+  --danger: #f87171;
   --danger-bg: rgba(248, 113, 113, 0.15);
   --danger-fg: #0f172a;
 
@@ -145,6 +145,31 @@ select {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+/* ============================================================
+   RESPONSIVE TEXT WRAPPING & CONTAINER BOUNDS
+   Prevent email addresses, long names, hashes and URLs from overflowing
+   ============================================================ */
+p, span, a, h1, h2, h3, h4, h5, h6, td, th, label {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+img, svg {
+  max-width: 100%;
+}
+
+/* Reusable touch-friendly table container */
+.table-responsive-container,
+.tableContainer {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  display: block;
+  position: relative;
 }
 
 /* Smooth transitions on common UI elements */

@@ -92,11 +92,11 @@ export default function ParentListClient({
 
 
   return (
-    <div style={{ marginTop: '2rem', background: 'var(--card-bg)', borderRadius: '12px', padding: '1.5rem', border: '1px solid var(--border-color)' }}>
+    <div style={{ marginTop: '2rem', background: 'var(--card-bg)', borderRadius: '12px', padding: '1.5rem', border: '1px solid var(--border-color)', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
       {/* Parent Count & Metrics Bar */}
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', 
         gap: '1.25rem', 
         marginBottom: '1.5rem',
         padding: '1.25rem',
@@ -166,8 +166,8 @@ export default function ParentListClient({
         </div>
       </div>
 
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+      <div style={{ overflowX: 'auto', width: '100%', maxWidth: '100%', minWidth: 0, WebkitOverflowScrolling: 'touch' }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "800px" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border-color)", backgroundColor: 'rgba(0,0,0,0.02)' }}>
               <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Name</th>

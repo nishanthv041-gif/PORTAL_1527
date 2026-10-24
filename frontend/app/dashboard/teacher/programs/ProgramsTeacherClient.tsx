@@ -296,8 +296,10 @@ export default function ProgramsTeacherClient({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
-            gap: "1.25rem"
+            gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 320px), 1fr))",
+            gap: "1.25rem",
+            width: "100%",
+            minWidth: 0
           }}
         >
           {displayedPrograms.map(prog => {

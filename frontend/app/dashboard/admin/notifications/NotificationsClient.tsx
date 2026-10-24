@@ -299,15 +299,15 @@ export default function NotificationsClient({
       )}
 
       {/* Notifications List (Managed Per Particular Notification) */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))", gap: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 340px), 1fr))", gap: "1.25rem", width: "100%", minWidth: 0 }}>
         {notifications.map(notif => (
-          <div key={notif.id} style={{ background: "var(--card-bg)", borderRadius: "12px", border: `1px solid ${!notif.isRead ? "var(--primary)" : "var(--border-color)"}`, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div key={notif.id} style={{ background: "var(--card-bg)", borderRadius: "12px", border: `1px solid ${!notif.isRead ? "var(--primary)" : "var(--border-color)"}`, padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1rem", minWidth: 0, width: "100%", boxSizing: "border-box" }}>
             
-            <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
-              <div style={{ padding: "0.5rem", background: "rgba(0,0,0,0.02)", borderRadius: "8px" }}>
+            <div style={{ display: "flex", gap: "0.85rem", alignItems: "flex-start", minWidth: 0 }}>
+              <div style={{ padding: "0.5rem", background: "rgba(0,0,0,0.02)", borderRadius: "8px", flexShrink: 0 }}>
                 {getTypeIcon(notif.type)}
               </div>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>{notif.title}</h3>
                 <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.875rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
                   {notif.content}

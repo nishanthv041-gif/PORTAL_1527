@@ -2,6 +2,10 @@
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .title {
@@ -11,36 +15,48 @@
   margin: 0;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
 }
 
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .statCard {
   background-color: var(--card);
-  padding: 1.5rem;
+  padding: 1.25rem;
   border-radius: 12px;
   border: 1px solid var(--border);
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1.25rem;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .navCard {
   background-color: var(--card);
-  padding: 1.5rem;
+  padding: 1.25rem;
   border-radius: 12px;
   border: 1px solid var(--border);
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1.25rem;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .navCard:hover {
@@ -49,39 +65,47 @@
 }
 
 .statIcon {
-  width: 54px;
-  height: 54px;
+  width: 50px;
+  height: 50px;
   border-radius: 12px;
   background-color: var(--primary-bg);
   color: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .statInfo {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  flex: 1;
 }
 
 .statLabel {
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   color: var(--foreground);
-  opacity: 0.7;
+  opacity: 0.75;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .statValue {
-  font-size: 1.75rem;
+  font-size: 1.6rem;
   font-weight: 700;
   color: var(--foreground);
-  margin-top: 0.25rem;
+  margin-top: 0.2rem;
+  overflow-wrap: anywhere;
 }
 
 .chartsContainer {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 @media (max-width: 1024px) {
@@ -96,27 +120,34 @@
   border-radius: 12px;
   border: 1px solid var(--border);
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .chartHeader {
   font-size: 1.125rem;
   font-weight: 600;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
   color: var(--foreground);
+  overflow-wrap: anywhere;
 }
 
 .recentActivity {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-width: 0;
 }
 
 .activityItem {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
-  padding-bottom: 1rem;
+  gap: 0.85rem;
+  padding-bottom: 0.85rem;
   border-bottom: 1px solid var(--border);
+  min-width: 0;
 }
 
 .activityItem:last-child {
@@ -127,38 +158,48 @@
 .activityIcon {
   margin-top: 0.25rem;
   color: var(--primary);
+  flex-shrink: 0;
 }
 
 .activityDetails {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  flex: 1;
 }
 
 .activityTitle {
   font-weight: 500;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   color: var(--foreground);
+  overflow-wrap: anywhere;
 }
 
 .activityTime {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--foreground);
   opacity: 0.6;
-  margin-top: 0.25rem;
+  margin-top: 0.2rem;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .dashboard {
     gap: 1.25rem;
   }
 
+  .chartCard {
+    padding: 1.15rem 1rem;
+  }
+}
+
+@media (max-width: 640px) {
   .title {
     font-size: 1.35rem;
     padding-bottom: 0.35rem;
   }
 
   .statsGrid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
     gap: 0.75rem;
   }
 
@@ -194,5 +235,8 @@
     grid-template-columns: 1fr;
     gap: 0.65rem;
   }
-}
 
+  .chartCard {
+    padding: 0.85rem;
+  }
+}

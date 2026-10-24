@@ -3,6 +3,10 @@
   grid-template-columns: 2fr 1fr;
   gap: 2rem;
   align-items: start;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .filters {
@@ -14,6 +18,10 @@
   gap: 1rem;
   align-items: flex-end;
   flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .filterItem {

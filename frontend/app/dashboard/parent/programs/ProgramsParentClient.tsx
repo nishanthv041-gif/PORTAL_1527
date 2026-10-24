@@ -272,7 +272,7 @@ export default function ProgramsParentClient({ programs }: { programs: CalendarE
           </div>
 
           {upcomingPrograms.length > 0 ? (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "1.5rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 320px), 1fr))", gap: "1.25rem", width: "100%", minWidth: 0 }}>
               {upcomingPrograms.map(prog => (
                 <ProgramCard key={prog.id} prog={prog} />
               ))}
@@ -329,7 +329,7 @@ export default function ProgramsParentClient({ programs }: { programs: CalendarE
           </div>
 
           {(activeTab === "PREVIOUS" || showPrevious) && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "1.5rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 320px), 1fr))", gap: "1.25rem", width: "100%", minWidth: 0 }}>
               {previousPrograms.map(prog => (
                 <ProgramCard key={prog.id} prog={prog} isPast={true} />
               ))}

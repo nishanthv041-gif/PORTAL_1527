@@ -327,7 +327,7 @@ export default function ClassListClient({
                 Assign the respective class teacher for each selected section:
               </p>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.85rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))', gap: '0.85rem', width: '100%', minWidth: 0 }}>
                 {selectedSections.map(sec => (
                   <div 
                     key={sec} 
@@ -545,7 +545,7 @@ export default function ClassListClient({
       )}
 
       {/* Classes Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: '1.25rem', width: '100%', minWidth: 0 }}>
         {Object.keys(groupedClasses).sort((a, b) => {
            const numA = parseInt(a.replace(/\D/g, '')) || 0;
            const numB = parseInt(b.replace(/\D/g, '')) || 0;

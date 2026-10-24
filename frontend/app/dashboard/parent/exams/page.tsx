@@ -76,8 +76,8 @@ export default async function ParentExamsPage({
             </div>
 
             {exam.marks.length > 0 ? (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+              <div style={{ overflowX: 'auto', width: '100%', maxWidth: '100%', minWidth: 0, WebkitOverflowScrolling: 'touch' }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "350px" }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid var(--border)" }}>
                       <th style={{ padding: "0.5rem 0", fontWeight: 600, fontSize: '0.875rem' }}>Subject</th>

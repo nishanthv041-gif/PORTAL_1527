@@ -132,9 +132,9 @@ export default function MeetingsClient({ meetings, teachers, parents, classes }:
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))', gap: '1.25rem', width: '100%', minWidth: 0 }}>
         {meetings.map(meeting => (
-          <div key={meeting.id} style={{ background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div key={meeting.id} style={{ background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
             <div style={{ padding: '1.5rem', flex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                 <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600, color: 'var(--primary)' }}>{meeting.agenda}</h3>

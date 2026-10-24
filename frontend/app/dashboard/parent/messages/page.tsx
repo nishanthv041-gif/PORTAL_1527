@@ -52,7 +52,7 @@ export default async function ParentMessagesPage() {
         <h3 className={styles.chartHeader}>Start a Conversation</h3>
         <p style={{ opacity: 0.7, marginBottom: "1.5rem" }}>Select a teacher to message them.</p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '1rem', width: '100%', minWidth: 0 }}>
           {teachers.map((teacherUser) => (
             <Link href={`/dashboard/parent/messages/${teacherUser.id}`} key={teacherUser.id} style={{ textDecoration: 'none' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', border: '1px solid var(--border)', borderRadius: '8px', backgroundColor: 'var(--background)', transition: 'border-color 0.2s' }}>

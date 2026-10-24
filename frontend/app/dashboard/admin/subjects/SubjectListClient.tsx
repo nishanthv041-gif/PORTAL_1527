@@ -230,7 +230,7 @@ export default function SubjectListClient({
                 Click to select each class where this subject is taught, and assign the teaching staff for that class.
               </p>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.85rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))', gap: '0.85rem', width: '100%', minWidth: 0 }}>
                 {classes.map(c => {
                   const isSelected = selectedClasses.includes(c.id);
 
@@ -314,7 +314,7 @@ export default function SubjectListClient({
       )}
 
       {/* Subject Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: '1.25rem', width: '100%', minWidth: 0 }}>
         {Object.keys(groupedSubjects).sort().map(subjectName => {
           const instances = groupedSubjects[subjectName];
           const subjectCode = instances[0]?.code || "";

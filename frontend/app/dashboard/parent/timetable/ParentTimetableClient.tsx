@@ -88,7 +88,7 @@ export default function ParentTimetableClient({
   };
 
   return (
-    <div>
+    <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       {/* Live On-Time Class Tracker Banner */}
       <div
         style={{
@@ -364,7 +364,7 @@ export default function ParentTimetableClient({
                   </span>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "1rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 240px), 1fr))", gap: "1rem", width: "100%", minWidth: 0 }}>
                   {daySlots.map(slot => (
                     <div
                       key={slot.id}

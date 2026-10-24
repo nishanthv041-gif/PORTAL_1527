@@ -61,8 +61,10 @@
 
 .dropdownGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: 1.25rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .classGroup {
@@ -116,4 +118,10 @@
   background: var(--primary) !important;
   color: white !important;
   border-color: var(--primary) !important;
+}
+
+@media (max-width: 480px) {
+  .selectorContainer {
+    padding: 1rem 0.85rem;
+  }
 }

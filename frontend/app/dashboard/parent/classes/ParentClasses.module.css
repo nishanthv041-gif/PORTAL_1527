@@ -1,0 +1,378 @@
+/* ParentClasses.module.css - Responsive layout for Child Classes & Faculty */
+
+.pageContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.pageTitle {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: clamp(1.3rem, 4vw, 1.75rem);
+  font-weight: 700;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+.pageSubtitle {
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* 2-Column Overview Cards Grid */
+.overviewGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  min-width: 0;
+}
+
+.cardIconCircle {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cardTitleGroup {
+  min-width: 0;
+  flex: 1;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+.cardSubtitle {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+  display: block;
+  margin-top: 0.15rem;
+  overflow-wrap: anywhere;
+}
+
+/* Class details key-value list */
+.detailList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  min-width: 0;
+}
+
+.detailRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+  min-width: 0;
+}
+
+.detailRow:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.detailLabel {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.detailValue {
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* Teacher details section */
+.teacherInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  font-size: 0.875rem;
+  min-width: 0;
+}
+
+.teacherName {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+.teacherMeta {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.contactItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  margin-top: 0.2rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.contactIcon {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.contactText {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  font-size: 0.84rem;
+}
+
+/* Subjects & Faculty Table Section */
+.subjectsCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.subjectsHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.subjectsTitle {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--foreground);
+}
+
+/* View toggle (Cards vs Table) */
+.viewToggle {
+  display: inline-flex;
+  background: var(--background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.viewToggleBtn {
+  background: none;
+  border: none;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+
+.viewToggleBtnActive {
+  background: var(--card-bg);
+  color: var(--primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Table layout (desktop/tablet) */
+.tableContainer {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  display: block;
+}
+
+.table {
+  width: 100%;
+  min-width: 580px;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.th {
+  padding: 0.8rem 1rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.02);
+  color: var(--foreground);
+  white-space: nowrap;
+}
+
+.td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+/* Mobile Subject Card Stack */
+.mobileCardsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.mobileSubjectCard {
+  background: var(--background);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.mobileSubjectTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.subjectCodeBadge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  background-color: var(--primary-bg);
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.subjectNameTitle {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--foreground);
+  margin: 0;
+  overflow-wrap: anywhere;
+  flex: 1;
+}
+
+.mobileTeacherRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.teacherAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.mobileMarksRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  flex-wrap: wrap;
+}
+
+.markChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.55rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .card,
+  .subjectsCard {
+    padding: 1.15rem 0.9rem;
+  }
+}

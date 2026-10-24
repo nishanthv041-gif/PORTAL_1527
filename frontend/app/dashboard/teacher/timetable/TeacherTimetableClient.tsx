@@ -104,10 +104,10 @@ export default function TeacherTimetableClient({
   const selectedClassObj = classes.find(c => c.id === selectedClassId);
 
   return (
-    <div>
+    <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       {/* View Switcher: Class Timetable vs My Teaching Schedule */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", marginBottom: "1.5rem" }}>
-        <div style={{ display: "flex", gap: "0.5rem", background: "var(--card-bg)", padding: "0.35rem", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", marginBottom: "1.5rem", width: "100%" }}>
+        <div style={{ display: "flex", gap: "0.5rem", background: "var(--card-bg)", padding: "0.35rem", borderRadius: "10px", border: "1px solid var(--border-color)", flexWrap: "wrap" }}>
           <button
             onClick={() => setViewMode("class")}
             style={{
@@ -315,7 +315,7 @@ export default function TeacherTimetableClient({
                   </span>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "1rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 240px), 1fr))", gap: "1rem", width: "100%", minWidth: 0 }}>
                   {daySlots.map(slot => {
                     const status = isToday ? getSlotStatus(slot) : "UPCOMING";
                     const isOngoing = status === "ONGOING";

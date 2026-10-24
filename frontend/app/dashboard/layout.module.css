@@ -2,6 +2,10 @@
   display: flex;
   min-height: 100vh;
   background-color: var(--background);
+  width: 100%;
+  max-width: 100vw;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .mobileMenuToggle {
@@ -14,11 +18,18 @@
   flex-direction: column;
   overflow: hidden;
   position: relative;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .topbarContainer {
   position: relative;
   z-index: 20;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .hamburger {
@@ -34,14 +45,17 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0,0,0,0.5);
-  z-index: 40;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 45;
 }
 
 .sidebarWrapper {
   z-index: 50;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .pageContent {
@@ -49,19 +63,29 @@
   padding: 2rem;
   overflow-y: auto;
   overflow-x: hidden;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 @media (max-width: 768px) {
   .hamburger {
     display: flex;
     position: absolute;
-    top: 15px;
-    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 0.85rem;
     z-index: 30;
     align-items: center;
     justify-content: center;
     width: 40px;
     height: 40px;
+    border-radius: 8px;
+  }
+
+  .hamburger:hover {
+    background-color: rgba(0, 0, 0, 0.05);
   }
 
   .sidebarWrapper {
@@ -69,19 +93,29 @@
     top: 0;
     left: 0;
     bottom: 0;
+    max-width: 85vw;
+    width: 260px;
     transform: translateX(-100%);
-    transition: transform 0.3s ease;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   }
 
   .mobileMenuToggle:checked ~ .sidebarWrapper {
     transform: translateX(0);
   }
 
+  .mobileMenuToggle:checked ~ .menuOverlay,
   .mobileMenuToggle:checked ~ .mainContent .menuOverlay {
     display: block;
   }
 
   .pageContent {
-    padding: 1rem;
+    padding: 1.25rem 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .pageContent {
+    padding: 1rem 0.75rem;
   }
 }

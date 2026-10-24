@@ -52,9 +52,25 @@
 
 @media (max-width: 768px) {
   .topbar {
+    height: 60px;
     padding: 0 1rem 0 3.5rem; /* Space for hamburger */
   }
   .userDetails {
     display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar {
+    height: 56px;
+    padding: 0 0.75rem 0 3.25rem;
+  }
+  .userInfo {
+    gap: 0.4rem;
+  }
+  .avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 0.9rem;
   }
 }
