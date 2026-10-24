@@ -84,7 +84,8 @@ export default function ParentCalendarClient({ initialEvents }: { initialEvents:
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px', background: 'var(--border-color)', border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden' }}>
+      <div style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', minWidth: 0, borderRadius: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', minWidth: '640px', gap: '1px', background: 'var(--border-color)', border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden' }}>
         {/* Day Headers */}
         {dayNames.map(day => (
           <div key={day} style={{ padding: '1rem', background: 'var(--card-bg)', textAlign: 'center', fontWeight: 600, fontSize: '0.875rem' }}>
@@ -148,6 +149,7 @@ export default function ParentCalendarClient({ initialEvents }: { initialEvents:
         {Array.from({ length: (7 - ((firstDayOfMonth + daysInMonth) % 7)) % 7 }).map((_, i) => (
           <div key={`empty-end-${i}`} style={{ background: 'rgba(0,0,0,0.02)', minHeight: '120px' }}></div>
         ))}
+        </div>
       </div>
     </div>
   );

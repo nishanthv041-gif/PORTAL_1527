@@ -918,8 +918,8 @@ export default function TimetableScanModal({
               </div>
 
               {/* Editing Grid */}
-              <div style={{ overflowX: "auto", border: "1px solid var(--border-color)", borderRadius: "10px" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+              <div style={{ overflowX: "auto", width: "100%", maxWidth: "100%", minWidth: 0, WebkitOverflowScrolling: "touch", border: "1px solid var(--border-color)", borderRadius: "10px" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", minWidth: "850px" }}>
                   <thead>
                     <tr style={{ background: "rgba(0,0,0,0.03)", borderBottom: "1px solid var(--border-color)", textAlign: "left" }}>
                       <th style={{ padding: "0.75rem", width: "120px" }}>Day</th>

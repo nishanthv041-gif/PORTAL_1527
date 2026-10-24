@@ -97,7 +97,7 @@ export default function PerformanceClient({
                   <span style={{ color: 'var(--text-secondary)' }}>Lowest Score</span>
                   <span style={{ fontWeight: 600, color: "var(--danger)" }}>{stats.lowest}</span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 100px), 1fr))', gap: '1rem' }}>
                   <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--success-bg)', color: 'var(--success)', borderRadius: '8px' }}>
                     <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>{stats.passPercent}%</div>
                     <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>Pass Rate</div>

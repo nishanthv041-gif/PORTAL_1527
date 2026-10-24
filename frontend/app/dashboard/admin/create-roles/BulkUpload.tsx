@@ -682,8 +682,8 @@ export default function BulkUpload({
           </div>
 
           {/* Scanned Table */}
-          <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '10px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+          <div style={{ overflowX: 'auto', width: '100%', maxWidth: '100%', minWidth: 0, WebkitOverflowScrolling: 'touch', border: '1px solid var(--border-color)', borderRadius: '10px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem', minWidth: '750px' }}>
               <thead>
                 <tr style={{ background: 'rgba(0,0,0,0.02)', borderBottom: '1px solid var(--border-color)' }}>
                   <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Status</th>
@@ -945,7 +945,7 @@ export default function BulkUpload({
                     Student Information
                   </h5>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1rem' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
                         Student First Name *
@@ -1034,7 +1034,7 @@ export default function BulkUpload({
                     Parent Information & Login
                   </h5>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1rem' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
                         Parent Email (Login ID) *
@@ -1085,7 +1085,7 @@ export default function BulkUpload({
                       />
                     </div>
 
-                    <div style={{ gridColumn: 'span 2' }}>
+                    <div style={{ gridColumn: '1 / -1' }}>
                       <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
                         Address
                       </label>
@@ -1099,7 +1099,7 @@ export default function BulkUpload({
                   </div>
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1rem' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
                       First Name *

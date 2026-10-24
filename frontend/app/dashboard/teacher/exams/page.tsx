@@ -2,8 +2,8 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import Link from "next/link";
-import styles from "../../dashboard.module.css";
-import { BookOpen, Calendar as CalendarIcon } from "lucide-react";
+import styles from "./TeacherExams.module.css";
+import { BookOpen, Calendar as CalendarIcon, Clock, CheckCircle2, AlertCircle, FileText } from "lucide-react";
 import CreateExamForm from "./CreateExamForm";
 import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
 
@@ -14,8 +14,8 @@ export default async function TeacherExamsPage() {
   const canManage = await getSystemSetting("TEACHER_MANAGE_MARKS", "true");
   if (canManage === "false") {
     return (
-      <div className={styles.dashboard}>
-        <h1 className={styles.title}>Exams</h1>
+      <div className={styles.container}>
+        <h1 className={styles.title}>Exams &amp; Marks</h1>
         <p style={{ color: "var(--danger)" }}>Exam and marks management has been disabled by the administrator.</p>
       </div>
     );
@@ -53,81 +53,123 @@ export default async function TeacherExamsPage() {
   });
 
   return (
-    <div className={styles.dashboard}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 className={styles.title}>Exams</h1>
+    <div className={styles.container}>
+      <div className={styles.headerRow}>
+        <div>
+          <h1 className={styles.title}>Exams &amp; Marks Management</h1>
+          <p style={{ color: "var(--text-secondary)", margin: "0.25rem 0 0 0", fontSize: "0.9rem" }}>
+            Schedule class exams, manage submitted requests, and track grade entry.
+          </p>
+        </div>
       </div>
 
-      <div className={styles.chartsContainer}>
-        <div className={styles.chartCard}>
-          <h3 className={styles.chartHeader}>My Exams</h3>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {exams.map((exam) => (
-              <Link href={`/dashboard/teacher/exams/${exam.id}`} key={exam.id} style={{ textDecoration: 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', border: '1px solid var(--border)', borderRadius: '8px', backgroundColor: 'var(--background)', transition: 'border-color 0.2s' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ width: 40, height: 40, borderRadius: '8px', backgroundColor: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className={styles.examsGrid}>
+        {/* Left Column: Scheduled Exams & Exam Requests */}
+        <div className={styles.mainColumn}>
+          {/* 1. Scheduled Class Exams */}
+          <div className={styles.card}>
+            <h3 className={styles.cardHeader}>
+              <BookOpen size={20} className="text-primary" />
+              <span>My Exams ({exams.length})</span>
+            </h3>
+            
+            <div className={styles.examList}>
+              {exams.map((exam) => (
+                <Link href={`/dashboard/teacher/exams/${exam.id}`} key={exam.id} className={styles.examItem}>
+                  <div className={styles.examLeft}>
+                    <div className={styles.examIconBox}>
                       <BookOpen size={20} />
                     </div>
-                    <div>
-                      <h4 style={{ margin: 0, color: 'var(--foreground)' }}>{exam.name}</h4>
-                      <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.7, color: 'var(--foreground)' }}>
-                        {exam.class.name} - {exam.class.section}
+                    <div className={styles.examMeta}>
+                      <h4 className={styles.examTitle}>{exam.name}</h4>
+                      <p className={styles.examSubText}>
+                        Class {exam.class.name} - Section {exam.class.section}
                       </p>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', opacity: 0.8, color: 'var(--foreground)' }}>
+                  <div className={styles.examRight}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
                       <CalendarIcon size={14} />
-                      {new Date(exam.date).toLocaleDateString()}
+                      <span>{new Date(exam.date).toLocaleDateString()}</span>
                     </div>
-                    <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: exam._count.marks > 0 ? 'var(--success-bg)' : 'var(--warning-bg)', color: exam._count.marks > 0 ? "var(--success)" : "var(--warning)" }}>
+                    <span 
+                      className={styles.statusBadge}
+                      style={{ 
+                        backgroundColor: exam._count.marks > 0 ? 'var(--success-bg)' : 'var(--warning-bg)', 
+                        color: exam._count.marks > 0 ? "var(--success)" : "var(--warning)" 
+                      }}
+                    >
+                      {exam._count.marks > 0 ? <CheckCircle2 size={12} /> : <Clock size={12} />}
                       {exam._count.marks > 0 ? 'Marks Entered' : 'Pending Marks'}
                     </span>
                   </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              ))}
 
-            {exams.length === 0 && (
-              <p style={{ textAlign: 'center', padding: '2rem', opacity: 0.7 }}>No exams scheduled yet.</p>
-            )}
+              {exams.length === 0 && (
+                <p style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-secondary)', margin: 0, fontSize: '0.9rem' }}>
+                  No scheduled exams found for your classes.
+                </p>
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className={styles.chartCard} style={{ gridColumn: 'span 2' }}>
-          <h3 className={styles.chartHeader}>My Exam Requests</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {examRequests.map((req) => (
-              <div key={req.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', border: '1px solid var(--border)', borderRadius: '8px', backgroundColor: 'var(--background)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div>
-                    <h4 style={{ margin: 0 }}>{req.subject.name} Exam</h4>
-                    <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.7 }}>
-                      {req.class.name} - {req.class.section} | {new Date(req.date).toLocaleDateString()} ({req.startTime} - {req.endTime})
+          {/* 2. My Submitted Exam Requests */}
+          <div className={styles.card}>
+            <h3 className={styles.cardHeader}>
+              <FileText size={20} className="text-primary" />
+              <span>My Exam Requests ({examRequests.length})</span>
+            </h3>
+            
+            <div className={styles.examList}>
+              {examRequests.map((req) => (
+                <div key={req.id} className={styles.requestItem}>
+                  <div className={styles.requestLeft}>
+                    <h4 className={styles.requestTitle}>{req.subject.name} Exam</h4>
+                    <p className={styles.requestSub}>
+                      Class {req.class.name} - {req.class.section} • {new Date(req.date).toLocaleDateString()} ({req.startTime} - {req.endTime})
                     </p>
                   </div>
+                  <div className={styles.requestRight}>
+                    <span 
+                      className={styles.statusBadge}
+                      style={{ 
+                        backgroundColor: req.status === 'APPROVED' ? 'var(--success-bg)' : req.status === 'DECLINED' ? 'var(--danger-bg)' : 'var(--warning-bg)', 
+                        color: req.status === 'APPROVED' ? "var(--success)" : req.status === 'DECLINED' ? "var(--danger)" : "var(--warning)" 
+                      }}
+                    >
+                      {req.status === 'APPROVED' && <CheckCircle2 size={12} />}
+                      {req.status === 'DECLINED' && <AlertCircle size={12} />}
+                      {req.status === 'PENDING' && <Clock size={12} />}
+                      {req.status}
+                    </span>
+                    {req.declineReason && (
+                      <span style={{ fontSize: '0.75rem', color: "var(--danger)", maxWidth: '220px', overflowWrap: 'anywhere' }}>
+                        Reason: {req.declineReason}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
-                  <span style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: '12px', backgroundColor: req.status === 'APPROVED' ? 'var(--success-bg)' : req.status === 'DECLINED' ? 'var(--danger-bg)' : 'var(--warning-bg)', color: req.status === 'APPROVED' ? "var(--success)" : req.status === 'DECLINED' ? "var(--danger)" : "var(--warning)", fontWeight: 500 }}>
-                    {req.status}
-                  </span>
-                  {req.declineReason && (
-                    <span style={{ fontSize: '0.75rem', color: "var(--danger)" }}>{req.declineReason}</span>
-                  )}
-                </div>
-              </div>
-            ))}
-            {examRequests.length === 0 && (
-              <p style={{ textAlign: 'center', padding: '1rem', opacity: 0.7 }}>No exam requests submitted.</p>
-            )}
+              ))}
+
+              {examRequests.length === 0 && (
+                <p style={{ textAlign: 'center', padding: '1.5rem 1rem', color: 'var(--text-secondary)', margin: 0, fontSize: '0.9rem' }}>
+                  No exam requests submitted yet.
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className={styles.chartCard}>
-          <h3 className={styles.chartHeader}>Request New Exam</h3>
-          <CreateExamForm teacherId={teacher.id} subjects={teacher.subjects} />
+        {/* Right Column: Request New Exam Form */}
+        <div className={styles.sideColumn}>
+          <div className={styles.card}>
+            <h3 className={styles.cardHeader}>
+              <CalendarIcon size={20} className="text-primary" />
+              <span>Request New Exam</span>
+            </h3>
+            <CreateExamForm teacherId={teacher.id} subjects={teacher.subjects} />
+          </div>
         </div>
       </div>
     </div>

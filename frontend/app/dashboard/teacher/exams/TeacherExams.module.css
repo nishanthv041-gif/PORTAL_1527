@@ -1,0 +1,255 @@
+/* TeacherExams.module.css - Mobile-first responsive styles for Teacher Exams & Requests */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.title {
+  font-size: clamp(1.4rem, 4vw, 1.85rem);
+  font-weight: 700;
+  color: var(--foreground);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Two-column layout on desktop, stacked single-column on tablets & mobile */
+.examsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (min-width: 1025px) {
+  .examsGrid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    align-items: start;
+    gap: 1.75rem;
+  }
+}
+
+.mainColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.sideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.card {
+  background-color: var(--card);
+  padding: 1.5rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 1rem;
+    border-radius: 10px;
+  }
+}
+
+.cardHeader {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 1.25rem 0;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.examList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.examItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--background);
+  transition: all 0.2s ease;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  text-decoration: none;
+  color: inherit;
+}
+
+.examItem:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.examLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+
+.examIconBox {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background-color: rgba(99, 102, 241, 0.1);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.examMeta {
+  min-width: 0;
+  flex: 1;
+}
+
+.examTitle {
+  margin: 0;
+  color: var(--foreground);
+  font-weight: 600;
+  font-size: 0.98rem;
+  overflow-wrap: anywhere;
+}
+
+.examSubText {
+  margin: 0.2rem 0 0 0;
+  font-size: 0.84rem;
+  opacity: 0.75;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+.examRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .examRight {
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px dashed var(--border);
+    padding-top: 0.5rem;
+    margin-top: 0.2rem;
+  }
+}
+
+.statusBadge {
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.requestItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--background);
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.requestLeft {
+  min-width: 0;
+  flex: 1 1 200px;
+}
+
+.requestTitle {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.98rem;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+.requestSub {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.84rem;
+  opacity: 0.75;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+.requestRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .requestRight {
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px dashed var(--border);
+    padding-top: 0.5rem;
+    margin-top: 0.2rem;
+  }
+}

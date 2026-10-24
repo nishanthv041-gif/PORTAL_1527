@@ -140,7 +140,7 @@ export default function NotificationsClient({
               background: "var(--card-bg, #ffffff)",
               borderRadius: "16px",
               border: "1px solid var(--border-color)",
-              padding: "2rem",
+              padding: "clamp(1rem, 2.5vw, 2rem)",
               maxWidth: "580px",
               width: "100%",
               boxShadow: "0 20px 40px rgba(0,0,0,0.2)",

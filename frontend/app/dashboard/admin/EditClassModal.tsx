@@ -51,8 +51,8 @@ export default function EditClassModal({
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-      <div style={{ background: 'var(--card-bg)', width: '100%', maxWidth: '500px', borderRadius: '12px', padding: '1.5rem', position: 'relative' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'clamp(0.75rem, 3vw, 1.5rem)', boxSizing: 'border-box' }}>
+      <div style={{ background: 'var(--card-bg)', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '12px', padding: '1.5rem', position: 'relative', boxSizing: 'border-box' }}>
         <button 
           onClick={() => setIsOpen(false)}
           style={{ position: 'absolute', right: '1.5rem', top: '1.5rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}

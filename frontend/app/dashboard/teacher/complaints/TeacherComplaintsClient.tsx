@@ -202,7 +202,7 @@ export default function TeacherComplaintsClient({
             <input required name="title" defaultValue={editingComplaint?.title || ""} type="text" placeholder="e.g. Repeated disruptive behavior" style={{ width: "100%", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border)", background: "transparent" }} />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: "1rem" }}>
             <div>
               <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.25rem" }}>Category *</label>
               <select required name="category" defaultValue={editingComplaint?.category || "BEHAVIOR"} style={{ width: "100%", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border)", background: "transparent" }}>

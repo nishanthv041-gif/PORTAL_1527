@@ -39,33 +39,17 @@ export default function Topbar({
 
   return (
     <header className={styles.topbar}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+      <div className={styles.leftSection}>
         {showBack && (
           <button 
+            type="button"
             onClick={() => router.back()} 
-            style={{ 
-              background: 'var(--card-bg)', 
-              border: '1px solid var(--border-color)', 
-              cursor: 'pointer', 
-              color: 'var(--text-secondary)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '0.25rem',
-              padding: '0.4rem 0.75rem',
-              borderRadius: '8px',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.color = 'var(--foreground)';
-              e.currentTarget.style.borderColor = 'var(--foreground)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.color = 'var(--text-secondary)';
-              e.currentTarget.style.borderColor = 'var(--border-color)';
-            }}
+            className={styles.backBtn}
+            aria-label="Go back to previous page"
+            title="Go back"
           >
             <ArrowLeft size={16} />
-            <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>Back</span>
+            <span className={styles.backBtnText}>Back</span>
           </button>
         )}
       </div>

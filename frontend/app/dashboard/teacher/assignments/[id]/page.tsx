@@ -52,8 +52,8 @@ export default async function TeacherAssignmentDetailsPage({ params }: { params:
       <div className={styles.chartCard}>
         <h3 className={styles.chartHeader}>Submissions</h3>
         
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+        <div style={{ overflowX: "auto", width: "100%", maxWidth: "100%", minWidth: 0, WebkitOverflowScrolling: "touch" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "500px" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border)" }}>
                 <th style={{ padding: "0.75rem", fontWeight: 600 }}>Student</th>

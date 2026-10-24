@@ -407,7 +407,7 @@ export default function ClassListClient({
           <div style={{ 
             background: 'var(--card-bg)', 
             borderRadius: '16px', 
-            padding: '1.75rem', 
+            padding: 'clamp(1rem, 2.5vw, 1.75rem)', 
             maxWidth: '650px', 
             width: '100%', 
             maxHeight: '90vh', 
@@ -639,7 +639,7 @@ export default function ClassListClient({
               </div>
 
               {/* Stats & Class Teacher Info */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem', flex: 1 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 110px), 1fr))', gap: '0.75rem', marginBottom: '1.25rem', flex: 1 }}>
                 <div style={{ padding: '0.65rem 0.85rem', background: 'rgba(0,0,0,0.02)', borderRadius: '8px' }}>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, marginBottom: '0.2rem', fontWeight: 600 }}>Total Students</p>
                   <p style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0 }}>{totalStudents}</p>
@@ -650,7 +650,7 @@ export default function ClassListClient({
                     {totalAttendances > 0 ? `${attendancePercent}%` : 'N/A'}
                   </p>
                 </div>
-                <div style={{ gridColumn: 'span 2', padding: '0.75rem', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div style={{ gridColumn: '1 / -1', padding: '0.75rem', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, marginBottom: '0.25rem', fontWeight: 600 }}>Class Teachers</p>
                   <p style={{ fontSize: '0.875rem', fontWeight: 600, margin: 0, color: 'var(--foreground)' }}>{teacherNames}</p>
                 </div>

@@ -7,6 +7,8 @@ import { Exam, Class, Student, Subject, Mark, ExamRequest, Teacher, User } from 
 import { BarChart, Bar, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { acceptExamRequest, declineExamRequest } from "@/backend/api/actions/dashboard/admin/exams/actions";
 
+import styles from "./ExamsClient.module.css";
+
 type ExamWithRelations = Exam & {
   class: Class & { students: Student[], subjects: Subject[] };
   marks: Mark[];
@@ -29,23 +31,23 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+    <div className={styles.container}>
       {examRequests && examRequests.length > 0 && (
-        <div style={{ background: 'var(--card-bg)', border: '1px solid var(--warning)', borderRadius: '12px', padding: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--warning)' }}>
+        <div className={styles.requestsCard}>
+          <h2 className={styles.requestsTitle}>
             <AlertTriangle size={20} /> Pending Exam Requests ({examRequests.length})
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
+          <div className={styles.requestsGrid}>
             {examRequests.map((req) => (
-              <div key={req.id} style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '8px', background: 'var(--background)' }}>
-                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>{req.subject.name} Exam</h4>
-                <p style={{ margin: 0, fontSize: '0.875rem', opacity: 0.8 }}>{req.class.name} - {req.class.section}</p>
-                <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.6, marginBottom: '0.5rem' }}>Requested by: {req.teacher.user.name}</p>
-                <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.75rem', marginBottom: '1rem' }}>
-                  <span style={{ background: 'rgba(0,0,0,0.05)', padding: '2px 6px', borderRadius: '4px' }}>Date: {new Date(req.date).toLocaleDateString()}</span>
-                  <span style={{ background: 'rgba(0,0,0,0.05)', padding: '2px 6px', borderRadius: '4px' }}>Time: {req.startTime} - {req.endTime}</span>
+              <div key={req.id} className={styles.requestItem}>
+                <h4 className={styles.requestItemTitle}>{req.subject.name} Exam</h4>
+                <p className={styles.requestItemSub}>{req.class.name} - {req.class.section}</p>
+                <p className={styles.requestItemTeacher}>Requested by: {req.teacher.user.name}</p>
+                <div className={styles.requestMeta}>
+                  <span className={styles.requestMetaBadge}>Date: {new Date(req.date).toLocaleDateString()}</span>
+                  <span className={styles.requestMetaBadge}>Time: {req.startTime} - {req.endTime}</span>
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <div className={styles.requestActions}>
                   <button 
                     onClick={async () => {
                       if (confirm("Approve this exam request?")) {
@@ -53,7 +55,7 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
                         if (res.error) alert(res.error);
                       }
                     }}
-                    style={{ flex: 1, padding: '0.5rem', background: 'var(--success-bg)', color: 'var(--success)', border: 'none', borderRadius: '6px', fontWeight: 500, cursor: 'pointer' }}
+                    className={styles.approveBtn}
                   >
                     Approve
                   </button>
@@ -65,7 +67,7 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
                         if (res.error) alert(res.error);
                       }
                     }}
-                    style={{ flex: 1, padding: '0.5rem', background: 'var(--danger-bg)', color: 'var(--danger)', border: 'none', borderRadius: '6px', fontWeight: 500, cursor: 'pointer' }}
+                    className={styles.declineBtn}
                   >
                     Decline
                   </button>
@@ -76,69 +78,57 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', alignItems: 'start' }}>
-        
+      <div className={styles.mainLayout}>
         {/* Exams List */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className={styles.examsList}>
           {exams.map(exam => {
             const isSelected = selectedExam === exam.id;
             return (
               <div 
                 key={exam.id} 
                 onClick={() => setSelectedExam(exam.id)}
-              style={{ 
-                background: isSelected ? 'rgba(79, 70, 229, 0.05)' : 'var(--card-bg)', 
-                border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border-color)', 
-                borderRadius: '12px', 
-                padding: '1.5rem', 
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>{exam.name}</h3>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-                    {exam.class.name} - {exam.class.section} • {new Date(exam.date).toLocaleDateString()}
-                  </p>
+                className={styles.examCard}
+                style={{ 
+                  background: isSelected ? 'rgba(79, 70, 229, 0.05)' : 'var(--card-bg)', 
+                  border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border-color)', 
+                }}
+              >
+                <div className={styles.examCardContent}>
+                  <div className={styles.examCardInfo}>
+                    <h3 className={styles.examCardTitle}>{exam.name}</h3>
+                    <p className={styles.examCardSub}>
+                      {exam.class.name} - {exam.class.section} • {new Date(exam.date).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); togglePublish(exam.id, exam.isPublished); }}
+                    className={styles.publishBadge}
+                    style={{ 
+                      background: exam.isPublished ? 'var(--success-bg)' : 'rgba(107, 114, 128, 0.1)', 
+                      color: exam.isPublished ? "var(--success)" : "var(--text-secondary)", 
+                    }}
+                  >
+                    {exam.isPublished ? <><Eye size={14} /> Published</> : <><EyeOff size={14} /> Draft</>}
+                  </button>
                 </div>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); togglePublish(exam.id, exam.isPublished); }}
-                  style={{ 
-                    background: exam.isPublished ? 'var(--success-bg)' : 'rgba(107, 114, 128, 0.1)', 
-                    color: exam.isPublished ? "var(--success)" : "var(--text-secondary)", 
-                    border: 'none', 
-                    padding: '0.5rem 0.75rem', 
-                    borderRadius: '6px', 
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.25rem',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {exam.isPublished ? <><Eye size={14} /> Published</> : <><EyeOff size={14} /> Draft</>}
-                </button>
               </div>
+            );
+          })}
+          {exams.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)', background: 'var(--card-bg)', borderRadius: '12px' }}>
+              <p>No exams found.</p>
             </div>
-          );
-        })}
-        {exams.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)', background: 'var(--card-bg)', borderRadius: '12px' }}>
-            <p>No exams found.</p>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* Selected Exam Details */}
-      <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '1.5rem', position: 'sticky', top: '2rem' }}>
-        {!selectedExam ? (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-            <Book size={48} style={{ opacity: 0.2, margin: '0 auto 1rem' }} />
-            <p>Select an exam to view marks entry status.</p>
-          </div>
-        ) : (
+        {/* Selected Exam Details */}
+        <div className={styles.detailsCard}>
+          {!selectedExam ? (
+            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+              <Book size={48} style={{ opacity: 0.2, margin: '0 auto 1rem' }} />
+              <p>Select an exam to view marks entry status.</p>
+            </div>
+          ) : (
           (() => {
             const exam = exams.find(e => e.id === selectedExam);
             if (!exam) return null;
@@ -216,7 +206,7 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
 
                           return (
                             <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(0,0,0,0.05)' }}>
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', marginBottom: '1rem' }}>
+                              <div className={styles.statsGrid}>
                                 <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.75rem', opacity: 0.7 }}>Avg</div><div style={{ fontWeight: 600 }}>{avg.toFixed(1)}</div></div>
                                 <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.75rem', opacity: 0.7 }}>High</div><div style={{ fontWeight: 600, color: "var(--success)" }}>{maxS}</div></div>
                                 <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.75rem', opacity: 0.7 }}>Low</div><div style={{ fontWeight: 600, color: "var(--danger)" }}>{minS}</div></div>
@@ -240,7 +230,7 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
                               </div>
 
                               {failingStudents.length > 0 && (
-                                <div style={{ background: 'var(--danger-bg)', color: 'var(--danger)', padding: '0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}>
+                                <div className={styles.riskBanner}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, marginBottom: '0.25rem' }}>
                                     <AlertTriangle size={14} /> {failingStudents.length} Students At Risk (Retest)
                                   </div>

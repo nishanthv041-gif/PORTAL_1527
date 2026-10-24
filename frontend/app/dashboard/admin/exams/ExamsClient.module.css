@@ -1,0 +1,220 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.requestsCard {
+  background: var(--card-bg);
+  border: 1px solid var(--warning);
+  border-radius: 12px;
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.requestsTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--warning);
+  flex-wrap: wrap;
+}
+
+.requestsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 1rem;
+  width: 100%;
+}
+
+.requestItem {
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--background);
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.requestItemTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.requestItemSub {
+  margin: 0;
+  font-size: 0.875rem;
+  opacity: 0.8;
+}
+
+.requestItemTeacher {
+  margin: 0;
+  font-size: 0.75rem;
+  opacity: 0.6;
+  margin-bottom: 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.requestMeta {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.requestMetaBadge {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.requestActions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.approveBtn,
+.declineBtn {
+  flex: 1 1 120px;
+  min-height: 40px;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+}
+
+.approveBtn {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.declineBtn {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.mainLayout {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 1.5rem;
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 1024px) {
+  .mainLayout {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+.examsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.examCard {
+  border-radius: 12px;
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.examCardContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.examCardInfo {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+.examCardTitle {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.examCardSub {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+.publishBadge {
+  border: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  min-height: 36px;
+}
+
+.detailsCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+  position: sticky;
+  top: 2rem;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+@media (max-width: 1024px) {
+  .detailsCard {
+    position: static;
+  }
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 65px), 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.riskBanner {
+  background: var(--danger-bg);
+  color: var(--danger);
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
