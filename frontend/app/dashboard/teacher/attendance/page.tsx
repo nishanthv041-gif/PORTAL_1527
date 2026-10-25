@@ -63,34 +63,34 @@ export default async function TeacherAttendancePage({
       return attDate === todayStr;
     });
 
+    const rawStatus = todayRecord?.status;
+    const currentStatus: TeacherStudentItem["currentStatus"] =
+      rawStatus === "PRESENT" ? "PRESENT" :
+      rawStatus === "ABSENT" ? "ABSENT" :
+      rawStatus === "LEAVE" ? "LEAVE" :
+      "NOT_MARKED";
+
     const totalSessions = s.attendances.length;
     const presentCount = s.attendances.filter((a) => a.status === "PRESENT").length;
     const absentCount = s.attendances.filter((a) => a.status === "ABSENT").length;
     const leaveCount = s.attendances.filter((a) => a.status === "LEAVE").length;
-    const lateCount = s.attendances.filter((a) => a.status === "LATE").length;
-    const halfDayCount = s.attendances.filter((a) => a.status === "HALF_DAY").length;
 
-    const totalCredits = (presentCount * 1.0) + (lateCount * 1.0) + (halfDayCount * 0.5);
     const attendancePercentage =
       totalSessions > 0
-        ? ((totalCredits / totalSessions) * 100).toFixed(1)
+        ? ((presentCount / totalSessions) * 100).toFixed(1)
         : "100.0";
 
     return {
       id: s.id,
       name: `${s.firstName} ${s.lastName}`.trim(),
       rollNumber: s.rollNumber,
-      currentStatus: todayRecord
-        ? (todayRecord.status as any) || "NOT_MARKED"
-        : "NOT_MARKED",
+      currentStatus,
       currentRemarks: todayRecord?.remarks || "",
       attendancePercentage,
       totalSessions,
       presentCount,
       absentCount,
       leaveCount,
-      lateCount,
-      halfDayCount,
       recentHistory: s.attendances.slice(0, 15).map((a) => ({
         id: a.id,
         date: a.date,

@@ -38,25 +38,24 @@ export default async function AdminTeacherAttendancePage({
     }),
   ]);
 
-  // Precompute baseline statistics for each teacher
+  // Precompute baseline statistics for each teacher (Present, Absent, Leave)
   const serializedTeachers: TeacherRecordItem[] = teachers.map((teacher) => {
     const todayRecord = dateAttendances.find((a) => a.teacherId === teacher.id);
-    const todayStatus: "PRESENT" | "ABSENT" | "LATE" | "LEAVE" | "HALF_DAY" | "NOT_MARKED" = todayRecord
-      ? (todayRecord.status as any) || "NOT_MARKED"
-      : "NOT_MARKED";
+    const rawStatus = todayRecord?.status;
+    const todayStatus: "PRESENT" | "ABSENT" | "LEAVE" | "NOT_MARKED" = 
+      rawStatus === "PRESENT" ? "PRESENT" :
+      rawStatus === "ABSENT" ? "ABSENT" :
+      rawStatus === "LEAVE" ? "LEAVE" :
+      "NOT_MARKED";
 
     const totalSessions = teacher.attendances.length;
     const presentedDays = teacher.attendances.filter((a) => a.status === "PRESENT").length;
     const absentedDays = teacher.attendances.filter((a) => a.status === "ABSENT").length;
     const leaveDays = teacher.attendances.filter((a) => a.status === "LEAVE").length;
-    const lateDays = teacher.attendances.filter((a) => a.status === "LATE").length;
-    const halfDayDays = teacher.attendances.filter((a) => a.status === "HALF_DAY").length;
 
-    // Credits: Present = 1, Late = 1, Half Day = 0.5
-    const totalCredits = (presentedDays * 1.0) + (lateDays * 1.0) + (halfDayDays * 0.5);
     const attendancePercentage =
       totalSessions > 0
-        ? ((totalCredits / totalSessions) * 100).toFixed(1)
+        ? ((presentedDays / totalSessions) * 100).toFixed(1)
         : "100.0";
 
     return {
@@ -71,8 +70,6 @@ export default async function AdminTeacherAttendancePage({
       presentedDays,
       absentedDays,
       leaveDays,
-      lateDays,
-      halfDayDays,
       attendancePercentage,
       todayStatus,
       todayRemarks: todayRecord?.remarks || "",

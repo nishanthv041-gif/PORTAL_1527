@@ -152,7 +152,6 @@ export default async function ParentAttendancePage({
                       {record.status === "PRESENT" && <CheckCircle size={14} />}
                       {record.status === "ABSENT" && <XCircle size={14} />}
                       {record.status === "LEAVE" && <CalendarCheck size={14} />}
-                      {record.status === "LATE" && <AlertCircle size={14} />}
                       {record.status}
                     </span>
                   </td>

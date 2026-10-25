@@ -19,10 +19,8 @@ export type TeacherRecordItem = {
   presentedDays: number;
   absentedDays: number;
   leaveDays: number;
-  lateDays: number;
-  halfDayDays: number;
   attendancePercentage: string;
-  todayStatus: "PRESENT" | "ABSENT" | "LATE" | "LEAVE" | "HALF_DAY" | "NOT_MARKED";
+  todayStatus: "PRESENT" | "ABSENT" | "LEAVE" | "NOT_MARKED";
   todayRemarks?: string;
   attendances: {
     id: string;
@@ -42,27 +40,34 @@ export default function TeacherAttendanceClient({
   const router = useRouter();
 
   const people: AttendancePersonItem[] = useMemo(() => {
-    return teachers.map((t) => ({
-      id: t.id,
-      name: t.user.name,
-      codeOrRoll: `EMP-${t.id.slice(-4).toUpperCase()}`,
-      category: "TEACHERS",
-      currentStatus: t.todayStatus,
-      currentRemarks: t.todayRemarks || "",
-      attendancePercentage: t.attendancePercentage,
-      totalSessions: t.totalSessions,
-      presentCount: t.presentedDays,
-      absentCount: t.absentedDays,
-      leaveCount: t.leaveDays,
-      lateCount: t.lateDays,
-      halfDayCount: t.halfDayDays,
-      recentHistory: t.attendances.slice(0, 15).map((a) => ({
-        id: a.id,
-        date: a.date,
-        status: a.status,
-        remarks: a.remarks,
-      })),
-    }));
+    return teachers.map((t) => {
+      // Normalize any legacy status
+      const normalizedStatus: AttendancePersonItem["currentStatus"] = 
+        t.todayStatus === "PRESENT" ? "PRESENT" :
+        t.todayStatus === "ABSENT" ? "ABSENT" :
+        t.todayStatus === "LEAVE" ? "LEAVE" :
+        "NOT_MARKED";
+
+      return {
+        id: t.id,
+        name: t.user.name,
+        codeOrRoll: `EMP-${t.id.slice(-4).toUpperCase()}`,
+        category: "TEACHERS",
+        currentStatus: normalizedStatus,
+        currentRemarks: t.todayRemarks || "",
+        attendancePercentage: t.attendancePercentage,
+        totalSessions: t.totalSessions,
+        presentCount: t.presentedDays,
+        absentCount: t.absentedDays,
+        leaveCount: t.leaveDays,
+        recentHistory: t.attendances.slice(0, 15).map((a) => ({
+          id: a.id,
+          date: a.date,
+          status: a.status,
+          remarks: a.remarks,
+        })),
+      };
+    });
   }, [teachers]);
 
   const handleDateChange = (date: string) => {

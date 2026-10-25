@@ -14,15 +14,13 @@ export type AdminStudentItem = {
   admissionNo?: string;
   classId: string;
   className: string;
-  currentStatus: "PRESENT" | "ABSENT" | "LATE" | "LEAVE" | "HALF_DAY" | "NOT_MARKED";
+  currentStatus: "PRESENT" | "ABSENT" | "LEAVE" | "NOT_MARKED";
   currentRemarks?: string;
   attendancePercentage: string;
   totalSessions: number;
   presentCount: number;
   absentCount: number;
   leaveCount: number;
-  lateCount: number;
-  halfDayCount: number;
   recentHistory?: {
     id: string;
     date: Date | string;
@@ -52,22 +50,28 @@ export default function AttendanceClient({
   }, [classes]);
 
   const people: AttendancePersonItem[] = useMemo(() => {
-    return students.map((s) => ({
-      id: s.id,
-      name: s.name,
-      codeOrRoll: s.rollNumber ? `Roll: ${s.rollNumber}` : s.admissionNo ? `Adm: ${s.admissionNo}` : "Student",
-      category: s.classId,
-      currentStatus: s.currentStatus,
-      currentRemarks: s.currentRemarks || "",
-      attendancePercentage: s.attendancePercentage,
-      totalSessions: s.totalSessions,
-      presentCount: s.presentCount,
-      absentCount: s.absentCount,
-      leaveCount: s.leaveCount,
-      lateCount: s.lateCount,
-      halfDayCount: s.halfDayCount,
-      recentHistory: s.recentHistory,
-    }));
+    return students.map((s) => {
+      const normalizedStatus: AttendancePersonItem["currentStatus"] = 
+        s.currentStatus === "PRESENT" ? "PRESENT" :
+        s.currentStatus === "ABSENT" ? "ABSENT" :
+        s.currentStatus === "LEAVE" ? "LEAVE" :
+        "NOT_MARKED";
+
+      return {
+        id: s.id,
+        name: s.name,
+        codeOrRoll: s.rollNumber ? `Roll: ${s.rollNumber}` : s.admissionNo ? `Adm: ${s.admissionNo}` : "Student",
+        category: s.classId,
+        currentStatus: normalizedStatus,
+        currentRemarks: s.currentRemarks || "",
+        attendancePercentage: s.attendancePercentage,
+        totalSessions: s.totalSessions,
+        presentCount: s.presentCount,
+        absentCount: s.absentCount,
+        leaveCount: s.leaveCount,
+        recentHistory: s.recentHistory,
+      };
+    });
   }, [students]);
 
   const handleCategoryChange = (newClassId: string) => {
