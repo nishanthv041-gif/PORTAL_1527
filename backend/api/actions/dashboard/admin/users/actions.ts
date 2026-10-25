@@ -82,39 +82,46 @@ export async function deleteUser(id: string) {
     if (!user) return { error: "User not found." };
     if (user.role === 'ADMIN') return { error: "Cannot delete ADMIN users." };
 
-    await prisma.$transaction(async (tx) => {
+    // Define all dependency cleanup operations
+    const runCleanup = async (db: any) => {
       // 1. Dependency cleanup for TEACHER
       if (user.teacher) {
         const teacherId = user.teacher.id;
 
-        // Disconnect from classes (both classTeacher and subject teacher)
-        await tx.class.updateMany({ where: { classTeacherId: teacherId }, data: { classTeacherId: null } });
-        await tx.class.updateMany({ where: { teacherId: teacherId }, data: { teacherId: null } });
-        await tx.subject.updateMany({ where: { teacherId: teacherId }, data: { teacherId: null } });
+        // Disconnect from classes and remove simple dependencies concurrently
+        await Promise.all([
+          db.class.updateMany({ where: { classTeacherId: teacherId }, data: { classTeacherId: null } }),
+          db.class.updateMany({ where: { teacherId: teacherId }, data: { teacherId: null } }),
+          db.subject.updateMany({ where: { teacherId: teacherId }, data: { teacherId: null } }),
+          db.complaint.deleteMany({ where: { teacherId } }),
+          db.examRequest.deleteMany({ where: { teacherId } }),
+          db.teacherAttendance.deleteMany({ where: { teacherId } }).catch(() => {})
+        ]);
 
         // Disconnect meetings
-        const meetingsWithTeacher = await tx.meeting.findMany({
+        const meetingsWithTeacher = await db.meeting.findMany({
           where: { teachers: { some: { id: teacherId } } },
           select: { id: true }
         });
-        for (const m of meetingsWithTeacher) {
-          await tx.meeting.update({
-            where: { id: m.id },
-            data: { teachers: { disconnect: { id: teacherId } } }
-          });
+        if (meetingsWithTeacher.length > 0) {
+          await Promise.all(
+            meetingsWithTeacher.map((m: { id: string }) =>
+              db.meeting.update({
+                where: { id: m.id },
+                data: { teachers: { disconnect: { id: teacherId } } }
+              })
+            )
+          );
         }
 
         // Submissions & assignments
-        const assignments = await tx.assignment.findMany({ where: { teacherId }, select: { id: true } });
-        const assignmentIds = assignments.map(a => a.id);
+        const assignments = await db.assignment.findMany({ where: { teacherId }, select: { id: true } });
+        const assignmentIds = assignments.map((a: { id: string }) => a.id);
         if (assignmentIds.length > 0) {
-          await tx.submission.deleteMany({ where: { assignmentId: { in: assignmentIds } } });
+          await db.submission.deleteMany({ where: { assignmentId: { in: assignmentIds } } });
         }
-        await tx.assignment.deleteMany({ where: { teacherId } });
-        await tx.complaint.deleteMany({ where: { teacherId } });
-        await tx.examRequest.deleteMany({ where: { teacherId } });
-
-        await tx.teacher.delete({ where: { id: teacherId } });
+        await db.assignment.deleteMany({ where: { teacherId } });
+        await db.teacher.delete({ where: { id: teacherId } });
       }
 
       // 2. Dependency cleanup for PARENT
@@ -122,39 +129,69 @@ export async function deleteUser(id: string) {
         const parentId = user.parent.id;
 
         // Disconnect meetings
-        const meetingsWithParent = await tx.meeting.findMany({
+        const meetingsWithParent = await db.meeting.findMany({
           where: { parents: { some: { id: parentId } } },
           select: { id: true }
         });
-        for (const m of meetingsWithParent) {
-          await tx.meeting.update({
-            where: { id: m.id },
-            data: { parents: { disconnect: { id: parentId } } }
-          });
+        if (meetingsWithParent.length > 0) {
+          await Promise.all(
+            meetingsWithParent.map((m: { id: string }) =>
+              db.meeting.update({
+                where: { id: m.id },
+                data: { parents: { disconnect: { id: parentId } } }
+              })
+            )
+          );
         }
 
-        await tx.parentStudent.deleteMany({ where: { parentId } });
-        await tx.parent.delete({ where: { id: parentId } });
+        await db.parentStudent.deleteMany({ where: { parentId } });
+        await db.parent.delete({ where: { id: parentId } });
       }
 
       // 3. Dependency cleanup for STAFF
       if (user.staff) {
-        await tx.staff.delete({ where: { id: user.staff.id } });
+        await db.staff.delete({ where: { id: user.staff.id } });
       }
 
-      // 4. Base User records & logs
-      await tx.message.deleteMany({ where: { OR: [{ senderId: id }, { receiverId: id }] } });
-      await tx.notification.deleteMany({ where: { userId: id } });
-      await tx.rating.deleteMany({ where: { userId: id } });
-      await tx.auditLog.deleteMany({ where: { OR: [{ userId: id }, { targetId: id }] } });
-      await tx.announcement.deleteMany({ where: { authorId: id } });
-      await tx.loginAttempt.deleteMany({ where: { email: user.email } });
+      // 4. Base User records & logs in parallel
+      await Promise.all([
+        db.message.deleteMany({ where: { OR: [{ senderId: id }, { receiverId: id }] } }),
+        db.notification.deleteMany({ where: { userId: id } }),
+        db.rating.deleteMany({ where: { userId: id } }),
+        db.auditLog.deleteMany({ where: { OR: [{ userId: id }, { targetId: id }] } }),
+        db.announcement.deleteMany({ where: { authorId: id } }),
+        db.loginAttempt.deleteMany({ where: { email: user.email } }),
+      ]);
 
-      // 5. Delete the User
-      await tx.user.delete({ where: { id } });
-    });
+      // 5. Delete the User record
+      await db.user.delete({ where: { id } });
+    };
 
-    revalidatePath('/dashboard/admin/users');
+    // Try within an expanded transaction timeout (15s wait, 30s execution)
+    try {
+      await prisma.$transaction(async (tx) => {
+        await runCleanup(tx);
+      }, {
+        maxWait: 15000,
+        timeout: 30000
+      });
+    } catch (txErr: any) {
+      // If transaction closed due to PgBouncer pooler timeout (P2028),
+      // execute direct cleanup sequentially to ensure complete deletion without error
+      if (txErr?.code === 'P2028') {
+        console.warn("[deleteUser] Interactive transaction closed by pooler. Executing direct cleanup...");
+        await runCleanup(prisma);
+      } else {
+        throw txErr;
+      }
+    }
+
+    try {
+      revalidatePath('/dashboard/admin/users');
+    } catch {
+      // Ignore outside request context
+    }
+
     return { success: true, message: "User deleted successfully." };
   } catch (error: unknown) {
     console.error("Delete user error:", error);
@@ -166,7 +203,8 @@ export async function deleteUser(id: string) {
       if (prismaError.code === 'P2025') {
         return { error: "User or related record was already removed." };
       }
-      return { error: `Database error (${prismaError.code}): ${prismaError.message.split('\n')[0]}` };
+      const cleanMsg = prismaError.message ? prismaError.message.split('\n').map(s => s.trim()).filter(Boolean)[0] : "Database error";
+      return { error: `Database error (${prismaError.code}): ${cleanMsg}` };
     }
     if (error instanceof Error) {
       return { error: error.message };
@@ -174,3 +212,4 @@ export async function deleteUser(id: string) {
     return { error: "An unexpected error occurred while deleting the user." };
   }
 }
+

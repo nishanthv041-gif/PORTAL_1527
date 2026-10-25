@@ -448,6 +448,17 @@ async function runTestSuite() {
     "OWASP formula injection defense prepends single quote to dangerous formula triggers in error reports"
   );
 
+  // Cleanup test records from database so production DB is never polluted
+  try {
+    await prisma.parentStudent.deleteMany({ where: { student: { rollNumber: { startsWith: 'ROLL_' } } } });
+    await prisma.student.deleteMany({ where: { rollNumber: { startsWith: 'ROLL_' } } });
+    await prisma.teacher.deleteMany({ where: { user: { email: { contains: 'schooltest.internal' } } } });
+    await prisma.parent.deleteMany({ where: { user: { email: { contains: 'schooltest.internal' } } } });
+    await prisma.user.deleteMany({ where: { email: { contains: 'schooltest.internal' } } });
+  } catch (cleanErr) {
+    // Ignore cleanup warnings
+  }
+
   console.log("==========================================================");
   console.log(`TEST SUMMARY: ${passed} PASSED, ${failed} FAILED`);
   console.log("==========================================================");
@@ -463,3 +474,4 @@ runTestSuite().catch(err => {
   console.error("Test execution fatal error:", err);
   process.exit(1);
 });
+
