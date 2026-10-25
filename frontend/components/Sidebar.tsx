@@ -29,7 +29,6 @@ import {
   Clock,
   Star,
   AlertOctagon,
-  FileSpreadsheet,
   Layers,
   X
 } from "lucide-react";
@@ -50,7 +49,6 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     { href: "/dashboard/admin", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
     { href: "/dashboard/admin/batches", label: "Batches & Promotion", icon: <Layers size={20} /> },
     { href: "/dashboard/admin/main-roles", label: "Main Roles", icon: <Users size={20} /> },
-    { href: "/dashboard/admin/excel-import", label: "Excel Import", icon: <FileSpreadsheet size={20} /> },
     { href: "/dashboard/admin/teacher-attendance", label: "Teacher Attendance", icon: <UserCheck size={20} /> },
     { href: "/dashboard/admin/activity-centre", label: "Activity Centre", icon: <Star size={20} /> },
     { href: "/dashboard/admin/users", label: "User Management", icon: <UserCheck size={20} /> },
