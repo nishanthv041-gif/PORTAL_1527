@@ -6,6 +6,8 @@ import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import BatchManagementClient from "./BatchManagementClient";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Academic Batches & Student Promotion | School Portal",
   description: "Manage academic year batches, annual class advancement, and Class 12 alumni graduation."
