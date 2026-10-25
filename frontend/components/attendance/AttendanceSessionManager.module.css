@@ -714,16 +714,17 @@
 .modalCard {
   background: var(--card-bg);
   border: 1px solid var(--border-color);
-  border-radius: 16px;
+  border-radius: 20px;
   width: 100%;
-  max-width: 520px;
+  max-width: 620px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45);
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.35rem;
+  box-sizing: border-box;
 }
 
 .modalHeader {
@@ -731,57 +732,427 @@
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--border-color);
-  padding-bottom: 0.85rem;
+  padding-bottom: 1rem;
 }
 
-.modalHeroPct {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.1) 0%, rgba(124, 58, 237, 0.08) 100%);
-  border: 1px solid rgba(37, 99, 235, 0.25);
-  border-radius: 14px;
-  padding: 1.25rem;
+.modalHeaderInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.modalAvatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);
+}
+
+.modalPersonName {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--foreground);
+  line-height: 1.2;
+}
+
+.modalPersonCode {
+  font-size: 0.825rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-top: 0.15rem;
+  display: block;
+}
+
+.modalCloseBtn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.modalCloseBtn:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Hero Overall Attendance Card */
+.modalHeroCard {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(124, 58, 237, 0.1) 100%);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  border-radius: 16px;
+  padding: 1.25rem 1.35rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  box-shadow: 0 4px 15px rgba(37, 99, 235, 0.08);
 }
 
-.modalHeroValue {
-  font-size: 2.25rem;
-  font-weight: 900;
-  color: var(--foreground);
+.modalHeroContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 .modalHeroLabel {
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: #2563eb;
 }
 
-.breakdownGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.6rem;
-}
-
-.breakdownBox {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border-color);
-  border-radius: 9px;
-  padding: 0.65rem;
+.modalHeroValueRow {
   display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
-.breakdownBoxLabel {
-  font-size: 0.7rem;
-  font-weight: 600;
+.modalHeroValue {
+  font-size: clamp(2.2rem, 3.5vw, 2.75rem);
+  font-weight: 900;
+  color: var(--foreground);
+  line-height: 1;
+}
+
+.modalHeroBadge {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+}
+
+.modalHeroSubtext {
+  margin: 0;
+  font-size: 0.8rem;
   color: var(--text-secondary);
 }
 
-.breakdownBoxValue {
-  font-size: 1.1rem;
+.modalHeroIconWrapper {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: rgba(37, 99, 235, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.modalHeroIcon {
+  color: #2563eb;
+}
+
+/* 1. Box Viewing Section */
+.boxViewingSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sectionHeading {
+  margin: 0;
+  font-size: 0.825rem;
   font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.statsBoxesGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+@media (max-width: 600px) {
+  .statsBoxesGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 380px) {
+  .statsBoxesGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.statBox {
+  border-radius: 14px;
+  padding: 0.85rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.statBox:hover {
+  transform: translateY(-2px);
+}
+
+.boxHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.boxLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.boxIcon {
+  flex-shrink: 0;
+}
+
+.boxValue {
+  font-size: 1.5rem;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.boxSubtext {
+  font-size: 0.68rem;
+  opacity: 0.8;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Box Color Themes */
+.boxPresent {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #059669;
+}
+.boxPresent .boxValue {
+  color: #059669;
+}
+
+.boxHalfDay {
+  background: rgba(37, 99, 235, 0.1);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  color: #2563eb;
+}
+.boxHalfDay .boxValue {
+  color: #2563eb;
+}
+
+.boxAbsent {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #dc2626;
+}
+.boxAbsent .boxValue {
+  color: #dc2626;
+}
+
+.boxLate {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #d97706;
+}
+.boxLate .boxValue {
+  color: #d97706;
+}
+
+.boxLeave {
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #7c3aed;
+}
+.boxLeave .boxValue {
+  color: #7c3aed;
+}
+
+/* 2. Table Viewing with Beautiful Options */
+.tableViewingSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tableSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tableBadge {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.modalTableCard {
+  background: var(--background);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.modalTableWrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modalTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.modalTh {
+  padding: 0.75rem 0.95rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.modalTr {
+  border-bottom: 1px solid var(--border-color);
+  transition: background 0.15s ease;
+}
+
+.modalTr:last-child {
+  border-bottom: none;
+}
+
+.modalTr:hover {
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.modalTd {
+  padding: 0.75rem 0.95rem;
+  vertical-align: middle;
+  font-size: 0.825rem;
+  white-space: nowrap;
+}
+
+.dateCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.dateMain {
+  font-weight: 700;
   color: var(--foreground);
+}
+
+.dateSub {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.sessionPill {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.pillStatusPresent {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.pillStatusHalfDay {
+  background: rgba(37, 99, 235, 0.15);
+  color: #2563eb;
+  border: 1px solid rgba(37, 99, 235, 0.3);
+}
+
+.pillStatusAbsent {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.pillStatusLate {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.pillStatusLeave {
+  background: rgba(139, 92, 246, 0.15);
+  color: #7c3aed;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.remarksText {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+}
+
+.modalEmptyState {
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
 }

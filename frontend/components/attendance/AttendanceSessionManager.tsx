@@ -3,7 +3,8 @@
 import { useState, useTransition, useMemo, useEffect } from "react";
 import { 
   Search, RotateCw, Check, AlertCircle, 
-  X, Award, Users, Loader2 
+  X, Award, Users, Loader2, CheckCircle2, 
+  XCircle, Clock, Palmtree, Calendar 
 } from "lucide-react";
 import styles from "./AttendanceSessionManager.module.css";
 
@@ -661,116 +662,215 @@ export default function AttendanceSessionManager({
         </div>
       </div>
 
-      {/* 7. Percentage View Modal (Live recalculated based on clicked options & DB) */}
+      {/* 7. Percentage View Modal with Box Viewing & Beautiful Table */}
       {selectedPersonForModal && (() => {
         const liveModalStats = getLivePersonStats(selectedPersonForModal);
 
         return (
           <div className={styles.modalBackdrop} onClick={() => setSelectedPersonForModal(null)}>
             <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+              {/* Modal Header */}
               <div className={styles.modalHeader}>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 800 }}>
-                    {selectedPersonForModal.name}
-                  </h3>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                    {selectedPersonForModal.codeOrRoll}
-                  </span>
+                <div className={styles.modalHeaderInfo}>
+                  <div className={styles.modalAvatar}>
+                    {selectedPersonForModal.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className={styles.modalPersonName}>
+                      {selectedPersonForModal.name}
+                    </h3>
+                    <span className={styles.modalPersonCode}>
+                      {selectedPersonForModal.codeOrRoll}
+                    </span>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedPersonForModal(null)}
-                  style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
+                  className={styles.modalCloseBtn}
+                  title="Close"
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              {/* Hero Percentage Card */}
-              <div className={styles.modalHeroPct}>
-                <div>
+              {/* Hero Overall Attendance Card */}
+              <div className={styles.modalHeroCard}>
+                <div className={styles.modalHeroContent}>
                   <span className={styles.modalHeroLabel}>Overall Attendance</span>
-                  <div className={styles.modalHeroValue}>
-                    {liveModalStats.percentage}%
+                  <div className={styles.modalHeroValueRow}>
+                    <span className={styles.modalHeroValue}>{liveModalStats.percentage}%</span>
+                    <span className={styles.modalHeroBadge}>
+                      {Number(liveModalStats.percentage) >= 75 ? "Good Standing" : "Needs Attention"}
+                    </span>
                   </div>
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                    Calculated from {liveModalStats.totalSessions} total recorded sessions
-                  </span>
+                  <p className={styles.modalHeroSubtext}>
+                    Calculated from <strong>{liveModalStats.totalSessions}</strong> total recorded sessions
+                  </p>
                 </div>
-
-                <Award size={48} color="#2563eb" style={{ opacity: 0.8 }} />
-              </div>
-
-              {/* Breakdown Grid */}
-              <div className={styles.modalStatsGrid}>
-                <div className={styles.modalStatBox}>
-                  <span className={styles.modalStatNum} style={{ color: "#059669" }}>
-                    {liveModalStats.presentCount}
-                  </span>
-                  <span className={styles.modalStatName}>Present</span>
-                </div>
-                <div className={styles.modalStatBox}>
-                  <span className={styles.modalStatNum} style={{ color: "#2563eb" }}>
-                    {liveModalStats.halfDayCount}
-                  </span>
-                  <span className={styles.modalStatName}>Half Day</span>
-                </div>
-                <div className={styles.modalStatBox}>
-                  <span className={styles.modalStatNum} style={{ color: "#dc2626" }}>
-                    {liveModalStats.absentCount}
-                  </span>
-                  <span className={styles.modalStatName}>Absent</span>
-                </div>
-                <div className={styles.modalStatBox}>
-                  <span className={styles.modalStatNum} style={{ color: "#d97706" }}>
-                    {liveModalStats.lateCount}
-                  </span>
-                  <span className={styles.modalStatName}>Late</span>
-                </div>
-                <div className={styles.modalStatBox}>
-                  <span className={styles.modalStatNum} style={{ color: "#7c3aed" }}>
-                    {liveModalStats.leaveCount}
-                  </span>
-                  <span className={styles.modalStatName}>On Leave</span>
+                <div className={styles.modalHeroIconWrapper}>
+                  <Award size={48} className={styles.modalHeroIcon} />
                 </div>
               </div>
 
-              {/* Recent Sessions */}
-              {selectedPersonForModal.recentHistory && selectedPersonForModal.recentHistory.length > 0 && (
-                <div className={styles.modalHistorySection}>
-                  <span className={styles.modalHistoryTitle}>Recent Attendance Log</span>
-                  <div className={styles.modalHistoryList}>
-                    {selectedPersonForModal.recentHistory.map((item) => (
-                      <div key={item.id} className={styles.modalHistoryRow}>
-                        <span style={{ fontWeight: 600 }}>
-                          {new Date(item.date).toLocaleDateString("en-GB", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
+              {/* 1. Box Viewing: Attendance Summary Boxes */}
+              <div className={styles.boxViewingSection}>
+                <h4 className={styles.sectionHeading}>Attendance Summary</h4>
+                <div className={styles.statsBoxesGrid}>
+                  {/* Box 1: Present */}
+                  <div className={`${styles.statBox} ${styles.boxPresent}`}>
+                    <div className={styles.boxHeader}>
+                      <span className={styles.boxLabel}>Present</span>
+                      <CheckCircle2 size={16} className={styles.boxIcon} />
+                    </div>
+                    <div className={styles.boxValue}>{liveModalStats.presentCount}</div>
+                    <span className={styles.boxSubtext}>Full Attendance</span>
+                  </div>
+
+                  {/* Box 2: Half Day */}
+                  <div className={`${styles.statBox} ${styles.boxHalfDay}`}>
+                    <div className={styles.boxHeader}>
+                      <span className={styles.boxLabel}>Half Day</span>
+                      <Clock size={16} className={styles.boxIcon} />
+                    </div>
+                    <div className={styles.boxValue}>{liveModalStats.halfDayCount}</div>
+                    <span className={styles.boxSubtext}>0.5 Day Credit</span>
+                  </div>
+
+                  {/* Box 3: Absent */}
+                  <div className={`${styles.statBox} ${styles.boxAbsent}`}>
+                    <div className={styles.boxHeader}>
+                      <span className={styles.boxLabel}>Absent</span>
+                      <XCircle size={16} className={styles.boxIcon} />
+                    </div>
+                    <div className={styles.boxValue}>{liveModalStats.absentCount}</div>
+                    <span className={styles.boxSubtext}>Unexcused</span>
+                  </div>
+
+                  {/* Box 4: Late */}
+                  <div className={`${styles.statBox} ${styles.boxLate}`}>
+                    <div className={styles.boxHeader}>
+                      <span className={styles.boxLabel}>Late</span>
+                      <AlertCircle size={16} className={styles.boxIcon} />
+                    </div>
+                    <div className={styles.boxValue}>{liveModalStats.lateCount}</div>
+                    <span className={styles.boxSubtext}>Delayed Entry</span>
+                  </div>
+
+                  {/* Box 5: On Leave */}
+                  <div className={`${styles.statBox} ${styles.boxLeave}`}>
+                    <div className={styles.boxHeader}>
+                      <span className={styles.boxLabel}>On Leave</span>
+                      <Palmtree size={16} className={styles.boxIcon} />
+                    </div>
+                    <div className={styles.boxValue}>{liveModalStats.leaveCount}</div>
+                    <span className={styles.boxSubtext}>Approved Leave</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Table Viewing with Beautiful Options: Recent Attendance Log Table */}
+              <div className={styles.tableViewingSection}>
+                <div className={styles.tableSectionHeader}>
+                  <h4 className={styles.sectionHeading}>Recent Attendance Log</h4>
+                  <span className={styles.tableBadge}>
+                    {selectedPersonForModal.recentHistory?.length || 0} Records
+                  </span>
+                </div>
+
+                <div className={styles.modalTableCard}>
+                  {selectedPersonForModal.recentHistory && selectedPersonForModal.recentHistory.length > 0 ? (
+                    <div className={styles.modalTableWrapper}>
+                      <table className={styles.modalTable}>
+                        <thead>
+                          <tr>
+                            <th className={styles.modalTh} style={{ width: "40px" }}>#</th>
+                            <th className={styles.modalTh}>Date</th>
+                            <th className={styles.modalTh}>Session</th>
+                            <th className={styles.modalTh} style={{ textAlign: "center" }}>Status</th>
+                            <th className={styles.modalTh}>Remarks</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedPersonForModal.recentHistory.map((item, idx) => {
+                            const itemDate = new Date(item.date);
+                            const formattedDate = itemDate.toLocaleDateString("en-GB", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            });
+                            const weekday = itemDate.toLocaleDateString("en-GB", { weekday: "short" });
+                            const sessionName = item.remarks?.includes("HD:FN") || item.remarks?.includes("FORENOON")
+                              ? "Forenoon"
+                              : item.remarks?.includes("HD:AN") || item.remarks?.includes("AFTERNOON")
+                              ? "Afternoon"
+                              : "Full Day";
+
+                            return (
+                              <tr key={item.id || idx} className={styles.modalTr}>
+                                <td className={styles.modalTd} style={{ color: "var(--text-secondary)", fontWeight: 600 }}>
+                                  {idx + 1}
+                                </td>
+                                <td className={styles.modalTd}>
+                                  <div className={styles.dateCol}>
+                                    <span className={styles.dateMain}>{formattedDate}</span>
+                                    <span className={styles.dateSub}>{weekday}</span>
+                                  </div>
+                                </td>
+                                <td className={styles.modalTd}>
+                                  <span className={styles.sessionPill}>{sessionName}</span>
+                                </td>
+                                <td className={styles.modalTd} style={{ textAlign: "center" }}>
+                                  {item.status === "PRESENT" && (
+                                    <span className={`${styles.statusPill} ${styles.pillStatusPresent}`}>
+                                      <CheckCircle2 size={12} /> Present
+                                    </span>
+                                  )}
+                                  {item.status === "HALF_DAY" && (
+                                    <span className={`${styles.statusPill} ${styles.pillStatusHalfDay}`}>
+                                      <Clock size={12} /> Half Day
+                                    </span>
+                                  )}
+                                  {item.status === "ABSENT" && (
+                                    <span className={`${styles.statusPill} ${styles.pillStatusAbsent}`}>
+                                      <XCircle size={12} /> Absent
+                                    </span>
+                                  )}
+                                  {item.status === "LATE" && (
+                                    <span className={`${styles.statusPill} ${styles.pillStatusLate}`}>
+                                      <AlertCircle size={12} /> Late
+                                    </span>
+                                  )}
+                                  {item.status === "LEAVE" && (
+                                    <span className={`${styles.statusPill} ${styles.pillStatusLeave}`}>
+                                      <Palmtree size={12} /> Leave
+                                    </span>
+                                  )}
+                                  {!["PRESENT", "HALF_DAY", "ABSENT", "LATE", "LEAVE"].includes(item.status) && (
+                                    <span className={styles.statusPill}>
+                                      {item.status}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className={styles.modalTd}>
+                                  <span className={styles.remarksText}>
+                                    {item.remarks || "—"}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
                           })}
-                        </span>
-                        <span
-                          className={styles.modalHistoryStatus}
-                          style={{
-                            background:
-                              item.status === "PRESENT" ? "rgba(16, 185, 129, 0.12)" :
-                              item.status === "HALF_DAY" ? "rgba(37, 99, 235, 0.12)" :
-                              item.status === "LATE" ? "rgba(245, 158, 11, 0.12)" :
-                              "rgba(239, 68, 68, 0.12)",
-                            color:
-                              item.status === "PRESENT" ? "#059669" :
-                              item.status === "HALF_DAY" ? "#2563eb" :
-                              item.status === "LATE" ? "#d97706" :
-                              "#dc2626",
-                          }}
-                        >
-                          {item.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className={styles.modalEmptyState}>
+                      <Calendar size={28} style={{ color: "var(--text-secondary)", opacity: 0.6 }} />
+                      <p>No historical attendance records found</p>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         );
