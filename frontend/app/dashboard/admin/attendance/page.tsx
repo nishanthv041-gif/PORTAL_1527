@@ -23,10 +23,6 @@ export default async function AdminAttendancePage({
   const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
   const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
 
-  // Determine official school working days up to current date
-  const { start: academicStart } = getAcademicYearRange(startOfDay);
-  const officialWorkingDays = await countSchoolWorkingDays(academicStart, endOfDay);
-
   // Fetch all active classes
   const classes = await prisma.class.findMany({
     where: { isActive: true },
@@ -35,6 +31,10 @@ export default async function AdminAttendancePage({
   });
 
   const selectedClassId = resolvedSearchParams?.classId || (classes.length > 0 ? classes[0].id : "");
+
+  // Determine official school working days up to current date for the selected class
+  const { start: academicStart } = getAcademicYearRange(startOfDay);
+  const officialWorkingDays = await countSchoolWorkingDays(academicStart, endOfDay, selectedClassId);
 
   let serializedStudents: AdminStudentItem[] = [];
 

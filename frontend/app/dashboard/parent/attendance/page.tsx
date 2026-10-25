@@ -33,8 +33,8 @@ export default async function ParentAttendancePage({
     );
   }
 
-  // Get Calendar stats from Admin Calendar
-  const calendarStats = await getSchoolCalendarStats();
+  // Get Calendar stats from Admin Calendar for selected child's class
+  const calendarStats = await getSchoolCalendarStats(new Date(), selectedChild.classId);
 
   const attendanceRecords = await prisma.attendance.findMany({
     where: { studentId: selectedChild.id },

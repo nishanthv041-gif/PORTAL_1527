@@ -65,7 +65,7 @@ export default async function ParentDashboard({
   const childClass = selectedChild.class;
 
   // 2. Compute student attendance statistics using official school working days
-  const calendarStats = await getSchoolCalendarStats();
+  const calendarStats = await getSchoolCalendarStats(new Date(), selectedChild.classId);
   const presentedDays = attendanceRecords.filter((a) => a.status === "PRESENT").length;
   const absentedDays = attendanceRecords.filter((a) => a.status === "ABSENT").length;
   const leaveDays = attendanceRecords.filter((a) => a.status === "LEAVE").length;

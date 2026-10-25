@@ -455,14 +455,17 @@ model CalendarEvent {
 }
 
 model SchoolDaySchedule {
-  id          String   @id @default(cuid())
-  date        DateTime @unique
-  status      String   // WORKING_DAY, LEAVE_DAY
-  title       String?  // e.g. "Special Working Saturday", "Diwali Holiday", "Sunday Weekend"
-  reason      String?
-  isCustom    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default(cuid())
+  date             DateTime @unique
+  status           String   // WORKING_DAY, LEAVE_DAY
+  title            String?  // e.g. "Special Working Saturday", "Diwali Holiday", "Sunday Weekend"
+  reason           String?
+  targetClassType  String   @default("ALL") // "ALL" or "SPECIFIC"
+  targetClassIds   String?  // Comma-separated class IDs or "ALL"
+  targetClassNames String?  // Human readable names e.g. "Grade 10 - A, Grade 12 - B"
+  isCustom         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([date, status])
 }

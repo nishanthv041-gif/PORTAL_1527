@@ -15,7 +15,10 @@ export interface SchoolCalendarStats {
  * Calculates total school active (working) days and total leave/holiday days
  * based on the School Calendar (SchoolDaySchedule overrides + CalendarEvent holidays).
  */
-export async function getSchoolCalendarStats(referenceDate: Date = new Date()): Promise<SchoolCalendarStats> {
+export async function getSchoolCalendarStats(
+  referenceDate: Date = new Date(),
+  classId?: string | null
+): Promise<SchoolCalendarStats> {
   try {
     const { start: academicStart, end: academicEnd } = getAcademicYearRange(referenceDate);
 
@@ -30,8 +33,8 @@ export async function getSchoolCalendarStats(referenceDate: Date = new Date()): 
       }
     });
 
-    // Count active school working days from academicStart up to referenceDate
-    const totalActiveDays = await countSchoolWorkingDays(academicStart, referenceDate);
+    // Count active school working days from academicStart up to referenceDate for this class
+    const totalActiveDays = await countSchoolWorkingDays(academicStart, referenceDate, classId);
 
     return {
       totalActiveDays,

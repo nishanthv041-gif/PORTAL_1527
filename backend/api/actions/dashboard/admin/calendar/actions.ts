@@ -24,9 +24,19 @@ export async function setSchoolDayStatusAction(payload: {
   status: "WORKING_DAY" | "LEAVE_DAY";
   title?: string;
   reason?: string;
+  targetClassType?: "ALL" | "SPECIFIC";
+  targetClassIds?: string[];
+  targetClassNames?: string;
 }) {
   try {
     const targetDate = parseDateString(payload.date);
+    const targetClassType = payload.targetClassType || "ALL";
+    const targetClassIds =
+      targetClassType === "SPECIFIC" && payload.targetClassIds && payload.targetClassIds.length > 0
+        ? payload.targetClassIds.join(",")
+        : "ALL";
+    const targetClassNames =
+      payload.targetClassNames || (targetClassType === "ALL" ? "All Classes" : "");
 
     await prisma.schoolDaySchedule.upsert({
       where: { date: targetDate },
@@ -34,6 +44,9 @@ export async function setSchoolDayStatusAction(payload: {
         status: payload.status,
         title: payload.title || (payload.status === "WORKING_DAY" ? "Working Day" : "Leave Day"),
         reason: payload.reason || null,
+        targetClassType,
+        targetClassIds,
+        targetClassNames,
         isCustom: true,
       },
       create: {
@@ -41,6 +54,9 @@ export async function setSchoolDayStatusAction(payload: {
         status: payload.status,
         title: payload.title || (payload.status === "WORKING_DAY" ? "Working Day" : "Leave Day"),
         reason: payload.reason || null,
+        targetClassType,
+        targetClassIds,
+        targetClassNames,
         isCustom: true,
       },
     });

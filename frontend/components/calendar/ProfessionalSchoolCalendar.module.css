@@ -714,6 +714,129 @@
   background: rgba(239, 68, 68, 0.1);
 }
 
+/* Class Scope Selection for Working Days */
+.classScopeSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  background: var(--background);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.classScopeHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.classScopeTitle {
+  font-size: 0.825rem;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.classScopeToggleGroup {
+  display: inline-flex;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 3px;
+}
+
+.classScopeToggleBtn {
+  border: none;
+  background: transparent;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.775rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.classScopeToggleBtn:hover {
+  color: var(--foreground);
+}
+
+.classScopeToggleBtnActive {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+
+.classPickerControls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.classQuickBtn {
+  background: transparent;
+  border: none;
+  color: #2563eb;
+  font-size: 0.725rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+
+.classQuickBtn:hover {
+  text-decoration: underline;
+}
+
+.classListGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.4rem;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 0.35rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-bg);
+}
+
+.classItemLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.775rem;
+  cursor: pointer;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.classItemLabel:hover {
+  border-color: var(--border-color);
+}
+
+.classItemLabelChecked {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: #2563eb;
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.badgeSpecificClasses {
+  background: rgba(59, 130, 246, 0.15);
+  color: #2563eb;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
 @media (max-width: 768px) {
   .headerBar {
     flex-direction: column;

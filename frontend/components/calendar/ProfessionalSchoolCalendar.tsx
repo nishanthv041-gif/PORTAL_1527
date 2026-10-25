@@ -27,22 +27,32 @@ import {
   Trash2,
   Loader2,
   Clock,
-  MapPin,
   CalendarDays,
-  ShieldAlert,
-  Sun,
-  Filter,
+  Users,
+  Check,
 } from "lucide-react";
+
+export interface SchoolClassOption {
+  id: string;
+  name: string;
+  section: string;
+}
 
 interface ProfessionalSchoolCalendarProps {
   initialData: MonthCalendarData;
+  classes?: SchoolClassOption[];
   role: "ADMIN" | "TEACHER" | "PARENT" | "STUDENT";
+  currentClassId?: string;
+  currentClassName?: string;
   baseRoute: string;
 }
 
 export default function ProfessionalSchoolCalendar({
   initialData,
+  classes = [],
   role,
+  currentClassId,
+  currentClassName,
   baseRoute,
 }: ProfessionalSchoolCalendarProps) {
   const router = useRouter();
@@ -58,6 +68,9 @@ export default function ProfessionalSchoolCalendar({
   const [editStatus, setEditStatus] = useState<"WORKING_DAY" | "LEAVE_DAY">("WORKING_DAY");
   const [editTitle, setEditTitle] = useState("");
   const [editReason, setEditReason] = useState("");
+  const [editTargetClassType, setEditTargetClassType] = useState<"ALL" | "SPECIFIC">("ALL");
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const [classSearch, setClassSearch] = useState("");
   const [modalFeedback, setModalFeedback] = useState<string | null>(null);
 
   // Quick batch set modal
@@ -101,6 +114,18 @@ export default function ProfessionalSchoolCalendar({
     setEditStatus(day.status);
     setEditTitle(day.title || "");
     setEditReason(day.reason || "");
+    setClassSearch("");
+
+    const isSpecific = day.targetClassType === "SPECIFIC";
+    setEditTargetClassType(isSpecific ? "SPECIFIC" : "ALL");
+
+    if (isSpecific && day.targetClassIds && day.targetClassIds !== "ALL") {
+      const ids = day.targetClassIds.split(",").map((id) => id.trim()).filter(Boolean);
+      setSelectedClassIds(ids);
+    } else {
+      setSelectedClassIds([]);
+    }
+
     setModalFeedback(null);
   };
 
@@ -108,12 +133,31 @@ export default function ProfessionalSchoolCalendar({
     if (!selectedDay || !isAdmin) return;
     setModalFeedback(null);
 
+    // Validation for specific classes
+    if (editStatus === "WORKING_DAY" && editTargetClassType === "SPECIFIC") {
+      if (selectedClassIds.length === 0) {
+        setModalFeedback("Please select at least one class for specific working day, or choose 'All Classes'.");
+        return;
+      }
+    }
+
+    let classNames = "All Classes";
+    if (editStatus === "WORKING_DAY" && editTargetClassType === "SPECIFIC") {
+      const selectedNames = classes
+        .filter((c) => selectedClassIds.includes(c.id))
+        .map((c) => `${c.name} - ${c.section}`);
+      classNames = selectedNames.length > 0 ? selectedNames.join(", ") : "Specific Classes";
+    }
+
     startTransition(async () => {
       const res = await setSchoolDayStatusAction({
         date: selectedDay.dateStr,
         status: editStatus,
         title: editTitle.trim() || undefined,
         reason: editReason.trim() || undefined,
+        targetClassType: editStatus === "WORKING_DAY" ? editTargetClassType : "ALL",
+        targetClassIds: editStatus === "WORKING_DAY" && editTargetClassType === "SPECIFIC" ? selectedClassIds : undefined,
+        targetClassNames: editStatus === "WORKING_DAY" ? classNames : "All Classes",
       });
 
       if (res.success) {
@@ -122,7 +166,7 @@ export default function ProfessionalSchoolCalendar({
           setSelectedDay(null);
           setModalFeedback(null);
           router.refresh();
-        }, 600);
+        }, 500);
       } else {
         setModalFeedback(res.error || "Failed to update day status");
       }
@@ -163,7 +207,6 @@ export default function ProfessionalSchoolCalendar({
 
     startTransition(async () => {
       if (batchActionType === "SUNDAYS") {
-        // Find all Sundays in this month
         const sundays = initialData.days
           .filter((d) => d.dayOfWeek === 0)
           .map((d) => ({
@@ -174,7 +217,6 @@ export default function ProfessionalSchoolCalendar({
           }));
         await batchSetSchoolDaysAction(sundays);
       } else if (batchActionType === "WEEKDAYS") {
-        // Mark all Mon-Fri as Working Days
         const weekdays = initialData.days
           .filter((d) => d.dayOfWeek >= 1 && d.dayOfWeek <= 5)
           .map((d) => ({
@@ -233,9 +275,13 @@ export default function ProfessionalSchoolCalendar({
   };
 
   const dayHeaders = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-  // Pre-pad empty cells before 1st day of month
   const emptyPreSlots = Array.from({ length: initialData.firstDayOfWeek });
+
+  const filteredClasses = classes.filter((c) => {
+    if (!classSearch) return true;
+    const term = classSearch.toLowerCase();
+    return c.name.toLowerCase().includes(term) || c.section.toLowerCase().includes(term);
+  });
 
   return (
     <div className={styles.calendarContainer}>
@@ -248,8 +294,8 @@ export default function ProfessionalSchoolCalendar({
           </h1>
           <p className={styles.subTitle}>
             {isAdmin
-              ? "Official school schedule. Mark working days and holidays to calculate attendance automatically."
-              : "Official school schedule with working days, holidays, exams, and events."}
+              ? "Official school schedule. Mark working days and holidays with all-class or specific-class selection."
+              : "Official school schedule with working days, holidays, exams, and class schedules."}
           </p>
         </div>
 
@@ -418,6 +464,17 @@ export default function ProfessionalSchoolCalendar({
             {/* Real Month Days */}
             {initialData.days.map((day) => {
               const isWorking = day.status === "WORKING_DAY";
+              const isSpecific = day.targetClassType === "SPECIFIC";
+
+              // Check if relevant for current viewing teacher/parent class
+              let effectiveStatusForUser = day.status;
+              if (currentClassId && isWorking && isSpecific) {
+                const classIds = (day.targetClassIds || "").split(",").map((id) => id.trim());
+                if (!classIds.includes(currentClassId)) {
+                  effectiveStatusForUser = "LEAVE_DAY"; // Holiday for user's class
+                }
+              }
+
               const matchesFilter =
                 activeFilter === "ALL" ||
                 (activeFilter === "WORKING" && isWorking) ||
@@ -435,8 +492,8 @@ export default function ProfessionalSchoolCalendar({
                   style={cellStyle}
                   onClick={() => handleOpenDayModal(day)}
                   title={`${day.dateStr}: ${day.title || (isWorking ? "Working Day" : "Leave Day")}${
-                    isAdmin ? " (Click to edit)" : ""
-                  }`}
+                    isSpecific ? ` (${day.targetClassNames || "Specific Classes"})` : ""
+                  }${isAdmin ? " (Click to edit)" : ""}`}
                 >
                   {/* Top row in cell: day number and status badge */}
                   <div className={styles.dayTopRow}>
@@ -448,20 +505,52 @@ export default function ProfessionalSchoolCalendar({
                       {day.dayNumber}
                     </span>
 
-                    <span
-                      className={`${styles.dayStatusBadge} ${
-                        isWorking ? styles.badgeWorking : styles.badgeLeave
-                      }`}
-                    >
-                      {isWorking ? "Working" : "Leave"}
-                      {day.isCustom && <span className={styles.customMarkDot} title="Admin Custom Marked" />}
-                    </span>
+                    {/* Status Badge */}
+                    {isWorking ? (
+                      isSpecific ? (
+                        <span
+                          className={`${styles.dayStatusBadge} ${styles.badgeSpecificClasses}`}
+                          title={`Working Day for: ${day.targetClassNames || "Specific Classes"}`}
+                        >
+                          {currentClassId
+                            ? effectiveStatusForUser === "WORKING_DAY"
+                              ? "Working"
+                              : "Leave (Off)"
+                            : "Working (Specific)"}
+                        </span>
+                      ) : (
+                        <span className={`${styles.dayStatusBadge} ${styles.badgeWorking}`}>
+                          Working
+                        </span>
+                      )
+                    ) : (
+                      <span className={`${styles.dayStatusBadge} ${styles.badgeLeave}`}>
+                        Leave
+                      </span>
+                    )}
                   </div>
 
                   {/* Day Title / Reason snippet */}
                   <div className={styles.dayTitleText} title={day.title || undefined}>
                     {day.title || (isWorking ? "Working Day" : "Holiday")}
                   </div>
+
+                  {/* Class targeting tag snippet */}
+                  {isWorking && isSpecific && (
+                    <div
+                      style={{
+                        fontSize: "0.65rem",
+                        color: "#2563eb",
+                        fontWeight: 700,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                      title={day.targetClassNames || undefined}
+                    >
+                      {day.targetClassNames ? day.targetClassNames : "Selected Classes"}
+                    </div>
+                  )}
 
                   {/* Events list */}
                   {day.events.length > 0 && (
@@ -516,7 +605,7 @@ export default function ProfessionalSchoolCalendar({
                 </h3>
                 <p className={styles.modalDateSubtitle}>
                   {isAdmin
-                    ? "Set working or leave status anytime. Working days are factored into attendance percentage calculation."
+                    ? "Set working or leave status anytime. Choose all classes or specific individual classes for working days."
                     : "School Academic Calendar schedule."}
                 </p>
               </div>
@@ -550,7 +639,7 @@ export default function ProfessionalSchoolCalendar({
                       />
                       <span className={styles.statusOptionLabel}>School Working Day</span>
                       <span className={styles.statusOptionHint}>
-                        Counted in student & teacher attendance calculations
+                        Classes in session. Factored into attendance percentage
                       </span>
                     </button>
 
@@ -573,13 +662,116 @@ export default function ProfessionalSchoolCalendar({
                   </div>
                 </div>
 
+                {/* Class Selection for Working Days (All Class vs Individual Class) */}
+                {editStatus === "WORKING_DAY" && (
+                  <div className={styles.classScopeSection}>
+                    <div className={styles.classScopeHeader}>
+                      <span className={styles.classScopeTitle}>Working Day Applicable For:</span>
+                      <div className={styles.classScopeToggleGroup}>
+                        <button
+                          type="button"
+                          onClick={() => setEditTargetClassType("ALL")}
+                          className={`${styles.classScopeToggleBtn} ${
+                            editTargetClassType === "ALL" ? styles.classScopeToggleBtnActive : ""
+                          }`}
+                        >
+                          All Classes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditTargetClassType("SPECIFIC")}
+                          className={`${styles.classScopeToggleBtn} ${
+                            editTargetClassType === "SPECIFIC" ? styles.classScopeToggleBtnActive : ""
+                          }`}
+                        >
+                          Specific Classes
+                        </button>
+                      </div>
+                    </div>
+
+                    {editTargetClassType === "SPECIFIC" && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                        <div className={styles.classPickerControls}>
+                          <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>
+                            Select Classes ({selectedClassIds.length} selected):
+                          </span>
+
+                          <div style={{ display: "flex", gap: "0.4rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedClassIds(classes.map((c) => c.id))}
+                              className={styles.classQuickBtn}
+                            >
+                              Select All
+                            </button>
+                            <span style={{ color: "var(--border-color)" }}>|</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedClassIds([])}
+                              className={styles.classQuickBtn}
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+
+                        {classes.length > 6 && (
+                          <input
+                            type="text"
+                            placeholder="Filter classes..."
+                            value={classSearch}
+                            onChange={(e) => setClassSearch(e.target.value)}
+                            className={styles.formInput}
+                            style={{ padding: "0.35rem 0.65rem", fontSize: "0.775rem" }}
+                          />
+                        )}
+
+                        <div className={styles.classListGrid}>
+                          {filteredClasses.length > 0 ? (
+                            filteredClasses.map((c) => {
+                              const isChecked = selectedClassIds.includes(c.id);
+                              return (
+                                <label
+                                  key={c.id}
+                                  className={`${styles.classItemLabel} ${
+                                    isChecked ? styles.classItemLabelChecked : ""
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedClassIds([...selectedClassIds, c.id]);
+                                      } else {
+                                        setSelectedClassIds(selectedClassIds.filter((id) => id !== c.id));
+                                      }
+                                    }}
+                                  />
+                                  <span>
+                                    {c.name} - {c.section}
+                                  </span>
+                                </label>
+                              );
+                            })
+                          ) : (
+                            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", padding: "0.5rem" }}>
+                              No matching classes found.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className={styles.formGroup}>
                   <label className={styles.formLabel}>Title / Label</label>
                   <input
                     type="text"
                     value={editTitle}
                     onChange={(e) => setEditTitle(e.target.value)}
-                    placeholder="e.g. Regular Working Day, Republic Day, Special Saturday Working Day"
+                    placeholder="e.g. Regular Working Day, Special Working Saturday, Republic Day"
                     className={styles.formInput}
                   />
                 </div>
@@ -590,7 +782,7 @@ export default function ProfessionalSchoolCalendar({
                     type="text"
                     value={editReason}
                     onChange={(e) => setEditReason(e.target.value)}
-                    placeholder="e.g. National Holiday, Weekend, Term Exam Day"
+                    placeholder="e.g. Extra classes for senior batches, National Holiday, Weekend"
                     className={styles.formInput}
                   />
                 </div>
@@ -634,7 +826,7 @@ export default function ProfessionalSchoolCalendar({
                       </>
                     ) : (
                       <>
-                        <CheckCircle2 size={16} />
+                        <Check size={16} />
                         <span>Save Day Status</span>
                       </>
                     )}
@@ -676,7 +868,9 @@ export default function ProfessionalSchoolCalendar({
                       }}
                     >
                       {selectedDay.status === "WORKING_DAY"
-                        ? "Official School Working Day"
+                        ? selectedDay.targetClassType === "SPECIFIC"
+                          ? "Working Day (Specific Classes)"
+                          : "Official School Working Day (All Classes)"
                         : "School Leave / Holiday"}
                     </div>
                     <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginTop: "2px" }}>
@@ -688,6 +882,42 @@ export default function ProfessionalSchoolCalendar({
                   </div>
                 </div>
 
+                {selectedDay.status === "WORKING_DAY" && selectedDay.targetClassType === "SPECIFIC" && (
+                  <div
+                    style={{
+                      padding: "0.75rem",
+                      borderRadius: "10px",
+                      background: "var(--background)",
+                      border: "1px solid var(--border-color)",
+                      fontSize: "0.825rem",
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, color: "var(--foreground)" }}>
+                      Classes with Working Day:
+                    </div>
+                    <div style={{ color: "#2563eb", fontWeight: 600, marginTop: "2px" }}>
+                      {selectedDay.targetClassNames || "Specified Classes"}
+                    </div>
+
+                    {currentClassId && (
+                      <div
+                        style={{
+                          marginTop: "0.5rem",
+                          fontWeight: 700,
+                          fontSize: "0.8rem",
+                          color: selectedDay.targetClassIds?.includes(currentClassId)
+                            ? "#059669"
+                            : "#dc2626",
+                        }}
+                      >
+                        {selectedDay.targetClassIds?.includes(currentClassId)
+                          ? `✓ Working day is scheduled for your class (${currentClassName || "Your Class"}).`
+                          : `🌴 Your class (${currentClassName || "Your Class"}) is on leave/holiday today.`}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div
                   style={{
                     fontSize: "0.775rem",
@@ -695,7 +925,7 @@ export default function ProfessionalSchoolCalendar({
                     fontStyle: "italic",
                   }}
                 >
-                  * School calendar status is managed by School Administration.
+                  * School calendar schedule is managed by School Administration.
                 </div>
               </div>
             )}

@@ -2,6 +2,16 @@ import { prisma } from "@/backend/db/prisma";
 
 export type DayScheduleStatus = "WORKING_DAY" | "LEAVE_DAY";
 
+export interface ScheduleEntry {
+  status: DayScheduleStatus;
+  title?: string | null;
+  reason?: string | null;
+  targetClassType?: string; // "ALL" | "SPECIFIC"
+  targetClassIds?: string | null; // comma-separated class IDs or "ALL"
+  targetClassNames?: string | null;
+  isCustom: boolean;
+}
+
 export interface DayInfo {
   dateStr: string; // YYYY-MM-DD
   dayNumber: number;
@@ -9,6 +19,9 @@ export interface DayInfo {
   status: DayScheduleStatus;
   title?: string | null;
   reason?: string | null;
+  targetClassType?: string;
+  targetClassIds?: string | null;
+  targetClassNames?: string | null;
   isCustom: boolean;
   events: {
     id: string;
@@ -86,8 +99,8 @@ export function getDefaultDayStatus(d: Date): DayScheduleStatus {
 export async function getSchoolScheduleMap(
   startDate: Date,
   endDate: Date
-): Promise<Map<string, { status: DayScheduleStatus; title?: string | null; reason?: string | null; isCustom: boolean }>> {
-  const scheduleMap = new Map<string, { status: DayScheduleStatus; title?: string | null; reason?: string | null; isCustom: boolean }>();
+): Promise<Map<string, ScheduleEntry>> {
+  const scheduleMap = new Map<string, ScheduleEntry>();
 
   // 1. Fetch custom overrides from SchoolDaySchedule
   const customOverrides = await prisma.schoolDaySchedule.findMany({
@@ -105,6 +118,9 @@ export async function getSchoolScheduleMap(
       status: override.status === "WORKING_DAY" ? "WORKING_DAY" : "LEAVE_DAY",
       title: override.title,
       reason: override.reason,
+      targetClassType: override.targetClassType || "ALL",
+      targetClassIds: override.targetClassIds,
+      targetClassNames: override.targetClassNames,
       isCustom: override.isCustom,
     });
   }
@@ -128,6 +144,9 @@ export async function getSchoolScheduleMap(
         status: "LEAVE_DAY",
         title: h.title,
         reason: h.description || "School Holiday",
+        targetClassType: "ALL",
+        targetClassIds: "ALL",
+        targetClassNames: "All Classes",
         isCustom: false,
       });
     }
@@ -137,9 +156,14 @@ export async function getSchoolScheduleMap(
 }
 
 /**
- * Counts total school working days in [startDate, endDate].
+ * Counts total school working days in [startDate, endDate],
+ * with optional classId filter for class-specific working days.
  */
-export async function countSchoolWorkingDays(startDate: Date, endDate: Date): Promise<number> {
+export async function countSchoolWorkingDays(
+  startDate: Date,
+  endDate: Date,
+  classId?: string | null
+): Promise<number> {
   const scheduleMap = await getSchoolScheduleMap(startDate, endDate);
 
   let workingDays = 0;
@@ -153,8 +177,25 @@ export async function countSchoolWorkingDays(startDate: Date, endDate: Date): Pr
     const key = toDateString(cursor);
     const existing = scheduleMap.get(key);
 
-    const status = existing ? existing.status : getDefaultDayStatus(cursor);
-    if (status === "WORKING_DAY") {
+    let isWorking = false;
+
+    if (existing) {
+      if (existing.status === "WORKING_DAY") {
+        if (!classId || existing.targetClassType === "ALL" || !existing.targetClassIds) {
+          isWorking = true;
+        } else {
+          // Specific class check
+          const ids = existing.targetClassIds.split(",").map((id) => id.trim());
+          isWorking = ids.includes(classId);
+        }
+      } else {
+        isWorking = false; // Explicit LEAVE_DAY
+      }
+    } else {
+      isWorking = getDefaultDayStatus(cursor) === "WORKING_DAY";
+    }
+
+    if (isWorking) {
       workingDays++;
     }
 
@@ -182,10 +223,11 @@ export function calculateAttendancePercentage(
 
 /**
  * Standard Calculation for Student Attendance:
- * Evaluates present sessions/days against official school working days.
+ * Evaluates present sessions/days against official school working days for their class.
  */
 export async function getStudentStandardAttendanceStats(
   studentId: string,
+  classId?: string | null,
   referenceDate: Date = new Date()
 ) {
   const { start: academicStart } = getAcademicYearRange(referenceDate);
@@ -206,11 +248,9 @@ export async function getStudentStandardAttendanceStats(
   const absentCount = records.filter((r) => r.status === "ABSENT").length;
   const leaveCount = records.filter((r) => r.status === "LEAVE").length;
 
-  // 2. Count official school working days from academicStart to referenceDate
-  const officialWorkingDays = await countSchoolWorkingDays(academicStart, referenceDate);
+  // 2. Count official school working days for this student's class
+  const officialWorkingDays = await countSchoolWorkingDays(academicStart, referenceDate, classId);
 
-  // In schools with Forenoon + Afternoon sessions, recorded sessions might be 2x or 1x.
-  // We use max(officialWorkingDays, records.length) as the authoritative base
   const totalSessionsOrDays = Math.max(officialWorkingDays, presentCount + absentCount + leaveCount);
 
   const percentage = calculateAttendancePercentage(presentCount, totalSessionsOrDays);

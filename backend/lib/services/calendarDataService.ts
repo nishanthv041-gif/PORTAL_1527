@@ -34,6 +34,9 @@ export interface CalendarDayModel {
   status: DayScheduleStatus;
   title?: string | null;
   reason?: string | null;
+  targetClassType?: string; // "ALL" | "SPECIFIC"
+  targetClassIds?: string | null; // Comma-separated class IDs or "ALL"
+  targetClassNames?: string | null; // e.g. "Grade 10 - A, Grade 12 - B"
   isCustom: boolean;
   events: SerializedCalendarEvent[];
 }
@@ -92,6 +95,9 @@ export async function getMonthCalendarData(
     status: DayScheduleStatus;
     title?: string | null;
     reason?: string | null;
+    targetClassType?: string;
+    targetClassIds?: string | null;
+    targetClassNames?: string | null;
     isCustom: boolean;
   }>();
 
@@ -101,6 +107,9 @@ export async function getMonthCalendarData(
       status: s.status === "WORKING_DAY" ? "WORKING_DAY" : "LEAVE_DAY",
       title: s.title,
       reason: s.reason,
+      targetClassType: s.targetClassType || "ALL",
+      targetClassIds: s.targetClassIds,
+      targetClassNames: s.targetClassNames,
       isCustom: s.isCustom,
     });
   }
@@ -158,6 +167,9 @@ export async function getMonthCalendarData(
         status: "LEAVE_DAY",
         title: e.title,
         reason: e.description || "Holiday Event",
+        targetClassType: "ALL",
+        targetClassIds: "ALL",
+        targetClassNames: "All Classes",
         isCustom: false,
       });
     }
@@ -180,12 +192,18 @@ export async function getMonthCalendarData(
     let status: DayScheduleStatus;
     let title: string | null | undefined = null;
     let reason: string | null | undefined = null;
+    let targetClassType: string | undefined = "ALL";
+    let targetClassIds: string | null | undefined = null;
+    let targetClassNames: string | null | undefined = null;
     let isCustom = false;
 
     if (override) {
       status = override.status;
       title = override.title;
       reason = override.reason;
+      targetClassType = override.targetClassType;
+      targetClassIds = override.targetClassIds;
+      targetClassNames = override.targetClassNames;
       isCustom = override.isCustom;
     } else {
       status = getDefaultDayStatus(dayDate);
@@ -214,6 +232,9 @@ export async function getMonthCalendarData(
       status,
       title,
       reason,
+      targetClassType,
+      targetClassIds,
+      targetClassNames,
       isCustom,
       events: dayEvents,
     });

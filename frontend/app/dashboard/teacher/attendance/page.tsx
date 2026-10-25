@@ -35,10 +35,6 @@ export default async function TeacherAttendancePage({
   const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
   const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
 
-  // Determine official school working days up to current date
-  const { start: academicStart } = getAcademicYearRange(startOfDay);
-  const officialWorkingDays = await countSchoolWorkingDays(academicStart, endOfDay);
-
   const teacher = await prisma.teacher.findUnique({
     where: { userId: session.user.id },
     include: {
@@ -69,6 +65,10 @@ export default async function TeacherAttendancePage({
   }
 
   const myClass = teacher.classTeacherOf;
+
+  // Determine official school working days up to current date for this specific class
+  const { start: academicStart } = getAcademicYearRange(startOfDay);
+  const officialWorkingDays = await countSchoolWorkingDays(academicStart, endOfDay, myClass.id);
 
   const serializedStudents: TeacherStudentItem[] = myClass.students.map((s) => {
     const todayRecord = s.attendances.find((a) => {
