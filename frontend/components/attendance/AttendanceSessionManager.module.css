@@ -7,7 +7,7 @@
   max-width: 1000px;
   margin: 0 auto;
   box-sizing: border-box;
-  padding-bottom: 5.5rem; /* Room for floating save bar */
+  padding-bottom: 2rem;
 }
 
 /* Header & Back Action */
@@ -632,25 +632,25 @@
   transition: width 0.3s ease;
 }
 
-/* Floating Bottom Save Bar */
+/* Save Action Bar (Sticky within content - will never overlap sidebar menu) */
 .bottomActionBar {
-  position: fixed;
+  position: sticky;
   bottom: 1rem;
-  left: 50%;
-  transform: translateX(-50%);
+  margin-top: 1.5rem;
   background: var(--card-bg);
   border: 1px solid var(--border-color);
   border-radius: 14px;
-  padding: 0.65rem 1.25rem;
+  padding: 0.75rem 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1.5rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-  z-index: 100;
-  width: calc(100% - 2rem);
-  max-width: 600px;
+  gap: 1.25rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 25; /* Strictly below sidebar (z-index: 50) and overlay (z-index: 45) */
+  width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
+  backdrop-filter: blur(8px);
 }
 
 .discardBtn {
