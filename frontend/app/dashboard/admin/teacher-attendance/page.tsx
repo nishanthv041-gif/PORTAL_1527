@@ -24,9 +24,6 @@ export default async function AdminTeacherAttendancePage({
       where: { isActive: true },
       include: {
         user: true,
-        classes: true,
-        subjects: true,
-        classTeacherOf: true,
         attendances: {
           orderBy: { date: "desc" },
           take: 60,
@@ -41,8 +38,8 @@ export default async function AdminTeacherAttendancePage({
     }),
   ]);
 
-  // Precompute statistics for each teacher
-  const serializedTeachers: TeacherRecordItem[] = teachers.map((teacher, index) => {
+  // Precompute baseline statistics for each teacher
+  const serializedTeachers: TeacherRecordItem[] = teachers.map((teacher) => {
     const todayRecord = dateAttendances.find((a) => a.teacherId === teacher.id);
     const todayStatus: "PRESENT" | "ABSENT" | "LATE" | "LEAVE" | "HALF_DAY" | "NOT_MARKED" = todayRecord
       ? (todayRecord.status as any) || "NOT_MARKED"
@@ -55,18 +52,12 @@ export default async function AdminTeacherAttendancePage({
     const lateDays = teacher.attendances.filter((a) => a.status === "LATE").length;
     const halfDayDays = teacher.attendances.filter((a) => a.status === "HALF_DAY").length;
 
+    // Credits: Present = 1, Late = 1, Half Day = 0.5
+    const totalCredits = (presentedDays * 1.0) + (lateDays * 1.0) + (halfDayDays * 0.5);
     const attendancePercentage =
       totalSessions > 0
-        ? ((presentedDays / totalSessions) * 100).toFixed(1)
+        ? ((totalCredits / totalSessions) * 100).toFixed(1)
         : "100.0";
-
-    // Distribute into Teachers vs Administrators based on designation / teaching load
-    const isAdministrator = 
-      teacher.user.role === "ADMIN" || 
-      (teacher.classes.length === 0 && teacher.subjects.length === 0 && !teacher.classTeacherOf) ||
-      (teachers.length > 3 && index >= Math.ceil(teachers.length * 0.6));
-
-    const category: "TEACHERS" | "ADMINS" = isAdministrator ? "ADMINS" : "TEACHERS";
 
     return {
       id: teacher.id,
@@ -85,7 +76,6 @@ export default async function AdminTeacherAttendancePage({
       attendancePercentage,
       todayStatus,
       todayRemarks: todayRecord?.remarks || "",
-      category,
       attendances: teacher.attendances.map((a) => ({
         id: a.id,
         date: a.date,

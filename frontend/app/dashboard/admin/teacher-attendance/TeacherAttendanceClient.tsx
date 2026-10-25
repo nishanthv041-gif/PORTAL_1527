@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import AttendanceSessionManager, {
   AttendancePersonItem,
@@ -24,7 +24,6 @@ export type TeacherRecordItem = {
   attendancePercentage: string;
   todayStatus: "PRESENT" | "ABSENT" | "LATE" | "LEAVE" | "HALF_DAY" | "NOT_MARKED";
   todayRemarks?: string;
-  category: "TEACHERS" | "ADMINS";
   attendances: {
     id: string;
     date: Date | string;
@@ -41,14 +40,13 @@ export default function TeacherAttendanceClient({
   initialDate: string;
 }) {
   const router = useRouter();
-  const [activeCategory, setActiveCategory] = useState<string>("TEACHERS");
 
   const people: AttendancePersonItem[] = useMemo(() => {
     return teachers.map((t) => ({
       id: t.id,
       name: t.user.name,
       codeOrRoll: `EMP-${t.id.slice(-4).toUpperCase()}`,
-      category: t.category,
+      category: "TEACHERS",
       currentStatus: t.todayStatus,
       currentRemarks: t.todayRemarks || "",
       attendancePercentage: t.attendancePercentage,
@@ -66,14 +64,6 @@ export default function TeacherAttendanceClient({
       })),
     }));
   }, [teachers]);
-
-  const teacherCount = people.filter((p) => p.category === "TEACHERS").length;
-  const adminCount = people.filter((p) => p.category === "ADMINS").length;
-
-  const categories = [
-    { id: "TEACHERS", label: "Teachers", count: teacherCount },
-    { id: "ADMINS", label: "Administrators", count: adminCount },
-  ];
 
   const handleDateChange = (date: string) => {
     router.push(`/dashboard/admin/teacher-attendance?date=${date}`);
@@ -100,13 +90,8 @@ export default function TeacherAttendanceClient({
 
   return (
     <AttendanceSessionManager
-      title="Mark Attendance — Teachers"
-      subtitle="Record session & daily attendance status for faculty members"
-      backUrl="/dashboard/admin/teachers"
-      backLabel="← Back to Faculty Roster"
-      categories={categories}
-      activeCategoryId={activeCategory}
-      onCategoryChange={setActiveCategory}
+      title="Teacher Attendance"
+      subtitle="Record session & daily attendance status"
       initialDate={initialDate}
       onDateChange={handleDateChange}
       people={people}

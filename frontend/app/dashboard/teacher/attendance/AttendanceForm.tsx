@@ -84,10 +84,8 @@ export default function AttendanceForm({
 
   return (
     <AttendanceSessionManager
-      title="Mark Attendance — Students"
-      subtitle={`Record session & daily attendance status for ${myClass.name} - ${myClass.section}`}
-      backUrl="/dashboard/teacher"
-      backLabel="← Back to Dashboard"
+      title="Student Attendance"
+      subtitle={`${myClass.name} - ${myClass.section}`}
       initialDate={initialDate}
       onDateChange={handleDateChange}
       people={people}

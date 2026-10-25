@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useTransition, useMemo, useEffect } from "react";
-import Link from "next/link";
 import { 
-  ArrowLeft, Search, RotateCw, Check, AlertCircle, 
-  X, Award, Clock, Sparkles, Users, Loader2 
+  Search, RotateCw, Check, AlertCircle, 
+  X, Award, Users, Loader2 
 } from "lucide-react";
 import styles from "./AttendanceSessionManager.module.css";
 
@@ -33,8 +32,6 @@ export type AttendancePersonItem = {
 export type AttendanceSessionManagerProps = {
   title: string;
   subtitle: string;
-  backUrl?: string;
-  backLabel?: string;
   categories?: { id: string; label: string; count?: number }[];
   activeCategoryId?: string;
   onCategoryChange?: (id: string) => void;
@@ -51,8 +48,6 @@ export type AttendanceSessionManagerProps = {
 export default function AttendanceSessionManager({
   title,
   subtitle,
-  backUrl,
-  backLabel = "Back to Faculty Roster",
   categories = [],
   activeCategoryId,
   onCategoryChange,
@@ -84,6 +79,13 @@ export default function AttendanceSessionManager({
   const [isPending, startTransition] = useTransition();
   const [saveSuccessMsg, setSaveSuccessMsg] = useState(false);
 
+  // Filter out any "Administrators" category completely
+  const filteredCategories = useMemo(() => {
+    return categories.filter(
+      (c) => c.id !== "ADMINS" && !c.label.toLowerCase().includes("administrator")
+    );
+  }, [categories]);
+
   // Update when people / initialDate props change
   useEffect(() => {
     setSelectedDate(initialDate);
@@ -114,7 +116,7 @@ export default function AttendanceSessionManager({
   // Filtered members list based on category & search
   const filteredPeople = useMemo(() => {
     return people.filter((p) => {
-      if (activeCategoryId && p.category && p.category !== activeCategoryId) {
+      if (activeCategoryId && p.category && p.category !== activeCategoryId && filteredCategories.length > 1) {
         return false;
       }
       if (!searchQuery.trim()) return true;
@@ -124,7 +126,7 @@ export default function AttendanceSessionManager({
         p.codeOrRoll.toLowerCase().includes(q)
       );
     });
-  }, [people, activeCategoryId, searchQuery]);
+  }, [people, activeCategoryId, searchQuery, filteredCategories.length]);
 
   // Dynamic counter pills based on localMap
   const counters = useMemo(() => {
@@ -158,65 +160,131 @@ export default function AttendanceSessionManager({
     };
   }, [localMap, people.length]);
 
-  // Date Change Handler
-  const handleDateChange = (val: string) => {
-    setSelectedDate(val);
-    onDateChange(val);
+  // Calculate dynamic live percentage & breakdown connected to database state
+  const getLivePersonStats = (person: AttendancePersonItem) => {
+    const curStatus = localMap[person.id]?.status || person.currentStatus;
+    const origStatus = originalSnapshot[person.id]?.status || person.currentStatus;
+
+    // Check if the initial database record already had a marked status today
+    const wasAlreadyMarkedInDb = origStatus !== "NOT_MARKED" && origStatus !== "";
+
+    // Baseline sessions count from DB without today's slot
+    const baseTotalSessions = wasAlreadyMarkedInDb
+      ? Math.max(0, person.totalSessions - 1)
+      : person.totalSessions;
+
+    // Baseline counts from DB without today's slot
+    let basePresent = person.presentCount - (wasAlreadyMarkedInDb && origStatus === "PRESENT" ? 1 : 0);
+    let baseAbsent = person.absentCount - (wasAlreadyMarkedInDb && origStatus === "ABSENT" ? 1 : 0);
+    let baseLate = person.lateCount - (wasAlreadyMarkedInDb && origStatus === "LATE" ? 1 : 0);
+    let baseLeave = person.leaveCount - (wasAlreadyMarkedInDb && origStatus === "LEAVE" ? 1 : 0);
+    let baseHalfDay = person.halfDayCount - (wasAlreadyMarkedInDb && origStatus === "HALF_DAY" ? 1 : 0);
+
+    basePresent = Math.max(0, basePresent);
+    baseAbsent = Math.max(0, baseAbsent);
+    baseLate = Math.max(0, baseLate);
+    baseLeave = Math.max(0, baseLeave);
+    baseHalfDay = Math.max(0, baseHalfDay);
+
+    // Apply the active live choice:
+    // PRESENT = 1.0 day credit
+    // LATE = 1.0 day credit
+    // HALF_DAY = 0.5 day credit
+    // ABSENT = 0.0 day credit
+    // LEAVE = 0.0 day credit
+    let livePresent = basePresent;
+    let liveAbsent = baseAbsent;
+    let liveLate = baseLate;
+    let liveLeave = baseLeave;
+    let liveHalfDay = baseHalfDay;
+    let liveTotalSessions = baseTotalSessions;
+
+    if (curStatus === "PRESENT") {
+      livePresent += 1;
+      liveTotalSessions += 1;
+    } else if (curStatus === "ABSENT") {
+      liveAbsent += 1;
+      liveTotalSessions += 1;
+    } else if (curStatus === "LATE") {
+      liveLate += 1;
+      liveTotalSessions += 1;
+    } else if (curStatus === "LEAVE") {
+      liveLeave += 1;
+      liveTotalSessions += 1;
+    } else if (curStatus === "HALF_DAY") {
+      liveHalfDay += 1;
+      liveTotalSessions += 1;
+    }
+
+    const totalCredits = (livePresent * 1.0) + (liveLate * 1.0) + (liveHalfDay * 0.5);
+    const percentage = liveTotalSessions > 0
+      ? ((totalCredits / liveTotalSessions) * 100).toFixed(1)
+      : "100.0";
+
+    return {
+      percentage,
+      totalSessions: liveTotalSessions,
+      presentCount: livePresent,
+      absentCount: liveAbsent,
+      lateCount: liveLate,
+      leaveCount: liveLeave,
+      halfDayCount: liveHalfDay,
+      currentStatus: curStatus,
+    };
   };
 
-  // Change status of one member
-  const setMemberStatus = (id: string, newStatus: string, defaultRemark?: string) => {
-    setLocalMap((prev) => ({
-      ...prev,
-      [id]: {
-        status: newStatus,
-        remarks: defaultRemark !== undefined ? defaultRemark : prev[id]?.remarks || "",
-      },
-    }));
+  // Toggle single member status (PRESENT, ABSENT, LATE, LEAVE, HALF_DAY)
+  const setMemberStatus = (
+    personId: string,
+    newStatus: "PRESENT" | "ABSENT" | "LATE" | "LEAVE" | "HALF_DAY",
+    remarks?: string
+  ) => {
     setActiveHalfDayPopover(null);
-  };
-
-  // Change remarks of one member
-  const setMemberRemark = (id: string, text: string) => {
     setLocalMap((prev) => ({
       ...prev,
-      [id]: {
-        ...prev[id],
-        remarks: text,
+      [personId]: {
+        status: newStatus,
+        remarks: remarks !== undefined ? remarks : prev[personId]?.remarks || "",
       },
     }));
   };
 
-  // Quick Mark All (for filtered people)
-  const handleQuickMarkAll = (statusToSet: string) => {
+  // Quick mark all currently filtered members
+  const handleQuickMarkAll = (status: "PRESENT" | "ABSENT" | "LATE") => {
     setLocalMap((prev) => {
-      const next = { ...prev };
+      const updated = { ...prev };
       filteredPeople.forEach((p) => {
-        next[p.id] = {
-          ...next[p.id],
-          status: statusToSet,
+        updated[p.id] = {
+          status,
+          remarks: prev[p.id]?.remarks || "",
         };
       });
-      return next;
+      return updated;
     });
   };
 
-  // Discard changes
+  // Date Change Handler
+  const handleDateChange = (newDate: string) => {
+    setSelectedDate(newDate);
+    onDateChange(newDate);
+  };
+
+  // Discard changes and revert to original snapshot
   const handleDiscard = () => {
     setLocalMap(originalSnapshot);
   };
 
-  // Save changes
+  // Save changes to database
   const handleSave = () => {
-    const payload = people.map((p) => ({
-      id: p.id,
-      status: localMap[p.id]?.status || "NOT_MARKED",
-      remarks: localMap[p.id]?.remarks || "",
-    }));
-
     startTransition(async () => {
-      const res = await onSave(payload, selectedDate, session);
-      if (res?.success) {
+      const recordsToSave = Object.entries(localMap).map(([id, item]) => ({
+        id,
+        status: item.status,
+        remarks: item.remarks,
+      }));
+
+      const res = await onSave(recordsToSave, selectedDate, session);
+      if (res.success) {
         setOriginalSnapshot(localMap);
         setSaveSuccessMsg(true);
         setTimeout(() => setSaveSuccessMsg(false), 3000);
@@ -226,24 +294,17 @@ export default function AttendanceSessionManager({
 
   return (
     <div className={styles.pageContainer}>
-      {/* 1. Top Header & Back Button */}
+      {/* 1. Top Header (Clean - No unwanted back button) */}
       <div className={styles.headerSection}>
         <h1 className={styles.pageTitle}>{title}</h1>
         <p className={styles.pageSubtitle}>{subtitle}</p>
-
-        {backUrl && (
-          <Link href={backUrl} prefetch={true} className={styles.backBtn}>
-            <ArrowLeft size={15} />
-            <span>{backLabel}</span>
-          </Link>
-        )}
       </div>
 
-      {/* 2. Scope Card: Category Tabs & Search Bar */}
+      {/* 2. Scope Card: Search Bar (and Category Tabs only if multiple classes exist) */}
       <div className={styles.scopeCard}>
-        {categories.length > 0 && (
+        {filteredCategories.length > 1 && (
           <div className={styles.categoryTabs}>
-            {categories.map((cat) => {
+            {filteredCategories.map((cat) => {
               const isActive = activeCategoryId === cat.id;
               return (
                 <button
@@ -308,9 +369,9 @@ export default function AttendanceSessionManager({
 
               <button
                 type="button"
-                onClick={() => handleDateChange(selectedDate)}
+                onClick={() => onDateChange(selectedDate)}
                 className={styles.refreshBtn}
-                title="Refresh attendance"
+                title="Refresh Attendance"
               >
                 <RotateCw size={15} />
               </button>
@@ -379,24 +440,24 @@ export default function AttendanceSessionManager({
         </div>
       </div>
 
-      {/* 4. Table of Members (No extra details, clean status buttons & percentage modal) */}
+      {/* 4. Table of Members (Clean 3-column table - Note/Remark removed) */}
       <div className={styles.tableCard}>
         <div className={styles.tableWrapper}>
           <table className={styles.table}>
             <thead>
               <tr>
-                <th className={styles.th} style={{ width: "45px" }}>#</th>
+                <th className={styles.th} style={{ width: "50px" }}>#</th>
                 <th className={styles.th}>
                   {title.toLowerCase().includes("teacher") ? "FACULTY MEMBER" : "STUDENT"}
                 </th>
-                <th className={styles.th}>ATTENDANCE STATUS</th>
-                <th className={styles.th}>NOTE / REMARK</th>
+                <th className={styles.th} style={{ textAlign: "center" }}>ATTENDANCE STATUS</th>
               </tr>
             </thead>
             <tbody>
               {filteredPeople.map((person, index) => {
                 const cur = localMap[person.id] || { status: "NOT_MARKED", remarks: "" };
                 const st = cur.status;
+                const liveStats = getLivePersonStats(person);
 
                 return (
                   <tr key={person.id} className={styles.tr}>
@@ -421,21 +482,21 @@ export default function AttendanceSessionManager({
                           </span>
                         </div>
 
-                        {/* Percentage View Button / Badge */}
+                        {/* Live Recalculated Percentage View Button / Badge */}
                         <button
                           type="button"
                           onClick={() => setSelectedPersonForModal(person)}
                           className={styles.pctBadge}
-                          title="Click to view attendance percentage & breakdown"
+                          title="Click to view detailed attendance breakdown"
                         >
                           <Award size={12} />
-                          <span>{person.attendancePercentage}%</span>
+                          <span>{liveStats.percentage}%</span>
                         </button>
                       </div>
                     </td>
 
                     {/* Attendance Status Buttons: P, A, L, LE, HD */}
-                    <td className={styles.td} style={{ position: "relative" }}>
+                    <td className={styles.td} style={{ position: "relative", textAlign: "center" }}>
                       <div className={styles.statusButtonGroup}>
                         {/* P: Present */}
                         <button
@@ -517,17 +578,6 @@ export default function AttendanceSessionManager({
                           </button>
                         </div>
                       )}
-                    </td>
-
-                    {/* Note / Remarks Input */}
-                    <td className={styles.td}>
-                      <input
-                        type="text"
-                        placeholder="Add note..."
-                        value={cur.remarks}
-                        onChange={(e) => setMemberRemark(person.id, e.target.value)}
-                        className={styles.remarkInput}
-                      />
                     </td>
                   </tr>
                 );
@@ -611,124 +661,120 @@ export default function AttendanceSessionManager({
         </div>
       </div>
 
-      {/* 7. Percentage View Modal (Requested: click option to view that person's percentage) */}
-      {selectedPersonForModal && (
-        <div className={styles.modalBackdrop} onClick={() => setSelectedPersonForModal(null)}>
-          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 800 }}>
-                  {selectedPersonForModal.name}
-                </h3>
-                <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                  {selectedPersonForModal.codeOrRoll}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedPersonForModal(null)}
-                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
-              >
-                <X size={20} />
-              </button>
-            </div>
+      {/* 7. Percentage View Modal (Live recalculated based on clicked options & DB) */}
+      {selectedPersonForModal && (() => {
+        const liveModalStats = getLivePersonStats(selectedPersonForModal);
 
-            {/* Hero Percentage Card */}
-            <div className={styles.modalHeroPct}>
-              <div>
-                <span className={styles.modalHeroLabel}>Overall Attendance</span>
-                <div className={styles.modalHeroValue}>
-                  {selectedPersonForModal.attendancePercentage}%
+        return (
+          <div className={styles.modalBackdrop} onClick={() => setSelectedPersonForModal(null)}>
+            <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+              <div className={styles.modalHeader}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 800 }}>
+                    {selectedPersonForModal.name}
+                  </h3>
+                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                    {selectedPersonForModal.codeOrRoll}
+                  </span>
                 </div>
-                <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                  Calculated from {selectedPersonForModal.totalSessions} total recorded sessions
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPersonForModal(null)}
+                  style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
+                >
+                  <X size={20} />
+                </button>
               </div>
 
-              <Award size={48} color="#2563eb" style={{ opacity: 0.8 }} />
-            </div>
+              {/* Hero Percentage Card */}
+              <div className={styles.modalHeroPct}>
+                <div>
+                  <span className={styles.modalHeroLabel}>Overall Attendance</span>
+                  <div className={styles.modalHeroValue}>
+                    {liveModalStats.percentage}%
+                  </div>
+                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                    Calculated from {liveModalStats.totalSessions} total recorded sessions
+                  </span>
+                </div>
 
-            {/* Breakdown Grid */}
-            <div className={styles.breakdownGrid}>
-              <div className={styles.breakdownBox}>
-                <span className={styles.breakdownBoxLabel}>Total Sessions</span>
-                <span className={styles.breakdownBoxValue}>{selectedPersonForModal.totalSessions}</span>
+                <Award size={48} color="#2563eb" style={{ opacity: 0.8 }} />
               </div>
-              <div className={styles.breakdownBox}>
-                <span className={styles.breakdownBoxLabel} style={{ color: "var(--success)" }}>Present</span>
-                <span className={styles.breakdownBoxValue} style={{ color: "var(--success)" }}>
-                  {selectedPersonForModal.presentCount}
-                </span>
-              </div>
-              <div className={styles.breakdownBox}>
-                <span className={styles.breakdownBoxLabel} style={{ color: "#dc2626" }}>Absent</span>
-                <span className={styles.breakdownBoxValue} style={{ color: "#dc2626" }}>
-                  {selectedPersonForModal.absentCount}
-                </span>
-              </div>
-              <div className={styles.breakdownBox}>
-                <span className={styles.breakdownBoxLabel} style={{ color: "#7c3aed" }}>On Leave</span>
-                <span className={styles.breakdownBoxValue} style={{ color: "#7c3aed" }}>
-                  {selectedPersonForModal.leaveCount}
-                </span>
-              </div>
-              <div className={styles.breakdownBox}>
-                <span className={styles.breakdownBoxLabel} style={{ color: "#d97706" }}>Late</span>
-                <span className={styles.breakdownBoxValue} style={{ color: "#d97706" }}>
-                  {selectedPersonForModal.lateCount}
-                </span>
-              </div>
-              <div className={styles.breakdownBox}>
-                <span className={styles.breakdownBoxLabel} style={{ color: "#2563eb" }}>Half Day</span>
-                <span className={styles.breakdownBoxValue} style={{ color: "#2563eb" }}>
-                  {selectedPersonForModal.halfDayCount}
-                </span>
-              </div>
-            </div>
 
-            {/* Recent History */}
-            {selectedPersonForModal.recentHistory && selectedPersonForModal.recentHistory.length > 0 && (
-              <div>
-                <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--foreground)", display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.5rem" }}>
-                  <Clock size={14} color="#2563eb" />
-                  Recent Sessions Log
-                </span>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", maxHeight: "160px", overflowY: "auto" }}>
-                  {selectedPersonForModal.recentHistory.map((item) => (
-                    <div
-                      key={item.id}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "0.45rem 0.75rem",
-                        background: "rgba(255, 255, 255, 0.02)",
-                        border: "1px solid var(--border-color)",
-                        borderRadius: "7px",
-                        fontSize: "0.825rem",
-                      }}
-                    >
-                      <span style={{ fontWeight: 600 }}>
-                        {new Date(item.date).toLocaleDateString()}
-                      </span>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        {item.remarks && (
-                          <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontStyle: "italic" }}>
-                            {item.remarks}
-                          </span>
-                        )}
-                        <span style={{ fontWeight: 700, fontSize: "0.75rem" }}>
+              {/* Breakdown Grid */}
+              <div className={styles.modalStatsGrid}>
+                <div className={styles.modalStatBox}>
+                  <span className={styles.modalStatNum} style={{ color: "#059669" }}>
+                    {liveModalStats.presentCount}
+                  </span>
+                  <span className={styles.modalStatName}>Present</span>
+                </div>
+                <div className={styles.modalStatBox}>
+                  <span className={styles.modalStatNum} style={{ color: "#2563eb" }}>
+                    {liveModalStats.halfDayCount}
+                  </span>
+                  <span className={styles.modalStatName}>Half Day</span>
+                </div>
+                <div className={styles.modalStatBox}>
+                  <span className={styles.modalStatNum} style={{ color: "#dc2626" }}>
+                    {liveModalStats.absentCount}
+                  </span>
+                  <span className={styles.modalStatName}>Absent</span>
+                </div>
+                <div className={styles.modalStatBox}>
+                  <span className={styles.modalStatNum} style={{ color: "#d97706" }}>
+                    {liveModalStats.lateCount}
+                  </span>
+                  <span className={styles.modalStatName}>Late</span>
+                </div>
+                <div className={styles.modalStatBox}>
+                  <span className={styles.modalStatNum} style={{ color: "#7c3aed" }}>
+                    {liveModalStats.leaveCount}
+                  </span>
+                  <span className={styles.modalStatName}>On Leave</span>
+                </div>
+              </div>
+
+              {/* Recent Sessions */}
+              {selectedPersonForModal.recentHistory && selectedPersonForModal.recentHistory.length > 0 && (
+                <div className={styles.modalHistorySection}>
+                  <span className={styles.modalHistoryTitle}>Recent Attendance Log</span>
+                  <div className={styles.modalHistoryList}>
+                    {selectedPersonForModal.recentHistory.map((item) => (
+                      <div key={item.id} className={styles.modalHistoryRow}>
+                        <span style={{ fontWeight: 600 }}>
+                          {new Date(item.date).toLocaleDateString("en-GB", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </span>
+                        <span
+                          className={styles.modalHistoryStatus}
+                          style={{
+                            background:
+                              item.status === "PRESENT" ? "rgba(16, 185, 129, 0.12)" :
+                              item.status === "HALF_DAY" ? "rgba(37, 99, 235, 0.12)" :
+                              item.status === "LATE" ? "rgba(245, 158, 11, 0.12)" :
+                              "rgba(239, 68, 68, 0.12)",
+                            color:
+                              item.status === "PRESENT" ? "#059669" :
+                              item.status === "HALF_DAY" ? "#2563eb" :
+                              item.status === "LATE" ? "#d97706" :
+                              "#dc2626",
+                          }}
+                        >
                           {item.status}
                         </span>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

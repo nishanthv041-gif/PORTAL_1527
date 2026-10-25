@@ -100,10 +100,8 @@ export default function AttendanceClient({
 
   return (
     <AttendanceSessionManager
-      title="Mark Attendance — Students"
-      subtitle="Record session & daily attendance status for students"
-      backUrl="/dashboard/admin/classes"
-      backLabel="← Back to Classes"
+      title="Student Attendance"
+      subtitle="Record session & daily attendance status"
       categories={categories}
       activeCategoryId={selectedClassId}
       onCategoryChange={handleCategoryChange}

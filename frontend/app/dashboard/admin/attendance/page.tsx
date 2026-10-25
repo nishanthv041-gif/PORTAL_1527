@@ -55,9 +55,10 @@ export default async function AdminAttendancePage({
       const lateCount = s.attendances.filter((a) => a.status === "LATE").length;
       const halfDayCount = s.attendances.filter((a) => a.status === "HALF_DAY").length;
 
+      const totalCredits = (presentCount * 1.0) + (lateCount * 1.0) + (halfDayCount * 0.5);
       const attendancePercentage =
         totalSessions > 0
-          ? ((presentCount / totalSessions) * 100).toFixed(1)
+          ? ((totalCredits / totalSessions) * 100).toFixed(1)
           : "100.0";
 
       return {
