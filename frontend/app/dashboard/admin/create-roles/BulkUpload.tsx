@@ -1,13 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import * as XLSX from "xlsx";
+import { useState, useEffect, useTransition } from "react";
 import { 
   Upload, Download, FileSpreadsheet, Loader2, AlertTriangle, 
-  CheckCircle2, Edit3, Trash2, Plus, X, Search, Check, Building2, Home
+  CheckCircle2, Edit3, Trash2, X, Search, Check, RefreshCw,
+  Clock, ShieldAlert, ArrowRight, Eye, AlertOctagon, HelpCircle,
+  FileCheck, Users, GraduationCap
 } from "lucide-react";
-import { bulkCreateUsers } from "@/backend/api/actions/dashboard/admin/create-roles/bulk-actions";
-import Link from "next/link";
+import { 
+  scanExcelFileAction, 
+  revalidateExcelRowsAction, 
+  commitExcelImportAction, 
+  getImportHistoryAction,
+  generateErrorReportAction
+} from "@/backend/api/actions/dashboard/admin/excel-import/actions";
+import { RowValidationResult, ExcelScanResult, ImportCommitResult } from "@/backend/lib/services/excelImportEngine";
 
 type ClassItem = {
   id: string;
@@ -15,42 +22,18 @@ type ClassItem = {
   section: string;
 };
 
-type ScannedProfile = {
-  _rowId: string;
-  _status: "VALID" | "ERROR";
-  _errors: string[];
-  
-  // Student & Parent fields
-  studentFirstName?: string;
-  studentLastName?: string;
-  studentRollNo?: string;
-  admissionNo?: string;
-  studentDob?: string;
-  classId?: string;
-  residenceType?: "HOSTEL" | "DAYSCHOLAR";
-  
-  parentFirstName?: string;
-  parentLastName?: string;
-  parentEmail?: string;
-  parentPassword?: string;
-  parentPhone?: string;
-  parentAddress?: string;
-  
-  // Teacher fields
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  password?: string;
-  phone?: string;
-  joiningDate?: string;
-  qualification?: string;
-  
-  [key: string]: unknown;
-};
-
-function isValidEmail(email?: string) {
-  if (!email) return false;
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+interface ImportHistoryItem {
+  id: string;
+  templateType: string;
+  fileName: string;
+  totalRows: number;
+  importedRows: number;
+  failedRows: number;
+  skippedRows: number;
+  status: string;
+  startedAt: Date | string;
+  completedAt?: Date | string | null;
+  errorSummary?: string | null;
 }
 
 export default function BulkUpload({ 
@@ -60,969 +43,1534 @@ export default function BulkUpload({
   type: "teacher" | "student";
   classes?: ClassItem[];
 }) {
+  const [isPending, startTransition] = useTransition();
+
+  // Active view tab in bulk upload
+  const [activeTab, setActiveTab] = useState<"UPLOAD" | "HISTORY">("UPLOAD");
+
+  // Upload & Scan state
   const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [scannedProfiles, setScannedProfiles] = useState<ScannedProfile[] | null>(null);
-  const [editingProfile, setEditingProfile] = useState<ScannedProfile | null>(null);
-  const [filter, setFilter] = useState<"ALL" | "ERRORS" | "VALID">("ALL");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [result, setResult] = useState<{ success?: boolean; count?: number; errors?: string[] } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [scanResult, setScanResult] = useState<ExcelScanResult | null>(null);
+  const [generalError, setGeneralError] = useState<string | null>(null);
 
-  const validateRow = (row: Partial<ScannedProfile>): { status: "VALID" | "ERROR"; errors: string[] } => {
-    const errors: string[] = [];
+  // Filter & Search
+  const [filter, setFilter] = useState<"ALL" | "ERRORS" | "VALID" | "DUPLICATES">("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
 
-    if (type === "student") {
-      if (!row.studentFirstName || !row.studentFirstName.toString().trim()) {
-        errors.push("Missing Student First Name");
-      }
-      if (!row.studentRollNo || !row.studentRollNo.toString().trim()) {
-        errors.push("Missing Roll Number");
-      }
-      if (!row.parentEmail || !isValidEmail(row.parentEmail)) {
-        errors.push("Missing or Invalid Parent Email");
-      }
-      if (!row.classId && classes.length > 0) {
-        errors.push("Missing Class & Section");
-      }
-    } else {
-      if (!row.firstName || !row.firstName.toString().trim()) {
-        errors.push("Missing Teacher First Name");
-      }
-      if (!row.email || !isValidEmail(row.email)) {
-        errors.push("Missing or Invalid Email");
-      }
-      if (!row.password || !row.password.toString().trim()) {
-        errors.push("Missing Password");
-      }
+  // Editing state
+  const [editingRow, setEditingRow] = useState<RowValidationResult | null>(null);
+  const [editFormData, setEditFormData] = useState<Record<string, any>>({});
+  const [editRowErrors, setEditRowErrors] = useState<Record<string, string>>({});
+
+  // Confirmation modal state
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [importMode, setImportMode] = useState<"VALID_ONLY" | "ALL_AFTER_CORRECTIONS">("VALID_ONLY");
+
+  // Commit execution state
+  const [commitResult, setCommitResult] = useState<ImportCommitResult | null>(null);
+
+  // History state
+  const [history, setHistory] = useState<ImportHistoryItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Available classes (combines props and those returned from scan)
+  const activeClasses = (scanResult?.availableClasses && scanResult.availableClasses.length > 0)
+    ? scanResult.availableClasses
+    : classes;
+
+  // Load history on tab switch
+  useEffect(() => {
+    if (activeTab === "HISTORY") {
+      fetchHistory();
     }
+  }, [activeTab]);
 
-    return {
-      status: errors.length === 0 ? "VALID" : "ERROR",
-      errors
-    };
-  };
-
-  const scanFile = async (selectedFile: File) => {
-    setLoading(true);
-    setResult(null);
-    setScannedProfiles(null);
-
+  const fetchHistory = async () => {
+    setLoadingHistory(true);
     try {
-      const data = await selectedFile.arrayBuffer();
-      const workbook = XLSX.read(data, { cellDates: true });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
-
-      if (rawRows.length === 0) {
-        setResult({ errors: ["File is empty or incorrectly formatted."] });
-        setLoading(false);
-        return;
+      const res = await getImportHistoryAction(25);
+      if (res.success && res.history) {
+        setHistory(res.history as unknown as ImportHistoryItem[]);
       }
-
-      const parsed: ScannedProfile[] = rawRows.map((raw, idx) => {
-        // Normalize keys
-        const norm: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(raw)) {
-          norm[k.trim().toLowerCase().replace(/[\s_]+/g, "")] = v;
-        }
-
-        const rowId = `row-${idx + 1}-${Date.now()}`;
-
-        if (type === "student") {
-          // Resolve class
-          const rawClass = (norm.classid || norm.class || norm.classname || norm.section || "") as string;
-          let matchedClassId = "";
-          if (rawClass) {
-            const classStr = rawClass.toString().trim().toLowerCase();
-            const found = classes.find(c => 
-              c.id.toLowerCase() === classStr ||
-              `${c.name} - ${c.section}`.toLowerCase() === classStr ||
-              `${c.name} - Section ${c.section}`.toLowerCase() === classStr ||
-              `${c.name} ${c.section}`.toLowerCase() === classStr ||
-              c.name.toLowerCase() === classStr
-            );
-            if (found) matchedClassId = found.id;
-            else if (classes.some(c => c.id === rawClass)) matchedClassId = rawClass;
-          }
-          if (!matchedClassId && classes.length === 1) {
-            matchedClassId = classes[0].id;
-          }
-
-          // Residence type (Hostel or Dayscholar)
-          const rawResidence = (norm.residencetype || norm.hostelordayscholar || norm.hostel || norm.type || "DAYSCHOLAR") as string;
-          const residenceType: "HOSTEL" | "DAYSCHOLAR" = rawResidence.toString().toUpperCase().includes("HOSTEL") 
-            ? "HOSTEL" 
-            : "DAYSCHOLAR";
-
-          const studentFirstName = (norm.studentfirstname || norm.firstname || norm.studentname?.toString().split(" ")[0] || "") as string;
-          const studentLastName = (norm.studentlastname || norm.lastname || norm.studentname?.toString().split(" ").slice(1).join(" ") || ".") as string;
-          const studentRollNo = (norm.studentrollno || norm.rollnumber || norm.rollno || "") as string;
-          const admissionNo = (norm.admissionno || norm.admissionnumber || (studentRollNo ? `ADM${studentRollNo}` : "")) as string;
-          
-          let studentDob = "";
-          if (norm.studentdob || norm.dateofbirth || norm.dob) {
-            const d = norm.studentdob || norm.dateofbirth || norm.dob;
-            studentDob = d instanceof Date ? d.toISOString().split("T")[0] : String(d);
-          }
-
-          const parentEmail = (norm.parentemail || norm.email || norm.parentusername || "") as string;
-          const parentPassword = (norm.parentpassword || norm.password || "Parent@123") as string;
-          const parentFirstName = (norm.parentfirstname || norm.parentname?.toString().split(" ")[0] || "Parent") as string;
-          const parentLastName = (norm.parentlastname || norm.parentname?.toString().split(" ").slice(1).join(" ") || ".") as string;
-          const parentPhone = (norm.parentphone || norm.phone || norm.mobile || "") as string;
-          const parentAddress = (norm.parentaddress || norm.address || "") as string;
-
-          const rowData: Partial<ScannedProfile> = {
-            _rowId: rowId,
-            studentFirstName,
-            studentLastName,
-            studentRollNo: studentRollNo ? String(studentRollNo) : "",
-            admissionNo: admissionNo ? String(admissionNo) : "",
-            studentDob,
-            classId: matchedClassId,
-            residenceType,
-            parentFirstName,
-            parentLastName,
-            parentEmail: parentEmail ? String(parentEmail).trim() : "",
-            parentPassword: String(parentPassword),
-            parentPhone: parentPhone ? String(parentPhone) : "",
-            parentAddress: String(parentAddress),
-          };
-
-          const validation = validateRow(rowData);
-          return {
-            ...rowData,
-            _status: validation.status,
-            _errors: validation.errors
-          } as ScannedProfile;
-        } else {
-          // Teacher
-          const email = (norm.email || norm.officialemail || norm.username || "") as string;
-          const password = (norm.password || norm.temppassword || "Teacher@123") as string;
-          const firstName = (norm.firstname || norm.first_name || norm.name?.toString().split(" ")[0] || "") as string;
-          const lastName = (norm.lastname || norm.last_name || norm.name?.toString().split(" ").slice(1).join(" ") || ".") as string;
-          const phone = (norm.phone || norm.phonenumber || norm.mobile || "") as string;
-          const qualification = (norm.qualification || norm.degree || norm.department || "") as string;
-          
-          let joiningDate = "";
-          if (norm.joiningdate || norm.joindate) {
-            const d = norm.joiningdate || norm.joindate;
-            joiningDate = d instanceof Date ? d.toISOString().split("T")[0] : String(d);
-          }
-
-          const rowData: Partial<ScannedProfile> = {
-            _rowId: rowId,
-            firstName,
-            lastName,
-            email: email ? String(email).trim() : "",
-            password: String(password),
-            phone: phone ? String(phone) : "",
-            qualification: String(qualification),
-            joiningDate
-          };
-
-          const validation = validateRow(rowData);
-          return {
-            ...rowData,
-            _status: validation.status,
-            _errors: validation.errors
-          } as ScannedProfile;
-        }
-      });
-
-      setScannedProfiles(parsed);
-    } catch (err) {
-      setResult({ errors: [err instanceof Error ? err.message : "Failed to scan file"] });
-    }
-    setLoading(false);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const selected = e.target.files[0];
-      setFile(selected);
-      scanFile(selected);
+    } catch {
+      // Ignore
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
-  const handleSaveEditedProfile = (updatedProfile: ScannedProfile) => {
-    if (!scannedProfiles) return;
-    const validation = validateRow(updatedProfile);
-    const finalizedProfile: ScannedProfile = {
-      ...updatedProfile,
-      _status: validation.status,
-      _errors: validation.errors
-    };
+  // Template download helpers
+  const templatePath = type === "student" 
+    ? "/templates/student_upload_template.xlsx" 
+    : "/templates/teacher_upload_template.xlsx";
+  const templateFilename = type === "student" 
+    ? "student_parent_upload_template.xlsx" 
+    : "teacher_upload_template.xlsx";
 
-    setScannedProfiles(prev => 
-      prev ? prev.map(p => p._rowId === finalizedProfile._rowId ? finalizedProfile : p) : []
-    );
-    setEditingProfile(null);
-  };
+  // Handle file drop & select
+  const handleFileChange = (selectedFile: File) => {
+    setGeneralError(null);
+    setCommitResult(null);
 
-  const handleDeleteProfile = (rowId: string) => {
-    if (!confirm("Are you sure you want to remove this profile from import?")) return;
-    setScannedProfiles(prev => prev ? prev.filter(p => p._rowId !== rowId) : []);
-  };
-
-  const handleAddNewBlankProfile = () => {
-    const newId = `row-manual-${Date.now()}`;
-    const newProfile: ScannedProfile = type === "student" ? {
-      _rowId: newId,
-      _status: "ERROR",
-      _errors: ["Missing Student First Name", "Missing Roll Number", "Missing or Invalid Parent Email"],
-      studentFirstName: "",
-      studentLastName: "",
-      studentRollNo: "",
-      admissionNo: "",
-      classId: classes[0]?.id || "",
-      residenceType: "DAYSCHOLAR",
-      parentFirstName: "",
-      parentLastName: "",
-      parentEmail: "",
-      parentPassword: "Parent@123",
-      parentPhone: "",
-      parentAddress: ""
-    } : {
-      _rowId: newId,
-      _status: "ERROR",
-      _errors: ["Missing Teacher First Name", "Missing or Invalid Email"],
-      firstName: "",
-      lastName: "",
-      email: "",
-      password: "Teacher@123",
-      phone: "",
-      qualification: ""
-    };
-
-    setScannedProfiles(prev => prev ? [newProfile, ...prev] : [newProfile]);
-    setEditingProfile(newProfile);
-  };
-
-  const handleUploadValidProfiles = async (onlyValid: boolean = false) => {
-    if (!scannedProfiles || scannedProfiles.length === 0) return;
-
-    const targets = onlyValid 
-      ? scannedProfiles.filter(p => p._status === "VALID")
-      : scannedProfiles;
-
-    if (targets.length === 0) {
-      alert("No valid profiles to import. Please fix the highlighted mistakes first.");
+    if (!selectedFile.name.toLowerCase().endsWith(".xlsx") && !selectedFile.name.toLowerCase().endsWith(".xls")) {
+      setGeneralError("Invalid file type. Please upload an Excel workbook (.xlsx or .xls).");
       return;
     }
 
-    setLoading(true);
-    setResult(null);
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      setGeneralError("File size exceeds 10MB limit.");
+      return;
+    }
 
-    try {
-      const payload = targets.map(p => {
-        const { _rowId, _status, _errors, ...data } = p;
-        return data;
-      });
+    setFile(selectedFile);
+    performScan(selectedFile);
+  };
 
-      const res = await bulkCreateUsers(type, payload as Record<string, unknown>[]);
-      if (res.error) {
-        setResult({ errors: [res.error] });
+  const performScan = (targetFile: File) => {
+    startTransition(async () => {
+      setGeneralError(null);
+      setScanResult(null);
+
+      const formData = new FormData();
+      formData.append("file", targetFile);
+
+      const res = await scanExcelFileAction(formData, type);
+      if (!res.success) {
+        setGeneralError(res.error || "Failed to scan Excel file.");
+        if (res.result) setScanResult(res.result);
+      } else if (res.result) {
+        setScanResult(res.result);
+      }
+    });
+  };
+
+  // Revalidate modified rows
+  const handleRevalidateAll = () => {
+    if (!scanResult) return;
+    startTransition(async () => {
+      const rawRows = scanResult.rows.map(r => r.data);
+      const res = await revalidateExcelRowsAction(rawRows, type);
+      if (res.success && res.result) {
+        setScanResult(res.result);
       } else {
-        setResult({ success: true, count: res.count, errors: res.errors });
-        // If some succeeded, clear imported ones from list
-        if (res.count && res.count > 0 && scannedProfiles) {
-          if (onlyValid) {
-            setScannedProfiles(prev => prev ? prev.filter(p => p._status !== "VALID") : []);
-          } else {
-            setScannedProfiles([]);
-          }
-        }
+        setGeneralError(res.error || "Revalidation failed.");
+      }
+    });
+  };
+
+  // Download error report (.csv)
+  const handleDownloadErrorReport = async () => {
+    if (!scanResult) return;
+    try {
+      const res = await generateErrorReportAction(scanResult.rows);
+      if (res.success && res.csvContent) {
+        const blob = new Blob([res.csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `excel_import_errors_${type}_${Date.now()}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        alert(res.error || "Failed to generate error report.");
       }
     } catch (err) {
-      setResult({ errors: [err instanceof Error ? err.message : "Failed to import records"] });
+      alert("Failed to download error report.");
     }
-    setLoading(false);
   };
 
-  const downloadTemplate = () => {
-    const data = type === "teacher" 
-      ? [{ 
-          firstName: "John", 
-          lastName: "Doe", 
-          email: "john.teacher@example.com", 
-          password: "password123", 
-          phone: "9876543210", 
-          joiningDate: "2026-06-01", 
-          qualification: "M.Sc., B.Ed." 
-        }]
-      : [{ 
-          studentFirstName: "Jimmy", 
-          studentLastName: "Doe", 
-          studentRollNo: "101", 
-          admissionNo: "ADM101", 
-          studentDob: "2010-05-15", 
-          class: classes[0] ? `${classes[0].name} - ${classes[0].section}` : "Grade 10 - A", 
-          residenceType: "Dayscholar (or Hostel)", 
-          parentFirstName: "Jane", 
-          parentLastName: "Doe", 
-          parentEmail: "jane.parent@example.com", 
-          parentPassword: "password123", 
-          parentPhone: "9876543210", 
-          parentAddress: "123 Main Street" 
-        }];
-    
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Template");
-    XLSX.writeFile(wb, `${type}_upload_template.xlsx`);
+  // Open Edit Modal for a row
+  const openEditRow = (row: RowValidationResult) => {
+    setEditingRow(row);
+    setEditFormData({ ...row.data });
+    setEditRowErrors({ ...row.fieldErrors });
   };
 
-  const errorCount = scannedProfiles ? scannedProfiles.filter(p => p._status === "ERROR").length : 0;
-  const validCount = scannedProfiles ? scannedProfiles.filter(p => p._status === "VALID").length : 0;
-  const totalCount = scannedProfiles ? scannedProfiles.length : 0;
+  // Save row changes & revalidate in-place
+  const handleSaveRow = async () => {
+    if (!editingRow || !scanResult) return;
 
-  const filteredProfiles = scannedProfiles ? scannedProfiles.filter(p => {
-    if (filter === "ERRORS" && p._status !== "ERROR") return false;
-    if (filter === "VALID" && p._status !== "VALID") return false;
+    startTransition(async () => {
+      // Update data in scanResult.rows
+      const updatedRows = scanResult.rows.map(r => {
+        if (r.rowId === editingRow.rowId) {
+          return editFormData;
+        }
+        return r.data;
+      });
 
-    if (searchTerm) {
-      const q = searchTerm.toLowerCase();
-      if (type === "student") {
-        const name = `${p.studentFirstName} ${p.studentLastName}`.toLowerCase();
-        const roll = (p.studentRollNo || "").toLowerCase();
-        const email = (p.parentEmail || "").toLowerCase();
-        return name.includes(q) || roll.includes(q) || email.includes(q);
+      const res = await revalidateExcelRowsAction(updatedRows, type);
+      if (res.success && res.result) {
+        setScanResult(res.result);
+        setEditingRow(null);
       } else {
-        const name = `${p.firstName} ${p.lastName}`.toLowerCase();
-        const email = (p.email || "").toLowerCase();
-        return name.includes(q) || email.includes(q);
+        alert(res.error || "Failed to revalidate corrected row.");
       }
+    });
+  };
+
+  // Handle final import execution
+  const handleExecuteImport = () => {
+    if (!scanResult) return;
+
+    // Filter rows eligible for import
+    const rowsToImport = scanResult.rows
+      .filter(r => r.isReadyToImport && !r.isSampleRow)
+      .map(r => r.data);
+
+    if (rowsToImport.length === 0) {
+      alert("No valid rows ready to import.");
+      return;
     }
+
+    setShowConfirmModal(false);
+
+    startTransition(async () => {
+      setGeneralError(null);
+      const res = await commitExcelImportAction(
+        rowsToImport, 
+        type, 
+        file?.name || "upload.xlsx", 
+        file?.size || 0
+      );
+
+      if (res.result) {
+        setCommitResult(res.result);
+        if (res.result.success || res.result.importedCount > 0) {
+          // Reset scan result on full or partial success so user sees the report
+          setScanResult(null);
+          setFile(null);
+        }
+      } else {
+        setGeneralError(res.error || "Import failed during database execution.");
+      }
+    });
+  };
+
+  // Filtered rows for the preview table
+  const displayedRows = (scanResult?.rows || []).filter(r => {
+    // Tab filter
+    if (filter === "ERRORS" && r.status === "VALID") return false;
+    if (filter === "VALID" && r.status !== "VALID") return false;
+    if (filter === "DUPLICATES" && r.status !== "DUPLICATE_IN_FILE" && r.status !== "CONFLICT_DB") return false;
+
+    // Search query filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const searchable = [
+        String(r.excelRowNumber),
+        r.data.studentFirstName,
+        r.data.studentLastName,
+        r.data.studentRollNo,
+        r.data.admissionNo,
+        r.data.parentEmail,
+        r.data.firstName,
+        r.data.lastName,
+        r.data.email
+      ].filter(Boolean).join(" ").toLowerCase();
+
+      return searchable.includes(q);
+    }
+
     return true;
-  }) : [];
+  });
 
   return (
-    <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '14px', padding: '2rem', marginTop: '2.5rem', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div>
-          <h3 style={{ fontSize: '1.35rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--foreground)' }}>
-            <FileSpreadsheet className="text-primary" size={24} /> 
-            Smart Bulk Upload: {type === 'teacher' ? 'Teachers' : 'Parents & Students'}
-          </h3>
-          <p style={{ color: 'var(--text-secondary)', marginTop: '0.35rem', fontSize: '0.9rem', marginBottom: 0 }}>
-            Upload an Excel (.xlsx/.xls) or CSV file. The portal scans details, catches missing/mistake fields, and enables instant inline editing before saving.
-          </p>
-        </div>
-
-        <button 
-          onClick={downloadTemplate}
-          style={{ 
-            padding: '0.6rem 1.1rem', 
-            background: 'transparent', 
-            color: 'var(--primary)', 
-            border: '1px solid var(--primary)',
-            borderRadius: '8px', 
-            fontWeight: 600,
-            fontSize: '0.875rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            transition: 'background 0.2s'
-          }}
-        >
-          <Download size={16} /> Download Template
-        </button>
-      </div>
-
-      {/* File Select & Upload Zone */}
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: '1rem', 
-        flexWrap: 'wrap', 
-        backgroundColor: 'rgba(0,0,0,0.02)', 
-        border: '2px dashed var(--border-color)', 
-        padding: '1.25rem', 
-        borderRadius: '10px' 
+    <div style={{
+      marginTop: "2.5rem",
+      backgroundColor: "var(--card-bg, #ffffff)",
+      borderRadius: "16px",
+      border: "1px solid var(--border-color, #e5e7eb)",
+      boxShadow: "0 4px 20px -2px rgba(0,0,0,0.05)",
+      overflow: "hidden"
+    }}>
+      {/* Header Bar */}
+      <div style={{
+        padding: "1.5rem 2rem",
+        borderBottom: "1px solid var(--border-color, #e5e7eb)",
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "1rem",
+        background: "linear-gradient(to right, rgba(99, 102, 241, 0.03), transparent)"
       }}>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: '260px' }}>
-          <input 
-            type="file" 
-            accept=".xlsx, .xls, .csv" 
-            onChange={handleFileChange}
-            id={`file-upload-${type}`}
-            style={{ display: 'none' }}
-          />
-          <label 
-            htmlFor={`file-upload-${type}`}
-            style={{
-              padding: '0.65rem 1.25rem',
-              backgroundColor: 'var(--background)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: 500,
-              fontSize: '0.875rem',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              color: 'var(--foreground)'
-            }}
-          >
-            <Upload size={16} />
-            {file ? file.name : "Select Excel/CSV File"}
-          </label>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-            {file ? `(${Math.round(file.size / 1024)} KB) - Auto-scanned` : "Supports .xlsx, .xls, .csv"}
-          </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <div style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "12px",
+            backgroundColor: type === "student" ? "rgba(16, 185, 129, 0.1)" : "rgba(99, 102, 241, 0.1)",
+            color: type === "student" ? "#10b981" : "#6366f1",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}>
+            <FileSpreadsheet size={26} />
+          </div>
+          <div>
+            <h2 style={{ fontSize: "1.25rem", fontWeight: 700, margin: 0, color: "var(--foreground)" }}>
+              {type === "student" ? "Intelligent Student & Parent Excel Import" : "Intelligent Teacher Excel Import"}
+            </h2>
+            <p style={{ margin: "0.25rem 0 0", fontSize: "0.875rem", color: "var(--text-secondary, #6b7280)" }}>
+              {type === "student" 
+                ? "Upload the combined student-parent workbook. Automatically links siblings, validates classes, and detects duplicates."
+                : "Upload official teacher spreadsheet. Validates emails, qualifications, and provisions teacher credentials securely."
+              }
+            </p>
+          </div>
         </div>
 
-        {file && (
-          <button 
-            onClick={() => scanFile(file)}
-            disabled={loading}
+        {/* View Switcher Tabs */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <button
+            onClick={() => setActiveTab("UPLOAD")}
             style={{
-              padding: '0.65rem 1.2rem',
-              backgroundColor: 'var(--background)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: '0.875rem',
+              padding: "0.5rem 1rem",
+              borderRadius: "8px",
+              border: "1px solid",
+              borderColor: activeTab === "UPLOAD" ? "var(--primary, #6366f1)" : "var(--border-color, #e5e7eb)",
+              backgroundColor: activeTab === "UPLOAD" ? "var(--primary-bg, rgba(99, 102, 241, 0.1))" : "transparent",
+              color: activeTab === "UPLOAD" ? "var(--primary, #6366f1)" : "var(--foreground)",
               fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem'
+              fontSize: "0.875rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem"
             }}
           >
-            {loading ? <Loader2 className="animate-spin" size={16} /> : null}
-            Re-scan File
+            <Upload size={16} /> Import Workflow
           </button>
-        )}
+          <button
+            onClick={() => setActiveTab("HISTORY")}
+            style={{
+              padding: "0.5rem 1rem",
+              borderRadius: "8px",
+              border: "1px solid",
+              borderColor: activeTab === "HISTORY" ? "var(--primary, #6366f1)" : "var(--border-color, #e5e7eb)",
+              backgroundColor: activeTab === "HISTORY" ? "var(--primary-bg, rgba(99, 102, 241, 0.1))" : "transparent",
+              color: activeTab === "HISTORY" ? "var(--primary, #6366f1)" : "var(--foreground)",
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem"
+            }}
+          >
+            <Clock size={16} /> Import History & Audit
+          </button>
+        </div>
       </div>
 
-      {/* Global Result notification */}
-      {result && (
-        <div style={{ 
-          marginTop: '1.5rem', 
-          padding: '1.25rem', 
-          borderRadius: '10px', 
-          background: result.success ? (result.errors?.length ? 'var(--warning-bg)' : 'var(--success-bg)') : 'var(--danger-bg)',
-          border: `1px solid ${result.success ? 'var(--success)' : 'var(--danger)'}`
-        }}>
-          {result.success && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--success)', fontWeight: 700, fontSize: '1rem' }}>
-                <CheckCircle2 size={22} />
-                Successfully imported and created {result.count} {type === 'student' ? 'students & parents' : 'teachers'}!
+      {/* Main Content Area */}
+      <div style={{ padding: "2rem" }}>
+
+        {/* ======================================================== */}
+        {/* VIEW 1: IMPORT WORKFLOW */}
+        {/* ======================================================== */}
+        {activeTab === "UPLOAD" && (
+          <div>
+            {/* Template Download Bar */}
+            <div style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "1rem",
+              padding: "1rem 1.5rem",
+              backgroundColor: "rgba(99, 102, 241, 0.05)",
+              border: "1px solid rgba(99, 102, 241, 0.2)",
+              borderRadius: "12px",
+              marginBottom: "1.75rem"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <FileCheck size={20} color="#6366f1" />
+                <span style={{ fontSize: "0.875rem", color: "var(--foreground)" }}>
+                  Need the official template with exact column headers?
+                </span>
               </div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <Link 
-                  href={type === 'student' ? '/dashboard/admin/students' : '/dashboard/admin/teachers'}
-                  style={{
-                    padding: '0.45rem 1rem',
-                    backgroundColor: 'var(--success)',
-                    color: '#fff',
-                    borderRadius: '6px',
-                    textDecoration: 'none',
-                    fontSize: '0.875rem',
-                    fontWeight: 600
-                  }}
-                >
-                  View in {type === 'student' ? 'Students List' : 'Teachers List'}
-                </Link>
+              <a
+                href={templatePath}
+                download={templateFilename}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  padding: "0.5rem 1rem",
+                  backgroundColor: "var(--primary, #6366f1)",
+                  color: "#ffffff",
+                  borderRadius: "8px",
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                  boxShadow: "0 2px 4px rgba(99, 102, 241, 0.2)"
+                }}
+              >
+                <Download size={16} /> Download {type === "student" ? "Student-Parent" : "Teacher"} Template (.xlsx)
+              </a>
+            </div>
+
+            {/* General Error Notification */}
+            {generalError && (
+              <div style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "0.75rem",
+                padding: "1rem 1.25rem",
+                backgroundColor: "rgba(239, 68, 68, 0.1)",
+                border: "1px solid rgba(239, 68, 68, 0.3)",
+                borderRadius: "10px",
+                marginBottom: "1.5rem",
+                color: "#dc2626"
+              }}>
+                <AlertOctagon size={20} style={{ flexShrink: 0, marginTop: "2px" }} />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: "0.9375rem" }}>Scan & Validation Alert</div>
+                  <div style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>{generalError}</div>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {result.errors && result.errors.length > 0 && (
-            <div style={{ marginTop: result.success ? '1rem' : 0 }}>
-              <p style={{ color: 'var(--danger)', fontWeight: 600, margin: '0 0 0.5rem 0' }}>Issues reported by server:</p>
-              <ul style={{ color: 'var(--danger)', fontSize: '0.875rem', paddingLeft: '1.5rem', margin: 0 }}>
-                {result.errors.map((err, i) => <li key={i}>{err}</li>)}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+            {/* Commit Success Report Screen */}
+            {commitResult && (
+              <div style={{
+                padding: "2rem",
+                backgroundColor: commitResult.success ? "rgba(16, 185, 129, 0.05)" : "rgba(245, 158, 11, 0.05)",
+                border: `1px solid ${commitResult.success ? "rgba(16, 185, 129, 0.3)" : "rgba(245, 158, 11, 0.3)"}`,
+                borderRadius: "12px",
+                marginBottom: "2rem"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem" }}>
+                  <div style={{
+                    width: "48px",
+                    height: "48px",
+                    borderRadius: "50%",
+                    backgroundColor: commitResult.success ? "rgba(16, 185, 129, 0.2)" : "rgba(245, 158, 11, 0.2)",
+                    color: commitResult.success ? "#10b981" : "#f59e0b",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}>
+                    <CheckCircle2 size={28} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "var(--foreground)" }}>
+                      {commitResult.success ? "Import Completed Successfully!" : "Import Completed with Partial Results"}
+                    </h3>
+                    <p style={{ margin: "0.25rem 0 0", fontSize: "0.875rem", color: "var(--text-secondary)" }}>
+                      Batch ID: <code>{commitResult.batchId}</code> • Database transaction successfully committed.
+                    </p>
+                  </div>
+                </div>
 
-      {/* Scanned Profiles Interactive Area */}
-      {scannedProfiles && (
-        <div style={{ marginTop: '2rem' }}>
-          {/* Summary Dashboard Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-            <div style={{ padding: '1rem', borderRadius: '10px', background: 'var(--card)', border: '1px solid var(--border-color)' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Total Scanned</span>
-              <div style={{ fontSize: '1.75rem', fontWeight: 700, marginTop: '0.25rem', color: 'var(--foreground)' }}>{totalCount}</div>
-            </div>
+                {/* Metric Summary */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                  gap: "1rem",
+                  margin: "1.5rem 0"
+                }}>
+                  <div style={{ padding: "1rem", background: "var(--card-bg)", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>IMPORTED RECORDS</div>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#10b981", marginTop: "0.25rem" }}>{commitResult.importedCount}</div>
+                  </div>
+                  <div style={{ padding: "1rem", background: "var(--card-bg)", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>SKIPPED ROWS</div>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#6b7280", marginTop: "0.25rem" }}>{commitResult.skippedCount}</div>
+                  </div>
+                  <div style={{ padding: "1rem", background: "var(--card-bg)", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>FAILED ROWS</div>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 700, color: commitResult.failedCount > 0 ? "#ef4444" : "#6b7280", marginTop: "0.25rem" }}>
+                      {commitResult.failedCount}
+                    </div>
+                  </div>
+                </div>
 
-            <div style={{ padding: '1rem', borderRadius: '10px', background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--success)', textTransform: 'uppercase', fontWeight: 600 }}>Ready to Import</span>
-              <div style={{ fontSize: '1.75rem', fontWeight: 700, marginTop: '0.25rem', color: 'var(--success)' }}>{validCount}</div>
-            </div>
-
-            <div style={{ padding: '1rem', borderRadius: '10px', background: errorCount > 0 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(0,0,0,0.02)', border: `1px solid ${errorCount > 0 ? 'rgba(239, 68, 68, 0.3)' : 'var(--border-color)'}` }}>
-              <span style={{ fontSize: '0.8rem', color: errorCount > 0 ? 'var(--danger)' : 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Mistakes to Fix</span>
-              <div style={{ fontSize: '1.75rem', fontWeight: 700, marginTop: '0.25rem', color: errorCount > 0 ? 'var(--danger)' : 'var(--foreground)' }}>{errorCount}</div>
-            </div>
-          </div>
-
-          {/* Action Bar & Filter */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <button 
-                onClick={() => setFilter("ALL")}
-                style={{
-                  padding: '0.45rem 0.9rem',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border-color)',
-                  backgroundColor: filter === "ALL" ? 'var(--primary)' : 'transparent',
-                  color: filter === "ALL" ? 'var(--primary-fg)' : 'inherit',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer'
-                }}
-              >
-                All ({totalCount})
-              </button>
-
-              <button 
-                onClick={() => setFilter("ERRORS")}
-                style={{
-                  padding: '0.45rem 0.9rem',
-                  borderRadius: '6px',
-                  border: `1px solid ${filter === "ERRORS" ? 'var(--danger)' : 'var(--border-color)'}`,
-                  backgroundColor: filter === "ERRORS" ? 'var(--danger)' : 'transparent',
-                  color: filter === "ERRORS" ? '#fff' : 'var(--danger)',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem'
-                }}
-              >
-                <AlertTriangle size={15} /> Needs Fixing ({errorCount})
-              </button>
-
-              <button 
-                onClick={() => setFilter("VALID")}
-                style={{
-                  padding: '0.45rem 0.9rem',
-                  borderRadius: '6px',
-                  border: `1px solid ${filter === "VALID" ? 'var(--success)' : 'var(--border-color)'}`,
-                  backgroundColor: filter === "VALID" ? 'var(--success)' : 'transparent',
-                  color: filter === "VALID" ? '#fff' : 'var(--success)',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem'
-                }}
-              >
-                <CheckCircle2 size={15} /> Ready ({validCount})
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <div style={{ position: 'relative', width: '220px' }}>
-                <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
-                <input 
-                  type="text" 
-                  placeholder="Filter scanned list..." 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  style={{ width: '100%', padding: '0.45rem 0.75rem 0.45rem 2rem', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', fontSize: '0.85rem' }}
-                />
-              </div>
-
-              <button 
-                onClick={handleAddNewBlankProfile}
-                style={{
-                  padding: '0.5rem 0.9rem',
-                  backgroundColor: 'transparent',
-                  border: '1px dashed var(--primary)',
-                  color: 'var(--primary)',
-                  borderRadius: '6px',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  cursor: 'pointer'
-                }}
-              >
-                <Plus size={16} /> Add Profile
-              </button>
-
-              {validCount > 0 && (
-                <button 
-                  onClick={() => handleUploadValidProfiles(errorCount > 0)}
-                  disabled={loading}
-                  style={{
-                    padding: '0.55rem 1.4rem',
-                    backgroundColor: 'var(--primary)',
-                    color: 'var(--primary-fg)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontWeight: 600,
-                    fontSize: '0.875rem',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)'
-                  }}
-                >
-                  {loading ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
-                  {errorCount === 0 
-                    ? `Save & Import All ${validCount} Records` 
-                    : `Import ${validCount} Valid Records (Skip Mistakes)`}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Scanned Table */}
-          <div style={{ overflowX: 'auto', width: '100%', maxWidth: '100%', minWidth: 0, WebkitOverflowScrolling: 'touch', border: '1px solid var(--border-color)', borderRadius: '10px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem', minWidth: '750px' }}>
-              <thead>
-                <tr style={{ background: 'rgba(0,0,0,0.02)', borderBottom: '1px solid var(--border-color)' }}>
-                  <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Status</th>
-                  {type === 'student' ? (
-                    <>
-                      <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Student Name</th>
-                      <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Roll No.</th>
-                      <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Class</th>
-                      <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Hostel / Dayscholar</th>
-                      <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Parent Email</th>
-                      <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Parent Phone</th>
-                    </>
-                  ) : (
-                    <>
-                      <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Teacher Name</th>
-                      <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Official Email</th>
-                      <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Phone</th>
-                      <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Qualification</th>
-                    </>
-                  )}
-                  <th style={{ padding: '0.85rem 1rem', fontWeight: 600, textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProfiles.map((p, idx) => {
-                  const hasError = p._status === "ERROR";
-                  const classObj = classes.find(c => c.id === p.classId);
-
-                  return (
-                    <tr 
-                      key={p._rowId || idx}
-                      style={{ 
-                        borderBottom: '1px solid var(--border-color)',
-                        backgroundColor: hasError ? 'rgba(239, 68, 68, 0.04)' : 'transparent',
-                        transition: 'background 0.15s'
-                      }}
-                    >
-                      {/* Status & Mistake summary */}
-                      <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
-                        {hasError ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                            <span style={{ 
-                              display: 'inline-flex', 
-                              alignItems: 'center', 
-                              gap: '0.35rem', 
-                              color: 'var(--danger)', 
-                              fontSize: '0.75rem', 
+                {/* List of Created Accounts */}
+                {commitResult.createdAccounts && commitResult.createdAccounts.length > 0 && (
+                  <div style={{ marginTop: "1.5rem" }}>
+                    <h4 style={{ fontSize: "0.9375rem", fontWeight: 600, marginBottom: "0.75rem" }}>
+                      Created & Linked Accounts ({commitResult.createdAccounts.length}):
+                    </h4>
+                    <div style={{
+                      maxHeight: "180px",
+                      overflowY: "auto",
+                      backgroundColor: "var(--card-bg)",
+                      border: "1px solid var(--border-color)",
+                      borderRadius: "8px",
+                      padding: "0.5rem"
+                    }}>
+                      {commitResult.createdAccounts.map((acc, idx) => (
+                        <div key={idx} style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "0.4rem 0.75rem",
+                          fontSize: "0.8125rem",
+                          borderBottom: idx !== commitResult.createdAccounts.length - 1 ? "1px solid var(--border-color)" : "none"
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span style={{
+                              padding: "0.15rem 0.4rem",
+                              borderRadius: "4px",
                               fontWeight: 700,
-                              backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                              padding: '0.2rem 0.5rem',
-                              borderRadius: '999px',
-                              width: 'fit-content'
+                              fontSize: "0.6875rem",
+                              backgroundColor: acc.role === "STUDENT" ? "rgba(16, 185, 129, 0.1)" : (acc.role === "PARENT" ? "rgba(59, 130, 246, 0.1)" : "rgba(139, 92, 246, 0.1)"),
+                              color: acc.role === "STUDENT" ? "#10b981" : (acc.role === "PARENT" ? "#3b82f6" : "#8b5cf6")
                             }}>
-                              <AlertTriangle size={13} /> Missing Details
+                              {acc.role}
                             </span>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--danger)', opacity: 0.9 }}>
-                              {p._errors.join(", ")}
-                            </span>
+                            <span style={{ fontWeight: 500 }}>{acc.name}</span>
                           </div>
-                        ) : (
-                          <span style={{ 
-                            display: 'inline-flex', 
-                            alignItems: 'center', 
-                            gap: '0.35rem', 
-                            color: 'var(--success)', 
-                            fontSize: '0.75rem', 
-                            fontWeight: 700,
-                            backgroundColor: 'rgba(34, 197, 94, 0.12)',
-                            padding: '0.2rem 0.5rem',
-                            borderRadius: '999px'
-                          }}>
-                            <CheckCircle2 size={13} /> Ready
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Content cells */}
-                      {type === 'student' ? (
-                        <>
-                          <td style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>
-                            {p.studentFirstName ? `${p.studentFirstName} ${p.studentLastName || ""}` : (
-                              <span style={{ color: 'var(--danger)', fontStyle: 'italic' }}>Required *</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '0.85rem 1rem' }}>
-                            {p.studentRollNo || <span style={{ color: 'var(--danger)', fontStyle: 'italic' }}>Missing *</span>}
-                          </td>
-                          <td style={{ padding: '0.85rem 1rem' }}>
-                            {classObj ? `${classObj.name} - ${classObj.section}` : (
-                              <span style={{ color: 'var(--danger)', fontStyle: 'italic' }}>Not Selected *</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '0.85rem 1rem' }}>
-                            <span style={{ 
-                              display: 'inline-flex', 
-                              alignItems: 'center', 
-                              gap: '0.35rem',
-                              padding: '0.2rem 0.5rem',
-                              borderRadius: '6px',
-                              fontSize: '0.75rem',
-                              fontWeight: 600,
-                              backgroundColor: p.residenceType === 'HOSTEL' ? 'rgba(245, 158, 11, 0.12)' : 'rgba(59, 130, 246, 0.12)',
-                              color: p.residenceType === 'HOSTEL' ? 'var(--warning)' : 'var(--primary)'
-                            }}>
-                              {p.residenceType === 'HOSTEL' ? <Building2 size={12} /> : <Home size={12} />}
-                              {p.residenceType === 'HOSTEL' ? 'Hostel' : 'Dayscholar'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '0.85rem 1rem' }}>
-                            {p.parentEmail ? p.parentEmail : <span style={{ color: 'var(--danger)', fontStyle: 'italic' }}>Missing *</span>}
-                          </td>
-                          <td style={{ padding: '0.85rem 1rem', opacity: 0.8 }}>
-                            {p.parentPhone || "—"}
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>
-                            {p.firstName ? `${p.firstName} ${p.lastName || ""}` : (
-                              <span style={{ color: 'var(--danger)', fontStyle: 'italic' }}>Required *</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '0.85rem 1rem' }}>
-                            {p.email || <span style={{ color: 'var(--danger)', fontStyle: 'italic' }}>Missing *</span>}
-                          </td>
-                          <td style={{ padding: '0.85rem 1rem', opacity: 0.8 }}>
-                            {p.phone || "—"}
-                          </td>
-                          <td style={{ padding: '0.85rem 1rem', opacity: 0.8 }}>
-                            {p.qualification || "—"}
-                          </td>
-                        </>
-                      )}
-
-                      {/* Actions */}
-                      <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <button 
-                            onClick={() => setEditingProfile({ ...p })}
-                            title="Edit and fix mistake"
-                            style={{
-                              padding: '0.35rem 0.75rem',
-                              backgroundColor: hasError ? 'var(--primary)' : 'transparent',
-                              color: hasError ? 'var(--primary-fg)' : 'var(--primary)',
-                              border: '1px solid var(--primary)',
-                              borderRadius: '6px',
-                              fontSize: '0.8rem',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.3rem'
-                            }}
-                          >
-                            <Edit3 size={13} /> {hasError ? "Fix Mistake" : "Edit"}
-                          </button>
-
-                          <button 
-                            onClick={() => handleDeleteProfile(p._rowId)}
-                            title="Remove row"
-                            style={{
-                              padding: '0.35rem',
-                              backgroundColor: 'transparent',
-                              color: 'var(--danger)',
-                              border: 'none',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                              opacity: 0.7
-                            }}
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          <span style={{ color: "var(--text-secondary)", fontFamily: "monospace" }}>{acc.identifier}</span>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {filteredProfiles.length === 0 && (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-secondary)' }}>
-                      No records matching the filter.
-                    </td>
-                  </tr>
+                      ))}
+                    </div>
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
-      {/* Mistake Edit Modal / Drawer */}
-      {editingProfile && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          backdropFilter: 'blur(3px)',
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '1rem'
-        }}>
-          <div style={{
-            backgroundColor: 'var(--card-bg)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '14px',
-            width: '100%',
-            maxWidth: '650px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            padding: '1.75rem',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-              <div>
-                <h4 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--foreground)' }}>
-                  Fix Profile Details & Mistakes
-                </h4>
-                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  Update missing or incorrect fields. All changes re-validate automatically.
+                {/* Errors Breakdown if any */}
+                {commitResult.errors && commitResult.errors.length > 0 && (
+                  <div style={{ marginTop: "1rem", color: "#dc2626", fontSize: "0.875rem" }}>
+                    <strong>Row Failures:</strong>
+                    <ul style={{ margin: "0.25rem 0 0", paddingLeft: "1.25rem" }}>
+                      {commitResult.errors.map((e, idx) => <li key={idx}>{e}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                <div style={{ marginTop: "1.5rem", display: "flex", gap: "1rem" }}>
+                  <button
+                    onClick={() => {
+                      setCommitResult(null);
+                      setScanResult(null);
+                      setFile(null);
+                    }}
+                    style={{
+                      padding: "0.625rem 1.25rem",
+                      backgroundColor: "var(--primary, #6366f1)",
+                      color: "#ffffff",
+                      borderRadius: "8px",
+                      border: "none",
+                      fontWeight: 600,
+                      fontSize: "0.875rem",
+                      cursor: "pointer"
+                    }}
+                  >
+                    Upload Another File
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("HISTORY")}
+                    style={{
+                      padding: "0.625rem 1.25rem",
+                      backgroundColor: "transparent",
+                      color: "var(--foreground)",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border-color)",
+                      fontWeight: 600,
+                      fontSize: "0.875rem",
+                      cursor: "pointer"
+                    }}
+                  >
+                    View Import History
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Drag & Drop Upload Zone */}
+            {!scanResult && !commitResult && (
+              <div
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    handleFileChange(e.dataTransfer.files[0]);
+                  }
+                }}
+                style={{
+                  border: `2px dashed ${isDragging ? "var(--primary, #6366f1)" : "var(--border-color, #d1d5db)"}`,
+                  backgroundColor: isDragging ? "rgba(99, 102, 241, 0.05)" : "var(--card-bg)",
+                  borderRadius: "14px",
+                  padding: "3.5rem 2rem",
+                  textAlign: "center",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease"
+                }}
+                onClick={() => {
+                  const input = document.getElementById("excel-file-input") as HTMLInputElement;
+                  if (input) input.click();
+                }}
+              >
+                <input
+                  id="excel-file-input"
+                  type="file"
+                  accept=".xlsx, .xls"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handleFileChange(e.target.files[0]);
+                    }
+                  }}
+                />
+
+                <div style={{
+                  width: "64px",
+                  height: "64px",
+                  borderRadius: "50%",
+                  backgroundColor: "rgba(99, 102, 241, 0.1)",
+                  color: "var(--primary, #6366f1)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: "1rem"
+                }}>
+                  {isPending ? <Loader2 size={32} className="animate-spin" /> : <Upload size={32} />}
+                </div>
+
+                <h3 style={{ fontSize: "1.125rem", fontWeight: 700, margin: "0 0 0.5rem", color: "var(--foreground)" }}>
+                  {isPending ? "Scanning spreadsheet & checking database..." : "Drag and drop your Excel file here, or click to browse"}
+                </h3>
+                <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--text-secondary, #6b7280)" }}>
+                  Supports .xlsx and .xls files up to 10MB • Auto-detects columns, missing fields & duplicate records
                 </p>
               </div>
-              <button 
-                onClick={() => setEditingProfile(null)}
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
+            )}
+
+            {/* SCAN RESULTS & INTERACTIVE PREVIEW */}
+            {scanResult && (
+              <div>
+                {/* File Info Bar */}
+                <div style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "1rem",
+                  padding: "1rem 1.25rem",
+                  backgroundColor: "var(--card-bg)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "10px",
+                  marginBottom: "1.5rem"
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <FileSpreadsheet size={22} color="var(--primary, #6366f1)" />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.9375rem" }}>{file?.name || "Uploaded Spreadsheet"}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                        {((file?.size || 0) / 1024).toFixed(1)} KB • Detected Template: <strong>{scanResult.detectedTemplate}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <button
+                      onClick={handleRevalidateAll}
+                      disabled={isPending}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        padding: "0.5rem 0.875rem",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border-color)",
+                        background: "transparent",
+                        fontSize: "0.8125rem",
+                        fontWeight: 600,
+                        cursor: "pointer"
+                      }}
+                    >
+                      <RefreshCw size={14} className={isPending ? "animate-spin" : ""} /> Revalidate All
+                    </button>
+                    <button
+                      onClick={handleDownloadErrorReport}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        padding: "0.5rem 0.875rem",
+                        borderRadius: "8px",
+                        border: "1px solid #ef4444",
+                        backgroundColor: "rgba(239, 68, 68, 0.05)",
+                        color: "#ef4444",
+                        fontSize: "0.8125rem",
+                        fontWeight: 600,
+                        cursor: "pointer"
+                      }}
+                    >
+                      <Download size={14} /> Download Error Report
+                    </button>
+                    <button
+                      onClick={() => {
+                        setScanResult(null);
+                        setFile(null);
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        padding: "0.5rem 0.875rem",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border-color)",
+                        background: "transparent",
+                        color: "var(--text-secondary)",
+                        fontSize: "0.8125rem",
+                        cursor: "pointer"
+                      }}
+                    >
+                      <Trash2 size={14} /> Clear
+                    </button>
+                  </div>
+                </div>
+
+                {/* Scan Metrics Overview Cards */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                  gap: "0.875rem",
+                  marginBottom: "1.75rem"
+                }}>
+                  {/* Total Rows */}
+                  <div style={{
+                    padding: "1rem",
+                    backgroundColor: "var(--card-bg)",
+                    border: "1px solid var(--border-color)",
+                    borderRadius: "10px"
+                  }}>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>TOTAL ROWS</div>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--foreground)", marginTop: "0.25rem" }}>
+                      {scanResult.totalRows}
+                    </div>
+                  </div>
+
+                  {/* Ready to Import (Valid) */}
+                  <div style={{
+                    padding: "1rem",
+                    backgroundColor: "rgba(16, 185, 129, 0.05)",
+                    border: "1px solid rgba(16, 185, 129, 0.2)",
+                    borderRadius: "10px"
+                  }}>
+                    <div style={{ fontSize: "0.75rem", color: "#10b981", fontWeight: 600 }}>READY TO IMPORT</div>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#10b981", marginTop: "0.25rem" }}>
+                      {scanResult.readyToImportCount}
+                    </div>
+                  </div>
+
+                  {/* Needs Correction / Errors */}
+                  <div style={{
+                    padding: "1rem",
+                    backgroundColor: scanResult.errorRowsCount > 0 ? "rgba(239, 68, 68, 0.05)" : "var(--card-bg)",
+                    border: `1px solid ${scanResult.errorRowsCount > 0 ? "rgba(239, 68, 68, 0.2)" : "var(--border-color)"}`,
+                    borderRadius: "10px"
+                  }}>
+                    <div style={{ fontSize: "0.75rem", color: scanResult.errorRowsCount > 0 ? "#ef4444" : "var(--text-secondary)", fontWeight: 600 }}>
+                      NEEDS CORRECTION
+                    </div>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 700, color: scanResult.errorRowsCount > 0 ? "#ef4444" : "var(--foreground)", marginTop: "0.25rem" }}>
+                      {scanResult.errorRowsCount}
+                    </div>
+                  </div>
+
+                  {/* Duplicates in File */}
+                  <div style={{
+                    padding: "1rem",
+                    backgroundColor: scanResult.duplicateRowsCount > 0 ? "rgba(245, 158, 11, 0.05)" : "var(--card-bg)",
+                    border: `1px solid ${scanResult.duplicateRowsCount > 0 ? "rgba(245, 158, 11, 0.2)" : "var(--border-color)"}`,
+                    borderRadius: "10px"
+                  }}>
+                    <div style={{ fontSize: "0.75rem", color: scanResult.duplicateRowsCount > 0 ? "#f59e0b" : "var(--text-secondary)", fontWeight: 600 }}>
+                      IN-FILE DUPLICATES
+                    </div>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 700, color: scanResult.duplicateRowsCount > 0 ? "#f59e0b" : "var(--foreground)", marginTop: "0.25rem" }}>
+                      {scanResult.duplicateRowsCount}
+                    </div>
+                  </div>
+
+                  {/* Database Conflicts */}
+                  <div style={{
+                    padding: "1rem",
+                    backgroundColor: scanResult.conflictRowsCount > 0 ? "rgba(139, 92, 246, 0.05)" : "var(--card-bg)",
+                    border: `1px solid ${scanResult.conflictRowsCount > 0 ? "rgba(139, 92, 246, 0.2)" : "var(--border-color)"}`,
+                    borderRadius: "10px"
+                  }}>
+                    <div style={{ fontSize: "0.75rem", color: scanResult.conflictRowsCount > 0 ? "#8b5cf6" : "var(--text-secondary)", fontWeight: 600 }}>
+                      DB CONFLICTS
+                    </div>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 700, color: scanResult.conflictRowsCount > 0 ? "#8b5cf6" : "var(--foreground)", marginTop: "0.25rem" }}>
+                      {scanResult.conflictRowsCount}
+                    </div>
+                  </div>
+
+                  {/* Sample Rows */}
+                  {scanResult.sampleRowsCount > 0 && (
+                    <div style={{
+                      padding: "1rem",
+                      backgroundColor: "rgba(107, 114, 128, 0.05)",
+                      border: "1px solid rgba(107, 114, 128, 0.2)",
+                      borderRadius: "10px"
+                    }}>
+                      <div style={{ fontSize: "0.75rem", color: "#6b7280", fontWeight: 600 }}>TEMPLATE SAMPLES</div>
+                      <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#6b7280", marginTop: "0.25rem" }}>
+                        {scanResult.sampleRowsCount}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Filter Tabs & Search Bar */}
+                <div style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "1rem",
+                  marginBottom: "1rem"
+                }}>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      onClick={() => setFilter("ALL")}
+                      style={{
+                        padding: "0.4rem 0.8rem",
+                        borderRadius: "6px",
+                        border: "1px solid",
+                        borderColor: filter === "ALL" ? "var(--primary)" : "var(--border-color)",
+                        backgroundColor: filter === "ALL" ? "var(--primary-bg)" : "transparent",
+                        color: filter === "ALL" ? "var(--primary)" : "var(--foreground)",
+                        fontSize: "0.8125rem",
+                        fontWeight: 600,
+                        cursor: "pointer"
+                      }}
+                    >
+                      All Rows ({scanResult.rows.length})
+                    </button>
+                    <button
+                      onClick={() => setFilter("ERRORS")}
+                      style={{
+                        padding: "0.4rem 0.8rem",
+                        borderRadius: "6px",
+                        border: "1px solid",
+                        borderColor: filter === "ERRORS" ? "#ef4444" : "var(--border-color)",
+                        backgroundColor: filter === "ERRORS" ? "rgba(239, 68, 68, 0.1)" : "transparent",
+                        color: filter === "ERRORS" ? "#ef4444" : "var(--foreground)",
+                        fontSize: "0.8125rem",
+                        fontWeight: 600,
+                        cursor: "pointer"
+                      }}
+                    >
+                      Errors Only ({scanResult.errorRowsCount})
+                    </button>
+                    <button
+                      onClick={() => setFilter("VALID")}
+                      style={{
+                        padding: "0.4rem 0.8rem",
+                        borderRadius: "6px",
+                        border: "1px solid",
+                        borderColor: filter === "VALID" ? "#10b981" : "var(--border-color)",
+                        backgroundColor: filter === "VALID" ? "rgba(16, 185, 129, 0.1)" : "transparent",
+                        color: filter === "VALID" ? "#10b981" : "var(--foreground)",
+                        fontSize: "0.8125rem",
+                        fontWeight: 600,
+                        cursor: "pointer"
+                      }}
+                    >
+                      Valid Only ({scanResult.readyToImportCount})
+                    </button>
+                    <button
+                      onClick={() => setFilter("DUPLICATES")}
+                      style={{
+                        padding: "0.4rem 0.8rem",
+                        borderRadius: "6px",
+                        border: "1px solid",
+                        borderColor: filter === "DUPLICATES" ? "#f59e0b" : "var(--border-color)",
+                        backgroundColor: filter === "DUPLICATES" ? "rgba(245, 158, 11, 0.1)" : "transparent",
+                        color: filter === "DUPLICATES" ? "#f59e0b" : "var(--foreground)",
+                        fontSize: "0.8125rem",
+                        fontWeight: 600,
+                        cursor: "pointer"
+                      }}
+                    >
+                      Duplicates & Conflicts ({scanResult.duplicateRowsCount + scanResult.conflictRowsCount})
+                    </button>
+                  </div>
+
+                  <div style={{ position: "relative", minWidth: "240px" }}>
+                    <Search size={16} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)" }} />
+                    <input
+                      type="text"
+                      placeholder="Search preview rows..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.45rem 0.75rem 0.45rem 2.25rem",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border-color)",
+                        background: "transparent",
+                        fontSize: "0.8125rem"
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Validation Preview Table */}
+                <div style={{
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "10px",
+                  overflowX: "auto",
+                  backgroundColor: "var(--card-bg)"
+                }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem", textAlign: "left" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: "rgba(0,0,0,0.02)", borderBottom: "1px solid var(--border-color)" }}>
+                        <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)", width: "70px" }}>Row</th>
+                        <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)", width: "120px" }}>Status</th>
+                        <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+                          {type === "student" ? "Student Details" : "Teacher Name"}
+                        </th>
+                        <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+                          {type === "student" ? "Parent & Contact" : "Email & Phone"}
+                        </th>
+                        <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+                          {type === "student" ? "Class & Residence" : "Joining & Qualification"}
+                        </th>
+                        <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Validation Issues</th>
+                        <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)", textAlign: "right", width: "90px" }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayedRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "var(--text-secondary)" }}>
+                            No rows match the selected filter.
+                          </td>
+                        </tr>
+                      ) : (
+                        displayedRows.map((r) => {
+                          const isReady = r.isReadyToImport;
+                          const isErr = r.status === "NEEDS_CORRECTION";
+                          const isDup = r.status === "DUPLICATE_IN_FILE";
+                          const isConflict = r.status === "CONFLICT_DB";
+                          const isSample = r.status === "SAMPLE_ROW";
+
+                          return (
+                            <tr key={r.rowId} style={{
+                              borderBottom: "1px solid var(--border-color)",
+                              backgroundColor: isErr ? "rgba(239, 68, 68, 0.02)" : (isDup ? "rgba(245, 158, 11, 0.02)" : "transparent")
+                            }}>
+                              {/* Row Number */}
+                              <td style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+                                #{r.excelRowNumber}
+                              </td>
+
+                              {/* Status Badge */}
+                              <td style={{ padding: "0.75rem 1rem" }}>
+                                {isReady && (
+                                  <span style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.3rem",
+                                    padding: "0.2rem 0.5rem",
+                                    borderRadius: "6px",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 700,
+                                    backgroundColor: "rgba(16, 185, 129, 0.1)",
+                                    color: "#10b981"
+                                  }}>
+                                    <CheckCircle2 size={12} /> Valid
+                                  </span>
+                                )}
+                                {isErr && (
+                                  <span style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.3rem",
+                                    padding: "0.2rem 0.5rem",
+                                    borderRadius: "6px",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 700,
+                                    backgroundColor: "rgba(239, 68, 68, 0.1)",
+                                    color: "#ef4444"
+                                  }}>
+                                    <AlertTriangle size={12} /> Correction
+                                  </span>
+                                )}
+                                {isDup && (
+                                  <span style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.3rem",
+                                    padding: "0.2rem 0.5rem",
+                                    borderRadius: "6px",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 700,
+                                    backgroundColor: "rgba(245, 158, 11, 0.1)",
+                                    color: "#f59e0b"
+                                  }}>
+                                    <AlertOctagon size={12} /> Duplicate
+                                  </span>
+                                )}
+                                {isConflict && (
+                                  <span style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.3rem",
+                                    padding: "0.2rem 0.5rem",
+                                    borderRadius: "6px",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 700,
+                                    backgroundColor: "rgba(139, 92, 246, 0.1)",
+                                    color: "#8b5cf6"
+                                  }}>
+                                    <ShieldAlert size={12} /> DB Conflict
+                                  </span>
+                                )}
+                                {isSample && (
+                                  <span style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.3rem",
+                                    padding: "0.2rem 0.5rem",
+                                    borderRadius: "6px",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 700,
+                                    backgroundColor: "rgba(107, 114, 128, 0.1)",
+                                    color: "#6b7280"
+                                  }}>
+                                    Sample
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Col 1 */}
+                              <td style={{ padding: "0.75rem 1rem" }}>
+                                {type === "student" ? (
+                                  <div>
+                                    <div style={{ fontWeight: 600 }}>{r.data.studentFirstName} {r.data.studentLastName}</div>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                                      Roll: <strong>{r.data.studentRollNo || "Missing"}</strong> • Adm: {r.data.admissionNo || "N/A"}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <div style={{ fontWeight: 600 }}>{r.data.firstName} {r.data.lastName}</div>
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Col 2 */}
+                              <td style={{ padding: "0.75rem 1rem" }}>
+                                {type === "student" ? (
+                                  <div>
+                                    <div style={{ fontWeight: 500 }}>{r.data.parentFirstName} {r.data.parentLastName}</div>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                                      {r.data.parentEmail || "Missing email"} {r.data.isExistingParent && " (Existing Parent)"}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <div style={{ fontWeight: 500 }}>{r.data.email || "Missing"}</div>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>{r.data.phone || "No phone"}</div>
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Col 3 */}
+                              <td style={{ padding: "0.75rem 1rem" }}>
+                                {type === "student" ? (
+                                  <div>
+                                    <div>{r.data.classNameResolved || r.data.class || "Unassigned"}</div>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                                      Type: {r.data.residenceType || "DAYSCHOLAR"}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <div>Qual: {r.data.qualification || "Missing"}</div>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Join: {r.data.joiningDate || "N/A"}</div>
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Validation Issues */}
+                              <td style={{ padding: "0.75rem 1rem" }}>
+                                {isReady && (
+                                  <span style={{ color: "#10b981", fontSize: "0.8125rem" }}>All fields valid & verified</span>
+                                )}
+                                {isSample && (
+                                  <span style={{ color: "#6b7280", fontSize: "0.8125rem" }}>Template demonstration row (skipped)</span>
+                                )}
+                                {(!isReady && !isSample) && (
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+                                    {Object.entries(r.fieldErrors).map(([field, err], i) => (
+                                      <span key={i} style={{
+                                        display: "inline-block",
+                                        padding: "0.15rem 0.4rem",
+                                        borderRadius: "4px",
+                                        backgroundColor: "rgba(239, 68, 68, 0.1)",
+                                        color: "#ef4444",
+                                        fontSize: "0.75rem"
+                                      }}>
+                                        {err}
+                                      </span>
+                                    ))}
+                                    {r.duplicateWarnings.map((dup, i) => (
+                                      <span key={`dup-${i}`} style={{
+                                        display: "inline-block",
+                                        padding: "0.15rem 0.4rem",
+                                        borderRadius: "4px",
+                                        backgroundColor: "rgba(245, 158, 11, 0.1)",
+                                        color: "#f59e0b",
+                                        fontSize: "0.75rem"
+                                      }}>
+                                        {dup}
+                                      </span>
+                                    ))}
+                                    {r.conflictWarnings.map((conf, i) => (
+                                      <span key={`conf-${i}`} style={{
+                                        display: "inline-block",
+                                        padding: "0.15rem 0.4rem",
+                                        borderRadius: "4px",
+                                        backgroundColor: "rgba(139, 92, 246, 0.1)",
+                                        color: "#8b5cf6",
+                                        fontSize: "0.75rem"
+                                      }}>
+                                        {conf}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Edit Action */}
+                              <td style={{ padding: "0.75rem 1rem", textAlign: "right" }}>
+                                {!isSample && (
+                                  <button
+                                    onClick={() => openEditRow(r)}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "0.3rem",
+                                      padding: "0.35rem 0.65rem",
+                                      borderRadius: "6px",
+                                      border: "1px solid var(--border-color)",
+                                      backgroundColor: "transparent",
+                                      color: "var(--foreground)",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 600,
+                                      cursor: "pointer"
+                                    }}
+                                  >
+                                    <Edit3 size={12} /> Edit
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Import Bottom Action Bar */}
+                <div style={{
+                  marginTop: "1.75rem",
+                  padding: "1.25rem 1.75rem",
+                  backgroundColor: "rgba(99, 102, 241, 0.04)",
+                  border: "1px solid rgba(99, 102, 241, 0.15)",
+                  borderRadius: "12px",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "1rem"
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--foreground)" }}>
+                      {scanResult.readyToImportCount} of {scanResult.totalRows} records ready for database import
+                    </div>
+                    <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", marginTop: "0.2rem" }}>
+                      {scanResult.errorRowsCount > 0 
+                        ? `${scanResult.errorRowsCount} rows have validation issues. You can import only valid rows now or correct them inline first.`
+                        : "All data rows passed schema validation and duplicate checks."
+                      }
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    {scanResult.readyToImportCount > 0 && (
+                      <button
+                        onClick={() => {
+                          setImportMode("VALID_ONLY");
+                          setShowConfirmModal(true);
+                        }}
+                        disabled={isPending}
+                        style={{
+                          padding: "0.625rem 1.25rem",
+                          backgroundColor: "#10b981",
+                          color: "#ffffff",
+                          borderRadius: "8px",
+                          border: "none",
+                          fontWeight: 700,
+                          fontSize: "0.875rem",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          boxShadow: "0 2px 6px rgba(16, 185, 129, 0.3)"
+                        }}
+                      >
+                        {isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                        Import Valid Rows ({scanResult.readyToImportCount})
+                      </button>
+                    )}
+
+                    {scanResult.errorRowsCount === 0 && scanResult.readyToImportCount > 0 && (
+                      <button
+                        onClick={() => {
+                          setImportMode("ALL_AFTER_CORRECTIONS");
+                          setShowConfirmModal(true);
+                        }}
+                        disabled={isPending}
+                        style={{
+                          padding: "0.625rem 1.25rem",
+                          backgroundColor: "var(--primary, #6366f1)",
+                          color: "#ffffff",
+                          borderRadius: "8px",
+                          border: "none",
+                          fontWeight: 700,
+                          fontSize: "0.875rem",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem"
+                        }}
+                      >
+                        Import All ({scanResult.readyToImportCount})
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* VIEW 2: IMPORT HISTORY & AUDIT TAB */}
+        {/* ======================================================== */}
+        {activeTab === "HISTORY" && (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700 }}>Past Import Batches & Audit Trail</h3>
+                <p style={{ margin: "0.25rem 0 0", fontSize: "0.875rem", color: "var(--text-secondary)" }}>
+                  Review historical Excel uploads, imported account volumes, and download non-sensitive error summaries.
+                </p>
+              </div>
+              <button
+                onClick={fetchHistory}
+                disabled={loadingHistory}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.4rem",
+                  padding: "0.5rem 0.875rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  background: "transparent",
+                  fontSize: "0.8125rem",
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                <RefreshCw size={14} className={loadingHistory ? "animate-spin" : ""} /> Refresh
+              </button>
+            </div>
+
+            {loadingHistory ? (
+              <div style={{ textAlign: "center", padding: "3rem" }}>
+                <Loader2 size={32} className="animate-spin" style={{ color: "var(--primary)" }} />
+                <p style={{ marginTop: "0.75rem", color: "var(--text-secondary)" }}>Loading import history...</p>
+              </div>
+            ) : history.length === 0 ? (
+              <div style={{
+                textAlign: "center",
+                padding: "3rem",
+                border: "1px dashed var(--border-color)",
+                borderRadius: "12px",
+                color: "var(--text-secondary)"
+              }}>
+                <FileSpreadsheet size={40} style={{ opacity: 0.5, marginBottom: "0.5rem" }} />
+                <h4>No import history recorded yet</h4>
+                <p style={{ fontSize: "0.875rem", margin: 0 }}>Any batch imported will automatically be logged here for audit purposes.</p>
+              </div>
+            ) : (
+              <div style={{ border: "1px solid var(--border-color)", borderRadius: "10px", overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem", textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: "rgba(0,0,0,0.02)", borderBottom: "1px solid var(--border-color)" }}>
+                      <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Timestamp</th>
+                      <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Template Type</th>
+                      <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>File Name</th>
+                      <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Total Rows</th>
+                      <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Imported</th>
+                      <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Failed</th>
+                      <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.map((h) => (
+                      <tr key={h.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
+                        <td style={{ padding: "0.75rem 1rem", fontSize: "0.8125rem" }}>
+                          {new Date(h.startedAt).toLocaleString()}
+                        </td>
+                        <td style={{ padding: "0.75rem 1rem" }}>
+                          <span style={{
+                            padding: "0.2rem 0.5rem",
+                            borderRadius: "4px",
+                            fontWeight: 700,
+                            fontSize: "0.75rem",
+                            backgroundColor: h.templateType === "STUDENT_PARENT" ? "rgba(16, 185, 129, 0.1)" : "rgba(99, 102, 241, 0.1)",
+                            color: h.templateType === "STUDENT_PARENT" ? "#10b981" : "#6366f1"
+                          }}>
+                            {h.templateType}
+                          </span>
+                        </td>
+                        <td style={{ padding: "0.75rem 1rem", fontWeight: 500 }}>{h.fileName}</td>
+                        <td style={{ padding: "0.75rem 1rem" }}>{h.totalRows}</td>
+                        <td style={{ padding: "0.75rem 1rem", color: "#10b981", fontWeight: 600 }}>{h.importedRows}</td>
+                        <td style={{ padding: "0.75rem 1rem", color: h.failedRows > 0 ? "#ef4444" : "var(--text-secondary)" }}>{h.failedRows}</td>
+                        <td style={{ padding: "0.75rem 1rem" }}>
+                          <span style={{
+                            padding: "0.2rem 0.5rem",
+                            borderRadius: "4px",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            backgroundColor: h.status === "COMPLETED" ? "rgba(16, 185, 129, 0.1)" : (h.status === "PARTIAL" ? "rgba(245, 158, 11, 0.1)" : "rgba(239, 68, 68, 0.1)"),
+                            color: h.status === "COMPLETED" ? "#10b981" : (h.status === "PARTIAL" ? "#f59e0b" : "#ef4444")
+                          }}>
+                            {h.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+
+      {/* ======================================================== */}
+      {/* INLINE ROW EDITING MODAL */}
+      {/* ======================================================== */}
+      {editingRow && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.6)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          padding: "1rem"
+        }}>
+          <div style={{
+            backgroundColor: "var(--card-bg, #ffffff)",
+            borderRadius: "16px",
+            border: "1px solid var(--border-color, #e5e7eb)",
+            width: "100%",
+            maxWidth: "700px",
+            maxHeight: "90vh",
+            display: "flex",
+            flexDirection: "column",
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
+            overflow: "hidden"
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: "1.25rem 1.5rem",
+              borderBottom: "1px solid var(--border-color)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              backgroundColor: "rgba(0,0,0,0.02)"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Edit3 size={18} color="var(--primary)" />
+                <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700 }}>
+                  Correct Details: Excel Row #{editingRow.excelRowNumber}
+                </h3>
+              </div>
+              <button
+                onClick={() => setEditingRow(null)}
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* If errors, display alert */}
-            {editingProfile._errors.length > 0 && (
-              <div style={{ 
-                background: 'rgba(239, 68, 68, 0.08)', 
-                border: '1px solid rgba(239, 68, 68, 0.3)', 
-                borderRadius: '8px', 
-                padding: '0.75rem 1rem', 
-                marginBottom: '1.25rem',
-                color: 'var(--danger)',
-                fontSize: '0.85rem'
-              }}>
-                <strong>Detected Issues to Correct:</strong>
-                <ul style={{ margin: '0.35rem 0 0 0', paddingLeft: '1.25rem' }}>
-                  {editingProfile._errors.map((err, i) => <li key={i}>{err}</li>)}
-                </ul>
-              </div>
-            )}
-
-            {/* Edit form */}
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              handleSaveEditedProfile(editingProfile);
-            }}>
-              {type === 'student' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <h5 style={{ margin: '0.5rem 0 0.25rem 0', fontSize: '0.95rem', fontWeight: 600, color: 'var(--primary)' }}>
+            {/* Modal Body: Form Fields */}
+            <div style={{ padding: "1.5rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              
+              {type === "student" ? (
+                <>
+                  <div style={{ fontWeight: 700, fontSize: "0.9375rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.25rem" }}>
                     Student Information
-                  </h5>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1rem' }}>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
                         Student First Name *
                       </label>
-                      <input 
-                        required
+                      <input
                         type="text"
-                        value={editingProfile.studentFirstName || ""}
-                        onChange={(e) => setEditingProfile({ ...editingProfile, studentFirstName: e.target.value })}
-                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: `1px solid ${!editingProfile.studentFirstName ? 'var(--danger)' : 'var(--border-color)'}`, backgroundColor: 'transparent' }}
+                        value={editFormData.studentFirstName || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, studentFirstName: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.studentFirstName ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
                       />
+                      {editRowErrors.studentFirstName && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.studentFirstName}</span>}
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                        Student Last Name
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Student Last Name *
                       </label>
-                      <input 
+                      <input
                         type="text"
-                        value={editingProfile.studentLastName || ""}
-                        onChange={(e) => setEditingProfile({ ...editingProfile, studentLastName: e.target.value })}
-                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'transparent' }}
+                        value={editFormData.studentLastName || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, studentLastName: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.studentLastName ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
                       />
+                      {editRowErrors.studentLastName && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.studentLastName}</span>}
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
                         Roll Number *
                       </label>
-                      <input 
-                        required
+                      <input
                         type="text"
-                        value={editingProfile.studentRollNo || ""}
-                        onChange={(e) => setEditingProfile({ ...editingProfile, studentRollNo: e.target.value })}
-                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: `1px solid ${!editingProfile.studentRollNo ? 'var(--danger)' : 'var(--border-color)'}`, backgroundColor: 'transparent' }}
+                        value={editFormData.studentRollNo || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, studentRollNo: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.studentRollNo ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
                       />
+                      {editRowErrors.studentRollNo && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.studentRollNo}</span>}
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                        Admission Number
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Admission Number *
                       </label>
-                      <input 
+                      <input
                         type="text"
-                        value={editingProfile.admissionNo || ""}
-                        onChange={(e) => setEditingProfile({ ...editingProfile, admissionNo: e.target.value })}
-                        placeholder={`ADM${editingProfile.studentRollNo || ''}`}
-                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'transparent' }}
+                        value={editFormData.admissionNo || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, admissionNo: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.admissionNo ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
                       />
+                      {editRowErrors.admissionNo && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.admissionNo}</span>}
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                        Class & Section *
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Date of Birth (YYYY-MM-DD)
                       </label>
-                      <select 
-                        required
-                        value={editingProfile.classId || ""}
-                        onChange={(e) => setEditingProfile({ ...editingProfile, classId: e.target.value })}
-                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: `1px solid ${!editingProfile.classId ? 'var(--danger)' : 'var(--border-color)'}`, backgroundColor: 'transparent' }}
+                      <input
+                        type="date"
+                        value={editFormData.studentDob || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, studentDob: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.studentDob ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
+                      />
+                      {editRowErrors.studentDob && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.studentDob}</span>}
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Assign Class *
+                      </label>
+                      <select
+                        value={editFormData.classId || ""}
+                        onChange={(e) => {
+                          const cId = e.target.value;
+                          const selected = activeClasses.find(c => c.id === cId);
+                          setEditFormData({
+                            ...editFormData,
+                            classId: cId,
+                            class: selected ? `${selected.name} - ${selected.section}` : "",
+                            classNameResolved: selected ? `${selected.name} - ${selected.section}` : ""
+                          });
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.class ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
                       >
-                        <option value="">Select a Class...</option>
-                        {classes.map(c => (
+                        <option value="">-- Select Class --</option>
+                        {activeClasses.map(c => (
                           <option key={c.id} value={c.id}>{c.name} - Section {c.section}</option>
                         ))}
                       </select>
+                      {editRowErrors.class && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.class}</span>}
                     </div>
 
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                        Hostel or Dayscholar *
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Residence Type *
                       </label>
-                      <select 
-                        required
-                        value={editingProfile.residenceType || "DAYSCHOLAR"}
-                        onChange={(e) => setEditingProfile({ ...editingProfile, residenceType: e.target.value as "HOSTEL" | "DAYSCHOLAR" })}
-                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'transparent' }}
+                      <select
+                        value={editFormData.residenceType || "DAYSCHOLAR"}
+                        onChange={(e) => setEditFormData({ ...editFormData, residenceType: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          background: "transparent"
+                        }}
                       >
                         <option value="DAYSCHOLAR">Dayscholar</option>
                         <option value="HOSTEL">Hostel</option>
@@ -1030,193 +1578,421 @@ export default function BulkUpload({
                     </div>
                   </div>
 
-                  <h5 style={{ margin: '1rem 0 0.25rem 0', fontSize: '0.95rem', fontWeight: 600, color: 'var(--primary)' }}>
-                    Parent Information & Login
-                  </h5>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1rem' }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.9375rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.25rem", marginTop: "0.5rem" }}>
+                    Parent Information
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                        Parent Email (Login ID) *
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Parent First Name *
                       </label>
-                      <input 
-                        required
+                      <input
+                        type="text"
+                        value={editFormData.parentFirstName || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, parentFirstName: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.parentFirstName ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
+                      />
+                      {editRowErrors.parentFirstName && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.parentFirstName}</span>}
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Parent Last Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.parentLastName || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, parentLastName: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.parentLastName ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
+                      />
+                      {editRowErrors.parentLastName && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.parentLastName}</span>}
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Parent Email *
+                      </label>
+                      <input
                         type="email"
-                        value={editingProfile.parentEmail || ""}
-                        onChange={(e) => setEditingProfile({ ...editingProfile, parentEmail: e.target.value })}
-                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: `1px solid ${!isValidEmail(editingProfile.parentEmail) ? 'var(--danger)' : 'var(--border-color)'}`, backgroundColor: 'transparent' }}
+                        value={editFormData.parentEmail || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, parentEmail: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.parentEmail ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
                       />
+                      {editRowErrors.parentEmail && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.parentEmail}</span>}
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                        Temporary Password *
-                      </label>
-                      <input 
-                        required
-                        type="text"
-                        value={editingProfile.parentPassword || "Parent@123"}
-                        onChange={(e) => setEditingProfile({ ...editingProfile, parentPassword: e.target.value })}
-                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'transparent' }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                        Parent Name
-                      </label>
-                      <input 
-                        type="text"
-                        value={editingProfile.parentFirstName || ""}
-                        onChange={(e) => setEditingProfile({ ...editingProfile, parentFirstName: e.target.value })}
-                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'transparent' }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
                         Parent Phone
                       </label>
-                      <input 
+                      <input
                         type="text"
-                        value={editingProfile.parentPhone || ""}
-                        onChange={(e) => setEditingProfile({ ...editingProfile, parentPhone: e.target.value })}
-                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'transparent' }}
+                        value={editFormData.parentPhone || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, parentPhone: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.parentPhone ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
                       />
-                    </div>
-
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                        Address
-                      </label>
-                      <input 
-                        type="text"
-                        value={editingProfile.parentAddress || ""}
-                        onChange={(e) => setEditingProfile({ ...editingProfile, parentAddress: e.target.value })}
-                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'transparent' }}
-                      />
+                      {editRowErrors.parentPhone && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.parentPhone}</span>}
                     </div>
                   </div>
-                </div>
+                </>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1rem' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                      First Name *
-                    </label>
-                    <input 
-                      required
-                      type="text"
-                      value={editingProfile.firstName || ""}
-                      onChange={(e) => setEditingProfile({ ...editingProfile, firstName: e.target.value })}
-                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: `1px solid ${!editingProfile.firstName ? 'var(--danger)' : 'var(--border-color)'}`, backgroundColor: 'transparent' }}
-                    />
+                /* TEACHER EDIT FORM */
+                <>
+                  <div style={{ fontWeight: 700, fontSize: "0.9375rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.25rem" }}>
+                    Teacher Information
                   </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        First Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.firstName || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, firstName: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.firstName ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
+                      />
+                      {editRowErrors.firstName && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.firstName}</span>}
+                    </div>
 
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                      Last Name
-                    </label>
-                    <input 
-                      type="text"
-                      value={editingProfile.lastName || ""}
-                      onChange={(e) => setEditingProfile({ ...editingProfile, lastName: e.target.value })}
-                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'transparent' }}
-                    />
-                  </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Last Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.lastName || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, lastName: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.lastName ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
+                      />
+                      {editRowErrors.lastName && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.lastName}</span>}
+                    </div>
 
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                      Official Email *
-                    </label>
-                    <input 
-                      required
-                      type="email"
-                      value={editingProfile.email || ""}
-                      onChange={(e) => setEditingProfile({ ...editingProfile, email: e.target.value })}
-                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: `1px solid ${!isValidEmail(editingProfile.email) ? 'var(--danger)' : 'var(--border-color)'}`, backgroundColor: 'transparent' }}
-                    />
-                  </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Official Email *
+                      </label>
+                      <input
+                        type="email"
+                        value={editFormData.email || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.email ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
+                      />
+                      {editRowErrors.email && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.email}</span>}
+                    </div>
 
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                      Password *
-                    </label>
-                    <input 
-                      required
-                      type="text"
-                      value={editingProfile.password || "Teacher@123"}
-                      onChange={(e) => setEditingProfile({ ...editingProfile, password: e.target.value })}
-                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'transparent' }}
-                    />
-                  </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Temporary Password *
+                      </label>
+                      <input
+                        type="password"
+                        value={editFormData.password || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, password: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.password ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
+                      />
+                      {editRowErrors.password && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.password}</span>}
+                    </div>
 
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                      Phone
-                    </label>
-                    <input 
-                      type="text"
-                      value={editingProfile.phone || ""}
-                      onChange={(e) => setEditingProfile({ ...editingProfile, phone: e.target.value })}
-                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'transparent' }}
-                    />
-                  </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Phone Number
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.phone || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.phone ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
+                      />
+                      {editRowErrors.phone && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.phone}</span>}
+                    </div>
 
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                      Qualification
-                    </label>
-                    <input 
-                      type="text"
-                      value={editingProfile.qualification || ""}
-                      onChange={(e) => setEditingProfile({ ...editingProfile, qualification: e.target.value })}
-                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'transparent' }}
-                    />
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Joining Date (YYYY-MM-DD)
+                      </label>
+                      <input
+                        type="date"
+                        value={editFormData.joiningDate || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, joiningDate: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.joiningDate ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
+                      />
+                      {editRowErrors.joiningDate && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.joiningDate}</span>}
+                    </div>
+
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Qualification *
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.qualification || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, qualification: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.qualification ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
+                      />
+                      {editRowErrors.qualification && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.qualification}</span>}
+                    </div>
                   </div>
-                </div>
+                </>
               )}
+            </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-                <button 
-                  type="button"
-                  onClick={() => setEditingProfile(null)}
-                  style={{
-                    padding: '0.6rem 1.25rem',
-                    backgroundColor: 'transparent',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    fontSize: '0.875rem',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-
-                <button 
-                  type="submit"
-                  style={{
-                    padding: '0.6rem 1.5rem',
-                    backgroundColor: 'var(--primary)',
-                    color: 'var(--primary-fg)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '0.875rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem'
-                  }}
-                >
-                  <Check size={16} /> Save & Re-validate
-                </button>
-              </div>
-            </form>
+            {/* Modal Footer */}
+            <div style={{
+              padding: "1rem 1.5rem",
+              borderTop: "1px solid var(--border-color)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: "0.75rem",
+              backgroundColor: "rgba(0,0,0,0.02)"
+            }}>
+              <button
+                onClick={() => setEditingRow(null)}
+                style={{
+                  padding: "0.5rem 1rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  background: "transparent",
+                  color: "var(--foreground)",
+                  fontWeight: 600,
+                  fontSize: "0.875rem",
+                  cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveRow}
+                disabled={isPending}
+                style={{
+                  padding: "0.5rem 1.25rem",
+                  borderRadius: "8px",
+                  border: "none",
+                  backgroundColor: "var(--primary, #6366f1)",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  fontSize: "0.875rem",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.4rem"
+                }}
+              >
+                {isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Save & Revalidate Row
+              </button>
+            </div>
           </div>
         </div>
       )}
+
+      {/* ======================================================== */}
+      {/* CONFIRMATION BEFORE DATABASE INSERTION MODAL */}
+      {/* ======================================================== */}
+      {showConfirmModal && scanResult && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.6)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          padding: "1rem"
+        }}>
+          <div style={{
+            backgroundColor: "var(--card-bg, #ffffff)",
+            borderRadius: "16px",
+            border: "1px solid var(--border-color, #e5e7eb)",
+            width: "100%",
+            maxWidth: "540px",
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
+            overflow: "hidden"
+          }}>
+            <div style={{ padding: "1.5rem", borderBottom: "1px solid var(--border-color)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <div style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  backgroundColor: "rgba(16, 185, 129, 0.15)",
+                  color: "#10b981",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}>
+                  <CheckCircle2 size={24} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700 }}>
+                    Confirm Database Import
+                  </h3>
+                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
+                    Please review the import summary before writing to PostgreSQL.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: "1.5rem" }}>
+              <div style={{
+                backgroundColor: "rgba(99, 102, 241, 0.05)",
+                border: "1px solid rgba(99, 102, 241, 0.2)",
+                borderRadius: "10px",
+                padding: "1rem",
+                marginBottom: "1.25rem"
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                  <span style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>Account Role:</span>
+                  <span style={{ fontSize: "0.875rem", fontWeight: 700 }}>
+                    {type === "student" ? "STUDENT & PARENT" : "TEACHER"}
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                  <span style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>Rows to Import:</span>
+                  <span style={{ fontSize: "0.875rem", fontWeight: 700, color: "#10b981" }}>
+                    {scanResult.readyToImportCount} Records
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>Skipped / Excluded Rows:</span>
+                  <span style={{ fontSize: "0.875rem", fontWeight: 700, color: "#ef4444" }}>
+                    {scanResult.totalRows - scanResult.readyToImportCount} Rows
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                {type === "student" ? (
+                  <p style={{ margin: 0 }}>
+                    • Valid students will be enrolled and linked to their specified class.<br />
+                    • Sibling students sharing an existing parent email will be safely linked to that parent account without duplicating logins.<br />
+                    • Passwords will be cryptographically hashed with bcrypt before storage.
+                  </p>
+                ) : (
+                  <p style={{ margin: 0 }}>
+                    • Valid teachers will receive official accounts with the <code>TEACHER</code> role.<br />
+                    • Credentials will be hashed with bcrypt. No plaintext credentials will be stored.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div style={{
+              padding: "1rem 1.5rem",
+              borderTop: "1px solid var(--border-color)",
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "0.75rem",
+              backgroundColor: "rgba(0,0,0,0.02)"
+            }}>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                style={{
+                  padding: "0.5rem 1rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  background: "transparent",
+                  color: "var(--foreground)",
+                  fontWeight: 600,
+                  fontSize: "0.875rem",
+                  cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExecuteImport}
+                disabled={isPending}
+                style={{
+                  padding: "0.5rem 1.25rem",
+                  borderRadius: "8px",
+                  border: "none",
+                  backgroundColor: "#10b981",
+                  color: "#ffffff",
+                  fontWeight: 700,
+                  fontSize: "0.875rem",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.4rem"
+                }}
+              >
+                {isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                Confirm & Import Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

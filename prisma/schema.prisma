@@ -585,3 +585,24 @@ model LoginAttempt {
   @@index([timestamp])
   @@index([email, timestamp])
 }
+
+model ImportBatch {
+  id              String    @id @default(cuid())
+  templateType    String    // STUDENT_PARENT, TEACHER
+  fileName        String
+  fileSize        Int?
+  adminId         String?
+  adminEmail      String?
+  totalRows       Int       @default(0)
+  validRows       Int       @default(0)
+  importedRows    Int       @default(0)
+  failedRows      Int       @default(0)
+  skippedRows     Int       @default(0)
+  status          String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, PARTIAL
+  errorSummary    String?   // JSON serialized array of row issues (non-sensitive)
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  @@index([templateType, startedAt])
+  @@index([adminId])
+}
