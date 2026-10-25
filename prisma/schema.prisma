@@ -454,6 +454,19 @@ model CalendarEvent {
   @@index([type, isPublished, date])
 }
 
+model SchoolDaySchedule {
+  id          String   @id @default(cuid())
+  date        DateTime @unique
+  status      String   // WORKING_DAY, LEAVE_DAY
+  title       String?  // e.g. "Special Working Saturday", "Diwali Holiday", "Sunday Weekend"
+  reason      String?
+  isCustom    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([date, status])
+}
+
 model SchoolProgram {
   id              String   @id @default(cuid())
   name            String

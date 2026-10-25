@@ -1,37 +1,29 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
-import { prisma } from "@/backend/db/prisma";
-import styles from "../../dashboard.module.css";
-import TeacherCalendarClient from "./TeacherCalendarClient";
+import ProfessionalSchoolCalendar from "@/frontend/components/calendar/ProfessionalSchoolCalendar";
+import { getMonthCalendarData } from "@/backend/lib/services/calendarDataService";
 
-export default async function TeacherCalendarPage() {
+export default async function TeacherCalendarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string; month?: string }>;
+}) {
   const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
-  const teacher = await prisma.teacher.findUnique({
-    where: { userId: session.user.id },
-    include: { user: true }
-  });
+  const resolvedParams = await searchParams;
+  const targetYear = resolvedParams?.year ? parseInt(resolvedParams.year, 10) : undefined;
+  const targetMonth = resolvedParams?.month ? parseInt(resolvedParams.month, 10) : undefined;
 
-  if (!teacher) return null;
-
-  // Teachers see ALL events, and TEACHER events
-  const events = await prisma.calendarEvent.findMany({
-    where: {
-      OR: [
-        { audience: "ALL" },
-        { audience: "TEACHER" }
-      ]
-    },
-    orderBy: [{ date: 'asc' }, { startTime: 'asc' }]
-  });
+  const monthData = await getMonthCalendarData(targetYear, targetMonth, "TEACHER");
 
   return (
-    <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1rem' }}>Calendar</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>View school events and create events for teachers.</p>
-
-      <TeacherCalendarClient events={events} currentUserName={teacher.user.name} />
+    <div style={{ padding: "0 0.5rem" }}>
+      <ProfessionalSchoolCalendar
+        initialData={monthData}
+        role="TEACHER"
+        baseRoute="/dashboard/teacher/calendar"
+      />
     </div>
   );
 }

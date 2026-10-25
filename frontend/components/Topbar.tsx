@@ -1,9 +1,9 @@
 "use client";
 
 import styles from "./Topbar.module.css";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
-import { ArrowLeft, Bell } from "lucide-react";
+import { Bell } from "lucide-react";
 import { useEffect, useState } from "react";
 
 // Matches the key used in NotificationPopupModal
@@ -15,7 +15,6 @@ export default function Topbar({
   user: { name?: string | null; role?: string | null };
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const [showRedDot, setShowRedDot] = useState(false);
 
   // On mount, check if notifications have been permanently cleared
@@ -31,28 +30,9 @@ export default function Topbar({
     return () => window.removeEventListener("notifications-cleared", handleCleared);
   }, []);
 
-  // Determine if we should show the back button
-  // Typically, show it if we are deeper than the main dashboard level.
-  // /dashboard is 2 segments (['', 'dashboard'])
-  // /dashboard/admin/users is 4 segments
-  const showBack = (pathname || "").split("/").filter(Boolean).length > 2;
-
   return (
     <header className={styles.topbar}>
-      <div className={styles.leftSection}>
-        {showBack && (
-          <button 
-            type="button"
-            onClick={() => router.back()} 
-            className={styles.backBtn}
-            aria-label="Go back to previous page"
-            title="Go back"
-          >
-            <ArrowLeft size={16} />
-            <span className={styles.backBtnText}>Back</span>
-          </button>
-        )}
-      </div>
+      <div className={styles.leftSection}></div>
       <div className={styles.userInfo}>
         <button
           type="button"

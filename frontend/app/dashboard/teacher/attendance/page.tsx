@@ -4,6 +4,11 @@ import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import AttendanceForm, { TeacherStudentItem } from "./AttendanceForm";
 import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
+import {
+  getAcademicYearRange,
+  countSchoolWorkingDays,
+  calculateAttendancePercentage,
+} from "@/backend/lib/services/attendanceCalculation";
 
 export default async function TeacherAttendancePage({
   searchParams,
@@ -25,6 +30,14 @@ export default async function TeacherAttendancePage({
 
   const resolvedSearchParams = await searchParams;
   const todayStr = resolvedSearchParams?.date || new Date().toISOString().split("T")[0];
+
+  const [year, month, day] = todayStr.split("-").map(Number);
+  const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+
+  // Determine official school working days up to current date
+  const { start: academicStart } = getAcademicYearRange(startOfDay);
+  const officialWorkingDays = await countSchoolWorkingDays(academicStart, endOfDay);
 
   const teacher = await prisma.teacher.findUnique({
     where: { userId: session.user.id },
@@ -70,15 +83,13 @@ export default async function TeacherAttendancePage({
       rawStatus === "LEAVE" ? "LEAVE" :
       "NOT_MARKED";
 
-    const totalSessions = s.attendances.length;
     const presentCount = s.attendances.filter((a) => a.status === "PRESENT").length;
     const absentCount = s.attendances.filter((a) => a.status === "ABSENT").length;
     const leaveCount = s.attendances.filter((a) => a.status === "LEAVE").length;
+    const recordedTotal = presentCount + absentCount + leaveCount;
 
-    const attendancePercentage =
-      totalSessions > 0
-        ? ((presentCount / totalSessions) * 100).toFixed(1)
-        : "100.0";
+    const totalWorkingSessions = Math.max(officialWorkingDays, recordedTotal, 1);
+    const attendancePercentage = calculateAttendancePercentage(presentCount, totalWorkingSessions);
 
     return {
       id: s.id,
@@ -87,7 +98,7 @@ export default async function TeacherAttendancePage({
       currentStatus,
       currentRemarks: todayRecord?.remarks || "",
       attendancePercentage,
-      totalSessions,
+      totalSessions: totalWorkingSessions,
       presentCount,
       absentCount,
       leaveCount,

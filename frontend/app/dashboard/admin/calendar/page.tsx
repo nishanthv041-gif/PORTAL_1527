@@ -1,23 +1,29 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
-import { prisma } from "@/backend/db/prisma";
-import styles from "../../dashboard.module.css";
-import CalendarClient from "./CalendarClient";
+import ProfessionalSchoolCalendar from "@/frontend/components/calendar/ProfessionalSchoolCalendar";
+import { getMonthCalendarData } from "@/backend/lib/services/calendarDataService";
 
-export default async function AdminCalendarPage() {
+export default async function AdminCalendarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string; month?: string }>;
+}) {
   const session = await getServerSession(getAuthOptions());
-  if (!session || session.user.role !== 'ADMIN') return null;
+  if (!session || session.user.role !== "ADMIN") return null;
 
-  const events = await prisma.calendarEvent.findMany({
-    orderBy: [{ date: 'asc' }, { startTime: 'asc' }]
-  });
+  const resolvedParams = await searchParams;
+  const targetYear = resolvedParams?.year ? parseInt(resolvedParams.year, 10) : undefined;
+  const targetMonth = resolvedParams?.month ? parseInt(resolvedParams.month, 10) : undefined;
+
+  const monthData = await getMonthCalendarData(targetYear, targetMonth, "ADMIN");
 
   return (
-    <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1rem' }}>School Calendar</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Manage all school events, holidays, and exams.</p>
-
-      <CalendarClient events={events} />
+    <div style={{ padding: "0 0.5rem" }}>
+      <ProfessionalSchoolCalendar
+        initialData={monthData}
+        role="ADMIN"
+        baseRoute="/dashboard/admin/calendar"
+      />
     </div>
   );
 }

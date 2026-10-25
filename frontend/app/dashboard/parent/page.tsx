@@ -8,6 +8,7 @@ import {
 import ParentChildBanner from "./ParentChildBanner";
 import Link from "next/link";
 import ExamClassPerformancePieChart from "./ExamClassPerformancePieChart";
+import { getSchoolCalendarStats } from "@/backend/api/actions/dashboard/attendance/calendarStats";
 
 export default async function ParentDashboard({
   searchParams
@@ -63,13 +64,15 @@ export default async function ParentDashboard({
 
   const childClass = selectedChild.class;
 
-  // 2. Compute student attendance statistics
-  const totalSessions = attendanceRecords.length;
+  // 2. Compute student attendance statistics using official school working days
+  const calendarStats = await getSchoolCalendarStats();
   const presentedDays = attendanceRecords.filter((a) => a.status === "PRESENT").length;
-  const absentedDays = attendanceRecords.filter((a) => a.status === "ABSENT" || a.status === "LEAVE").length;
-  const attendancePercentage = totalSessions > 0
-    ? ((presentedDays / totalSessions) * 100).toFixed(1)
-    : "100.0";
+  const absentedDays = attendanceRecords.filter((a) => a.status === "ABSENT").length;
+  const leaveDays = attendanceRecords.filter((a) => a.status === "LEAVE").length;
+  const recordedTotal = attendanceRecords.length;
+
+  const totalSessions = Math.max(calendarStats.totalActiveDays, recordedTotal, 1);
+  const attendancePercentage = ((presentedDays / totalSessions) * 100).toFixed(1);
 
   // Recent attendance entries (last 5 recorded days)
   const recentAttendance = attendanceRecords.slice(0, 5);

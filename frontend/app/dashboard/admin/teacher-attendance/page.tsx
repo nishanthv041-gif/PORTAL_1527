@@ -2,6 +2,11 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import TeacherAttendanceClient, { TeacherRecordItem } from "./TeacherAttendanceClient";
+import {
+  getAcademicYearRange,
+  countSchoolWorkingDays,
+  calculateAttendancePercentage,
+} from "@/backend/lib/services/attendanceCalculation";
 
 export default async function AdminTeacherAttendancePage({
   searchParams,
@@ -18,8 +23,12 @@ export default async function AdminTeacherAttendancePage({
   const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
   const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
 
+  // Determine official academic working days up to current date
+  const { start: academicStart } = getAcademicYearRange(startOfDay);
+  const officialWorkingDaysPromise = countSchoolWorkingDays(academicStart, endOfDay);
+
   // Fetch all active teachers and today's attendance records
-  const [teachers, dateAttendances] = await Promise.all([
+  const [teachers, dateAttendances, officialWorkingDays] = await Promise.all([
     prisma.teacher.findMany({
       where: { isActive: true },
       include: {
@@ -36,9 +45,10 @@ export default async function AdminTeacherAttendancePage({
         date: { gte: startOfDay, lte: endOfDay },
       },
     }),
+    officialWorkingDaysPromise,
   ]);
 
-  // Precompute baseline statistics for each teacher (Present, Absent, Leave)
+  // Precompute baseline statistics for each teacher using official school working days
   const serializedTeachers: TeacherRecordItem[] = teachers.map((teacher) => {
     const todayRecord = dateAttendances.find((a) => a.teacherId === teacher.id);
     const rawStatus = todayRecord?.status;
@@ -48,15 +58,14 @@ export default async function AdminTeacherAttendancePage({
       rawStatus === "LEAVE" ? "LEAVE" :
       "NOT_MARKED";
 
-    const totalSessions = teacher.attendances.length;
     const presentedDays = teacher.attendances.filter((a) => a.status === "PRESENT").length;
     const absentedDays = teacher.attendances.filter((a) => a.status === "ABSENT").length;
     const leaveDays = teacher.attendances.filter((a) => a.status === "LEAVE").length;
+    const recordedTotal = presentedDays + absentedDays + leaveDays;
 
-    const attendancePercentage =
-      totalSessions > 0
-        ? ((presentedDays / totalSessions) * 100).toFixed(1)
-        : "100.0";
+    // Use official school working days as authoritative base
+    const effectiveWorkingUnits = Math.max(officialWorkingDays, recordedTotal, 1);
+    const attendancePercentage = calculateAttendancePercentage(presentedDays, effectiveWorkingUnits);
 
     return {
       id: teacher.id,
@@ -66,7 +75,7 @@ export default async function AdminTeacherAttendancePage({
         email: teacher.user.email,
         role: teacher.user.role,
       },
-      totalSessions,
+      totalSessions: effectiveWorkingUnits,
       presentedDays,
       absentedDays,
       leaveDays,

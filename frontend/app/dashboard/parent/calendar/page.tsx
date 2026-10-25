@@ -1,40 +1,29 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
-import { prisma } from "@/backend/db/prisma";
-import styles from "../../dashboard.module.css";
-import ParentCalendarClient from "./ParentCalendarClient";
+import ProfessionalSchoolCalendar from "@/frontend/components/calendar/ProfessionalSchoolCalendar";
+import { getMonthCalendarData } from "@/backend/lib/services/calendarDataService";
 
-export default async function ParentCalendarPage() {
+export default async function ParentCalendarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string; month?: string }>;
+}) {
   const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
-  const events = await prisma.calendarEvent.findMany({
-    where: {
-      OR: [
-        { audience: 'ALL' },
-        { audience: 'STUDENT' }, // Parents want to see student events
-        { audience: 'PARENTS' }  // Just in case it's added
-      ]
-    },
-    orderBy: { date: 'asc' }
-  });
+  const resolvedParams = await searchParams;
+  const targetYear = resolvedParams?.year ? parseInt(resolvedParams.year, 10) : undefined;
+  const targetMonth = resolvedParams?.month ? parseInt(resolvedParams.month, 10) : undefined;
 
-  // Convert dates to ISO strings for client component serialization
-  const serializedEvents = events.map(event => ({
-    ...event,
-    date: event.date.toISOString(),
-    endDate: event.endDate?.toISOString() || null,
-    createdAt: event.createdAt.toISOString()
-  }));
+  const monthData = await getMonthCalendarData(targetYear, targetMonth, "PARENT");
 
   return (
-    <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1rem' }}>School Calendar</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>View upcoming school events, holidays, and deadlines.</p>
-
-      <div className={styles.chartCard} style={{ minHeight: '600px', display: 'flex', flexDirection: 'column' }}>
-        <ParentCalendarClient initialEvents={serializedEvents} />
-      </div>
+    <div style={{ padding: "0 0.5rem" }}>
+      <ProfessionalSchoolCalendar
+        initialData={monthData}
+        role="PARENT"
+        baseRoute="/dashboard/parent/calendar"
+      />
     </div>
   );
 }
