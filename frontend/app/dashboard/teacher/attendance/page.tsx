@@ -2,12 +2,14 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
-import AttendanceForm from "./AttendanceForm";
+import AttendanceForm, { TeacherStudentItem } from "./AttendanceForm";
 import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
-import { getSchoolCalendarStats } from "@/backend/api/actions/dashboard/attendance/calendarStats";
-import { getClassAttendanceDetails } from "@/backend/api/actions/dashboard/teacher/attendance/actions";
 
-export default async function TeacherAttendancePage() {
+export default async function TeacherAttendancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
   const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
@@ -21,6 +23,9 @@ export default async function TeacherAttendancePage() {
     );
   }
 
+  const resolvedSearchParams = await searchParams;
+  const todayStr = resolvedSearchParams?.date || new Date().toISOString().split("T")[0];
+
   const teacher = await prisma.teacher.findUnique({
     where: { userId: session.user.id },
     include: {
@@ -28,13 +33,13 @@ export default async function TeacherAttendancePage() {
         include: {
           students: {
             where: { isActive: true },
-            orderBy: { rollNumber: "asc" },
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              rollNumber: true,
+            include: {
+              attendances: {
+                orderBy: { date: "desc" },
+                take: 60,
+              },
             },
+            orderBy: { rollNumber: "asc" },
           },
         },
       },
@@ -51,29 +56,55 @@ export default async function TeacherAttendancePage() {
   }
 
   const myClass = teacher.classTeacherOf;
-  const todayStr = new Date().toISOString().split("T")[0];
 
-  // Fetch school active days and leave days from Admin Calendar
-  const calendarStats = await getSchoolCalendarStats();
+  const serializedStudents: TeacherStudentItem[] = myClass.students.map((s) => {
+    const todayRecord = s.attendances.find((a) => {
+      const attDate = new Date(a.date).toISOString().split("T")[0];
+      return attDate === todayStr;
+    });
 
-  // Fetch today's class attendance details & approved leaves
-  const initialDetails = await getClassAttendanceDetails(myClass.id, todayStr);
+    const totalSessions = s.attendances.length;
+    const presentCount = s.attendances.filter((a) => a.status === "PRESENT").length;
+    const absentCount = s.attendances.filter((a) => a.status === "ABSENT").length;
+    const leaveCount = s.attendances.filter((a) => a.status === "LEAVE").length;
+    const lateCount = s.attendances.filter((a) => a.status === "LATE").length;
+    const halfDayCount = s.attendances.filter((a) => a.status === "HALF_DAY").length;
+
+    const attendancePercentage =
+      totalSessions > 0
+        ? ((presentCount / totalSessions) * 100).toFixed(1)
+        : "100.0";
+
+    return {
+      id: s.id,
+      name: `${s.firstName} ${s.lastName}`.trim(),
+      rollNumber: s.rollNumber,
+      currentStatus: todayRecord
+        ? (todayRecord.status as any) || "NOT_MARKED"
+        : "NOT_MARKED",
+      currentRemarks: todayRecord?.remarks || "",
+      attendancePercentage,
+      totalSessions,
+      presentCount,
+      absentCount,
+      leaveCount,
+      lateCount,
+      halfDayCount,
+      recentHistory: s.attendances.slice(0, 15).map((a) => ({
+        id: a.id,
+        date: a.date,
+        status: a.status,
+        remarks: a.remarks,
+      })),
+    };
+  });
 
   return (
-    <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: "0.25rem" }}>
-        Attendance
-      </h1>
-      <p style={{ color: "var(--text-secondary)", marginTop: 0, marginBottom: "1.75rem" }}>
-        Real-time class attendance register for {myClass.name} - {myClass.section}. Changes save automatically.
-      </p>
-
+    <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       <AttendanceForm
-        myClass={myClass}
-        calendarStats={calendarStats}
+        myClass={{ id: myClass.id, name: myClass.name, section: myClass.section }}
+        students={serializedStudents}
         initialDate={todayStr}
-        initialAttendanceMap={initialDetails.attendanceMap || {}}
-        initialLeaveCount={initialDetails.leaveCountToday || 0}
       />
     </div>
   );

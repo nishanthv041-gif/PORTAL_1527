@@ -71,7 +71,7 @@ export async function adminUpdateTeacherAttendance(
 }
 
 export async function adminBulkTeacherAttendance(
-  data: { teacherId: string; date: string; status: string }[]
+  data: { teacherId: string; date: string; status: string; remarks?: string }[]
 ) {
   try {
     const session = await getServerSession(getAuthOptions());
@@ -95,7 +95,7 @@ export async function adminBulkTeacherAttendance(
           data: {
             status: item.status,
             date: startOfDay,
-            remarks: "Admin Bulk Mark"
+            remarks: item.remarks !== undefined ? item.remarks : existing.remarks
           }
         });
       } else {
@@ -104,7 +104,7 @@ export async function adminBulkTeacherAttendance(
             teacherId: item.teacherId,
             date: startOfDay,
             status: item.status,
-            remarks: "Admin Bulk Mark"
+            remarks: item.remarks || null
           }
         });
       }

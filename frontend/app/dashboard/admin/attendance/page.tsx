@@ -1,13 +1,7 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
-import { Student, Attendance } from "@prisma/client";
-import styles from "../../dashboard.module.css";
-import AttendanceClient from "./AttendanceClient";
-import { getSchoolCalendarStats } from "@/backend/api/actions/dashboard/attendance/calendarStats";
-
-import Link from "next/link";
-import { GraduationCap, UserCheck } from "lucide-react";
+import AttendanceClient, { AdminStudentItem } from "./AttendanceClient";
 
 export default async function AdminAttendancePage({
   searchParams,
@@ -19,94 +13,88 @@ export default async function AdminAttendancePage({
 
   const resolvedSearchParams = await searchParams;
 
-  const today = resolvedSearchParams.date ? new Date(resolvedSearchParams.date) : new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayStr = resolvedSearchParams?.date || new Date().toISOString().split("T")[0];
+  const [year, month, day] = todayStr.split("-").map(Number);
+  const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
 
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  // Fetch all active classes for the selector
+  // Fetch all active classes
   const classes = await prisma.class.findMany({
     where: { isActive: true },
     orderBy: [{ name: "asc" }, { section: "asc" }],
+    select: { id: true, name: true, section: true },
   });
 
-  // Calculate calendar stats from Admin Calendar
-  const calendarStats = await getSchoolCalendarStats(today);
+  const selectedClassId = resolvedSearchParams?.classId || (classes.length > 0 ? classes[0].id : "");
 
-  let students: Student[] = [];
-  let classAttendances: Attendance[] = [];
-  let leaveCount = 0;
-
-  const selectedClassId = resolvedSearchParams.classId || (classes.length > 0 ? classes[0].id : "");
+  let serializedStudents: AdminStudentItem[] = [];
 
   if (selectedClassId) {
-    students = await prisma.student.findMany({
+    const rawStudents = await prisma.student.findMany({
       where: { classId: selectedClassId, isActive: true },
+      include: {
+        class: { select: { id: true, name: true, section: true } },
+        attendances: {
+          orderBy: { date: "desc" },
+          take: 60,
+        },
+      },
       orderBy: { rollNumber: "asc" },
     });
 
-    const studentIds = students.map((s) => s.id);
+    serializedStudents = rawStudents.map((s) => {
+      const todayRecord = s.attendances.find((a) => {
+        const attDate = new Date(a.date).toISOString().split("T")[0];
+        return attDate === todayStr;
+      });
 
-    classAttendances = await prisma.attendance.findMany({
-      where: {
-        studentId: { in: studentIds },
-        date: { gte: today, lt: tomorrow },
-      },
+      const totalSessions = s.attendances.length;
+      const presentCount = s.attendances.filter((a) => a.status === "PRESENT").length;
+      const absentCount = s.attendances.filter((a) => a.status === "ABSENT").length;
+      const leaveCount = s.attendances.filter((a) => a.status === "LEAVE").length;
+      const lateCount = s.attendances.filter((a) => a.status === "LATE").length;
+      const halfDayCount = s.attendances.filter((a) => a.status === "HALF_DAY").length;
+
+      const attendancePercentage =
+        totalSessions > 0
+          ? ((presentCount / totalSessions) * 100).toFixed(1)
+          : "100.0";
+
+      return {
+        id: s.id,
+        name: `${s.firstName} ${s.lastName}`.trim(),
+        rollNumber: s.rollNumber,
+        admissionNo: s.admissionNo,
+        classId: s.classId || selectedClassId,
+        className: s.class ? `${s.class.name} - ${s.class.section}` : "",
+        currentStatus: todayRecord
+          ? (todayRecord.status as any) || "NOT_MARKED"
+          : "NOT_MARKED",
+        currentRemarks: todayRecord?.remarks || "",
+        attendancePercentage,
+        totalSessions,
+        presentCount,
+        absentCount,
+        leaveCount,
+        lateCount,
+        halfDayCount,
+        recentHistory: s.attendances.slice(0, 15).map((a) => ({
+          id: a.id,
+          date: a.date,
+          status: a.status,
+          remarks: a.remarks,
+        })),
+      };
     });
-
-    // Check approved leaves for this class on this date
-    const approvedLeaves = await prisma.leaveRequest.findMany({
-      where: {
-        studentId: { in: studentIds },
-        status: "APPROVED",
-        startDate: { lte: tomorrow },
-        endDate: { gte: today },
-      },
-    });
-
-    leaveCount = approvedLeaves.length;
   }
 
   return (
-    <div className={styles.dashboard}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1.5rem" }}>
-        <div>
-          <h1 className={styles.title} style={{ margin: 0, marginBottom: "0.25rem" }}>
-            Attendance Management
-          </h1>
-          <p style={{ color: "var(--text-secondary)", margin: 0 }}>
-            Full administrative attendance overview and editing access across the entire academic year.
-          </p>
-        </div>
-
-        {/* Hub Switcher: Student Attendance vs Teacher Attendance */}
-        <div style={{ display: "inline-flex", background: "rgba(255, 255, 255, 0.04)", border: "1px solid var(--border-color)", padding: "4px", borderRadius: "12px", gap: "4px" }}>
-          <Link 
-            href="/dashboard/admin/attendance" 
-            style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.55rem 1.15rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "9px", textDecoration: "none", background: "var(--primary)", color: "#fff" }}
-          >
-            <GraduationCap size={16} />
-            <span>Student Attendance</span>
-          </Link>
-          <Link 
-            href="/dashboard/admin/teacher-attendance" 
-            style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.55rem 1.15rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "9px", textDecoration: "none", color: "var(--text-secondary)" }}
-          >
-            <UserCheck size={16} />
-            <span>Teacher Attendance</span>
-          </Link>
-        </div>
-      </div>
-
+    <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       <AttendanceClient
         classes={classes}
-        students={students}
-        attendances={classAttendances}
-        initialClassId={selectedClassId}
-        initialDate={today.toISOString().split("T")[0]}
-        calendarStats={calendarStats}
-        initialLeaveCount={leaveCount}
+        students={serializedStudents}
+        selectedClassId={selectedClassId}
+        initialDate={todayStr}
       />
     </div>
   );

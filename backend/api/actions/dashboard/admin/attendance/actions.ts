@@ -64,7 +64,7 @@ export async function adminUpdateAttendance(studentId: string, dateStr: string, 
   }
 }
 
-export async function adminBulkAttendance(data: { studentId: string; date: string; status: string; classId: string }[]) {
+export async function adminBulkAttendance(data: { studentId: string; date: string; status: string; classId?: string; remarks?: string }[]) {
   try {
     const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
@@ -87,17 +87,23 @@ export async function adminBulkAttendance(data: { studentId: string; date: strin
           data: {
             status: item.status,
             date: startOfDay,
-            remarks: "Admin Bulk Mark"
+            remarks: item.remarks !== undefined ? item.remarks : existing.remarks
           }
         });
       } else {
+        let finalClassId = item.classId;
+        if (!finalClassId) {
+          const student = await prisma.student.findUnique({ where: { id: item.studentId }, select: { classId: true } });
+          finalClassId = student?.classId || undefined;
+        }
+
         await prisma.attendance.create({
           data: {
             studentId: item.studentId,
-            classId: item.classId,
+            classId: finalClassId,
             date: startOfDay,
             status: item.status,
-            remarks: "Admin Bulk Mark"
+            remarks: item.remarks || null
           }
         });
       }

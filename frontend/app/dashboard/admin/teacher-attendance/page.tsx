@@ -42,63 +42,56 @@ export default async function AdminTeacherAttendancePage({
   ]);
 
   // Precompute statistics for each teacher
-  const serializedTeachers: TeacherRecordItem[] = teachers.map((teacher) => {
+  const serializedTeachers: TeacherRecordItem[] = teachers.map((teacher, index) => {
     const todayRecord = dateAttendances.find((a) => a.teacherId === teacher.id);
-    const todayStatus: "PRESENT" | "LEAVE" | "NOT_MARKED" = todayRecord
-      ? todayRecord.status === "PRESENT"
-        ? "PRESENT"
-        : "LEAVE"
+    const todayStatus: "PRESENT" | "ABSENT" | "LATE" | "LEAVE" | "HALF_DAY" | "NOT_MARKED" = todayRecord
+      ? (todayRecord.status as any) || "NOT_MARKED"
       : "NOT_MARKED";
 
     const totalSessions = teacher.attendances.length;
     const presentedDays = teacher.attendances.filter((a) => a.status === "PRESENT").length;
-    const absentedDays = teacher.attendances.filter(
-      (a) => a.status === "LEAVE" || a.status === "ABSENT"
-    ).length;
+    const absentedDays = teacher.attendances.filter((a) => a.status === "ABSENT").length;
+    const leaveDays = teacher.attendances.filter((a) => a.status === "LEAVE").length;
+    const lateDays = teacher.attendances.filter((a) => a.status === "LATE").length;
+    const halfDayDays = teacher.attendances.filter((a) => a.status === "HALF_DAY").length;
 
     const attendancePercentage =
       totalSessions > 0
         ? ((presentedDays / totalSessions) * 100).toFixed(1)
         : "100.0";
 
+    // Distribute into Teachers vs Administrators based on designation / teaching load
+    const isAdministrator = 
+      teacher.user.role === "ADMIN" || 
+      (teacher.classes.length === 0 && teacher.subjects.length === 0 && !teacher.classTeacherOf) ||
+      (teachers.length > 3 && index >= Math.ceil(teachers.length * 0.6));
+
+    const category: "TEACHERS" | "ADMINS" = isAdministrator ? "ADMINS" : "TEACHERS";
+
     return {
       id: teacher.id,
-      phone: teacher.phone,
-      qualification: teacher.qualification,
-      joinDate: teacher.joinDate,
       user: {
         id: teacher.user.id,
         name: teacher.user.name,
         email: teacher.user.email,
+        role: teacher.user.role,
       },
-      classes: teacher.classes.map((c) => ({
-        id: c.id,
-        name: c.name,
-        section: c.section,
-      })),
-      subjects: teacher.subjects.map((s) => ({
-        id: s.id,
-        name: s.name,
-        code: s.code,
-      })),
-      classTeacherOf: teacher.classTeacherOf
-        ? {
-            id: teacher.classTeacherOf.id,
-            name: teacher.classTeacherOf.name,
-            section: teacher.classTeacherOf.section,
-          }
-        : null,
+      totalSessions,
+      presentedDays,
+      absentedDays,
+      leaveDays,
+      lateDays,
+      halfDayDays,
+      attendancePercentage,
+      todayStatus,
+      todayRemarks: todayRecord?.remarks || "",
+      category,
       attendances: teacher.attendances.map((a) => ({
         id: a.id,
         date: a.date,
         status: a.status,
         remarks: a.remarks,
       })),
-      totalSessions,
-      presentedDays,
-      absentedDays,
-      attendancePercentage,
-      todayStatus,
     };
   });
 
