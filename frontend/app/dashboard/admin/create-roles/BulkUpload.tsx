@@ -5,7 +5,7 @@ import {
   Upload, Download, FileSpreadsheet, Loader2, AlertTriangle, 
   CheckCircle2, Edit3, Trash2, X, Search, Check, RefreshCw,
   Clock, ShieldAlert, ArrowRight, Eye, AlertOctagon, HelpCircle,
-  FileCheck, Users, GraduationCap
+  FileCheck, Users, GraduationCap, Wand2
 } from "lucide-react";
 import { 
   scanExcelFileAction, 
@@ -182,11 +182,82 @@ export default function BulkUpload({
     }
   };
 
+  // Check if any rows have unclear residence options
+  const hasUnclearResidenceRows = (scanResult?.rows || []).some(r => {
+    const resRaw = String(r.data.residenceType || "").toUpperCase();
+    return (resRaw.includes("DAY") && resRaw.includes("HOSTEL")) || !!r.fieldErrors?.residenceType?.includes("Unclear option");
+  });
+
   // Open Edit Modal for a row
   const openEditRow = (row: RowValidationResult) => {
     setEditingRow(row);
-    setEditFormData({ ...row.data });
+    const initialData = { ...row.data };
+    if (initialData.residenceType) {
+      const upper = String(initialData.residenceType).toUpperCase();
+      if (upper.includes("HOSTEL") && !upper.includes("DAY")) {
+        initialData.residenceType = "HOSTEL";
+      } else {
+        initialData.residenceType = "DAYSCHOLAR";
+      }
+    } else {
+      initialData.residenceType = "DAYSCHOLAR";
+    }
+    setEditFormData(initialData);
     setEditRowErrors({ ...row.fieldErrors });
+  };
+
+  // Quick action: set single row residence
+  const handleQuickSetResidence = (row: RowValidationResult, chosenResidence: "DAYSCHOLAR" | "HOSTEL") => {
+    if (!scanResult) return;
+    startTransition(async () => {
+      const updatedRows = scanResult.rows.map(r => {
+        if (r.rowId === row.rowId) {
+          return {
+            ...r.data,
+            residenceType: chosenResidence
+          };
+        }
+        return r.data;
+      });
+
+      const res = await revalidateExcelRowsAction(updatedRows, type);
+      if (res.success && res.result) {
+        setScanResult(res.result);
+      } else {
+        setGeneralError(res.error || "Failed to update row residence.");
+      }
+    });
+  };
+
+  // Quick action: auto-resolve all unclear residence rows to DAYSCHOLAR
+  const handleAutoResolveUnclearResidence = () => {
+    if (!scanResult) return;
+    startTransition(async () => {
+      const updatedRows = scanResult.rows.map(r => {
+        const rowData = { ...r.data };
+        const resRaw = String(rowData.residenceType || "").toUpperCase();
+        if ((resRaw.includes("DAY") && resRaw.includes("HOSTEL")) || r.fieldErrors?.residenceType?.includes("Unclear option")) {
+          rowData.residenceType = "DAYSCHOLAR";
+        }
+        return rowData;
+      });
+
+      const res = await revalidateExcelRowsAction(updatedRows, type);
+      if (res.success && res.result) {
+        setScanResult(res.result);
+      } else {
+        setGeneralError(res.error || "Failed to auto-resolve unclear residence options.");
+      }
+    });
+  };
+
+  // Edit first error row
+  const handleEditFirstError = () => {
+    if (!scanResult) return;
+    const firstErr = scanResult.rows.find(r => !r.isReadyToImport) || scanResult.rows[0];
+    if (firstErr) {
+      openEditRow(firstErr);
+    }
   };
 
   // Save row changes & revalidate in-place
@@ -1085,10 +1156,50 @@ export default function BulkUpload({
                               <td style={{ padding: "0.75rem 1rem" }}>
                                 {type === "student" ? (
                                   <div>
-                                    <div>{r.data.classNameResolved || r.data.class || "Unassigned"}</div>
-                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                                      Type: {r.data.residenceType || "DAYSCHOLAR"}
+                                    <div style={{ fontWeight: 500 }}>{r.data.classNameResolved || r.data.class || "Unassigned"}</div>
+                                    <div style={{ fontSize: "0.75rem", color: r.fieldErrors.residenceType ? "#ef4444" : "var(--text-secondary)" }}>
+                                      Type: <strong>{r.data.residenceType || "DAYSCHOLAR"}</strong>
                                     </div>
+                                    {r.fieldErrors.residenceType && (
+                                      <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginTop: "0.35rem" }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleQuickSetResidence(r, "DAYSCHOLAR")}
+                                          disabled={isPending}
+                                          title="Click to set residence as Dayscholar"
+                                          style={{
+                                            padding: "0.2rem 0.45rem",
+                                            fontSize: "0.7rem",
+                                            borderRadius: "4px",
+                                            border: "1px solid #10b981",
+                                            backgroundColor: "rgba(16, 185, 129, 0.1)",
+                                            color: "#10b981",
+                                            cursor: "pointer",
+                                            fontWeight: 700
+                                          }}
+                                        >
+                                          + Dayscholar
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleQuickSetResidence(r, "HOSTEL")}
+                                          disabled={isPending}
+                                          title="Click to set residence as Hostel"
+                                          style={{
+                                            padding: "0.2rem 0.45rem",
+                                            fontSize: "0.7rem",
+                                            borderRadius: "4px",
+                                            border: "1px solid #6366f1",
+                                            backgroundColor: "rgba(99, 102, 241, 0.1)",
+                                            color: "#6366f1",
+                                            cursor: "pointer",
+                                            fontWeight: 700
+                                          }}
+                                        >
+                                          + Hostel
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
                                 ) : (
                                   <div>
@@ -1150,26 +1261,25 @@ export default function BulkUpload({
 
                               {/* Edit Action */}
                               <td style={{ padding: "0.75rem 1rem", textAlign: "right" }}>
-                                {!isSample && (
-                                  <button
-                                    onClick={() => openEditRow(r)}
-                                    style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "0.3rem",
-                                      padding: "0.35rem 0.65rem",
-                                      borderRadius: "6px",
-                                      border: "1px solid var(--border-color)",
-                                      backgroundColor: "transparent",
-                                      color: "var(--foreground)",
-                                      fontSize: "0.75rem",
-                                      fontWeight: 600,
-                                      cursor: "pointer"
-                                    }}
-                                  >
-                                    <Edit3 size={12} /> Edit
-                                  </button>
-                                )}
+                                <button
+                                  onClick={() => openEditRow(r)}
+                                  disabled={isPending}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.3rem",
+                                    padding: "0.35rem 0.65rem",
+                                    borderRadius: "6px",
+                                    border: r.isReadyToImport ? "1px solid var(--border-color)" : "1px solid #6366f1",
+                                    backgroundColor: r.isReadyToImport ? "transparent" : "rgba(99, 102, 241, 0.12)",
+                                    color: r.isReadyToImport ? "var(--foreground)" : "#6366f1",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 700,
+                                    cursor: "pointer"
+                                  }}
+                                >
+                                  <Edit3 size={12} /> {r.isReadyToImport ? "Edit" : "Edit / Fix"}
+                                </button>
                               </td>
                             </tr>
                           );
@@ -1196,15 +1306,91 @@ export default function BulkUpload({
                     <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--foreground)" }}>
                       {scanResult.readyToImportCount} of {scanResult.totalRows} records ready for database import
                     </div>
-                    <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", marginTop: "0.2rem" }}>
+                    <div style={{ fontSize: "0.8125rem", color: scanResult.errorRowsCount > 0 || scanResult.sampleRowsCount > 0 ? "#f59e0b" : "var(--text-secondary)", marginTop: "0.2rem", fontWeight: scanResult.readyToImportCount === 0 ? 600 : 400 }}>
                       {scanResult.errorRowsCount > 0 
-                        ? `${scanResult.errorRowsCount} rows have validation issues. You can import only valid rows now or correct them inline first.`
+                        ? `⚠️ ${scanResult.errorRowsCount} record(s) need updates (unclear option or missing fields). Please update the details before importing.`
+                        : (scanResult.readyToImportCount === 0 && scanResult.sampleRowsCount > 0)
+                        ? `${scanResult.sampleRowsCount} row(s) detected as template demonstration. Click "Update Details" to fill in real student data.`
                         : "All data rows passed schema validation and duplicate checks."
                       }
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem" }}>
+                    {/* Auto-Resolve button if unclear residence rows exist */}
+                    {hasUnclearResidenceRows && (
+                      <button
+                        type="button"
+                        onClick={handleAutoResolveUnclearResidence}
+                        disabled={isPending}
+                        title="Auto-fix all unclear 'Dayscholar (or Hostel)' values to Dayscholar"
+                        style={{
+                          padding: "0.625rem 1.15rem",
+                          backgroundColor: "#3b82f6",
+                          color: "#ffffff",
+                          borderRadius: "8px",
+                          border: "none",
+                          fontWeight: 700,
+                          fontSize: "0.875rem",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.45rem",
+                          boxShadow: "0 2px 6px rgba(59, 130, 246, 0.3)"
+                        }}
+                      >
+                        <Wand2 size={16} /> Quick Fix: Set Unclear to Dayscholar
+                      </button>
+                    )}
+
+                    {/* Update / Edit First Error Row */}
+                    {(scanResult.errorRowsCount > 0 || scanResult.readyToImportCount === 0) && (
+                      <button
+                        type="button"
+                        onClick={handleEditFirstError}
+                        disabled={isPending}
+                        style={{
+                          padding: "0.625rem 1.15rem",
+                          backgroundColor: scanResult.readyToImportCount === 0 ? "var(--primary, #6366f1)" : "rgba(99, 102, 241, 0.15)",
+                          color: scanResult.readyToImportCount === 0 ? "#ffffff" : "#6366f1",
+                          borderRadius: "8px",
+                          border: scanResult.readyToImportCount === 0 ? "none" : "1px solid #6366f1",
+                          fontWeight: 700,
+                          fontSize: "0.875rem",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.45rem",
+                          boxShadow: scanResult.readyToImportCount === 0 ? "0 2px 6px rgba(99, 102, 241, 0.3)" : "none"
+                        }}
+                      >
+                        <Edit3 size={16} /> Update Details {scanResult.errorRowsCount > 0 ? `(${scanResult.errorRowsCount} pending)` : ""}
+                      </button>
+                    )}
+
+                    {/* Revalidate Button */}
+                    <button
+                      type="button"
+                      onClick={handleRevalidateAll}
+                      disabled={isPending}
+                      style={{
+                        padding: "0.625rem 1rem",
+                        backgroundColor: "transparent",
+                        color: "var(--foreground)",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border-color)",
+                        fontWeight: 600,
+                        fontSize: "0.875rem",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem"
+                      }}
+                    >
+                      <RefreshCw size={15} /> Revalidate
+                    </button>
+
+                    {/* Import Buttons */}
                     {scanResult.readyToImportCount > 0 && (
                       <button
                         onClick={() => {
@@ -1558,23 +1744,43 @@ export default function BulkUpload({
                     </div>
 
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                        Residence Type *
-                      </label>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.25rem" }}>
+                        <label style={{ fontSize: "0.8125rem", fontWeight: 600 }}>
+                          Residence Type *
+                        </label>
+                        {editingRow?.fieldErrors?.residenceType && (
+                          <span style={{ fontSize: "0.75rem", color: "#f59e0b", fontWeight: 600 }}>
+                            ⚠️ Unclear option in file — please confirm:
+                          </span>
+                        )}
+                      </div>
                       <select
-                        value={editFormData.residenceType || "DAYSCHOLAR"}
-                        onChange={(e) => setEditFormData({ ...editFormData, residenceType: e.target.value })}
+                        value={editFormData.residenceType === "HOSTEL" ? "HOSTEL" : "DAYSCHOLAR"}
+                        onChange={(e) => {
+                          setEditFormData({ ...editFormData, residenceType: e.target.value });
+                          if (editRowErrors.residenceType) {
+                            const errs = { ...editRowErrors };
+                            delete errs.residenceType;
+                            setEditRowErrors(errs);
+                          }
+                        }}
                         style={{
                           width: "100%",
                           padding: "0.5rem 0.75rem",
                           borderRadius: "8px",
-                          border: "1px solid var(--border-color)",
-                          background: "transparent"
+                          border: `1px solid ${editRowErrors.residenceType ? "#f59e0b" : "var(--border-color)"}`,
+                          background: "transparent",
+                          color: "var(--foreground)"
                         }}
                       >
-                        <option value="DAYSCHOLAR">Dayscholar</option>
-                        <option value="HOSTEL">Hostel</option>
+                        <option value="DAYSCHOLAR">Dayscholar (Day scholar)</option>
+                        <option value="HOSTEL">Hostel (Hosteller)</option>
                       </select>
+                      {editRowErrors.residenceType && (
+                        <span style={{ color: "#ef4444", fontSize: "0.75rem", marginTop: "0.25rem", display: "block" }}>
+                          {editRowErrors.residenceType}
+                        </span>
+                      )}
                     </div>
                   </div>
 

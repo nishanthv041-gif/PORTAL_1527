@@ -219,22 +219,19 @@ export function isSampleTemplateRow(type: ImportType, row: Record<string, any>):
     const pEmail = String(row.parentEmail || "").toLowerCase();
     const roll = String(row.studentRollNo || "").trim();
     const adm = String(row.admissionNo || "").trim();
-    const residence = String(row.residenceType || "").toLowerCase();
 
+    // Strictly detect the official template dummy demo row (Jimmy Doe / parent@example.com with 101/ADM101)
     if (
       (sName.includes("jimmy doe") || pEmail.includes("parent@example.com")) &&
-      (roll === "101" || adm === "ADM101")
+      (roll === "101" || adm.toUpperCase() === "ADM101")
     ) {
-      return true;
-    }
-    if (residence.includes("(or hostel)") || residence.includes("dayscholar (or")) {
       return true;
     }
   } else {
     const tName = `${row.firstName || ""} ${row.lastName || ""}`.toLowerCase();
     const email = String(row.email || "").toLowerCase();
     if (
-      (tName.includes("john doe") || email.includes("john.teacher@example.com") || email.includes("@example.com")) &&
+      (tName.includes("john doe") || email.includes("john.teacher@example.com") || email.includes("teacher@example.com")) &&
       String(row.phone || "").includes("9876543210")
     ) {
       return true;
@@ -702,10 +699,14 @@ export async function validateAndCorrelateBatch(
       if (!resRaw) {
         fieldErrors.residenceType = "Residence type is required (DAYSCHOLAR or HOSTEL).";
         missingFields.push("residenceType");
-      } else if (resRaw.includes("HOSTEL")) {
+      } else if (resRaw.includes("HOSTEL") && !resRaw.includes("DAYSCHOLAR") && !resRaw.includes("DAY")) {
         row.residenceType = "HOSTEL";
-      } else if (resRaw.includes("DAYSCHOLAR") || resRaw.includes("DAY")) {
+      } else if ((resRaw.includes("DAYSCHOLAR") || resRaw.includes("DAY")) && !resRaw.includes("HOSTEL")) {
         row.residenceType = "DAYSCHOLAR";
+      } else if (resRaw.includes("HOSTEL") && (resRaw.includes("DAYSCHOLAR") || resRaw.includes("DAY"))) {
+        // Template placeholder text "Dayscholar (or Hostel)" was left in the row
+        fieldErrors.residenceType = "Unclear option: 'Dayscholar (or Hostel)'. Please update detail to Dayscholar or Hostel.";
+        invalidFields.push("residenceType");
       } else {
         fieldErrors.residenceType = `Invalid residence type '${resRaw}'. Must be DAYSCHOLAR or HOSTEL.`;
         invalidFields.push("residenceType");

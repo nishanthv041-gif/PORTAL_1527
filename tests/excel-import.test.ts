@@ -448,6 +448,43 @@ async function runTestSuite() {
     "OWASP formula injection defense prepends single quote to dangerous formula triggers in error reports"
   );
 
+  // ----------------------------------------------------
+  // Test U: Unclear option ("Dayscholar (or Hostel)") handling & non-sample row detection
+  // ----------------------------------------------------
+  const unclearRow = {
+    excelRowNumber: 2,
+    studentFirstName: "Anushka",
+    studentLastName: "A",
+    studentRollNo: `7376252AD114_${Date.now()}`,
+    admissionNo: `AD123_${Date.now()}`,
+    studentDob: "2012-04-10",
+    class: `${testClass.name} - ${testClass.section}`,
+    residenceType: "Dayscholar (or Hostel)",
+    parentFirstName: "Anand",
+    parentLastName: "H A",
+    parentEmail: `anushka_${Date.now()}@schooltest.internal`,
+    parentPassword: "Password@123",
+    parentPhone: "9876543210"
+  };
+
+  const scanUnclear = await validateAndCorrelateBatch("STUDENT_PARENT", [unclearRow], [testClass]);
+  assert(
+    scanUnclear.sampleRowsCount === 0 &&
+    scanUnclear.rows[0].status === "NEEDS_CORRECTION" &&
+    scanUnclear.rows[0].fieldErrors.residenceType?.includes("Unclear option"),
+    "U1",
+    "Real student with 'Dayscholar (or Hostel)' is NOT marked as sample row, but flagged as unclear option needing correction"
+  );
+
+  // Correct unclear residence to DAYSCHOLAR
+  const resolvedRow = { ...unclearRow, residenceType: "DAYSCHOLAR" };
+  const scanResolved = await validateAndCorrelateBatch("STUDENT_PARENT", [resolvedRow], [testClass]);
+  assert(
+    scanResolved.readyToImportCount === 1 && scanResolved.rows[0].status === "VALID",
+    "U2",
+    "Selecting Dayscholar or Hostel resolves unclear option and row becomes ready to import"
+  );
+
   // Cleanup test records from database so production DB is never polluted
   try {
     await prisma.parentStudent.deleteMany({ where: { student: { rollNumber: { startsWith: 'ROLL_' } } } });
