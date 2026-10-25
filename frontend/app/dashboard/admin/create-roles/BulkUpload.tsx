@@ -40,7 +40,7 @@ export default function BulkUpload({
   type, 
   classes = [] 
 }: { 
-  type: "teacher" | "student";
+  type: "teacher" | "student" | "admin";
   classes?: ClassItem[];
 }) {
   const [isPending, startTransition] = useTransition();
@@ -101,20 +101,24 @@ export default function BulkUpload({
   };
 
   // Template download helpers
-  const templatePath = type === "student" 
+  const csvTemplatePath = type === "student" 
+    ? "/templates/student_upload_template.csv" 
+    : (type === "teacher" ? "/templates/teacher_upload_template.csv" : "/templates/admin_upload_template.csv");
+  const excelTemplatePath = type === "student" 
     ? "/templates/student_upload_template.xlsx" 
-    : "/templates/teacher_upload_template.xlsx";
-  const templateFilename = type === "student" 
-    ? "student_parent_upload_template.xlsx" 
-    : "teacher_upload_template.xlsx";
+    : (type === "teacher" ? "/templates/teacher_upload_template.xlsx" : "/templates/admin_upload_template.xlsx");
+
+  const csvTemplateFilename = `${type}_upload_template.csv`;
+  const excelTemplateFilename = `${type}_upload_template.xlsx`;
 
   // Handle file drop & select
   const handleFileChange = (selectedFile: File) => {
     setGeneralError(null);
     setCommitResult(null);
 
-    if (!selectedFile.name.toLowerCase().endsWith(".xlsx") && !selectedFile.name.toLowerCase().endsWith(".xls")) {
-      setGeneralError("Invalid file type. Please upload an Excel workbook (.xlsx or .xls).");
+    const name = selectedFile.name.toLowerCase();
+    if (!name.endsWith(".xlsx") && !name.endsWith(".xls") && !name.endsWith(".csv")) {
+      setGeneralError("Invalid file type. Please upload a CSV (.csv) or Excel workbook (.xlsx or .xls).");
       return;
     }
 
@@ -374,8 +378,8 @@ export default function BulkUpload({
             width: "48px",
             height: "48px",
             borderRadius: "12px",
-            backgroundColor: type === "student" ? "rgba(16, 185, 129, 0.1)" : "rgba(99, 102, 241, 0.1)",
-            color: type === "student" ? "#10b981" : "#6366f1",
+            backgroundColor: type === "student" ? "rgba(16, 185, 129, 0.1)" : (type === "teacher" ? "rgba(99, 102, 241, 0.1)" : "rgba(239, 68, 68, 0.1)"),
+            color: type === "student" ? "#10b981" : (type === "teacher" ? "#6366f1" : "var(--danger, #ef4444)"),
             display: "flex",
             alignItems: "center",
             justifyContent: "center"
@@ -384,12 +388,17 @@ export default function BulkUpload({
           </div>
           <div>
             <h2 style={{ fontSize: "1.25rem", fontWeight: 700, margin: 0, color: "var(--foreground)" }}>
-              {type === "student" ? "Intelligent Student & Parent Excel Import" : "Intelligent Teacher Excel Import"}
+              {type === "student" 
+                ? "Intelligent Student & Parent Import" 
+                : (type === "teacher" ? "Intelligent Teacher Import" : "Intelligent Admin Import")
+              }
             </h2>
             <p style={{ margin: "0.25rem 0 0", fontSize: "0.875rem", color: "var(--text-secondary, #6b7280)" }}>
               {type === "student" 
-                ? "Upload the combined student-parent workbook. Automatically links siblings, validates classes, and detects duplicates."
-                : "Upload official teacher spreadsheet. Validates emails, qualifications, and provisions teacher credentials securely."
+                ? "Upload student-parent workbook (.csv or .xlsx). Automatically links siblings, validates classes, and detects duplicates."
+                : (type === "teacher"
+                  ? "Upload official teacher spreadsheet (.csv or .xlsx). Validates emails, qualifications, and provisions teacher credentials securely."
+                  : "Upload administrator accounts (.csv or .xlsx). Validates Gmail addresses (@gmail.com) for Google SSO and provisions admin access.")
               }
             </p>
           </div>
@@ -446,7 +455,7 @@ export default function BulkUpload({
         {/* ======================================================== */}
         {activeTab === "UPLOAD" && (
           <div>
-            {/* Template Download Bar */}
+            {/* Template Download Bar with CSV and XLSX options */}
             <div style={{
               display: "flex",
               flexWrap: "wrap",
@@ -462,28 +471,50 @@ export default function BulkUpload({
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                 <FileCheck size={20} color="#6366f1" />
                 <span style={{ fontSize: "0.875rem", color: "var(--foreground)" }}>
-                  Need the official template with exact column headers?
+                  Download official template with exact column headers:
                 </span>
               </div>
-              <a
-                href={templatePath}
-                download={templateFilename}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "var(--primary, #6366f1)",
-                  color: "#ffffff",
-                  borderRadius: "8px",
-                  fontSize: "0.875rem",
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  boxShadow: "0 2px 4px rgba(99, 102, 241, 0.2)"
-                }}
-              >
-                <Download size={16} /> Download {type === "student" ? "Student-Parent" : "Teacher"} Template (.xlsx)
-              </a>
+              <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                <a
+                  href={csvTemplatePath}
+                  download={csvTemplateFilename}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    padding: "0.5rem 1rem",
+                    backgroundColor: "var(--card-bg, #ffffff)",
+                    color: "var(--primary, #6366f1)",
+                    border: "1px solid var(--primary, #6366f1)",
+                    borderRadius: "8px",
+                    fontSize: "0.875rem",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)"
+                  }}
+                >
+                  <Download size={16} /> Download Template (.csv)
+                </a>
+                <a
+                  href={excelTemplatePath}
+                  download={excelTemplateFilename}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    padding: "0.5rem 1rem",
+                    backgroundColor: "var(--primary, #6366f1)",
+                    color: "#ffffff",
+                    borderRadius: "8px",
+                    fontSize: "0.875rem",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    boxShadow: "0 2px 4px rgba(99, 102, 241, 0.2)"
+                  }}
+                >
+                  <Download size={16} /> Download Template (.xlsx)
+                </a>
+              </div>
             </div>
 
             {/* General Error Notification */}
@@ -591,8 +622,8 @@ export default function BulkUpload({
                               borderRadius: "4px",
                               fontWeight: 700,
                               fontSize: "0.6875rem",
-                              backgroundColor: acc.role === "STUDENT" ? "rgba(16, 185, 129, 0.1)" : (acc.role === "PARENT" ? "rgba(59, 130, 246, 0.1)" : "rgba(139, 92, 246, 0.1)"),
-                              color: acc.role === "STUDENT" ? "#10b981" : (acc.role === "PARENT" ? "#3b82f6" : "#8b5cf6")
+                              backgroundColor: acc.role === "STUDENT" ? "rgba(16, 185, 129, 0.1)" : (acc.role === "PARENT" ? "rgba(59, 130, 246, 0.1)" : (acc.role === "ADMIN" ? "rgba(236, 72, 153, 0.1)" : "rgba(139, 92, 246, 0.1)")),
+                              color: acc.role === "STUDENT" ? "#10b981" : (acc.role === "PARENT" ? "#3b82f6" : (acc.role === "ADMIN" ? "#ec4899" : "#8b5cf6"))
                             }}>
                               {acc.role}
                             </span>
@@ -683,7 +714,7 @@ export default function BulkUpload({
                 <input
                   id="excel-file-input"
                   type="file"
-                  accept=".xlsx, .xls"
+                  accept=".csv, .xlsx, .xls"
                   style={{ display: "none" }}
                   onChange={(e) => {
                     if (e.target.files && e.target.files[0]) {
@@ -707,10 +738,10 @@ export default function BulkUpload({
                 </div>
 
                 <h3 style={{ fontSize: "1.125rem", fontWeight: 700, margin: "0 0 0.5rem", color: "var(--foreground)" }}>
-                  {isPending ? "Scanning spreadsheet & checking database..." : "Drag and drop your Excel file here, or click to browse"}
+                  {isPending ? "Scanning spreadsheet & checking database..." : "Drag and drop your CSV or Excel file here, or click to browse"}
                 </h3>
                 <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--text-secondary, #6b7280)" }}>
-                  Supports .xlsx and .xls files up to 10MB • Auto-detects columns, missing fields & duplicate records
+                  Supports .csv, .xlsx, and .xls files up to 10MB • Auto-detects columns, missing fields & duplicate records
                 </p>
               </div>
             )}
@@ -1003,13 +1034,13 @@ export default function BulkUpload({
                         <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)", width: "70px" }}>Row</th>
                         <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)", width: "120px" }}>Status</th>
                         <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>
-                          {type === "student" ? "Student Details" : "Teacher Name"}
+                          {type === "student" ? "Student Details" : (type === "teacher" ? "Teacher Name" : "Admin Name")}
                         </th>
                         <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>
-                          {type === "student" ? "Parent & Contact" : "Email & Phone"}
+                          {type === "student" ? "Parent & Contact" : (type === "teacher" ? "Email & Phone" : "Gmail Address")}
                         </th>
                         <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>
-                          {type === "student" ? "Class & Residence" : "Joining & Qualification"}
+                          {type === "student" ? "Class & Residence" : (type === "teacher" ? "Joining & Qualification" : "Role & Status")}
                         </th>
                         <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Validation Issues</th>
                         <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)", textAlign: "right", width: "90px" }}>Action</th>
@@ -1128,9 +1159,13 @@ export default function BulkUpload({
                                       Roll: <strong>{r.data.studentRollNo || "Missing"}</strong> • Adm: {r.data.admissionNo || "N/A"}
                                     </div>
                                   </div>
-                                ) : (
+                                ) : type === "teacher" ? (
                                   <div>
                                     <div style={{ fontWeight: 600 }}>{r.data.firstName} {r.data.lastName}</div>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <div style={{ fontWeight: 600 }}>{r.data.name || "Missing Name"}</div>
                                   </div>
                                 )}
                               </td>
@@ -1144,10 +1179,15 @@ export default function BulkUpload({
                                       {r.data.parentEmail || "Missing email"} {r.data.isExistingParent && " (Existing Parent)"}
                                     </div>
                                   </div>
-                                ) : (
+                                ) : type === "teacher" ? (
                                   <div>
                                     <div style={{ fontWeight: 500 }}>{r.data.email || "Missing"}</div>
                                     <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>{r.data.phone || "No phone"}</div>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <div style={{ fontWeight: 500 }}>{r.data.email || "Missing"}</div>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Google OAuth SSO</div>
                                   </div>
                                 )}
                               </td>
@@ -1201,10 +1241,15 @@ export default function BulkUpload({
                                       </div>
                                     )}
                                   </div>
-                                ) : (
+                                ) : type === "teacher" ? (
                                   <div>
                                     <div>Qual: {r.data.qualification || "Missing"}</div>
                                     <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Join: {r.data.joiningDate || "N/A"}</div>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <div style={{ fontWeight: 600, color: "var(--primary)" }}>Role: ADMIN</div>
+                                    <div style={{ fontSize: "0.75rem", color: "#10b981" }}>Status: ACTIVE</div>
                                   </div>
                                 )}
                               </td>
@@ -1865,7 +1910,7 @@ export default function BulkUpload({
                     </div>
                   </div>
                 </>
-              ) : (
+              ) : type === "teacher" ? (
                 /* TEACHER EDIT FORM */
                 <>
                   <div style={{ fontWeight: 700, fontSize: "0.9375rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.25rem" }}>
@@ -2006,6 +2051,57 @@ export default function BulkUpload({
                     </div>
                   </div>
                 </>
+              ) : (
+                /* ADMIN EDIT FORM */
+                <>
+                  <div style={{ fontWeight: 700, fontSize: "0.9375rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.25rem" }}>
+                    Administrator Information
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1rem" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Full Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.name || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                        placeholder="e.g. John Doe"
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.name ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
+                      />
+                      {editRowErrors.name && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.name}</span>}
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Google Gmail Address (@gmail.com) *
+                      </label>
+                      <input
+                        type="email"
+                        value={editFormData.email || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                        placeholder="admin@gmail.com"
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: `1px solid ${editRowErrors.email ? "#ef4444" : "var(--border-color)"}`,
+                          background: "transparent"
+                        }}
+                      />
+                      {editRowErrors.email && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.email}</span>}
+                      <p style={{ margin: "0.25rem 0 0", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                        Admins authenticate exclusively via Google OAuth SSO. Only @gmail.com and @googlemail.com are permitted.
+                      </p>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 
@@ -2118,7 +2214,7 @@ export default function BulkUpload({
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
                   <span style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>Account Role:</span>
                   <span style={{ fontSize: "0.875rem", fontWeight: 700 }}>
-                    {type === "student" ? "STUDENT & PARENT" : "TEACHER"}
+                    {type === "student" ? "STUDENT & PARENT" : (type === "teacher" ? "TEACHER" : "ADMINISTRATOR")}
                   </span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
@@ -2142,10 +2238,15 @@ export default function BulkUpload({
                     • Sibling students sharing an existing parent email will be safely linked to that parent account without duplicating logins.<br />
                     • Passwords will be cryptographically hashed with bcrypt before storage.
                   </p>
-                ) : (
+                ) : type === "teacher" ? (
                   <p style={{ margin: 0 }}>
                     • Valid teachers will receive official accounts with the <code>TEACHER</code> role.<br />
                     • Credentials will be hashed with bcrypt. No plaintext credentials will be stored.
+                  </p>
+                ) : (
+                  <p style={{ margin: 0 }}>
+                    • Valid administrators will receive administrative accounts with the <code>ADMIN</code> role.<br />
+                    • Google OAuth SSO will be enabled for verified Gmail addresses.
                   </p>
                 )}
               </div>

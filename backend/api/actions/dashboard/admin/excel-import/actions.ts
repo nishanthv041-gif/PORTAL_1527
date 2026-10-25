@@ -31,11 +31,11 @@ async function verifyAdminAuth() {
 }
 
 /**
- * Scan and analyze an uploaded Excel file
+ * Scan and analyze an uploaded Excel or CSV file
  */
 export async function scanExcelFileAction(
   formData: FormData,
-  expectedType: "student" | "teacher"
+  expectedType: "student" | "teacher" | "admin"
 ): Promise<{ success: boolean; result?: ExcelScanResult; error?: string }> {
   const auth = await verifyAdminAuth();
   if (!auth.authorized) {
@@ -57,17 +57,19 @@ export async function scanExcelFileAction(
 
   // File name extension check
   const fileName = file.name.toLowerCase();
-  if (!fileName.endsWith(".xlsx") && !fileName.endsWith(".xls")) {
+  if (!fileName.endsWith(".xlsx") && !fileName.endsWith(".xls") && !fileName.endsWith(".csv")) {
     return {
       success: false,
-      error: "Invalid file format. Only Excel spreadsheets (.xlsx, .xls) are supported."
+      error: "Invalid file format. Only CSV (.csv) and Excel spreadsheets (.xlsx, .xls) are supported."
     };
   }
 
   try {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const targetType: ImportType = expectedType === "student" ? "STUDENT_PARENT" : "TEACHER";
+    const targetType: ImportType = expectedType === "student" 
+      ? "STUDENT_PARENT" 
+      : (expectedType === "teacher" ? "TEACHER" : "ADMIN");
 
     const scanResult = await parseAndScanWorkbook(buffer, targetType);
 
@@ -79,7 +81,7 @@ export async function scanExcelFileAction(
   } catch (err) {
     return {
       success: false,
-      error: `Failed to process Excel file: ${err instanceof Error ? err.message : String(err)}`
+      error: `Failed to process spreadsheet file: ${err instanceof Error ? err.message : String(err)}`
     };
   }
 }
@@ -89,7 +91,7 @@ export async function scanExcelFileAction(
  */
 export async function revalidateExcelRowsAction(
   rows: Record<string, any>[],
-  expectedType: "student" | "teacher"
+  expectedType: "student" | "teacher" | "admin"
 ): Promise<{ success: boolean; result?: ExcelScanResult; error?: string }> {
   const auth = await verifyAdminAuth();
   if (!auth.authorized) {
@@ -97,7 +99,9 @@ export async function revalidateExcelRowsAction(
   }
 
   try {
-    const targetType: ImportType = expectedType === "student" ? "STUDENT_PARENT" : "TEACHER";
+    const targetType: ImportType = expectedType === "student" 
+      ? "STUDENT_PARENT" 
+      : (expectedType === "teacher" ? "TEACHER" : "ADMIN");
     const availableClasses = await prisma.class.findMany({
       where: { isActive: true },
       select: { id: true, name: true, section: true },
@@ -119,7 +123,7 @@ export async function revalidateExcelRowsAction(
  */
 export async function commitExcelImportAction(
   rowsToImport: Record<string, any>[],
-  expectedType: "student" | "teacher",
+  expectedType: "student" | "teacher" | "admin",
   fileName?: string,
   fileSize?: number
 ): Promise<{ success: boolean; result?: ImportCommitResult; error?: string }> {
@@ -133,7 +137,9 @@ export async function commitExcelImportAction(
   }
 
   try {
-    const targetType: ImportType = expectedType === "student" ? "STUDENT_PARENT" : "TEACHER";
+    const targetType: ImportType = expectedType === "student" 
+      ? "STUDENT_PARENT" 
+      : (expectedType === "teacher" ? "TEACHER" : "ADMIN");
     const commitResult = await executeImportTransaction(
       targetType,
       rowsToImport,
@@ -148,6 +154,7 @@ export async function commitExcelImportAction(
       revalidatePath("/dashboard/admin/students");
       revalidatePath("/dashboard/admin/parents");
       revalidatePath("/dashboard/admin/teachers");
+      revalidatePath("/dashboard/admin/create-roles/admin");
       revalidatePath("/dashboard/admin/excel-import");
     } catch {
       // Ignore outside request context

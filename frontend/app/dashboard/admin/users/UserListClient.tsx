@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Shield, CheckCircle2, XCircle } from "lucide-react";
+import { Search, Shield, CheckCircle2, XCircle, FileSpreadsheet } from "lucide-react";
 import Link from "next/link";
+import BulkUpload from "../create-roles/BulkUpload";
 import { deactivateUser, activateUser, activateAllUsers, deleteUser } from "@/backend/api/actions/dashboard/admin/users/actions";
 import { User, Teacher, Parent } from "@prisma/client";
 
@@ -15,6 +16,7 @@ type UserWithRelations = User & {
 };
 
 export default function UserListClient({ users }: { users: (UserWithRelations & { expiresAt: Date | null })[] }) {
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [userList, setUserList] = useState(users);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -97,7 +99,28 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
             style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
           />
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={() => setShowBulkUpload(!showBulkUpload)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              border: "1px solid var(--danger, #ef4444)",
+              backgroundColor: showBulkUpload ? "var(--danger, #ef4444)" : "rgba(239, 68, 68, 0.08)",
+              color: showBulkUpload ? "#ffffff" : "var(--danger, #ef4444)",
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              cursor: "pointer",
+              transition: "all 0.2s ease"
+            }}
+          >
+            <FileSpreadsheet size={18} />
+            {showBulkUpload ? "Hide Bulk Import" : "Bulk Import Admins"}
+          </button>
           <select 
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
@@ -126,6 +149,12 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
           </button>
         </div>
       </div>
+
+      {showBulkUpload && (
+        <div style={{ marginBottom: "2rem" }}>
+          <BulkUpload type="admin" />
+        </div>
+      )}
 
       <div style={{ overflowX: 'auto', width: '100%', maxWidth: '100%', minWidth: 0, WebkitOverflowScrolling: 'touch' }}>
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "750px" }}>

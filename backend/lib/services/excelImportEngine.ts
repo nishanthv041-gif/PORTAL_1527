@@ -6,7 +6,7 @@ import { hash } from "bcryptjs";
 // TYPE DEFINITIONS
 // ==========================================
 
-export type ImportType = "STUDENT_PARENT" | "TEACHER";
+export type ImportType = "STUDENT_PARENT" | "TEACHER" | "ADMIN";
 
 export interface StudentParentData {
   excelRowNumber: number;
@@ -42,6 +42,13 @@ export interface TeacherData {
   [key: string]: unknown;
 }
 
+export interface AdminData {
+  excelRowNumber: number;
+  name: string;
+  email: string;
+  [key: string]: unknown;
+}
+
 export type RowValidationStatus = 
   | "VALID"
   | "NEEDS_CORRECTION"
@@ -65,7 +72,8 @@ export interface RowValidationResult {
 
 export interface ExcelScanResult {
   isValidWorkbook: boolean;
-  detectedTemplate: "STUDENT_PARENT" | "TEACHER" | "UNKNOWN";
+  detectedTemplate: "STUDENT_PARENT" | "TEACHER" | "ADMIN" | "UNKNOWN";
+  isTemplateMismatch?: boolean;
   headersFound: string[];
   missingHeaders: string[];
   unexpectedHeaders: string[];
@@ -90,7 +98,7 @@ export interface ImportCommitResult {
   failedCount: number;
   errors: string[];
   createdAccounts: {
-    role: "STUDENT" | "PARENT" | "TEACHER";
+    role: "STUDENT" | "PARENT" | "TEACHER" | "ADMIN";
     identifier: string;
     name: string;
   }[];
@@ -120,6 +128,11 @@ export const EXPECTED_TEACHER_HEADERS = [
   "phone",
   "joiningDate",
   "qualification"
+];
+
+export const EXPECTED_ADMIN_HEADERS = [
+  "name",
+  "email"
 ];
 
 // Normalize header for comparison
@@ -227,12 +240,21 @@ export function isSampleTemplateRow(type: ImportType, row: Record<string, any>):
     ) {
       return true;
     }
-  } else {
+  } else if (type === "TEACHER") {
     const tName = `${row.firstName || ""} ${row.lastName || ""}`.toLowerCase();
     const email = String(row.email || "").toLowerCase();
     if (
       (tName.includes("john doe") || email.includes("john.teacher@example.com") || email.includes("teacher@example.com")) &&
       String(row.phone || "").includes("9876543210")
+    ) {
+      return true;
+    }
+  } else if (type === "ADMIN") {
+    const aName = String(row.name || "").toLowerCase();
+    const email = String(row.email || "").toLowerCase();
+    if (
+      (aName.includes("system admin") || aName.includes("admin example") || aName.includes("john doe")) &&
+      (email.includes("admin.example@gmail.com") || email.includes("example.com"))
     ) {
       return true;
     }
@@ -262,29 +284,34 @@ export async function parseAndScanWorkbook(
   buffer: Buffer | ArrayBuffer,
   expectedType: ImportType
 ): Promise<ExcelScanResult> {
-  // Safe parsing
+  // Safe parsing - supports both binary (XLSX, XLS) and text CSV
   let workbook: XLSX.WorkBook;
+  const uint8 = buffer instanceof Buffer ? buffer : new Uint8Array(buffer);
   try {
-    const uint8 = buffer instanceof Buffer ? buffer : new Uint8Array(buffer);
     workbook = XLSX.read(uint8, { type: "buffer", cellDates: true, cellNF: false, cellText: true });
   } catch (err) {
-    return {
-      isValidWorkbook: false,
-      detectedTemplate: "UNKNOWN",
-      headersFound: [],
-      missingHeaders: [],
-      unexpectedHeaders: [],
-      totalRows: 0,
-      validRowsCount: 0,
-      errorRowsCount: 0,
-      duplicateRowsCount: 0,
-      conflictRowsCount: 0,
-      sampleRowsCount: 0,
-      readyToImportCount: 0,
-      rows: [],
-      availableClasses: [],
-      fileError: `Malformed Excel workbook: ${err instanceof Error ? err.message : String(err)}`
-    };
+    try {
+      const text = new TextDecoder("utf-8").decode(uint8);
+      workbook = XLSX.read(text, { type: "string", cellDates: true, cellNF: false, cellText: true });
+    } catch {
+      return {
+        isValidWorkbook: false,
+        detectedTemplate: "UNKNOWN",
+        headersFound: [],
+        missingHeaders: [],
+        unexpectedHeaders: [],
+        totalRows: 0,
+        validRowsCount: 0,
+        errorRowsCount: 0,
+        duplicateRowsCount: 0,
+        conflictRowsCount: 0,
+        sampleRowsCount: 0,
+        readyToImportCount: 0,
+        rows: [],
+        availableClasses: [],
+        fileError: `Malformed CSV or Excel workbook: ${err instanceof Error ? err.message : String(err)}`
+      };
+    }
   }
 
   if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
@@ -311,12 +338,16 @@ export async function parseAndScanWorkbook(
   // Get raw 2D array to inspect headers safely
   const matrix = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, raw: false });
 
+  const defaultMissing = expectedType === "STUDENT_PARENT" 
+    ? EXPECTED_STUDENT_PARENT_HEADERS 
+    : (expectedType === "TEACHER" ? EXPECTED_TEACHER_HEADERS : EXPECTED_ADMIN_HEADERS);
+
   if (!matrix || matrix.length === 0) {
     return {
       isValidWorkbook: false,
       detectedTemplate: "UNKNOWN",
       headersFound: [],
-      missingHeaders: expectedType === "STUDENT_PARENT" ? EXPECTED_STUDENT_PARENT_HEADERS : EXPECTED_TEACHER_HEADERS,
+      missingHeaders: defaultMissing,
       unexpectedHeaders: [],
       totalRows: 0,
       validRowsCount: 0,
@@ -327,7 +358,7 @@ export async function parseAndScanWorkbook(
       readyToImportCount: 0,
       rows: [],
       availableClasses: [],
-      fileError: "Excel sheet is completely empty."
+      fileError: "Spreadsheet is completely empty."
     };
   }
 
@@ -338,15 +369,17 @@ export async function parseAndScanWorkbook(
   // Detect which template headers are present
   const isTeacherTemplate = normalizedFound.includes("qualification") || (normalizedFound.includes("joiningdate") && !normalizedFound.includes("studentrollno"));
   const isStudentTemplate = normalizedFound.includes("studentrollno") || normalizedFound.includes("admissionno") || normalizedFound.includes("parentemail");
+  const isAdminTemplate = !isTeacherTemplate && !isStudentTemplate && normalizedFound.includes("email") && (normalizedFound.includes("name") || normalizedFound.includes("adminname") || normalizedFound.includes("fullname") || normalizedFound.includes("firstname"));
 
-  const detectedTemplate: "STUDENT_PARENT" | "TEACHER" | "UNKNOWN" = 
-    isStudentTemplate ? "STUDENT_PARENT" : (isTeacherTemplate ? "TEACHER" : "UNKNOWN");
+  const detectedTemplate: "STUDENT_PARENT" | "TEACHER" | "ADMIN" | "UNKNOWN" = 
+    isStudentTemplate ? "STUDENT_PARENT" : (isTeacherTemplate ? "TEACHER" : (isAdminTemplate ? "ADMIN" : "UNKNOWN"));
 
   // Validate template match
-  if (expectedType === "STUDENT_PARENT" && detectedTemplate === "TEACHER") {
+  if (expectedType === "STUDENT_PARENT" && detectedTemplate !== "STUDENT_PARENT" && detectedTemplate !== "UNKNOWN") {
     return {
       isValidWorkbook: false,
-      detectedTemplate: "TEACHER",
+      detectedTemplate,
+      isTemplateMismatch: true,
       headersFound: headerRow,
       missingHeaders: EXPECTED_STUDENT_PARENT_HEADERS,
       unexpectedHeaders: headerRow,
@@ -359,14 +392,15 @@ export async function parseAndScanWorkbook(
       readyToImportCount: 0,
       rows: [],
       availableClasses: [],
-      fileError: "Template mismatch: Uploaded file contains Teacher data, but this upload is for Student & Parent accounts. Please use the Student-Parent template."
+      fileError: `Template mismatch: Uploaded file contains ${detectedTemplate === "TEACHER" ? "Teacher" : "Admin"} data, but this upload is for Student & Parent accounts. Please use the Student-Parent template.`
     };
   }
 
-  if (expectedType === "TEACHER" && detectedTemplate === "STUDENT_PARENT") {
+  if (expectedType === "TEACHER" && detectedTemplate !== "TEACHER" && detectedTemplate !== "UNKNOWN") {
     return {
       isValidWorkbook: false,
-      detectedTemplate: "STUDENT_PARENT",
+      detectedTemplate,
+      isTemplateMismatch: true,
       headersFound: headerRow,
       missingHeaders: EXPECTED_TEACHER_HEADERS,
       unexpectedHeaders: headerRow,
@@ -379,12 +413,35 @@ export async function parseAndScanWorkbook(
       readyToImportCount: 0,
       rows: [],
       availableClasses: [],
-      fileError: "Template mismatch: Uploaded file contains Student & Parent data, but this upload is for Teacher accounts. Please use the Teacher template."
+      fileError: `Template mismatch: Uploaded file contains ${detectedTemplate === "STUDENT_PARENT" ? "Student & Parent" : "Admin"} data, but this upload is for Teacher accounts. Please use the Teacher template.`
+    };
+  }
+
+  if (expectedType === "ADMIN" && detectedTemplate !== "ADMIN" && detectedTemplate !== "UNKNOWN") {
+    return {
+      isValidWorkbook: false,
+      detectedTemplate,
+      isTemplateMismatch: true,
+      headersFound: headerRow,
+      missingHeaders: EXPECTED_ADMIN_HEADERS,
+      unexpectedHeaders: headerRow,
+      totalRows: matrix.length - 1,
+      validRowsCount: 0,
+      errorRowsCount: 0,
+      duplicateRowsCount: 0,
+      conflictRowsCount: 0,
+      sampleRowsCount: 0,
+      readyToImportCount: 0,
+      rows: [],
+      availableClasses: [],
+      fileError: `Template mismatch: Uploaded file contains ${detectedTemplate === "STUDENT_PARENT" ? "Student & Parent" : "Teacher"} data, but this upload is for Admin accounts. Please use the Admin template.`
     };
   }
 
   // Check expected headers
-  const expectedList = expectedType === "STUDENT_PARENT" ? EXPECTED_STUDENT_PARENT_HEADERS : EXPECTED_TEACHER_HEADERS;
+  const expectedList = expectedType === "STUDENT_PARENT" 
+    ? EXPECTED_STUDENT_PARENT_HEADERS 
+    : (expectedType === "TEACHER" ? EXPECTED_TEACHER_HEADERS : EXPECTED_ADMIN_HEADERS);
   const missingHeaders: string[] = [];
 
   for (const expected of expectedList) {
@@ -489,7 +546,7 @@ export async function parseAndScanWorkbook(
         parentPhone,
         parentAddress
       };
-    } else {
+    } else if (expectedType === "TEACHER") {
       const firstName = String(norm.firstname || "").trim();
       const lastName = String(norm.lastname || "").trim();
       const email = String(norm.email || "").trim().toLowerCase();
@@ -507,6 +564,16 @@ export async function parseAndScanWorkbook(
         phone,
         joiningDate,
         qualification
+      };
+    } else {
+      // ADMIN
+      const name = String(norm.name || norm.fullname || norm.adminname || `${norm.firstname || ""} ${norm.lastname || ""}`).trim();
+      const email = String(norm.email || norm.gmail || norm.googleemail || "").trim().toLowerCase();
+
+      return {
+        excelRowNumber,
+        name,
+        email
       };
     }
   });
@@ -575,6 +642,7 @@ export async function validateAndCorrelateBatch(
   const seenRolls = new Map<string, number>(); // roll -> first row number
   const seenAdmissions = new Map<string, number>(); // adm -> first row number
   const seenTeacherEmails = new Map<string, number>(); // email -> first row number
+  const seenAdminEmails = new Map<string, number>(); // email -> first row number
 
   const results: RowValidationResult[] = [];
   let validCount = 0;
@@ -753,7 +821,7 @@ export async function validateAndCorrelateBatch(
         invalidFields.push("parentPhone");
       }
 
-    } else {
+    } else if (type === "TEACHER") {
       // TEACHER VALIDATION
       // 1. First Name
       if (!row.firstName || !String(row.firstName).trim()) {
@@ -821,6 +889,43 @@ export async function validateAndCorrelateBatch(
       if (!row.qualification || !String(row.qualification).trim()) {
         fieldErrors.qualification = "Teacher qualification is required.";
         missingFields.push("qualification");
+      }
+    } else {
+      // ADMIN VALIDATION
+      // 1. Full Name
+      const adminName = String(row.name || "").trim();
+      if (!adminName) {
+        fieldErrors.name = "Admin full name is required.";
+        missingFields.push("name");
+      }
+
+      // 2. Email (Must be valid Gmail address for Google OAuth)
+      const email = String(row.email || "").trim().toLowerCase();
+      if (!email) {
+        fieldErrors.email = "Admin Gmail address is required.";
+        missingFields.push("email");
+      } else if (!isValidEmail(email)) {
+        fieldErrors.email = "Admin email address is invalid.";
+        invalidFields.push("email");
+      } else if (!email.endsWith("@gmail.com") && !email.endsWith("@googlemail.com")) {
+        fieldErrors.email = "Admin email must be a valid Gmail account ending in @gmail.com (required for Google OAuth).";
+        invalidFields.push("email");
+      } else {
+        // In-file duplicate check
+        if (seenAdminEmails.has(email)) {
+          const firstRow = seenAdminEmails.get(email);
+          fieldErrors.email = `Admin email '${email}' is duplicated in row ${firstRow}.`;
+          duplicateWarnings.push(`Duplicate admin email in row ${firstRow}.`);
+        } else {
+          seenAdminEmails.set(email, excelRow);
+        }
+
+        // DB conflict check
+        if (existingUsersByEmail.has(email)) {
+          const existing = existingUsersByEmail.get(email);
+          fieldErrors.email = `Email '${email}' already exists in database (${existing?.role} account).`;
+          conflictWarnings.push(`Account with email '${email}' already exists in database.`);
+        }
       }
     }
 
@@ -893,7 +998,7 @@ export function generateErrorReportCsv(rows: RowValidationResult[]): string {
     const identifier = r.data.studentRollNo || r.data.email || r.data.admissionNo || "N/A";
     const name = r.data.studentFirstName 
       ? `${r.data.studentFirstName} ${r.data.studentLastName || ""}`.trim()
-      : `${r.data.firstName || ""} ${r.data.lastName || ""}`.trim() || "N/A";
+      : (r.data.name || `${r.data.firstName || ""} ${r.data.lastName || ""}`.trim() || "N/A");
 
     const problemFields = [...r.missingFields, ...r.invalidFields].join("; ");
     const errorMessages = [
@@ -1089,7 +1194,7 @@ export async function executeImportTransaction(
             result.importedCount++;
           });
 
-        } else {
+        } else if (type === "TEACHER") {
           // TEACHER IMPORT
           const {
             firstName,
@@ -1137,6 +1242,41 @@ export async function executeImportTransaction(
               role: "TEACHER",
               identifier: cleanEmail,
               name: teacherFullName
+            });
+
+            result.importedCount++;
+          });
+        } else {
+          // ADMIN IMPORT
+          const { name, email } = row;
+
+          await prisma.$transaction(async (tx) => {
+            const cleanEmail = String(email).trim().toLowerCase();
+            const existing = await tx.user.findUnique({
+              where: { email: cleanEmail }
+            });
+
+            if (existing) {
+              throw new Error(`Email '${cleanEmail}' is already registered in the system (${existing.role} account).`);
+            }
+
+            const adminFullName = String(name).trim();
+
+            await tx.user.create({
+              data: {
+                email: cleanEmail,
+                name: adminFullName,
+                role: "ADMIN",
+                status: "ACTIVE",
+                googleEmail: cleanEmail,
+                googleEmailVerified: true
+              }
+            });
+
+            result.createdAccounts.push({
+              role: "ADMIN",
+              identifier: cleanEmail,
+              name: adminFullName
             });
 
             result.importedCount++;
