@@ -53,6 +53,9 @@ model Student {
   isActive      Boolean   @default(true)
   batch         String?
   residenceType String?   @default("DAYSCHOLAR") // HOSTEL or DAYSCHOLAR
+  enrollmentStatus String?  @default("ACTIVE") // ACTIVE, GRADUATED, RETAINED, TRANSFERRED
+  graduationBatch  String?
+  graduatedAt      DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -67,9 +70,11 @@ model Student {
   achievements  Achievement[]
   leaveRequests LeaveRequest[]
   complaints    Complaint[]
+  promotions    PromotionAudit[]
 
   @@index([classId])
   @@index([isActive])
+  @@index([enrollmentStatus])
 }
 
 model Teacher {
@@ -148,9 +153,12 @@ model Class {
   examRequests   ExamRequest[]
   assignments    Assignment[]
   attendances    Attendance[]
+  batchId        String?
+  batch          AcademicBatch? @relation(fields: [batchId], references: [id])
 
   @@index([isActive])
   @@index([teacherId])
+  @@index([batchId, isActive])
 }
 
 model Subject {
@@ -605,4 +613,45 @@ model ImportBatch {
 
   @@index([templateType, startedAt])
   @@index([adminId])
+}
+
+model AcademicBatch {
+  id              String           @id @default(cuid())
+  name            String           @unique // e.g. "25-26" or "2025-2026"
+  academicYear    String?          // e.g. "2025-2026"
+  startDate       DateTime?
+  endDate         DateTime?
+  isCurrent       Boolean          @default(false)
+  status          String           @default("ACTIVE") // UPCOMING, ACTIVE, COMPLETED, ARCHIVED
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  classes         Class[]
+  promotionsFrom  PromotionAudit[] @relation("FromBatch")
+  promotionsTo    PromotionAudit[] @relation("ToBatch")
+
+  @@index([isCurrent])
+  @@index([status])
+}
+
+model PromotionAudit {
+  id              String         @id @default(cuid())
+  studentId       String
+  student         Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  fromBatchId     String?
+  fromBatch       AcademicBatch? @relation("FromBatch", fields: [fromBatchId], references: [id])
+  toBatchId       String?
+  toBatch         AcademicBatch? @relation("ToBatch", fields: [toBatchId], references: [id])
+  fromBatchName   String
+  toBatchName     String
+  fromClassName   String?
+  toClassName     String?
+  action          String         // PROMOTED, GRADUATED, RETAINED, TRANSFERRED
+  promotedAt      DateTime       @default(now())
+  authorizedById  String?
+  remarks         String?
+
+  @@index([studentId])
+  @@index([fromBatchName, toBatchName])
+  @@index([action])
 }
