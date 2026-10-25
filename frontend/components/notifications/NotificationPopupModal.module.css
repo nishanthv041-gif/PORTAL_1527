@@ -252,6 +252,32 @@
   box-shadow: 0 6px 18px rgba(220, 38, 38, 0.45);
 }
 
+.deleteBtn {
+  flex: 1;
+  background-color: rgba(239, 68, 68, 0.12);
+  color: #ef4444 !important;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 999px;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+.deleteBtn:hover {
+  background-color: #ef4444;
+  color: #ffffff !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+}
+
 /* Clear All & Don't Show Again row */
 .clearAllRow {
   margin-top: 1rem;

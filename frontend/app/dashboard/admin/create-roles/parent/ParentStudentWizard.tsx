@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import styles from "../../../dashboard.module.css";
 import { createParentStudentAction } from "@/backend/api/actions/dashboard/admin/create-roles/actions";
 import BulkUpload from "../BulkUpload";
@@ -24,7 +26,7 @@ export default function ParentStudentWizard({ classes }: { classes: { id: string
     const formData = new FormData(e.currentTarget);
     const parentGoogleEmail = (formData.get("parentGoogleEmail") as string)?.trim().toLowerCase();
     if (parentGoogleEmail && !parentGoogleEmail.endsWith("@gmail.com") && !parentGoogleEmail.endsWith("@googlemail.com")) {
-      setError("Google Email must be a valid Gmail account ending with @gmail.com.");
+      setError("Sign In with Google Mail ID must be a valid Gmail account ending with @gmail.com.");
       setIsSubmitting(false);
       return;
     }
@@ -43,7 +45,26 @@ export default function ParentStudentWizard({ classes }: { classes: { id: string
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title}>Create Parent & Student</h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+        <Link 
+          href="/dashboard/admin/create-roles" 
+          style={{ 
+            padding: '0.5rem', 
+            background: 'var(--card-bg)', 
+            border: '1px solid var(--border-color)', 
+            borderRadius: '8px', 
+            color: 'inherit', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            textDecoration: 'none'
+          }}
+          title="Back to Create Roles"
+        >
+          <ArrowLeft size={20} />
+        </Link>
+        <h1 className={styles.title} style={{ margin: 0 }}>Create Parent & Student</h1>
+      </div>
       
       <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '2rem', maxWidth: '800px' }}>
         {error && (
@@ -116,17 +137,20 @@ export default function ParentStudentWizard({ classes }: { classes: { id: string
                 <input name="parentAddress" type="text" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Official Email (Login ID) *</label>
-                <input required name="parentEmail" type="email" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.25rem' }}>User ID *</label>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Used for manual login in the user ID space on the login page.</p>
+                <input required name="parentEmail" type="email" placeholder="e.g. parent@school.com" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Temporary Password *</label>
-                <input required name="parentPassword" type="password" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.25rem' }}>Password *</label>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Used for manual login with password on the login page.</p>
+                <input required name="parentPassword" type="password" placeholder="Enter password" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Google Email (Optional)</label>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Only Gmail accounts (@gmail.com) are allowed for Google SSO verification.</p>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.25rem' }}>Sign In with Google Mail ID *</label>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Exclusively used for &quot;Log in with Google&quot; OAuth SSO. Only valid Gmail addresses (@gmail.com) are accepted.</p>
                 <input 
+                  required
                   name="parentGoogleEmail" 
                   type="email" 
                   placeholder="e.g. parent@gmail.com"

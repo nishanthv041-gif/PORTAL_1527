@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 
 export async function deleteNotification(id: string) {
   try {
-    await prisma.notification.delete({ where: { id } });
+    const realId = id.startsWith("notif-") ? id.replace("notif-", "") : id;
+    await prisma.notification.deleteMany({ where: { id: realId } });
     revalidatePath("/dashboard/admin/notifications");
     return { success: true };
   } catch (error: unknown) {

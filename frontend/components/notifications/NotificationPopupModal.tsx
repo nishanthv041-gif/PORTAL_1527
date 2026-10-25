@@ -8,7 +8,7 @@ import {
   FileText, Clock, Users, AlertCircle, BellOff, CheckCheck, Trash2
 } from "lucide-react";
 import styles from "./NotificationPopupModal.module.css";
-import { UnifiedNotification, getUnifiedNotificationsAction, markNotificationReadAction, clearAllNotificationsAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { UnifiedNotification, getUnifiedNotificationsAction, markNotificationReadAction, clearAllNotificationsAction, deleteUnifiedNotificationAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
 
 // Key used in localStorage — unique per portal so it doesn't clash with other apps
 const CLEARED_KEY = "srt_portal_notif_cleared_v1";
@@ -134,9 +134,37 @@ export default function NotificationPopupModal({
   const current = notifications[currentIndex] || notifications[0];
 
   const handleClose = () => {
+    // When closed/read, save it as read on the server so it appears in the notifications page
+    if (current?.id) {
+      markNotificationReadAction(current.id).catch(() => {});
+    }
     setIsOpen(false);
     // Mark as dismissed for the current session so it doesn't pop up on every route change
     sessionStorage.setItem(DISMISSED_KEY, "true");
+    router.refresh();
+  };
+
+  const handleDeleteCurrent = async () => {
+    if (!current) return;
+    if (!confirm("Are you sure you want to delete this notification?")) return;
+
+    try {
+      await deleteUnifiedNotificationAction(current.id);
+    } catch {
+      // silent
+    }
+
+    const updated = notifications.filter((_, idx) => idx !== currentIndex);
+    setNotifications(updated);
+
+    if (updated.length === 0) {
+      setIsOpen(false);
+      sessionStorage.setItem(DISMISSED_KEY, "true");
+    } else if (currentIndex >= updated.length) {
+      setCurrentIndex(Math.max(0, updated.length - 1));
+    }
+
+    router.refresh();
   };
 
   const handleOpen = async () => {
@@ -312,7 +340,7 @@ export default function NotificationPopupModal({
           </div>
         )}
 
-        {/* Action Buttons: Open (Blue), Close (Red) */}
+        {/* Action Buttons: Open (Blue), Delete (Red/Trash), Close */}
         <div className={styles.actionButtonGroup}>
           <button
             type="button"
@@ -326,9 +354,19 @@ export default function NotificationPopupModal({
 
           <button
             type="button"
+            onClick={handleDeleteCurrent}
+            className={styles.deleteBtn}
+            title="Delete this notification"
+          >
+            <Trash2 size={15} />
+            <span>Delete</span>
+          </button>
+
+          <button
+            type="button"
             onClick={handleClose}
             className={styles.closeBtn}
-            title="Close this notification"
+            title="Close this notification and save in notifications page"
           >
             <span>Close</span>
           </button>

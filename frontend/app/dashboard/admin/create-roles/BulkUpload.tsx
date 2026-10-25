@@ -1957,7 +1957,7 @@ export default function BulkUpload({
 
                     <div>
                       <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                        Official Email *
+                        User ID *
                       </label>
                       <input
                         type="email"
@@ -1976,7 +1976,7 @@ export default function BulkUpload({
 
                     <div>
                       <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                        Temporary Password *
+                        Password *
                       </label>
                       <input
                         type="password"

@@ -333,7 +333,15 @@ export async function executeBatchPromotionTransaction(
     async function getOrCreateTargetClass(name: string, section: string, maxStrength: number = 40) {
       const key = `${name.toLowerCase()}||${section.toLowerCase()}`;
       if (targetClassMap.has(key)) {
-        return targetClassMap.get(key)!;
+        const existing = targetClassMap.get(key)!;
+        if (existing.batchId !== input.targetBatchId) {
+          await tx.class.update({
+            where: { id: existing.id },
+            data: { batchId: input.targetBatchId }
+          });
+          existing.batchId = input.targetBatchId;
+        }
+        return existing;
       }
 
       const created = await tx.class.create({

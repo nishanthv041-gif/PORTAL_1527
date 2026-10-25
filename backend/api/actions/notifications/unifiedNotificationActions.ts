@@ -423,6 +423,7 @@ export async function markNotificationReadAction(notificationId: string) {
   try {
     const session = await getServerSession(getAuthOptions());
     if (session?.user?.id) invalidateUserNotifCache(session.user.id);
+    const userId = session?.user?.id;
 
     if (notificationId.startsWith("notif-")) {
       const realId = notificationId.replace("notif-", "");
@@ -436,6 +437,57 @@ export async function markNotificationReadAction(notificationId: string) {
         where: { id: realId },
         data: { isRead: true }
       });
+    } else if (notificationId.startsWith("ann-")) {
+      const realId = notificationId.replace("ann-", "");
+      const ann = await prisma.announcement.findUnique({ where: { id: realId } });
+      if (ann && userId) {
+        // Save into Notification table as read so it persists in the notification page
+        const existing = await prisma.notification.findFirst({
+          where: { userId, title: ann.title }
+        });
+        if (existing) {
+          await prisma.notification.update({
+            where: { id: existing.id },
+            data: { isRead: true }
+          });
+        } else {
+          await prisma.notification.create({
+            data: {
+              userId,
+              title: ann.title,
+              content: ann.content,
+              type: "ANNOUNCEMENT",
+              link: ann.fileUrl || (session.user.role === "ADMIN" ? "/dashboard/admin/announcements" : "/dashboard/parent/announcements"),
+              isRead: true
+            }
+          });
+        }
+      }
+    } else if (notificationId.startsWith("meeting-")) {
+      const realId = notificationId.replace("meeting-", "");
+      const m = await prisma.meeting.findUnique({ where: { id: realId } });
+      if (m && userId) {
+        const existing = await prisma.notification.findFirst({
+          where: { userId, title: `Meeting: ${m.agenda}` }
+        });
+        if (existing) {
+          await prisma.notification.update({
+            where: { id: existing.id },
+            data: { isRead: true }
+          });
+        } else {
+          await prisma.notification.create({
+            data: {
+              userId,
+              title: `Meeting: ${m.agenda}`,
+              content: `Scheduled meeting on ${new Date(m.date).toLocaleDateString()} at ${m.time}. Location: ${m.location || 'Online'}. Agenda: ${m.agenda}`,
+              type: "MEETING",
+              link: session.user.role === "ADMIN" ? "/dashboard/admin/meetings" : "/dashboard/parent/meetings",
+              isRead: true
+            }
+          });
+        }
+      }
     } else if (notificationId.startsWith("rc-")) {
       const realId = notificationId.replace("rc-", "");
       await prisma.reportCard.updateMany({
@@ -443,9 +495,55 @@ export async function markNotificationReadAction(notificationId: string) {
         data: { parentVerified: true }
       });
     }
+
+    revalidatePath("/dashboard/admin/notifications");
+    revalidatePath("/dashboard/parent/notifications");
+    revalidatePath("/dashboard/teacher/notifications");
+
     return { success: true };
   } catch (error) {
+    console.error("Error in markNotificationReadAction:", error);
     return { error: "Failed to mark as read" };
+  }
+}
+
+/**
+ * Deletes a single unified notification by its ID from the corresponding database table.
+ */
+export async function deleteUnifiedNotificationAction(notificationId: string): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session || !session.user) return { error: "Unauthorized" };
+
+    const userId = session.user.id;
+    invalidateUserNotifCache(userId);
+
+    if (notificationId.startsWith("notif-")) {
+      const realId = notificationId.replace("notif-", "");
+      await prisma.notification.deleteMany({
+        where: { id: realId }
+      });
+    } else if (notificationId.startsWith("msg-")) {
+      const realId = notificationId.replace("msg-", "");
+      await prisma.message.deleteMany({
+        where: { id: realId, receiverId: userId }
+      });
+    } else if (notificationId.startsWith("ann-")) {
+      const realId = notificationId.replace("ann-", "");
+      if (session.user.role === "ADMIN") {
+        await prisma.announcement.deleteMany({ where: { id: realId } });
+      }
+    }
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/admin/notifications");
+    revalidatePath("/dashboard/parent/notifications");
+    revalidatePath("/dashboard/teacher/notifications");
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error deleting unified notification:", error);
+    return { error: error.message || "Failed to delete notification." };
   }
 }
 

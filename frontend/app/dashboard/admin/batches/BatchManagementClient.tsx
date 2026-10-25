@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { 
   Layers, Plus, ArrowRight, Sparkles, GraduationCap, Users, 
   Calendar, Check, AlertCircle, RefreshCw, Star, ShieldCheck, 
-  Clock, BookOpen, X, Loader2
+  Clock, BookOpen, X, Loader2, Edit3, Trash2
 } from "lucide-react";
 import PromotionWizardModal from "./PromotionWizardModal";
 import GraduatedStudentsTable from "./GraduatedStudentsTable";
@@ -12,7 +12,9 @@ import {
   createBatchAction, 
   setCurrentBatchAction, 
   assignClassesToBatchAction,
-  getPromotionAuditHistoryAction 
+  getPromotionAuditHistoryAction,
+  updateBatchDatesAction,
+  deleteBatchAction
 } from "@/backend/api/actions/dashboard/admin/batches/actions";
 import { useRouter } from "next/navigation";
 
@@ -56,6 +58,80 @@ export default function BatchManagementClient({
   const [activeTab, setActiveTab] = useState<"OVERVIEW" | "ALL_BATCHES" | "ALUMNI" | "AUDIT">("OVERVIEW");
   const [showWizard, setShowWizard] = useState<boolean>(false);
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
+
+  // Edit Batch Dates State
+  const [editingBatch, setEditingBatch] = useState<BatchItem | null>(null);
+  const [editBatchName, setEditBatchName] = useState<string>("");
+  const [editBatchAcademicYear, setEditBatchAcademicYear] = useState<string>("");
+  const [editBatchStartDate, setEditBatchStartDate] = useState<string>("");
+  const [editBatchEndDate, setEditBatchEndDate] = useState<string>("");
+
+  // Delete Batch Confirmation Modal State
+  const [deletingBatch, setDeletingBatch] = useState<BatchItem | null>(null);
+
+  // Helper to format dates cleanly
+  const formatDateDisplay = (date: Date | string | null | undefined) => {
+    if (!date) return null;
+    try {
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return null;
+      return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    } catch {
+      return null;
+    }
+  };
+
+  const handleOpenEditDates = (batch: BatchItem) => {
+    setEditingBatch(batch);
+    setEditBatchName(batch.name);
+    setEditBatchAcademicYear(batch.academicYear || "");
+    setEditBatchStartDate(batch.startDate ? new Date(batch.startDate).toISOString().split("T")[0] : "");
+    setEditBatchEndDate(batch.endDate ? new Date(batch.endDate).toISOString().split("T")[0] : "");
+  };
+
+  const handleSaveEditDates = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBatch) return;
+
+    setFeedbackError(null);
+    setFeedbackSuccess(null);
+
+    startTransition(async () => {
+      const res = await updateBatchDatesAction({
+        batchId: editingBatch.id,
+        name: editBatchName,
+        academicYear: editBatchAcademicYear,
+        startDate: editBatchStartDate || null,
+        endDate: editBatchEndDate || null
+      });
+
+      if (res.success) {
+        setFeedbackSuccess(`Batch '${editBatchName}' dates and details updated.`);
+        setEditingBatch(null);
+        router.refresh();
+      } else {
+        setFeedbackError(res.error || "Failed to update batch dates.");
+      }
+    });
+  };
+
+  const handleConfirmDeleteBatch = () => {
+    if (!deletingBatch) return;
+
+    setFeedbackError(null);
+    setFeedbackSuccess(null);
+
+    startTransition(async () => {
+      const res = await deleteBatchAction(deletingBatch.id);
+      if (res.success) {
+        setFeedbackSuccess(`Batch '${deletingBatch.name}' has been deleted.`);
+        setDeletingBatch(null);
+        router.refresh();
+      } else {
+        setFeedbackError(res.error || "Failed to delete batch.");
+      }
+    });
+  };
 
   // Create Batch Form State
   const [newBatchName, setNewBatchName] = useState<string>("");
@@ -305,16 +381,65 @@ export default function BatchManagementClient({
           padding: "1.25rem 1.5rem",
           borderRadius: "14px",
           backgroundColor: "var(--card-bg, #ffffff)",
-          border: "1px solid var(--border-color, #e5e7eb)"
+          border: "1px solid var(--border-color, #e5e7eb)",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          gap: "0.5rem"
         }}>
-          <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", fontWeight: 700, textTransform: "uppercase" }}>
-            Active Session Batch
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
+              <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", fontWeight: 700, textTransform: "uppercase" }}>
+                Active Session Batch
+              </div>
+              {currentBatch && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenEditDates(currentBatch)}
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border-color)",
+                    backgroundColor: "transparent",
+                    color: "var(--foreground)",
+                    fontSize: "0.7rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.3rem"
+                  }}
+                  title="Edit batch dates and academic year"
+                >
+                  <Edit3 size={12} /> Edit Dates
+                </button>
+              )}
+            </div>
+            <div style={{ fontSize: "1.75rem", fontWeight: 800, marginTop: "0.35rem", color: "var(--foreground)" }}>
+              {currentBatch ? currentBatch.name : "None Configured"}
+            </div>
+            <div style={{ fontSize: "0.75rem", color: "#10b981", marginTop: "0.25rem", fontWeight: 600 }}>
+              ● Primary school academic year
+            </div>
           </div>
-          <div style={{ fontSize: "1.75rem", fontWeight: 800, marginTop: "0.35rem", color: "var(--foreground)" }}>
-            {currentBatch ? currentBatch.name : "None Configured"}
-          </div>
-          <div style={{ fontSize: "0.75rem", color: "#10b981", marginTop: "0.25rem", fontWeight: 600 }}>
-            ● Primary school academic year
+
+          <div style={{
+            fontSize: "0.75rem",
+            color: "var(--text-secondary)",
+            paddingTop: "0.4rem",
+            borderTop: "1px dashed var(--border-color)",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.35rem"
+          }}>
+            <Calendar size={13} color="var(--primary)" />
+            {currentBatch?.startDate || currentBatch?.endDate ? (
+              <span>
+                <strong>Timeline:</strong> {formatDateDisplay(currentBatch.startDate) || "Start TBD"} – {formatDateDisplay(currentBatch.endDate) || "End TBD"}
+              </span>
+            ) : (
+              <span style={{ fontStyle: "italic", opacity: 0.85 }}>Timeline dates not set (click &apos;Edit Dates&apos;)</span>
+            )}
           </div>
         </div>
 
@@ -378,7 +503,12 @@ export default function BatchManagementClient({
         alignItems: "center",
         gap: "0.5rem",
         borderBottom: "1px solid var(--border-color, #e5e7eb)",
-        paddingBottom: "0.5rem"
+        paddingBottom: "0.5rem",
+        overflowX: "auto",
+        WebkitOverflowScrolling: "touch",
+        whiteSpace: "nowrap",
+        maxWidth: "100%",
+        scrollbarWidth: "none"
       }}>
         <button
           type="button"
@@ -602,89 +732,151 @@ export default function BatchManagementClient({
           border: "1px solid var(--border-color, #e5e7eb)",
           borderRadius: "14px",
           backgroundColor: "var(--card-bg, #ffffff)",
-          overflow: "hidden"
+          overflow: "hidden",
+          width: "100%",
+          maxWidth: "100%"
         }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem", textAlign: "left" }}>
-            <thead>
-              <tr style={{ backgroundColor: "rgba(0,0,0,0.02)", borderBottom: "1px solid var(--border-color)" }}>
-                <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Batch Name</th>
-                <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Academic Year</th>
-                <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Classes Linked</th>
-                <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Students</th>
-                <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Status</th>
-                <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)", textAlign: "right" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {initialBatches.map((b) => {
-                const totalStudents = b.classes.reduce((sum, c) => sum + c._count.students, 0);
+          <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+            <table style={{ width: "100%", minWidth: "750px", borderCollapse: "collapse", fontSize: "0.875rem", textAlign: "left" }}>
+              <thead>
+                <tr style={{ backgroundColor: "rgba(0,0,0,0.02)", borderBottom: "1px solid var(--border-color)" }}>
+                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Batch Name</th>
+                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Academic Year</th>
+                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Start &amp; End Dates</th>
+                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Classes Linked</th>
+                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Students</th>
+                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Status</th>
+                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)", textAlign: "right" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {initialBatches.map((b) => {
+                  const totalStudents = b.classes.reduce((sum, c) => sum + c._count.students, 0);
 
-                return (
-                  <tr key={b.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
-                    <td style={{ padding: "0.85rem 1rem" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <strong>{b.name}</strong>
-                        {b.isCurrent && (
-                          <span style={{
-                            padding: "0.15rem 0.5rem",
-                            borderRadius: "12px",
-                            backgroundColor: "rgba(16, 185, 129, 0.15)",
-                            color: "#10b981",
-                            fontSize: "0.7rem",
-                            fontWeight: 800
-                          }}>
-                            Current Active
-                          </span>
+                  return (
+                    <tr key={b.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
+                      <td style={{ padding: "0.85rem 1rem" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <strong>{b.name}</strong>
+                          {b.isCurrent && (
+                            <span style={{
+                              padding: "0.15rem 0.5rem",
+                              borderRadius: "12px",
+                              backgroundColor: "rgba(16, 185, 129, 0.15)",
+                              color: "#10b981",
+                              fontSize: "0.7rem",
+                              fontWeight: 800
+                            }}>
+                              Current Active
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ padding: "0.85rem 1rem", color: "var(--text-secondary)" }}>
+                        {b.academicYear || b.name}
+                      </td>
+                      <td style={{ padding: "0.85rem 1rem", fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
+                        {b.startDate || b.endDate ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                            <Calendar size={13} color="var(--primary)" />
+                            <span>{formatDateDisplay(b.startDate) || "TBD"} – {formatDateDisplay(b.endDate) || "TBD"}</span>
+                          </div>
+                        ) : (
+                          <span style={{ fontStyle: "italic", opacity: 0.6 }}>Not set</span>
                         )}
-                      </div>
-                    </td>
-                    <td style={{ padding: "0.85rem 1rem", color: "var(--text-secondary)" }}>
-                      {b.academicYear || b.name}
-                    </td>
-                    <td style={{ padding: "0.85rem 1rem" }}>
-                      {b.classes.length} class{b.classes.length === 1 ? "" : "es"}
-                    </td>
-                    <td style={{ padding: "0.85rem 1rem", fontWeight: 600 }}>
-                      {totalStudents} student{totalStudents === 1 ? "" : "s"}
-                    </td>
-                    <td style={{ padding: "0.85rem 1rem" }}>
-                      <span style={{
-                        padding: "0.2rem 0.5rem",
-                        borderRadius: "4px",
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        backgroundColor: b.status === "ACTIVE" ? "rgba(16, 185, 129, 0.1)" : (b.status === "COMPLETED" ? "rgba(107, 114, 128, 0.1)" : "rgba(99, 102, 241, 0.1)"),
-                        color: b.status === "ACTIVE" ? "#10b981" : (b.status === "COMPLETED" ? "#6b7280" : "#6366f1")
-                      }}>
-                        {b.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: "0.85rem 1rem", textAlign: "right" }}>
-                      {!b.isCurrent && (
-                        <button
-                          type="button"
-                          onClick={() => handleSetCurrent(b.id, b.name)}
-                          disabled={isPending}
-                          style={{
-                            padding: "0.35rem 0.75rem",
-                            borderRadius: "6px",
-                            border: "1px solid var(--border-color)",
-                            backgroundColor: "transparent",
-                            color: "var(--foreground)",
-                            fontSize: "0.75rem",
-                            fontWeight: 600,
-                            cursor: "pointer"
-                          }}
-                        >
-                          Set as Active
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td style={{ padding: "0.85rem 1rem" }}>
+                        {b.classes.length} class{b.classes.length === 1 ? "" : "es"}
+                      </td>
+                      <td style={{ padding: "0.85rem 1rem", fontWeight: 600 }}>
+                        {totalStudents} student{totalStudents === 1 ? "" : "s"}
+                      </td>
+                      <td style={{ padding: "0.85rem 1rem" }}>
+                        <span style={{
+                          padding: "0.2rem 0.5rem",
+                          borderRadius: "4px",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          backgroundColor: b.status === "ACTIVE" ? "rgba(16, 185, 129, 0.1)" : (b.status === "COMPLETED" ? "rgba(107, 114, 128, 0.1)" : "rgba(99, 102, 241, 0.1)"),
+                          color: b.status === "ACTIVE" ? "#10b981" : (b.status === "COMPLETED" ? "#6b7280" : "#6366f1")
+                        }}>
+                          {b.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: "0.85rem 1rem", textAlign: "right" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "0.45rem", flexWrap: "wrap" }}>
+                          {!b.isCurrent && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetCurrent(b.id, b.name)}
+                              disabled={isPending}
+                              style={{
+                                padding: "0.35rem 0.65rem",
+                                borderRadius: "6px",
+                                border: "1px solid var(--border-color)",
+                                backgroundColor: "transparent",
+                                color: "var(--foreground)",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                whiteSpace: "nowrap"
+                              }}
+                            >
+                              Set Active
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditDates(b)}
+                            disabled={isPending}
+                            style={{
+                              padding: "0.35rem 0.65rem",
+                              borderRadius: "6px",
+                              border: "1px solid var(--border-color)",
+                              backgroundColor: "transparent",
+                              color: "var(--foreground)",
+                              fontSize: "0.75rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.25rem",
+                              whiteSpace: "nowrap"
+                            }}
+                            title="Edit batch duration and dates"
+                          >
+                            <Edit3 size={12} /> Dates
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingBatch(b)}
+                            disabled={isPending}
+                            style={{
+                              padding: "0.35rem 0.65rem",
+                              borderRadius: "6px",
+                              border: "1px solid rgba(239, 68, 68, 0.3)",
+                              backgroundColor: "rgba(239, 68, 68, 0.08)",
+                              color: "#ef4444",
+                              fontSize: "0.75rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.25rem",
+                              whiteSpace: "nowrap"
+                            }}
+                            title="Delete this batch"
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -723,48 +915,50 @@ export default function BatchManagementClient({
               </p>
             </div>
           ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem", textAlign: "left" }}>
-              <thead>
-                <tr style={{ backgroundColor: "rgba(0,0,0,0.02)", borderBottom: "1px solid var(--border-color)" }}>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Timestamp</th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Student</th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>From ➔ To Batch</th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Class Progression</th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {auditLogs.map((log) => (
-                  <tr key={log.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
-                    <td style={{ padding: "0.85rem 1rem", fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
-                      {new Date(log.promotedAt).toLocaleString()}
-                    </td>
-                    <td style={{ padding: "0.85rem 1rem" }}>
-                      <strong>{log.student?.firstName} {log.student?.lastName}</strong>
-                      <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Roll: {log.student?.rollNumber}</div>
-                    </td>
-                    <td style={{ padding: "0.85rem 1rem" }}>
-                      {log.fromBatchName} ➔ <strong>{log.toBatchName}</strong>
-                    </td>
-                    <td style={{ padding: "0.85rem 1rem" }}>
-                      {log.fromClassName} ➔ <strong style={{ color: log.action === "GRADUATED" ? "#f59e0b" : "#10b981" }}>{log.toClassName}</strong>
-                    </td>
-                    <td style={{ padding: "0.85rem 1rem" }}>
-                      <span style={{
-                        padding: "0.2rem 0.5rem",
-                        borderRadius: "4px",
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        backgroundColor: log.action === "GRADUATED" ? "rgba(245, 158, 11, 0.15)" : "rgba(16, 185, 129, 0.15)",
-                        color: log.action === "GRADUATED" ? "#f59e0b" : "#10b981"
-                      }}>
-                        {log.action}
-                      </span>
-                    </td>
+            <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+              <table style={{ width: "100%", minWidth: "680px", borderCollapse: "collapse", fontSize: "0.875rem", textAlign: "left" }}>
+                <thead>
+                  <tr style={{ backgroundColor: "rgba(0,0,0,0.02)", borderBottom: "1px solid var(--border-color)" }}>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Timestamp</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Student</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>From ➔ To Batch</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Class Progression</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "var(--text-secondary)" }}>Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {auditLogs.map((log) => (
+                    <tr key={log.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
+                      <td style={{ padding: "0.85rem 1rem", fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
+                        {new Date(log.promotedAt).toLocaleString()}
+                      </td>
+                      <td style={{ padding: "0.85rem 1rem" }}>
+                        <strong>{log.student?.firstName} {log.student?.lastName}</strong>
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Roll: {log.student?.rollNumber}</div>
+                      </td>
+                      <td style={{ padding: "0.85rem 1rem" }}>
+                        {log.fromBatchName} ➔ <strong>{log.toBatchName}</strong>
+                      </td>
+                      <td style={{ padding: "0.85rem 1rem" }}>
+                        {log.fromClassName} ➔ <strong style={{ color: log.action === "GRADUATED" ? "#f59e0b" : "#10b981" }}>{log.toClassName}</strong>
+                      </td>
+                      <td style={{ padding: "0.85rem 1rem" }}>
+                        <span style={{
+                          padding: "0.2rem 0.5rem",
+                          borderRadius: "4px",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          backgroundColor: log.action === "GRADUATED" ? "rgba(245, 158, 11, 0.15)" : "rgba(16, 185, 129, 0.15)",
+                          color: log.action === "GRADUATED" ? "#f59e0b" : "#10b981"
+                        }}>
+                          {log.action}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
@@ -971,6 +1165,313 @@ export default function BatchManagementClient({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* EDIT BATCH DATES & DETAILS MODAL */}
+      {/* ======================================================== */}
+      {editingBatch && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.6)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          padding: "1rem"
+        }}>
+          <div style={{
+            backgroundColor: "var(--card-bg, #ffffff)",
+            borderRadius: "16px",
+            border: "1px solid var(--border-color)",
+            width: "100%",
+            maxWidth: "500px",
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
+            overflow: "hidden"
+          }}>
+            <div style={{
+              padding: "1.25rem 1.5rem",
+              borderBottom: "1px solid var(--border-color)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Edit3 size={18} color="var(--primary)" />
+                <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700 }}>
+                  Edit Dates &amp; Details: Batch {editingBatch.name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingBatch(null)}
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditDates} style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                  Batch Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editBatchName}
+                  onChange={(e) => setEditBatchName(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.6rem 0.75rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color)",
+                    backgroundColor: "transparent",
+                    color: "var(--foreground)",
+                    fontSize: "0.9375rem"
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                  Academic Year Description (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Academic Year 2026-2027"
+                  value={editBatchAcademicYear}
+                  onChange={(e) => setEditBatchAcademicYear(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.6rem 0.75rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color)",
+                    backgroundColor: "transparent",
+                    color: "var(--foreground)",
+                    fontSize: "0.875rem"
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={editBatchStartDate}
+                    onChange={(e) => setEditBatchStartDate(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem 0.75rem",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border-color)",
+                      backgroundColor: "transparent",
+                      color: "var(--foreground)",
+                      fontSize: "0.875rem"
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={editBatchEndDate}
+                    onChange={(e) => setEditBatchEndDate(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem 0.75rem",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border-color)",
+                      backgroundColor: "transparent",
+                      color: "var(--foreground)",
+                      fontSize: "0.875rem"
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.75rem",
+                marginTop: "0.5rem",
+                paddingTop: "1rem",
+                borderTop: "1px solid var(--border-color)"
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingBatch(null)}
+                  disabled={isPending}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color)",
+                    backgroundColor: "transparent",
+                    color: "var(--foreground)",
+                    fontSize: "0.875rem",
+                    cursor: "pointer",
+                    fontWeight: 600
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  style={{
+                    padding: "0.5rem 1.25rem",
+                    borderRadius: "8px",
+                    border: "none",
+                    backgroundColor: "var(--primary, #6366f1)",
+                    color: "#ffffff",
+                    fontSize: "0.875rem",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.4rem"
+                  }}
+                >
+                  {isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* DELETE BATCH CONFIRMATION MODAL */}
+      {/* ======================================================== */}
+      {deletingBatch && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.65)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          padding: "1rem"
+        }}>
+          <div style={{
+            backgroundColor: "var(--card-bg, #ffffff)",
+            borderRadius: "16px",
+            border: "1px solid rgba(239, 68, 68, 0.3)",
+            width: "100%",
+            maxWidth: "460px",
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.25)",
+            overflow: "hidden"
+          }}>
+            <div style={{
+              padding: "1.25rem 1.5rem",
+              borderBottom: "1px solid var(--border-color)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Trash2 size={20} color="#ef4444" />
+                <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700, color: "#ef4444" }}>
+                  Delete Batch {deletingBatch.name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeletingBatch(null)}
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <p style={{ margin: 0, fontSize: "0.9375rem", color: "var(--foreground)", lineHeight: 1.5 }}>
+                Are you sure you want to permanently delete <strong>Batch &apos;{deletingBatch.name}&apos;</strong>?
+              </p>
+              
+              <div style={{
+                padding: "0.85rem 1rem",
+                borderRadius: "10px",
+                backgroundColor: "rgba(239, 68, 68, 0.08)",
+                border: "1px solid rgba(239, 68, 68, 0.2)",
+                fontSize: "0.8125rem",
+                color: "var(--text-secondary)",
+                lineHeight: 1.5
+              }}>
+                ⚠️ <strong>Safety guarantee:</strong> Any classes linked to this batch ({deletingBatch.classes.length} class{deletingBatch.classes.length === 1 ? "" : "es"}) will be safely unassigned so that no classes, teacher assignments, or student accounts are lost.
+              </div>
+
+              {deletingBatch.isCurrent && (
+                <div style={{
+                  padding: "0.75rem 1rem",
+                  borderRadius: "8px",
+                  backgroundColor: "rgba(245, 158, 11, 0.1)",
+                  border: "1px solid rgba(245, 158, 11, 0.25)",
+                  fontSize: "0.8125rem",
+                  color: "#d97706"
+                }}>
+                  Note: This is currently the active academic batch. A fallback batch will automatically be designated as active.
+                </div>
+              )}
+
+              <div style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.75rem",
+                marginTop: "0.5rem",
+                paddingTop: "1rem",
+                borderTop: "1px solid var(--border-color)"
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setDeletingBatch(null)}
+                  disabled={isPending}
+                  style={{
+                    padding: "0.55rem 1.15rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color)",
+                    backgroundColor: "transparent",
+                    color: "var(--foreground)",
+                    fontSize: "0.875rem",
+                    cursor: "pointer",
+                    fontWeight: 600
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteBatch}
+                  disabled={isPending}
+                  style={{
+                    padding: "0.55rem 1.25rem",
+                    borderRadius: "8px",
+                    border: "none",
+                    backgroundColor: "#ef4444",
+                    color: "#ffffff",
+                    fontSize: "0.875rem",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.4rem"
+                  }}
+                >
+                  {isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} Delete Batch
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

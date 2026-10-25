@@ -32,6 +32,16 @@ export default function NotificationsClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [targetType, setTargetType] = useState("ALL");
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<"ALL" | "UNREAD" | "READ">("ALL");
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const readCount = notifications.filter(n => n.isRead).length;
+
+  const filteredNotifications = notifications.filter(n => {
+    if (filterStatus === "UNREAD") return !n.isRead;
+    if (filterStatus === "READ") return n.isRead;
+    return true;
+  });
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -298,9 +308,61 @@ export default function NotificationsClient({
         </div>
       )}
 
+      {/* Notifications Filter Bar (All / Unread / Read History) */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.5rem", overflowX: "auto", whiteSpace: "nowrap" }}>
+        <button
+          type="button"
+          onClick={() => setFilterStatus("ALL")}
+          style={{
+            padding: "0.45rem 0.95rem",
+            borderRadius: "8px",
+            border: "1px solid var(--border-color)",
+            backgroundColor: filterStatus === "ALL" ? "rgba(99, 102, 241, 0.15)" : "transparent",
+            color: filterStatus === "ALL" ? "var(--primary)" : "var(--text-secondary)",
+            fontSize: "0.8125rem",
+            fontWeight: 700,
+            cursor: "pointer"
+          }}
+        >
+          All Notifications ({notifications.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilterStatus("UNREAD")}
+          style={{
+            padding: "0.45rem 0.95rem",
+            borderRadius: "8px",
+            border: "1px solid var(--border-color)",
+            backgroundColor: filterStatus === "UNREAD" ? "rgba(99, 102, 241, 0.15)" : "transparent",
+            color: filterStatus === "UNREAD" ? "var(--primary)" : "var(--text-secondary)",
+            fontSize: "0.8125rem",
+            fontWeight: 700,
+            cursor: "pointer"
+          }}
+        >
+          Unread ({unreadCount})
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilterStatus("READ")}
+          style={{
+            padding: "0.45rem 0.95rem",
+            borderRadius: "8px",
+            border: "1px solid var(--border-color)",
+            backgroundColor: filterStatus === "READ" ? "rgba(16, 185, 129, 0.15)" : "transparent",
+            color: filterStatus === "READ" ? "#10b981" : "var(--text-secondary)",
+            fontSize: "0.8125rem",
+            fontWeight: 700,
+            cursor: "pointer"
+          }}
+        >
+          Read &amp; Saved ({readCount})
+        </button>
+      </div>
+
       {/* Notifications List (Managed Per Particular Notification) */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 340px), 1fr))", gap: "1.25rem", width: "100%", minWidth: 0 }}>
-        {notifications.map(notif => (
+        {filteredNotifications.map(notif => (
           <div key={notif.id} style={{ background: "var(--card-bg)", borderRadius: "12px", border: `1px solid ${!notif.isRead ? "var(--primary)" : "var(--border-color)"}`, padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1rem", minWidth: 0, width: "100%", boxSizing: "border-box" }}>
             
             <div style={{ display: "flex", gap: "0.85rem", alignItems: "flex-start", minWidth: 0 }}>
@@ -315,8 +377,19 @@ export default function NotificationsClient({
               </div>
               <button
                 onClick={() => handleDelete(notif.id)}
-                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--danger)", padding: "0.25rem", borderRadius: "4px", flexShrink: 0 }}
-                title="Delete this particular notification"
+                style={{
+                  background: "rgba(239, 68, 68, 0.08)",
+                  border: "1px solid rgba(239, 68, 68, 0.2)",
+                  cursor: "pointer",
+                  color: "#ef4444",
+                  padding: "0.35rem",
+                  borderRadius: "6px",
+                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+                title="Delete this notification permanently"
               >
                 <Trash2 size={16} />
               </button>
@@ -356,7 +429,7 @@ export default function NotificationsClient({
                   </button>
                 ) : (
                   <span style={{ fontSize: "0.65rem", fontWeight: 600, textTransform: "uppercase", padding: "0.25rem 0.5rem", borderRadius: "12px", background: "var(--success-bg)", color: "var(--success)" }}>
-                    Read
+                    Read &amp; Saved
                   </span>
                 )}
               </div>
@@ -371,11 +444,11 @@ export default function NotificationsClient({
             <p>Notifications are currently paused.</p>
             <p style={{ fontSize: "0.875rem", opacity: 0.8 }}>Turn them back on to see your alerts and history.</p>
           </div>
-        ) : notifications.length === 0 ? (
+        ) : filteredNotifications.length === 0 ? (
           <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "4rem", color: "var(--text-secondary)", background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)" }}>
             <Bell size={48} style={{ opacity: 0.2, margin: "0 auto 1rem" }} />
-            <p>No notifications yet.</p>
-            <p style={{ fontSize: "0.875rem", opacity: 0.8 }}>Click &quot;Create Notification&quot; to send a notification message to users.</p>
+            <p>No notifications found in this view.</p>
+            <p style={{ fontSize: "0.875rem", opacity: 0.8 }}>Notifications read in the pop-up or created here will appear in your saved history.</p>
           </div>
         ) : null}
       </div>

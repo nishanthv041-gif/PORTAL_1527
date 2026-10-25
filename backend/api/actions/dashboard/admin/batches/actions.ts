@@ -26,6 +26,29 @@ export async function getBatchesAction() {
   try {
     await requireAdmin();
 
+    // Auto-sync any classes whose active students belong to a registered batch name
+    const allBatchesBasic = await prisma.academicBatch.findMany({ select: { id: true, name: true } });
+    for (const b of allBatchesBasic) {
+      const mismatchedClasses = await prisma.class.findMany({
+        where: {
+          isActive: true,
+          students: { some: { isActive: true, batch: b.name, enrollmentStatus: { not: "GRADUATED" } } },
+          OR: [
+            { batchId: null },
+            { batchId: { not: b.id } }
+          ]
+        },
+        select: { id: true }
+      });
+
+      if (mismatchedClasses.length > 0) {
+        await prisma.class.updateMany({
+          where: { id: { in: mismatchedClasses.map(c => c.id) } },
+          data: { batchId: b.id }
+        });
+      }
+    }
+
     const batches = await prisma.academicBatch.findMany({
       orderBy: [{ isCurrent: "desc" }, { createdAt: "desc" }],
       include: {
@@ -358,3 +381,104 @@ export async function getPromotionAuditHistoryAction() {
     };
   }
 }
+
+// ----------------------------------------------------
+// 9. UPDATE BATCH DETAILS & DATES
+// ----------------------------------------------------
+export async function updateBatchDatesAction(input: {
+  batchId: string;
+  name?: string;
+  academicYear?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  status?: string;
+}) {
+  try {
+    await requireAdmin();
+
+    const data: any = {};
+    if (input.name && input.name.trim()) data.name = input.name.trim();
+    if (input.academicYear !== undefined) data.academicYear = input.academicYear?.trim() || null;
+    if (input.status) data.status = input.status.trim().toUpperCase();
+
+    if (input.startDate !== undefined) {
+      data.startDate = input.startDate ? new Date(input.startDate) : null;
+    }
+    if (input.endDate !== undefined) {
+      data.endDate = input.endDate ? new Date(input.endDate) : null;
+    }
+
+    const updated = await prisma.academicBatch.update({
+      where: { id: input.batchId },
+      data
+    });
+
+    revalidatePath("/dashboard/admin/batches");
+    revalidatePath("/dashboard/admin");
+    return { success: true, batch: updated };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to update batch dates." };
+  }
+}
+
+// ----------------------------------------------------
+// 10. DELETE ACADEMIC BATCH
+// ----------------------------------------------------
+export async function deleteBatchAction(batchId: string) {
+  try {
+    await requireAdmin();
+
+    const batch = await prisma.academicBatch.findUnique({
+      where: { id: batchId },
+      include: { classes: true }
+    });
+
+    if (!batch) {
+      return { success: false, error: "Batch not found." };
+    }
+
+    // Safely unassign linked classes so no class or student data is lost
+    await prisma.class.updateMany({
+      where: { batchId },
+      data: { batchId: null }
+    });
+
+    // Remove promotion audits referring to this batch
+    await prisma.promotionAudit.deleteMany({
+      where: {
+        OR: [
+          { fromBatchId: batchId },
+          { toBatchId: batchId }
+        ]
+      }
+    });
+
+    // If deleting the current active batch, set another remaining batch as current
+    if (batch.isCurrent) {
+      const remaining = await prisma.academicBatch.findFirst({
+        where: { id: { not: batchId } },
+        orderBy: { createdAt: "desc" }
+      });
+      if (remaining) {
+        await prisma.academicBatch.update({
+          where: { id: remaining.id },
+          data: { isCurrent: true, status: "ACTIVE" }
+        });
+      }
+    }
+
+    await prisma.academicBatch.delete({
+      where: { id: batchId }
+    });
+
+    revalidatePath("/dashboard/admin/batches");
+    revalidatePath("/dashboard/admin/classes");
+    revalidatePath("/dashboard/admin/students");
+    revalidatePath("/dashboard/admin");
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to delete batch." };
+  }
+}
+
