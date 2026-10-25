@@ -90,6 +90,7 @@ model Teacher {
   meetings       Meeting[]
   classTeacherOf Class?        @relation("ClassTeacher")
   examRequests   ExamRequest[]
+  attendances    TeacherAttendance[]
 }
 
 model Staff {
@@ -190,6 +191,25 @@ model Attendance {
   @@index([date])
   @@index([date, status])
   @@index([studentId, status])
+}
+
+model TeacherAttendance {
+  id        String   @id @default(cuid())
+  date      DateTime
+  status    String   // PRESENT, ABSENT, LEAVE, LATE, HALF_DAY
+  remarks   String?
+
+  // Relationships
+  teacherId String
+  teacher   Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teacherId, date])
+  @@index([date])
+  @@index([date, status])
+  @@index([teacherId, status])
 }
 
 model Exam {

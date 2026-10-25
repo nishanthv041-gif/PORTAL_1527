@@ -6,6 +6,9 @@ import styles from "../../dashboard.module.css";
 import AttendanceClient from "./AttendanceClient";
 import { getSchoolCalendarStats } from "@/backend/api/actions/dashboard/attendance/calendarStats";
 
+import Link from "next/link";
+import { GraduationCap, UserCheck } from "lucide-react";
+
 export default async function AdminAttendancePage({
   searchParams,
 }: {
@@ -67,12 +70,34 @@ export default async function AdminAttendancePage({
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: "0.25rem" }}>
-        Attendance Management
-      </h1>
-      <p style={{ color: "var(--text-secondary)", marginTop: 0, marginBottom: "1.75rem" }}>
-        Full administrative attendance overview and editing access across the entire academic year.
-      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1.5rem" }}>
+        <div>
+          <h1 className={styles.title} style={{ margin: 0, marginBottom: "0.25rem" }}>
+            Attendance Management
+          </h1>
+          <p style={{ color: "var(--text-secondary)", margin: 0 }}>
+            Full administrative attendance overview and editing access across the entire academic year.
+          </p>
+        </div>
+
+        {/* Hub Switcher: Student Attendance vs Teacher Attendance */}
+        <div style={{ display: "inline-flex", background: "rgba(255, 255, 255, 0.04)", border: "1px solid var(--border-color)", padding: "4px", borderRadius: "12px", gap: "4px" }}>
+          <Link 
+            href="/dashboard/admin/attendance" 
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.55rem 1.15rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "9px", textDecoration: "none", background: "var(--primary)", color: "#fff" }}
+          >
+            <GraduationCap size={16} />
+            <span>Student Attendance</span>
+          </Link>
+          <Link 
+            href="/dashboard/admin/teacher-attendance" 
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.55rem 1.15rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "9px", textDecoration: "none", color: "var(--text-secondary)" }}
+          >
+            <UserCheck size={16} />
+            <span>Teacher Attendance</span>
+          </Link>
+        </div>
+      </div>
 
       <AttendanceClient
         classes={classes}

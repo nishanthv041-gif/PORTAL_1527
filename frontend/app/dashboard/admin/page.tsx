@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../dashboard.module.css";
-import { Users, GraduationCap, BookOpen, Briefcase, Mail, Phone, CheckCircle2, XCircle } from "lucide-react";
+import { Users, GraduationCap, BookOpen, Briefcase, Mail, Phone, CheckCircle2, XCircle, UserCheck } from "lucide-react";
 import ClassSelector from "./ClassSelector";
 import PassFailChart from "./PassFailChart";
 import EditClassModal from "./EditClassModal";
@@ -198,6 +198,17 @@ export default async function AdminDashboardPage({
             <div className={styles.statInfo}>
               <span className={styles.statLabel}>Total Subjects</span>
               <span className={styles.statValue}>{totalSubjects}</span>
+            </div>
+          </div>
+        </Link>
+        <Link href="/dashboard/admin/teacher-attendance" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div className={styles.statCard}>
+            <div className={styles.statIcon} style={{ backgroundColor: "var(--success-bg)", color: "var(--success)" }}>
+              <UserCheck size={24} />
+            </div>
+            <div className={styles.statInfo}>
+              <span className={styles.statLabel}>Teacher Attendance</span>
+              <span className={styles.statValue}>Manage</span>
             </div>
           </div>
         </Link>
