@@ -26,7 +26,12 @@ export async function createTeacherAction(formData: FormData) {
     const googleEmail = formData.get("googleEmail") as string;
 
     if (!isValidEmail(email)) return { error: "Invalid official email address." };
-    if (googleEmail && !isValidEmail(googleEmail)) return { error: "Invalid Google email address." };
+    if (googleEmail) {
+      const cleanGoogle = googleEmail.trim().toLowerCase();
+      if (!isValidEmail(cleanGoogle) || (!cleanGoogle.endsWith('@gmail.com') && !cleanGoogle.endsWith('@googlemail.com'))) {
+        return { error: "Google Email must be a valid Gmail account (@gmail.com)." };
+      }
+    }
 
     // Check uniqueness
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -129,7 +134,12 @@ export async function createParentStudentAction(formData: FormData) {
     const parentAddress = formData.get("parentAddress") as string;
 
     if (!isValidEmail(parentEmail)) return { error: "Invalid official email address." };
-    if (parentGoogleEmail && !isValidEmail(parentGoogleEmail)) return { error: "Invalid Google email address." };
+    if (parentGoogleEmail) {
+      const cleanGoogle = parentGoogleEmail.trim().toLowerCase();
+      if (!isValidEmail(cleanGoogle) || (!cleanGoogle.endsWith('@gmail.com') && !cleanGoogle.endsWith('@googlemail.com'))) {
+        return { error: "Google Email must be a valid Gmail account (@gmail.com)." };
+      }
+    }
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({ 
@@ -244,16 +254,21 @@ export async function createAdminAction(formData: FormData) {
     
     if (!name || !email) return { error: "Name and Email ID are required." };
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail.endsWith('@gmail.com') && !cleanEmail.endsWith('@googlemail.com')) {
+      return { error: "Admin email must be a valid Gmail account (@gmail.com)." };
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { email: cleanEmail } });
     if (existingUser) return { error: "A user with this email already exists." };
 
     await prisma.user.create({
       data: {
         name,
-        email,
+        email: cleanEmail,
         role: "ADMIN",
         status: "ACTIVE",
-        googleEmail: email,
+        googleEmail: cleanEmail,
         googleEmailVerified: true
       }
     });

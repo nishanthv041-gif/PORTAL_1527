@@ -35,6 +35,13 @@ export default function CreateTeacherClient({ subjects = [], classes = [] }: { s
     const formData = new FormData(e.currentTarget);
     formData.set("subjectIds", selectedSubjects.join(","));
 
+    const googleEmail = (formData.get("googleEmail") as string)?.trim().toLowerCase();
+    if (googleEmail && !googleEmail.endsWith("@gmail.com") && !googleEmail.endsWith("@googlemail.com")) {
+      setError("Google Email must be a valid Gmail account ending with @gmail.com.");
+      setIsSubmitting(false);
+      return;
+    }
+
     const result = await createTeacherAction(formData);
 
     setIsSubmitting(false);
@@ -135,8 +142,15 @@ export default function CreateTeacherClient({ subjects = [], classes = [] }: { s
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Google Email (Optional)</label>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Used for Phase 1 Google SSO verification.</p>
-                <input name="googleEmail" type="email" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Only Gmail accounts (@gmail.com) are allowed for Google SSO verification.</p>
+                <input 
+                  name="googleEmail" 
+                  type="email" 
+                  placeholder="e.g. teacher@gmail.com"
+                  pattern=".+@(gmail\.com|googlemail\.com)"
+                  title="Please enter a valid Gmail address (@gmail.com)"
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} 
+                />
               </div>
             </div>
           </div>

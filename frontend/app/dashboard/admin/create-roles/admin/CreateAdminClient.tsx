@@ -42,8 +42,16 @@ export default function CreateAdminClient() {
             <input required name="name" type="text" placeholder="e.g. Admin Name" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>Email ID *</label>
-            <input required name="email" type="email" placeholder="e.g. admin@school.com" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>Gmail Address *</label>
+            <input 
+              required 
+              name="email" 
+              type="email" 
+              placeholder="e.g. admin@gmail.com" 
+              pattern=".+@(gmail\.com|googlemail\.com)"
+              title="Please enter a valid Gmail address (@gmail.com)"
+              style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} 
+            />
           </div>
         </div>
       </div>
