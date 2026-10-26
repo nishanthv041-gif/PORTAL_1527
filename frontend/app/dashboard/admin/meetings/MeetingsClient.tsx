@@ -6,10 +6,35 @@ import {
   Plus, Calendar, Clock, MapPin, Link as LinkIcon, Trash2, 
   Users, UserCheck, Video, Building2, Bell, Send, CheckCircle, 
   AlertCircle, Search, ArrowLeft, ExternalLink, Copy, Check,
-  X, Loader2, Sparkles, Filter, ShieldCheck
+  X, Loader2, Sparkles, Filter, ShieldCheck, AlertTriangle
 } from "lucide-react";
-import { createMeetingAction, deleteMeetingAction, sendMeetingNotificationAction } from "@/backend/api/actions/dashboard/admin/meetings/actions";
+import { 
+  createMeetingAction, 
+  deleteMeetingAction, 
+  sendMeetingNotificationAction
+} from "@/backend/api/actions/dashboard/admin/meetings/actions";
+import { 
+  parseTimeToMinutes,
+  doTimesOverlap,
+  getDayOfWeekFromDate
+} from "./meetingUtils";
 import { Meeting, Teacher, Parent, User, Class } from "@prisma/client";
+
+export type TimetableSlotItem = {
+  id: string;
+  dayOfWeek: string;
+  period: number;
+  startTime: string;
+  endTime: string;
+  classId: string;
+  class: { id: string; name: string; section: string };
+  subject: {
+    id: string;
+    name: string;
+    code: string;
+    teacherId: string | null;
+  } | null;
+};
 
 type TeacherWithUser = Teacher & { user: User; classes?: Class[] };
 type ParentWithUser = Parent & { 
@@ -26,13 +51,15 @@ interface MeetingsClientProps {
   teachers: TeacherWithUser[];
   parents: ParentWithUser[];
   classes: (Class & { teacher?: TeacherWithUser | null; _count?: { students: number } })[];
+  timetableSlots?: TimetableSlotItem[];
 }
 
 export default function MeetingsClient({ 
   meetings: initialMeetings, 
   teachers, 
   parents, 
-  classes 
+  classes,
+  timetableSlots = []
 }: MeetingsClientProps) {
   // Navigation / Page Tab State: "PARENTS" or "TEACHERS"
   const [activeTab, setActiveTab] = useState<"PARENTS" | "TEACHERS">("PARENTS");
@@ -71,6 +98,23 @@ export default function MeetingsClient({
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
 
+  // Selected Teacher and Day of Week for Timetable Overlap Detection
+  const selectedDayOfWeek = formDate ? getDayOfWeekFromDate(formDate) : "";
+  const selectedTeacher = teachers.find(t => t.id === formStaffInchargeId);
+
+  // Teaching slots for the selected teacher on the target day of week
+  const teacherDaySlots = (formStaffInchargeId && selectedDayOfWeek)
+    ? timetableSlots.filter(s => 
+        s.subject?.teacherId === formStaffInchargeId &&
+        s.dayOfWeek?.toUpperCase() === selectedDayOfWeek.toUpperCase()
+      ).sort((a, b) => a.period - b.period)
+    : [];
+
+  // Teaching slots that clash with the proposed meeting timing
+  const clashingSlots = (formStartTime && teacherDaySlots.length > 0)
+    ? teacherDaySlots.filter(s => doTimesOverlap(formStartTime, formEndTime, s.startTime, s.endTime))
+    : [];
+
   // Helper: Parse structured summary or plain text
   const parseMeetingMeta = (meeting: MeetingWithRelations) => {
     let meta: any = {};
@@ -95,6 +139,14 @@ export default function MeetingsClient({
         ? (meeting.parents.length > 0 ? `${meeting.parents.length} Parents` : "All Parents")
         : (meeting.teachers.length > 0 ? `${meeting.teachers.length} Faculty Members` : "All Teachers")
     );
+    const timetableOverlaps: {
+      period: number;
+      subjectName: string;
+      className: string;
+      startTime: string;
+      endTime: string;
+    }[] = meta.timetableOverlaps || [];
+    const meetingDayOfWeek: string = meta.meetingDayOfWeek || "";
 
     return {
       meetingType,
@@ -105,7 +157,9 @@ export default function MeetingsClient({
       startTime,
       endTime,
       staffInchargeName,
-      audienceLabel
+      audienceLabel,
+      timetableOverlaps,
+      meetingDayOfWeek
     };
   };
 
@@ -933,6 +987,27 @@ export default function MeetingsClient({
                       <span>Audience:</span>
                       <span style={{ color: "var(--foreground)", fontWeight: 600 }}>{meta.audienceLabel}</span>
                     </div>
+
+                    {meta.timetableOverlaps && meta.timetableOverlaps.length > 0 && (
+                      <div style={{
+                        marginTop: "0.25rem",
+                        padding: "0.45rem 0.65rem",
+                        borderRadius: "8px",
+                        backgroundColor: "rgba(239, 68, 68, 0.08)",
+                        border: "1px solid rgba(239, 68, 68, 0.25)",
+                        color: "#ef4444",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem"
+                      }}>
+                        <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                        <span>
+                          Timetable Overlap: Period {meta.timetableOverlaps.map((o: any) => o.period).join(", ")} ({meta.timetableOverlaps.map((o: any) => o.subjectName).join(", ")})
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1278,6 +1353,126 @@ export default function MeetingsClient({
                   />
                 </div>
               </div>
+
+              {/* Teacher Today's Schedule & Timetable Overlap Checker */}
+              {formDate && formStaffInchargeId ? (
+                <div style={{
+                  padding: "0.9rem 1rem",
+                  borderRadius: "10px",
+                  border: clashingSlots.length > 0 ? "2px solid #ef4444" : "1px solid var(--border-color)",
+                  backgroundColor: clashingSlots.length > 0 ? "rgba(239, 68, 68, 0.05)" : "rgba(0, 0, 0, 0.02)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.6rem"
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 700, color: "var(--foreground)" }}>
+                      <Calendar size={15} color="var(--primary)" />
+                      <span>{selectedTeacher?.user.name}&apos;s Schedule on {selectedDayOfWeek}</span>
+                    </div>
+
+                    <span style={{
+                      padding: "0.2rem 0.55rem",
+                      borderRadius: "12px",
+                      fontSize: "0.725rem",
+                      fontWeight: 700,
+                      backgroundColor: clashingSlots.length > 0 ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)",
+                      color: clashingSlots.length > 0 ? "#dc2626" : "#059669",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.3rem"
+                    }}>
+                      {clashingSlots.length > 0 ? (
+                        <>
+                          <AlertTriangle size={12} /> {clashingSlots.length} Timetable Clash{clashingSlots.length > 1 ? "es" : ""}!
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle size={12} /> No Timing Clashes
+                        </>
+                      )}
+                    </span>
+                  </div>
+
+                  {/* Overlap Alert Notice */}
+                  {clashingSlots.length > 0 && (
+                    <div style={{
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "8px",
+                      backgroundColor: "rgba(239, 68, 68, 0.1)",
+                      border: "1px solid rgba(239, 68, 68, 0.3)",
+                      fontSize: "0.8rem",
+                      color: "#b91c1c",
+                      lineHeight: 1.4
+                    }}>
+                      <strong>⚠️ TIMETABLE OVERLAP DETECTED:</strong> Proposed meeting time ({formStartTime}{formEndTime ? ` - ${formEndTime}` : ""}) clashes with {selectedTeacher?.user.name}&apos;s active teaching period(s):
+                      <ul style={{ margin: "0.35rem 0 0 1.2rem", padding: 0 }}>
+                        {clashingSlots.map(cs => (
+                          <li key={cs.id}>
+                            <strong>Period {cs.period} ({cs.startTime} - {cs.endTime}):</strong> {cs.subject?.name || "Subject"} for {cs.class.name} - {cs.class.section}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Periods on this day */}
+                  {teacherDaySlots.length === 0 ? (
+                    <div style={{ fontSize: "0.8rem", color: "#059669", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <CheckCircle size={14} /> Teacher has NO scheduled classes on {selectedDayOfWeek}. Free all day!
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
+                        All Teaching Periods on {selectedDayOfWeek} ({teacherDaySlots.length} periods):
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: "0.5rem" }}>
+                        {teacherDaySlots.map(slot => {
+                          const isClash = clashingSlots.some(cs => cs.id === slot.id);
+                          return (
+                            <div
+                              key={slot.id}
+                              style={{
+                                padding: "0.45rem 0.65rem",
+                                borderRadius: "8px",
+                                border: isClash ? "1.5px solid #ef4444" : "1px solid var(--border-color)",
+                                backgroundColor: isClash ? "rgba(239, 68, 68, 0.12)" : "var(--card-bg, #ffffff)",
+                                fontSize: "0.75rem",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "0.15rem"
+                              }}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <strong style={{ color: isClash ? "#dc2626" : "var(--foreground)" }}>
+                                  P{slot.period}: {slot.startTime}-{slot.endTime}
+                                </strong>
+                                {isClash && (
+                                  <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "#dc2626" }}>CLASH</span>
+                                )}
+                              </div>
+                              <span style={{ color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {slot.subject?.name || "Class"} • {slot.class.name}-{slot.class.section}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{
+                  padding: "0.65rem 0.85rem",
+                  borderRadius: "8px",
+                  border: "1px dashed var(--border-color)",
+                  fontSize: "0.785rem",
+                  color: "var(--text-secondary)",
+                  backgroundColor: "rgba(0,0,0,0.01)"
+                }}>
+                  💡 Select Date and Staff In-charge to automatically display their timetable schedule for that day and check for overlaps.
+                </div>
+              )}
 
               {/* Place (if Offline) OR Meeting Link (if Online) */}
               {modalMode === "OFFLINE" ? (

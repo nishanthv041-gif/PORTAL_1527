@@ -8,7 +8,7 @@ export default async function AdminMeetingsPage() {
   const session = await getServerSession(getAuthOptions());
   if (!session || session.user.role !== 'ADMIN') return null;
 
-  const [meetings, teachers, parents, classes] = await Promise.all([
+  const [meetings, teachers, parents, classes, timetableSlots] = await Promise.all([
     prisma.meeting.findMany({
       include: {
         teachers: { include: { user: true } },
@@ -44,6 +44,21 @@ export default async function AdminMeetingsPage() {
         _count: { select: { students: true } }
       },
       orderBy: [{ name: 'asc' }, { section: 'asc' }]
+    }),
+    prisma.timetable.findMany({
+      where: { isBreak: false },
+      include: {
+        class: { select: { id: true, name: true, section: true } },
+        subject: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            teacherId: true
+          }
+        }
+      },
+      orderBy: [{ dayOfWeek: 'asc' }, { period: 'asc' }]
     })
   ]);
 
@@ -54,8 +69,10 @@ export default async function AdminMeetingsPage() {
         teachers={teachers}
         parents={parents}
         classes={classes}
+        timetableSlots={timetableSlots}
       />
     </div>
   );
 }
+
 

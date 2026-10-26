@@ -132,6 +132,13 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
       });
     }
 
+    // Track existing notifications for this user to check what has already been marked as read/seen
+    const userExistingNotifs = await prisma.notification.findMany({
+      where: { userId },
+      select: { id: true, title: true, isRead: true }
+    });
+    const readTitles = new Set(userExistingNotifs.filter(n => n.isRead).map(n => n.title.trim().toLowerCase()));
+
     // 2. Scheduled Meetings for this user
     try {
       let userMeetings: any[] = [];
@@ -172,6 +179,15 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
       }
 
       for (const m of userMeetings) {
+        const titleLower = `meeting: ${m.agenda.trim().toLowerCase()}`;
+        const rawAgendaLower = m.agenda.trim().toLowerCase();
+
+        // If user already marked this as read, skip if unreadOnly or mark isRead: true
+        const alreadyRead = readTitles.has(titleLower) || readTitles.has(rawAgendaLower);
+        if (options?.unreadOnly && alreadyRead) {
+          continue;
+        }
+
         const dateFormatted = new Date(m.date).toLocaleDateString(undefined, {
           weekday: "short",
           month: "short",
@@ -190,7 +206,7 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
           description: desc,
           timestamp: m.date.toISOString(),
           link: userRole === "PARENT" ? "/dashboard/parent/meetings" : userRole === "TEACHER" ? "/dashboard/teacher/meetings" : "/dashboard/admin/meetings",
-          isRead: false,
+          isRead: alreadyRead,
           priority: "HIGH",
           badgeLabel: "Meeting",
           badgeColors: { bg: "rgba(245, 158, 11, 0.12)", text: "#d97706", border: "rgba(245, 158, 11, 0.3)" }
@@ -276,6 +292,12 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
           badgeColors = { bg: "rgba(16, 185, 129, 0.12)", text: "#059669", border: "rgba(16, 185, 129, 0.3)" };
         }
 
+        const annTitleLower = ann.title.trim().toLowerCase();
+        const alreadyRead = readTitles.has(annTitleLower);
+        if (options?.unreadOnly && alreadyRead) {
+          continue;
+        }
+
         items.push({
           id: `ann-${ann.id}`,
           category,
@@ -283,7 +305,7 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
           description: ann.content,
           timestamp: ann.createdAt.toISOString(),
           link: userRole === "PARENT" ? "/dashboard/parent/announcements" : userRole === "TEACHER" ? "/dashboard/teacher/announcements" : "/dashboard/admin/announcements",
-          isRead: false,
+          isRead: alreadyRead,
           priority: ann.priority,
           badgeLabel,
           badgeColors
@@ -609,3 +631,96 @@ export async function deleteAllNotificationsAction(): Promise<{ success?: boolea
     return { error: "Failed to delete notifications." };
   }
 }
+
+/**
+ * Marks a batch of notifications as seen in the popup modal:
+ * - Persists them as read in the database `Notification` table so they remain visible on the user's notification page.
+ * - Prevents them from appearing in future popup modals.
+ */
+export async function markNotificationsAsSeenInPopupAction(notificationIds: string[]): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+    const userId = session.user.id;
+    invalidateUserNotifCache(userId);
+
+    if (!notificationIds || notificationIds.length === 0) return { success: true };
+
+    for (const notifId of notificationIds) {
+      if (notifId.startsWith("notif-")) {
+        const realId = notifId.replace("notif-", "");
+        await prisma.notification.updateMany({
+          where: { id: realId, userId },
+          data: { isRead: true }
+        });
+      } else if (notifId.startsWith("msg-")) {
+        const realId = notifId.replace("msg-", "");
+        await prisma.message.updateMany({
+          where: { id: realId, receiverId: userId },
+          data: { isRead: true }
+        });
+      } else if (notifId.startsWith("ann-")) {
+        const realId = notifId.replace("ann-", "");
+        const ann = await prisma.announcement.findUnique({ where: { id: realId } });
+        if (ann) {
+          const existing = await prisma.notification.findFirst({
+            where: { userId, title: ann.title }
+          });
+          if (existing) {
+            await prisma.notification.update({
+              where: { id: existing.id },
+              data: { isRead: true }
+            });
+          } else {
+            await prisma.notification.create({
+              data: {
+                userId,
+                title: ann.title,
+                content: ann.content,
+                type: "ANNOUNCEMENT",
+                link: ann.fileUrl || (session.user.role === "ADMIN" ? "/dashboard/admin/announcements" : "/dashboard/parent/announcements"),
+                isRead: true
+              }
+            });
+          }
+        }
+      } else if (notifId.startsWith("meeting-")) {
+        const realId = notifId.replace("meeting-", "");
+        const m = await prisma.meeting.findUnique({ where: { id: realId } });
+        if (m) {
+          const existing = await prisma.notification.findFirst({
+            where: { userId, title: { contains: m.agenda } }
+          });
+          if (existing) {
+            await prisma.notification.update({
+              where: { id: existing.id },
+              data: { isRead: true }
+            });
+          } else {
+            await prisma.notification.create({
+              data: {
+                userId,
+                title: `Meeting: ${m.agenda}`,
+                content: `Scheduled meeting on ${new Date(m.date).toLocaleDateString()} at ${m.time}. ${m.location ? `Place: ${m.location}.` : (m.link ? `Link: ${m.link}.` : "")} Agenda: ${m.agenda}`,
+                type: "MEETING",
+                link: session.user.role === "ADMIN" ? "/dashboard/admin/meetings" : session.user.role === "TEACHER" ? "/dashboard/teacher/meetings" : "/dashboard/parent/meetings",
+                isRead: true
+              }
+            });
+          }
+        }
+      }
+    }
+
+    revalidatePath("/dashboard/admin/notifications");
+    revalidatePath("/dashboard/parent/notifications");
+    revalidatePath("/dashboard/teacher/notifications");
+    revalidatePath("/dashboard");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error in markNotificationsAsSeenInPopupAction:", error);
+    return { success: false, error: "Failed to mark notifications as seen" };
+  }
+}
+

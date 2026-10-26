@@ -29,6 +29,8 @@ export interface CreateMeetingInput {
   syncCalendar?: boolean;
 }
 
+import { doTimesOverlap, getDayOfWeekFromDate } from "@/frontend/app/dashboard/admin/meetings/meetingUtils";
+
 export async function createMeetingAction(formData: FormData) {
   try {
     const session = await getServerSession(getAuthOptions());
@@ -68,6 +70,43 @@ export async function createMeetingAction(formData: FormData) {
     });
     if (!staffIncharge) {
       return { error: "Selected Staff In-charge not found." };
+    }
+
+    // Detect Timetable Overlaps for Staff In-charge on the target date
+    const meetingDayOfWeek = getDayOfWeekFromDate(date);
+    const teacherSlotsOnDay = await prisma.timetable.findMany({
+      where: {
+        isBreak: false,
+        dayOfWeek: meetingDayOfWeek,
+        subject: {
+          teacherId: staffIncharge.id
+        }
+      },
+      include: {
+        class: { select: { id: true, name: true, section: true } },
+        subject: { select: { id: true, name: true, code: true } }
+      },
+      orderBy: { period: "asc" }
+    });
+
+    const timetableOverlaps: {
+      period: number;
+      subjectName: string;
+      className: string;
+      startTime: string;
+      endTime: string;
+    }[] = [];
+
+    for (const slot of teacherSlotsOnDay) {
+      if (doTimesOverlap(startTime, endTime, slot.startTime, slot.endTime)) {
+        timetableOverlaps.push({
+          period: slot.period,
+          subjectName: slot.subject?.name || "Subject Period",
+          className: slot.class ? `${slot.class.name} - ${slot.class.section}` : "Class",
+          startTime: slot.startTime,
+          endTime: slot.endTime
+        });
+      }
     }
 
     let teachersToConnect = new Set<string>();
@@ -152,7 +191,9 @@ export async function createMeetingAction(formData: FormData) {
       link: mode === "ONLINE" ? link : "",
       staffInchargeId: staffIncharge.id,
       staffInchargeName: staffIncharge.user.name,
-      audienceDescription
+      audienceDescription,
+      meetingDayOfWeek,
+      timetableOverlaps
     };
 
     const meeting = await prisma.meeting.create({
@@ -215,12 +256,15 @@ export async function createMeetingAction(formData: FormData) {
       meeting.teachers.forEach(t => {
         if (t.userId) {
           const isIncharge = t.id === staffIncharge.id;
+          const overlapNote = isIncharge && timetableOverlaps.length > 0
+            ? ` ⚠️ Note: This meeting overlaps with your scheduled Period ${timetableOverlaps.map(o => `${o.period} (${o.subjectName})`).join(", ")}.`
+            : "";
           notificationsToInsert.push({
             userId: t.userId,
             title: isIncharge
               ? `🗓️ Staff In-charge Assignment: ${topic}`
               : `👥 ${meetingType === "PARENTS" ? "Parents-Faculty Meeting" : "Teachers Meeting"}: ${topic}`,
-            content: `Scheduled on ${dateFormatted} (${formattedTime}). Mode: ${mode === "ONLINE" ? "Online" : "In-Person"}. ${mode === "ONLINE" ? `Meeting Link: ${link}` : `Place: ${place}`}. ${isIncharge ? "You are designated as Staff In-charge." : `Staff In-charge: ${staffIncharge.user.name}.`}${description ? ` Agenda: ${description}` : ""}`,
+            content: `Scheduled on ${dateFormatted} (${formattedTime}). Mode: ${mode === "ONLINE" ? "Online" : "In-Person"}. ${mode === "ONLINE" ? `Meeting Link: ${link}` : `Place: ${place}`}. ${isIncharge ? "You are designated as Staff In-charge." : `Staff In-charge: ${staffIncharge.user.name}.`}${description ? ` Agenda: ${description}` : ""}${overlapNote}`,
             type: "MEETING",
             link: "/dashboard/teacher/meetings",
             isRead: false
@@ -278,7 +322,8 @@ export async function createMeetingAction(formData: FormData) {
     return {
       success: true,
       meetingId: meeting.id,
-      notificationsCreated
+      notificationsCreated,
+      timetableOverlaps
     };
   } catch (error: unknown) {
     console.error("createMeetingAction error:", error);

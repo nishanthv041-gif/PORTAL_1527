@@ -8,13 +8,21 @@ import {
   FileText, Clock, Users, AlertCircle, BellOff, CheckCheck, Trash2
 } from "lucide-react";
 import styles from "./NotificationPopupModal.module.css";
-import { UnifiedNotification, getUnifiedNotificationsAction, markNotificationReadAction, clearAllNotificationsAction, deleteUnifiedNotificationAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { 
+  UnifiedNotification, 
+  getUnifiedNotificationsAction, 
+  markNotificationReadAction, 
+  clearAllNotificationsAction, 
+  deleteUnifiedNotificationAction,
+  markNotificationsAsSeenInPopupAction
+} from "@/backend/api/actions/notifications/unifiedNotificationActions";
 
 // Key used in localStorage — unique per portal so it doesn't clash with other apps
 const CLEARED_KEY = "srt_portal_notif_cleared_v1";
 const CLEARED_TIMESTAMP_KEY = "srt_portal_notif_cleared_time";
 const DISMISSED_KEY = "srt_portal_popup_notif_dismissed";
 const FRESH_LOGIN_KEY = "srt_portal_fresh_login";
+const SEEN_POPUP_IDS_KEY = "srt_portal_seen_popup_ids";
 
 export default function NotificationPopupModal({
   initialNotifications = [],
@@ -29,12 +37,43 @@ export default function NotificationPopupModal({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isClearing, setIsClearing] = useState(false);
 
-  // Helper to filter out already-read or already-cleared notifications
+  // Helper to filter out already-read, already-cleared, or already-seen-in-popup notifications
   const filterActiveUnread = (items: UnifiedNotification[]) => {
     if (!items || items.length === 0) return [];
     const clearedTimeStr = typeof window !== "undefined" ? localStorage.getItem(CLEARED_TIMESTAMP_KEY) : null;
     const clearedTime = clearedTimeStr ? new Date(clearedTimeStr).getTime() : 0;
-    return items.filter(n => !n.isRead && new Date(n.timestamp).getTime() > clearedTime);
+
+    let seenIds = new Set<string>();
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(SEEN_POPUP_IDS_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) seenIds = new Set(parsed);
+        }
+      } catch {}
+    }
+
+    return items.filter(n => !n.isRead && !seenIds.has(n.id) && new Date(n.timestamp).getTime() > clearedTime);
+  };
+
+  // Helper to mark a list of notifications as seen:
+  // 1. Locally via localStorage so it never shows in popup again
+  // 2. In database so it remains safely stored and accessible on the user's notification page
+  const markShownNotificationsAsSeen = (items: UnifiedNotification[]) => {
+    if (!items || items.length === 0) return;
+    const ids = items.map(n => n.id);
+
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(SEEN_POPUP_IDS_KEY);
+        const existingArr: string[] = stored ? JSON.parse(stored) : [];
+        const updated = new Set([...existingArr, ...ids]);
+        localStorage.setItem(SEEN_POPUP_IDS_KEY, JSON.stringify(Array.from(updated)));
+      } catch {}
+    }
+
+    markNotificationsAsSeenInPopupAction(ids).catch(() => {});
   };
 
   // Sync if prop updates
@@ -69,11 +108,17 @@ export default function NotificationPopupModal({
               sessionStorage.removeItem(FRESH_LOGIN_KEY);
               sessionStorage.removeItem(DISMISSED_KEY);
               setTimeout(() => {
-                if (isMounted) setIsOpen(true);
+                if (isMounted) {
+                  setIsOpen(true);
+                  markShownNotificationsAsSeen(activeFresh);
+                }
               }, 350);
             } else if (!isDismissed) {
               setTimeout(() => {
-                if (isMounted) setIsOpen(true);
+                if (isMounted) {
+                  setIsOpen(true);
+                  markShownNotificationsAsSeen(activeFresh);
+                }
               }, 500);
             }
           }
@@ -91,12 +136,18 @@ export default function NotificationPopupModal({
         sessionStorage.removeItem(FRESH_LOGIN_KEY);
         sessionStorage.removeItem(DISMISSED_KEY);
         const timer = setTimeout(() => {
-          if (isMounted) setIsOpen(true);
+          if (isMounted) {
+            setIsOpen(true);
+            markShownNotificationsAsSeen(activeInitial);
+          }
         }, 350);
         return () => clearTimeout(timer);
       } else if (!isDismissed) {
         const timer = setTimeout(() => {
-          if (isMounted) setIsOpen(true);
+          if (isMounted) {
+            setIsOpen(true);
+            markShownNotificationsAsSeen(activeInitial);
+          }
         }, 500);
         return () => clearTimeout(timer);
       }
@@ -134,15 +185,13 @@ export default function NotificationPopupModal({
   const current = notifications[currentIndex] || notifications[0];
 
   const handleClose = () => {
-    // When closed/read, save it as read on the server so it appears in the notifications page
-    if (current?.id) {
-      markNotificationReadAction(current.id).catch(() => {});
-    }
+    // When closed, ensure all seen notifications are marked as seen and stored in database
+    markShownNotificationsAsSeen(notifications);
     setIsOpen(false);
-    // Mark as dismissed for the current session so it doesn't pop up on every route change
     sessionStorage.setItem(DISMISSED_KEY, "true");
     router.refresh();
   };
+
 
   const handleDeleteCurrent = async () => {
     if (!current) return;
@@ -170,10 +219,8 @@ export default function NotificationPopupModal({
   const handleOpen = async () => {
     if (!current) return;
     
-    // Mark notification as read on the server
-    if (current.id) {
-      markNotificationReadAction(current.id).catch(() => {});
-    }
+    // Mark notifications as seen and store permanently in user notification page
+    markShownNotificationsAsSeen(notifications);
 
     // Dismiss modal and navigate directly to target action
     setIsOpen(false);
