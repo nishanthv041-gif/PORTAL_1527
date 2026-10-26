@@ -1244,7 +1244,9 @@ export default function BulkUpload({
                                 ) : type === "teacher" ? (
                                   <div>
                                     <div>Qual: {r.data.qualification || "Missing"}</div>
-                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Join: {r.data.joiningDate || "N/A"}</div>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                                      {r.data.subjects ? `Subjects: ${r.data.subjects}` : `Join: ${r.data.joiningDate || "N/A"}`}
+                                    </div>
                                   </div>
                                 ) : (
                                   <div>
@@ -2048,6 +2050,25 @@ export default function BulkUpload({
                         }}
                       />
                       {editRowErrors.qualification && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.qualification}</span>}
+                    </div>
+
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Assigned Subjects (Comma-separated, e.g. Mathematics, Science)
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.subjects || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, subjects: e.target.value })}
+                        placeholder="e.g. Mathematics, Science"
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          background: "transparent"
+                        }}
+                      />
                     </div>
                   </div>
                 </>

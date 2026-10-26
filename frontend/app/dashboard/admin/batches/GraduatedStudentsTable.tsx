@@ -170,7 +170,11 @@ export default function GraduatedStudentsTable() {
               </tr>
             </thead>
             <tbody>
-              {graduatedStudents.map((s) => (
+              {[...graduatedStudents].sort((a, b) => {
+                const nameA = `${a.firstName} ${a.lastName}`.trim().toLowerCase();
+                const nameB = `${b.firstName} ${b.lastName}`.trim().toLowerCase();
+                return nameA.localeCompare(nameB);
+              }).map((s) => (
                 <tr key={s.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
                   <td style={{ padding: "0.85rem 1rem" }}>
                     <div style={{ fontWeight: 700, color: "var(--foreground)" }}>

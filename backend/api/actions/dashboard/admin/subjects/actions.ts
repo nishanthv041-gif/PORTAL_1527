@@ -225,3 +225,96 @@ export async function assignSubjectTeacher(subjectId: string, teacherId: string)
     return { error: "Failed to assign teacher." };
   }
 }
+
+export async function importSubjectsFromCsvAction(formData: FormData) {
+  try {
+    const file = formData.get("file") as File | null;
+    if (!file) {
+      return { error: "No file provided." };
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const XLSX = await import("xlsx");
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+      return { error: "Spreadsheet contains no sheets." };
+    }
+
+    const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
+    if (!rows || rows.length === 0) {
+      return { error: "Spreadsheet is empty." };
+    }
+
+    const classes = await prisma.class.findMany({ where: { isActive: true } });
+    const teachers = await prisma.teacher.findMany({
+      where: { isActive: true },
+      include: { user: true }
+    });
+
+    let createdCount = 0;
+    for (const r of rows) {
+      const norm: Record<string, string> = {};
+      for (const [k, v] of Object.entries(r)) {
+        norm[k.toLowerCase().replace(/[\s_-]/g, "")] = String(v).trim();
+      }
+
+      const name = norm.name || norm.subjectname || "";
+      const code = (norm.code || norm.subjectcode || (name ? name.substring(0, 3).toUpperCase() : "")).trim();
+      const maxMarks = parseInt(norm.maxmarks || norm.max || "100", 10);
+      const passMarks = parseInt(norm.passmarks || norm.pass || "35", 10);
+      const className = norm.class || norm.classname || "";
+      const teacherEmail = norm.teacheremail || norm.email || "";
+
+      if (!name) continue;
+
+      // Match class
+      const targetClass = classes.find(c => {
+        const full = `${c.name} - Section ${c.section}`.toLowerCase();
+        const short = `${c.name} ${c.section}`.toLowerCase();
+        const clean = className.toLowerCase();
+        return full.includes(clean) || short.includes(clean) || clean.includes(c.name.toLowerCase());
+      }) || classes[0];
+
+      if (!targetClass) continue;
+
+      // Match teacher
+      const targetTeacher = teacherEmail ? teachers.find(t => t.user.email.toLowerCase() === teacherEmail.toLowerCase()) : null;
+
+      // Check if subject exists for class
+      const existing = await prisma.subject.findFirst({
+        where: { name, classId: targetClass.id }
+      });
+
+      if (existing) {
+        if (targetTeacher) {
+          await prisma.subject.update({
+            where: { id: existing.id },
+            data: { teacherId: targetTeacher.id }
+          });
+        }
+      } else {
+        await prisma.subject.create({
+          data: {
+            name,
+            code,
+            maxMarks,
+            passMarks,
+            classId: targetClass.id,
+            teacherId: targetTeacher?.id || null
+          }
+        });
+        createdCount++;
+      }
+    }
+
+    revalidatePath("/dashboard/admin/subjects");
+    return { success: true, count: createdCount };
+  } catch (error) {
+    console.error("Import subjects error:", error);
+    if (error instanceof Error) {
+      return { error: error.message || "Failed to import subjects." };
+    }
+    return { error: "Failed to import subjects." };
+  }
+}

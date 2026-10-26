@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import styles from "../../../dashboard.module.css";
-import { createParentStudentAction } from "@/backend/api/actions/dashboard/admin/create-roles/actions";
+import { createParentStudentAction, getNextAdmissionNumberAction } from "@/backend/api/actions/dashboard/admin/create-roles/actions";
 import BulkUpload from "../BulkUpload";
 
 export default function ParentStudentWizard({ classes }: { classes: { id: string; name: string; section: string }[] }) {
@@ -13,6 +13,15 @@ export default function ParentStudentWizard({ classes }: { classes: { id: string
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [admissionNo, setAdmissionNo] = useState("");
+
+  useEffect(() => {
+    getNextAdmissionNumberAction().then(res => {
+      if (res?.nextAdmissionNo) {
+        setAdmissionNo(res.nextAdmissionNo);
+      }
+    });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -87,8 +96,19 @@ export default function ParentStudentWizard({ classes }: { classes: { id: string
                 <input required name="rollNumber" type="text" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Admission Number *</label>
-                <input required name="admissionNo" type="text" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                  <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>Admission Number *</label>
+                  <span style={{ fontSize: '0.725rem', color: 'var(--primary)', fontWeight: 600 }}>Auto-ordered</span>
+                </div>
+                <input 
+                  required 
+                  name="admissionNo" 
+                  type="text" 
+                  value={admissionNo}
+                  onChange={(e) => setAdmissionNo(e.target.value)}
+                  placeholder="e.g. AD125"
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} 
+                />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Batch (e.g. 2023-2024)</label>

@@ -48,7 +48,7 @@ export default async function TeacherAttendancePage({
                 take: 60,
               },
             },
-            orderBy: { rollNumber: "asc" },
+            orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
           },
         },
       },

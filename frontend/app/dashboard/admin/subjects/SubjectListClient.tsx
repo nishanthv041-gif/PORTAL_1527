@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Plus, LayoutDashboard, Trash2, UserCheck, Check, School } from "lucide-react";
+import { BookOpen, Plus, LayoutDashboard, Trash2, UserCheck, Check, School, FileSpreadsheet, Download } from "lucide-react";
 import Link from "next/link";
-import { createSubjectAction, deleteSubjectGroupByName } from "@/backend/api/actions/dashboard/admin/subjects/actions";
+import { createSubjectAction, deleteSubjectGroupByName, importSubjectsFromCsvAction } from "@/backend/api/actions/dashboard/admin/subjects/actions";
 import { Subject, Class, Teacher, User, Student, Mark } from "@prisma/client";
 
 type TeacherWithUser = Teacher & { user: User };
@@ -26,6 +26,11 @@ export default function SubjectListClient({
   const router = useRouter();
   const [subjectList, setSubjectList] = useState(subjects);
   const [showCreate, setShowCreate] = useState(false);
+  const [showCsvUpload, setShowCsvUpload] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvLoading, setCsvLoading] = useState(false);
+  const [csvMessage, setCsvMessage] = useState<string | null>(null);
+  const [csvError, setCsvError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -115,6 +120,25 @@ export default function SubjectListClient({
     }
   };
 
+  const handleCsvSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!csvFile) return;
+    setCsvLoading(true);
+    setCsvError(null);
+    setCsvMessage(null);
+    const fd = new FormData();
+    fd.set("file", csvFile);
+    const res = await importSubjectsFromCsvAction(fd);
+    setCsvLoading(false);
+    if (res.error) {
+      setCsvError(res.error);
+    } else {
+      setCsvMessage(`Successfully imported/updated ${res.count} subject(s)!`);
+      setCsvFile(null);
+      router.refresh();
+    }
+  };
+
   // Group subjects by shared name across all classes
   const groupedSubjects = subjectList.reduce((acc, curr) => {
     if (!acc[curr.name]) acc[curr.name] = [];
@@ -124,9 +148,48 @@ export default function SubjectListClient({
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
+        <a 
+          href="/templates/subject_upload_template.csv" 
+          download="subject_upload_template.csv"
+          style={{ 
+            padding: '0.75rem 1.25rem', 
+            background: 'var(--card-bg)', 
+            color: 'inherit', 
+            border: '1px solid var(--border-color)', 
+            borderRadius: '8px', 
+            fontWeight: 600, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.5rem',
+            textDecoration: 'none',
+            fontSize: '0.875rem'
+          }}
+        >
+          <Download size={16} /> Download CSV Template
+        </a>
         <button 
-          onClick={() => setShowCreate(!showCreate)}
+          type="button"
+          onClick={() => { setShowCsvUpload(!showCsvUpload); setShowCreate(false); }}
+          style={{ 
+            padding: '0.75rem 1.25rem', 
+            background: showCsvUpload ? 'var(--primary)' : 'rgba(99, 102, 241, 0.1)', 
+            color: showCsvUpload ? '#ffffff' : 'var(--primary)', 
+            border: '1px solid var(--primary)', 
+            borderRadius: '8px', 
+            fontWeight: 600, 
+            cursor: 'pointer', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.5rem',
+            fontSize: '0.875rem'
+          }}
+        >
+          <FileSpreadsheet size={16} /> {showCsvUpload ? "Close CSV Import" : "Import via CSV"}
+        </button>
+        <button 
+          type="button"
+          onClick={() => { setShowCreate(!showCreate); setShowCsvUpload(false); }}
           style={{ 
             padding: '0.75rem 1.5rem', 
             backgroundColor: "var(--primary)", 
@@ -138,12 +201,68 @@ export default function SubjectListClient({
             display: 'flex', 
             alignItems: 'center', 
             gap: '0.5rem',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+            boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+            fontSize: '0.875rem'
           }}
         >
           {showCreate ? "Cancel" : <><Plus size={18} /> Add Subject</>}
         </button>
       </div>
+
+      {showCsvUpload && (
+        <div style={{
+          background: 'var(--card-bg)',
+          borderRadius: '16px',
+          padding: '1.75rem',
+          border: '1px solid var(--border-color)',
+          marginBottom: '2rem',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+        }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <FileSpreadsheet size={20} className="text-primary" />
+            Bulk Import Subjects via CSV / Excel
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
+            Upload a CSV containing <code>name, code, maxMarks, passMarks, class, teacherEmail</code> to batch activate subjects and assign teachers.
+          </p>
+
+          {csvError && (
+            <div style={{ background: 'var(--danger-bg)', color: "var(--danger)", padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid var(--danger)', fontSize: '0.875rem' }}>
+              {csvError}
+            </div>
+          )}
+          {csvMessage && (
+            <div style={{ background: 'var(--success-bg)', color: "var(--success)", padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid var(--success)', fontSize: '0.875rem' }}>
+              {csvMessage}
+            </div>
+          )}
+
+          <form onSubmit={handleCsvSubmit} style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input 
+              type="file" 
+              accept=".csv,.xlsx,.xls" 
+              required
+              onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+              style={{ padding: '0.5rem', border: '1px solid var(--border-color)', borderRadius: '8px', background: 'transparent' }} 
+            />
+            <button 
+              type="submit" 
+              disabled={csvLoading || !csvFile}
+              style={{
+                padding: '0.65rem 1.5rem',
+                backgroundColor: 'var(--primary)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              {csvLoading ? "Uploading..." : "Upload & Activate Subjects"}
+            </button>
+          </form>
+        </div>
+      )}
 
       {showCreate && (
         <div style={{ 
@@ -372,7 +491,7 @@ export default function SubjectListClient({
               <div style={{ marginBottom: '1.25rem', flex: 1 }}>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Enrolled Classes</p>
                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                  {instances.map(subj => (
+                  {[...instances].sort((a, b) => `${a.class.name}-${a.class.section}`.localeCompare(`${b.class.name}-${b.class.section}`)).map(subj => (
                     <span 
                       key={subj.id}
                       style={{ 

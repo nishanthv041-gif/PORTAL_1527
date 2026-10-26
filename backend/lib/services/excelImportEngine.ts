@@ -563,7 +563,8 @@ export async function parseAndScanWorkbook(
         password,
         phone,
         joiningDate,
-        qualification
+        qualification,
+        subjects: String(norm.subjects || norm.subject || "").trim()
       };
     } else {
       // ADMIN
@@ -1220,6 +1221,23 @@ export async function executeImportTransaction(
             const teacherFullName = `${firstName} ${lastName || ""}`.trim();
             const joinDate = joiningDate ? new Date(joiningDate) : new Date();
 
+            const rawSubjects = row.subjects;
+            let matchedSubjectIds: string[] = [];
+            if (rawSubjects) {
+              const tokens = String(rawSubjects)
+                .split(',')
+                .map(s => s.trim().toLowerCase())
+                .filter(Boolean);
+              if (tokens.length > 0) {
+                const dbSubjects = await tx.subject.findMany({
+                  select: { id: true, name: true, code: true }
+                });
+                matchedSubjectIds = dbSubjects
+                  .filter(s => tokens.includes(s.name.toLowerCase()) || tokens.includes(s.code.toLowerCase()))
+                  .map(s => s.id);
+              }
+            }
+
             await tx.user.create({
               data: {
                 email: cleanEmail,
@@ -1232,7 +1250,12 @@ export async function executeImportTransaction(
                     phone: phone ? String(phone).trim() : null,
                     qualification: qualification ? String(qualification).trim() : null,
                     joinDate,
-                    isActive: true
+                    isActive: true,
+                    ...(matchedSubjectIds.length > 0 ? {
+                      subjects: {
+                        connect: matchedSubjectIds.map(id => ({ id }))
+                      }
+                    } : {})
                   }
                 }
               }

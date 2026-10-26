@@ -32,10 +32,10 @@ XLSX.writeFile(studentWb, path.join(templatesDir, "student_upload_template.xlsx"
 
 // 2. Teacher Templates
 const teacherHeaders = [
-  "firstName", "lastName", "email", "password", "phone", "joiningDate", "qualification"
+  "firstName", "lastName", "email", "password", "phone", "joiningDate", "qualification", "subjects"
 ];
 const teacherSample = [
-  "Rajesh", "Sharma", "r.sharma@school.internal", "Teacher@123", "9876543211", "2024-06-01", "M.Sc, B.Ed"
+  "Rajesh", "Sharma", "r.sharma@school.internal", "Teacher@123", "9876543211", "2024-06-01", "M.Sc B.Ed", "Science"
 ];
 
 const teacherCsvContent = [
@@ -63,5 +63,20 @@ const adminWs = XLSX.utils.aoa_to_sheet([adminHeaders, adminSample]);
 const adminWb = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(adminWb, adminWs, "Admins");
 XLSX.writeFile(adminWb, path.join(templatesDir, "admin_upload_template.xlsx"));
+
+// 4. Subject Templates
+const subjectHeaders = ["name", "code", "maxMarks", "passMarks", "class", "teacherEmail"];
+const subjectSample = ["Physics", "PHY", "100", "35", "Class 4 - Section A", "r.sharma@school.internal"];
+
+const subjectCsvContent = [
+  subjectHeaders.join(","),
+  subjectSample.join(",")
+].join("\n");
+fs.writeFileSync(path.join(templatesDir, "subject_upload_template.csv"), subjectCsvContent, "utf8");
+
+const subjectWs = XLSX.utils.aoa_to_sheet([subjectHeaders, subjectSample]);
+const subjectWb = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(subjectWb, subjectWs, "Subjects");
+XLSX.writeFile(subjectWb, path.join(templatesDir, "subject_upload_template.xlsx"));
 
 console.log("All templates successfully generated in public/templates!");

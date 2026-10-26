@@ -48,7 +48,7 @@ export default async function AdminAttendancePage({
           take: 60,
         },
       },
-      orderBy: { rollNumber: "asc" },
+      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
     });
 
     serializedStudents = rawStudents.map((s) => {

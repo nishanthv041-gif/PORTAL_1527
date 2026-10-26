@@ -122,19 +122,45 @@ export default function CreateTeacherClient({ subjects = [], classes = [] }: { s
                 <input name="resume" type="file" accept=".pdf,.doc,.docx" style={{ width: '100%', padding: '0.625rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.875rem' }} />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Additional Subjects</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '0.5rem' }}>
-                  {subjects.map(s => (
-                    <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: 'var(--card-bg)', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={selectedSubjects.includes(s.id)}
-                        onChange={() => toggleSubject(s.id)}
-                      />
-                      {s.name} ({s.class.name}-{s.class.section})
-                    </label>
-                  ))}
-                  {subjects.length === 0 && <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No subjects available.</span>}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600 }}>Subject Allocation via CSV</label>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600, background: 'rgba(99, 102, 241, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>CSV Activated</span>
+                </div>
+                <div style={{ 
+                  background: 'rgba(99, 102, 241, 0.04)', 
+                  border: '1px dashed var(--primary)', 
+                  borderRadius: '8px', 
+                  padding: '1rem', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem'
+                }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600 }}>Subject Assignment via CSV</p>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                      Teaching subjects are configured and activated directly via CSV (using the teacher upload template with the <code>subjects</code> column) or from the Subjects management page.
+                    </p>
+                  </div>
+                  <a 
+                    href="/templates/teacher_upload_template.csv" 
+                    download="teacher_upload_template.csv"
+                    style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '0.4rem', 
+                      padding: '0.5rem 0.85rem', 
+                      borderRadius: '6px', 
+                      backgroundColor: 'var(--primary)', 
+                      color: '#ffffff', 
+                      fontSize: '0.8rem', 
+                      fontWeight: 600, 
+                      textDecoration: 'none' 
+                    }}
+                  >
+                    Download CSV Template
+                  </a>
                 </div>
               </div>
               <div style={{ gridColumn: '1 / -1' }}>

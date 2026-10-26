@@ -73,6 +73,7 @@ export default async function AdminDashboardPage({
         prisma.class.count({ where: { name: selectedClassData.name, isActive: true } }),
         prisma.student.findMany({
           where: { classId, isActive: true },
+          orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
           include: {
             parents: { include: { parent: { include: { user: true } } } },
             attendances: { select: { status: true } }

@@ -67,7 +67,7 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
     const matchesStatus = statusFilter ? user.status === statusFilter : true;
     
     return matchesSearch && matchesRole && matchesStatus;
-  });
+  }).sort((a, b) => a.name.trim().localeCompare(b.name.trim()));
 
   const handleDeactivate = async (id: string) => {
     if (confirm("Are you sure you want to deactivate this user? Their records will be preserved.")) {

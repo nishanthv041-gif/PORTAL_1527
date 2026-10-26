@@ -140,10 +140,16 @@ export default function ReportCardsClient({ classData, exams, subjects, marks, b
     return editedMarks.find(m => m.studentId === studentId && m.examId === examId && m.subjectId === subjectId);
   };
 
+  const sortedStudents = [...classData.students].sort((a, b) => {
+    const nameA = `${a.firstName} ${a.lastName}`.trim().toLowerCase();
+    const nameB = `${b.firstName} ${b.lastName}`.trim().toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+
   // Render Student-Wise (Step 1)
   const renderStudentWise = () => (
     <div style={{ display: 'grid', gap: '1rem' }}>
-      {classData.students.map(student => (
+      {sortedStudents.map(student => (
         <Link 
           href={`${baseUrl}/${student.id}?classId=${classData.id}`} 
           key={student.id}
@@ -218,7 +224,7 @@ export default function ReportCardsClient({ classData, exams, subjects, marks, b
               </tr>
             </thead>
             <tbody>
-              {classData.students.map(student => (
+              {sortedStudents.map(student => (
                 <tr key={student.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                   <td style={{ padding: '1rem', fontWeight: 500 }}>
                     {student.firstName} {student.lastName} <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>({student.rollNumber})</span>

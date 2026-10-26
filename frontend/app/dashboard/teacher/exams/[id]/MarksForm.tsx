@@ -155,7 +155,11 @@ export default function MarksForm({ exam, classData }: { exam: ExamData; classDa
             </tr>
           </thead>
           <tbody>
-            {classData.students.map((student) => {
+            {[...classData.students].sort((a, b) => {
+              const nameA = `${a.firstName} ${a.lastName}`.trim().toLowerCase();
+              const nameB = `${b.firstName} ${b.lastName}`.trim().toLowerCase();
+              return nameA.localeCompare(nameB);
+            }).map((student) => {
               const isAbsent = absentees[student.id];
               const scoreVal = parseFloat(scores[student.id] || "0");
               const grade = isAbsent ? "F" : computeGrade(scoreVal, parseFloat(maxScore));

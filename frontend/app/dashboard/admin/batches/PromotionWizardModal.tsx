@@ -555,7 +555,7 @@ export default function PromotionWizardModal({
                           Review Individual Students ({mapping.students.length}):
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                          {mapping.students.map((st) => {
+                          {[...mapping.students].sort((a, b) => a.name.trim().localeCompare(b.name.trim())).map((st) => {
                             const currentAction = studentOverrides[st.id] || st.defaultAction;
 
                             return (

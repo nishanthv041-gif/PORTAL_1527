@@ -83,7 +83,7 @@ export default function ParentListClient({
       }
       
       return matchesSearch && matchesStatus && matchesClass && matchesStudentCount;
-    });
+    }).sort((a, b) => a.user.name.trim().localeCompare(b.user.name.trim()));
   }, [parents, searchTerm, statusFilter, classFilter, studentCountFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredParents.length / pageSize));

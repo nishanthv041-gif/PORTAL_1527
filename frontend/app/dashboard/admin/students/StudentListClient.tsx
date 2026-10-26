@@ -71,6 +71,10 @@ export default function StudentListClient({ students, classes }: { students: Stu
     const matchesResidence = residenceFilter ? (student.residenceType || "DAYSCHOLAR") === residenceFilter : true;
     
     return matchesSearch && matchesStatus && matchesClass && matchesBatch && matchesResidence;
+  }).sort((a, b) => {
+    const nameA = `${a.firstName} ${a.lastName}`.trim().toLowerCase();
+    const nameB = `${b.firstName} ${b.lastName}`.trim().toLowerCase();
+    return nameA.localeCompare(nameB);
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));

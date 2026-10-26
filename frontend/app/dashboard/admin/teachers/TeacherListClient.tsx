@@ -67,7 +67,7 @@ export default function TeacherListClient({ teachers, allClasses, allSubjects }:
     const matchesSubject = subjectFilter ? teacher.subjects.some(s => s.name === subjectFilter) : true;
 
     return matchesSearch && matchesStatus && matchesSubject;
-  });
+  }).sort((a, b) => a.user.name.trim().localeCompare(b.user.name.trim()));
 
   const totalPages = Math.max(1, Math.ceil(filteredTeachers.length / pageSize));
   const startIndex = (currentPage - 1) * pageSize;

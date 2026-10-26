@@ -105,6 +105,46 @@ export async function createTeacherAction(formData: FormData) {
   }
 }
 
+export async function getNextAdmissionNumberAction(): Promise<{ nextAdmissionNo: string }> {
+  try {
+    const students = await prisma.student.findMany({
+      select: { admissionNo: true },
+      where: { admissionNo: { not: "" } },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+
+    let maxNum = 0;
+    let detectedPrefix = "AD";
+    let padLength = 3;
+
+    for (const s of students) {
+      const val = (s.admissionNo || "").trim();
+      const match = val.match(/^([A-Za-z_-]*)(\d+)$/);
+      if (match) {
+        const prefix = match[1];
+        const num = parseInt(match[2], 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+          detectedPrefix = prefix || "AD";
+          padLength = match[2].length;
+        }
+      }
+    }
+
+    if (maxNum === 0) {
+      return { nextAdmissionNo: "AD101" };
+    }
+
+    const nextNum = maxNum + 1;
+    const formattedNum = String(nextNum).padStart(padLength, "0");
+    return { nextAdmissionNo: `${detectedPrefix}${formattedNum}` };
+  } catch (error) {
+    console.error("Error determining next admission number:", error);
+    return { nextAdmissionNo: `AD${Date.now().toString().slice(-4)}` };
+  }
+}
+
 export async function createParentStudentAction(formData: FormData) {
   try {
     const { getSystemSetting } = await import("@/backend/api/actions/dashboard/admin/settings/actions");
@@ -119,7 +159,11 @@ export async function createParentStudentAction(formData: FormData) {
     const gender = formData.get("gender") as string;
     const dateOfBirth = formData.get("dateOfBirth") as string;
     const rollNumber = formData.get("rollNumber") as string;
-    const admissionNo = formData.get("admissionNo") as string;
+    let admissionNo = ((formData.get("admissionNo") as string) || "").trim();
+    if (!admissionNo) {
+      const nextAdm = await getNextAdmissionNumberAction();
+      admissionNo = nextAdm.nextAdmissionNo;
+    }
     const classId = formData.get("classId") as string;
     const batch = formData.get("batch") as string;
     const rawResidence = (formData.get("residenceType") as string) || "DAYSCHOLAR";
