@@ -190,53 +190,47 @@ export default function AttendanceSessionManager({
 
   // Calculate dynamic live percentage & breakdown connected to database state
   const getLivePersonStats = (person: AttendancePersonItem) => {
-    const curStatus = sessionMap[session][person.id]?.status || 
-      (session === "FORENOON" ? person.forenoonStatus : person.afternoonStatus) || 
-      person.currentStatus || "NOT_MARKED";
-    
-    const origStatus = originalSnapshot[session][person.id]?.status || 
-      (session === "FORENOON" ? person.forenoonStatus : person.afternoonStatus) || 
-      person.currentStatus || "NOT_MARKED";
+    // DB status at page load for Forenoon and Afternoon
+    const fnInDb = originalSnapshot.FORENOON[person.id]?.status;
+    const anInDb = originalSnapshot.AFTERNOON[person.id]?.status;
 
-    // Check if the initial database record already had a marked status in this session
-    const wasAlreadyMarkedInDb = origStatus !== "NOT_MARKED" && origStatus !== "";
+    // Baseline counts from DB strictly prior to today's date
+    const dbFnPresent = fnInDb === "PRESENT" ? 1 : 0;
+    const dbFnAbsent = fnInDb === "ABSENT" ? 1 : 0;
+    const dbFnLate = fnInDb === "LATE" ? 1 : 0;
 
-    // Baseline sessions count from DB without today's active slot
-    const baseTotalSessions = wasAlreadyMarkedInDb
-      ? Math.max(0, person.totalSessions - 1)
-      : person.totalSessions;
+    const dbAnPresent = anInDb === "PRESENT" ? 1 : 0;
+    const dbAnAbsent = anInDb === "ABSENT" ? 1 : 0;
+    const dbAnLate = anInDb === "LATE" ? 1 : 0;
 
-    // Baseline counts from DB without today's active slot
-    let basePresent = person.presentCount - (wasAlreadyMarkedInDb && origStatus === "PRESENT" ? 1 : 0);
-    let baseAbsent = person.absentCount - (wasAlreadyMarkedInDb && origStatus === "ABSENT" ? 1 : 0);
-    let baseLate = person.lateCount - (wasAlreadyMarkedInDb && origStatus === "LATE" ? 1 : 0);
+    const priorPresent = Math.max(0, person.presentCount - dbFnPresent - dbAnPresent);
+    const priorAbsent = Math.max(0, person.absentCount - dbFnAbsent - dbAnAbsent);
+    const priorLate = Math.max(0, person.lateCount - dbFnLate - dbAnLate);
 
-    basePresent = Math.max(0, basePresent);
-    baseAbsent = Math.max(0, baseAbsent);
-    baseLate = Math.max(0, baseLate);
+    // Active live selections for Forenoon and Afternoon
+    const fnLive = sessionMap.FORENOON[person.id]?.status || fnInDb || "NOT_MARKED";
+    const anLive = sessionMap.AFTERNOON[person.id]?.status || anInDb || "NOT_MARKED";
 
-    // Apply the active live choice (PRESENT = 1.0, LATE = 1.0 attended, ABSENT = 0)
-    let livePresent = basePresent;
-    let liveAbsent = baseAbsent;
-    let liveLate = baseLate;
-    let liveTotalSessions = baseTotalSessions;
+    let livePresent = priorPresent;
+    let liveAbsent = priorAbsent;
+    let liveLate = priorLate;
 
-    if (curStatus === "PRESENT") {
-      livePresent += 1;
-      liveTotalSessions += 1;
-    } else if (curStatus === "ABSENT") {
-      liveAbsent += 1;
-      liveTotalSessions += 1;
-    } else if (curStatus === "LATE") {
-      liveLate += 1;
-      liveTotalSessions += 1;
-    }
+    if (fnLive === "PRESENT") livePresent += 1;
+    else if (fnLive === "ABSENT") liveAbsent += 1;
+    else if (fnLive === "LATE") liveLate += 1;
+
+    if (anLive === "PRESENT") livePresent += 1;
+    else if (anLive === "ABSENT") liveAbsent += 1;
+    else if (anLive === "LATE") liveLate += 1;
 
     // Both Present and Late count as attended session for overall percentage
     const attendedSessions = livePresent + liveLate;
-    const percentage = liveTotalSessions > 0
-      ? ((attendedSessions / liveTotalSessions) * 100).toFixed(1)
-      : "100.0";
+    const totalRecordedSessions = livePresent + liveAbsent + liveLate;
+    const liveTotalSessions = Math.max(person.totalSessions, totalRecordedSessions, 1);
+
+    const percentage = ((attendedSessions / liveTotalSessions) * 100).toFixed(1);
+
+    const curStatus = session === "FORENOON" ? fnLive : anLive;
 
     return {
       percentage,

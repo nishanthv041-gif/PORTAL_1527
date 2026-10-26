@@ -50,18 +50,26 @@ export function toDateString(d: Date | string): string {
   if (typeof d === "string") {
     return d.split("T")[0];
   }
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return d.toISOString().split("T")[0];
 }
 
 /**
- * Parse YYYY-MM-DD into a localized midnight Date object.
+ * Parse YYYY-MM-DD into a UTC midnight Date object.
  */
 export function parseDateString(dateStr: string): Date {
   const [year, month, day] = dateStr.split("-").map(Number);
-  return new Date(year, month - 1, day, 0, 0, 0, 0);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+}
+
+/**
+ * Returns today's YYYY-MM-DD string in the local system timezone.
+ */
+export function getLocalTodayDateString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 /**
@@ -112,8 +120,35 @@ export async function getEffectiveAcademicYearRange(
     }
 
     if (batch?.startDate) {
-      const start = new Date(batch.startDate);
+      let start = new Date(batch.startDate);
       start.setHours(0, 0, 0, 0);
+
+      const refStr = toDateString(refDate);
+      let startStr = toDateString(start);
+
+      // Check if attendance records exist prior to batch.startDate or if batch.startDate is in the future
+      const earliestAtt = await prisma.attendance.findFirst({
+        where: classId ? { student: { classId } } : undefined,
+        orderBy: { date: "asc" },
+        select: { date: true }
+      });
+
+      if (earliestAtt) {
+        const earliestStr = toDateString(earliestAtt.date);
+        if (earliestStr < startStr && earliestStr <= refStr) {
+          start = parseDateString(earliestStr);
+          startStr = earliestStr;
+        }
+      }
+
+      // If batch startDate is still in the future of refDate, clamp start to earliest attendance or refDate
+      if (startStr > refStr) {
+        if (earliestAtt && toDateString(earliestAtt.date) <= refStr) {
+          start = parseDateString(toDateString(earliestAtt.date));
+        } else {
+          start = parseDateString(refStr);
+        }
+      }
 
       let end: Date;
       if (batch.endDate) {
@@ -140,7 +175,7 @@ export async function getEffectiveAcademicYearRange(
  * - Saturday (6): LEAVE_DAY (Weekend)
  */
 export function getDefaultDayStatus(d: Date): DayScheduleStatus {
-  const day = d.getDay();
+  const day = d.getUTCDay();
   if (day === 0 || day === 6) {
     return "LEAVE_DAY";
   }
@@ -215,23 +250,24 @@ export async function getSchoolScheduleMap(
  * with optional classId filter for class-specific working days.
  */
 export async function countSchoolWorkingDays(
-  startDate: Date,
-  endDate: Date,
+  startDate: Date | string,
+  endDate: Date | string,
   classId?: string | null
 ): Promise<number> {
-  const scheduleMap = await getSchoolScheduleMap(startDate, endDate);
+  const startStr = toDateString(startDate);
+  const endStr = toDateString(endDate);
 
-  let workingDays = 0;
-  const cursor = new Date(startDate);
-  cursor.setHours(0, 0, 0, 0);
-
-  const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999);
-
-  // If start date is after end date (e.g. today is before batch start date), 0 working days
-  if (cursor > end) {
+  // If start date is after end date, 0 working days
+  if (startStr > endStr) {
     return 0;
   }
+
+  const cursor = parseDateString(startStr);
+  const end = parseDateString(endStr);
+
+  const scheduleMap = await getSchoolScheduleMap(cursor, end);
+
+  let workingDays = 0;
 
   while (cursor <= end) {
     const key = toDateString(cursor);
@@ -259,7 +295,7 @@ export async function countSchoolWorkingDays(
       workingDays++;
     }
 
-    cursor.setDate(cursor.getDate() + 1);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
   return workingDays;

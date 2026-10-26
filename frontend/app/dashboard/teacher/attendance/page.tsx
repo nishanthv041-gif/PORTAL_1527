@@ -9,6 +9,7 @@ import {
   getEffectiveAcademicYearRange,
   countSchoolWorkingDays,
   calculateAttendancePercentage,
+  getLocalTodayDateString,
 } from "@/backend/lib/services/attendanceCalculation";
 
 export default async function TeacherAttendancePage({
@@ -30,7 +31,7 @@ export default async function TeacherAttendancePage({
   }
 
   const resolvedSearchParams = await searchParams;
-  const todayStr = resolvedSearchParams?.date || new Date().toISOString().split("T")[0];
+  const todayStr = resolvedSearchParams?.date || getLocalTodayDateString();
 
   const [year, month, day] = todayStr.split("-").map(Number);
   const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
@@ -45,8 +46,12 @@ export default async function TeacherAttendancePage({
             where: { isActive: true },
             include: {
               attendances: {
+                where: {
+                  date: {
+                    lte: endOfDay,
+                  },
+                },
                 orderBy: { date: "desc" },
-                take: 60,
               },
             },
             orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
