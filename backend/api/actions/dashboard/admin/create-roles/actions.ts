@@ -43,7 +43,23 @@ export async function createTeacherAction(formData: FormData) {
       googleEmailVerified = true;
     }
 
-    const subjectIds = subjectIdsInput ? subjectIdsInput.split(',').filter(Boolean) : [];
+    const subjectMajor = (formData.get("subjectMajor") as string || "").trim();
+    let subjectIds = subjectIdsInput ? subjectIdsInput.split(',').filter(Boolean) : [];
+
+    // If subjectMajor is provided and no specific subjectIds were checked,
+    // automatically find all active unassigned subjects for that major
+    if (subjectMajor && subjectIds.length === 0) {
+      const matching = await prisma.subject.findMany({
+        where: {
+          isActive: true,
+          teacherId: null,
+          name: { equals: subjectMajor, mode: "insensitive" }
+        },
+        select: { id: true }
+      });
+      subjectIds = matching.map(s => s.id);
+    }
+
     const classTeacherId = formData.get("classTeacherId") as string;
     
     const resumeFile = formData.get("resume") as File | null;

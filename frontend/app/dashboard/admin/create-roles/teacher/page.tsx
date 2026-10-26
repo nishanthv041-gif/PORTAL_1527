@@ -7,11 +7,17 @@ export default async function AdminCreateTeacherPage() {
   const session = await getServerSession(getAuthOptions());
   if (!session || session.user.role !== 'ADMIN') return null;
 
-  const [subjects, classes] = await Promise.all([
+  const [subjects, allSchoolSubjects, classes] = await Promise.all([
     prisma.subject.findMany({
       where: { isActive: true, teacherId: null },
       include: { class: true },
-      orderBy: [{ class: { name: 'asc' } }, { name: 'asc' }]
+      orderBy: [{ class: { name: 'asc' } }, { class: { section: 'asc' } }, { name: 'asc' }]
+    }),
+    prisma.subject.findMany({
+      where: { isActive: true },
+      select: { name: true, code: true },
+      distinct: ['name'],
+      orderBy: { name: 'asc' }
     }),
     prisma.class.findMany({
       where: { isActive: true },
@@ -19,5 +25,5 @@ export default async function AdminCreateTeacherPage() {
     })
   ]);
 
-  return <CreateTeacherClient subjects={subjects} classes={classes} />;
+  return <CreateTeacherClient subjects={subjects} classes={classes} allSchoolSubjects={allSchoolSubjects} />;
 }

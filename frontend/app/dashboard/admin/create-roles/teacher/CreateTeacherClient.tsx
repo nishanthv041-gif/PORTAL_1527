@@ -10,12 +10,58 @@ import BulkUpload from "../BulkUpload";
 
 import { Subject, Class } from "@prisma/client";
 
-export default function CreateTeacherClient({ subjects = [], classes = [] }: { subjects?: (Subject & { class: Class })[], classes?: Class[] }) {
+export default function CreateTeacherClient({ 
+  subjects = [], 
+  classes = [],
+  allSchoolSubjects = []
+}: { 
+  subjects?: (Subject & { class: Class })[]; 
+  classes?: Class[];
+  allSchoolSubjects?: { name: string; code?: string }[];
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [selectedMajor, setSelectedMajor] = useState<string>("");
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+
+  // Collect distinct subject majors from active school subjects + available subjects
+  const subjectMajorsMap = new Map<string, string>();
+  allSchoolSubjects.forEach(s => {
+    if (s.name) subjectMajorsMap.set(s.name.trim().toUpperCase(), s.code || "");
+  });
+  subjects.forEach(s => {
+    if (s.name && !subjectMajorsMap.has(s.name.trim().toUpperCase())) {
+      subjectMajorsMap.set(s.name.trim().toUpperCase(), s.code || "");
+    }
+  });
+  if (subjectMajorsMap.size === 0) {
+    [
+      { name: "MATHEMATICS", code: "MAT001" },
+      { name: "SCIENCE", code: "SCI002" },
+      { name: "ENGLISH", code: "ENG001" },
+      { name: "SOCIAL SCIENCE", code: "SOC001" },
+      { name: "TAMIL", code: "TAM001" },
+      { name: "HINDI", code: "HIN001" },
+      { name: "COMPUTER SCIENCE", code: "CS001" },
+    ].forEach(m => subjectMajorsMap.set(m.name, m.code));
+  }
+
+  const availableMajors = Array.from(subjectMajorsMap.entries()).map(([name, code]) => ({
+    name,
+    code
+  })).sort((a, b) => a.name.localeCompare(b.name));
+
+  const matchingSubjects = selectedMajor
+    ? subjects.filter(s => s.name.trim().toUpperCase() === selectedMajor.trim().toUpperCase())
+    : [];
+
+  const handleMajorChange = (major: string) => {
+    setSelectedMajor(major);
+    const matching = subjects.filter(s => s.name.trim().toUpperCase() === major.trim().toUpperCase());
+    setSelectedSubjects(matching.map(s => s.id));
+  };
 
   const toggleSubject = (subjectId: string) => {
     if (selectedSubjects.includes(subjectId)) {
@@ -31,10 +77,15 @@ export default function CreateTeacherClient({ subjects = [], classes = [] }: { s
       setError("Please confirm the information is correct.");
       return;
     }
+    if (!selectedMajor) {
+      setError("Please select a Subject Major for the teacher.");
+      return;
+    }
     setError(null);
     setIsSubmitting(true);
 
     const formData = new FormData(e.currentTarget);
+    formData.set("subjectMajor", selectedMajor);
     formData.set("subjectIds", selectedSubjects.join(","));
 
     const googleEmail = (formData.get("googleEmail") as string)?.trim().toLowerCase();
@@ -122,46 +173,88 @@ export default function CreateTeacherClient({ subjects = [], classes = [] }: { s
                 <input name="resume" type="file" accept=".pdf,.doc,.docx" style={{ width: '100%', padding: '0.625rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.875rem' }} />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600 }}>Subject Allocation via CSV</label>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600, background: 'rgba(99, 102, 241, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>CSV Activated</span>
-                </div>
-                <div style={{ 
-                  background: 'rgba(99, 102, 241, 0.04)', 
-                  border: '1px dashed var(--primary)', 
-                  borderRadius: '8px', 
-                  padding: '1rem', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '0.75rem'
-                }}>
-                  <div>
-                    <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600 }}>Subject Assignment via CSV</p>
-                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                      Teaching subjects are configured and activated directly via CSV (using the teacher upload template with the <code>subjects</code> column) or from the Subjects management page.
-                    </p>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.25rem' }}>
+                  Subject Major *
+                </label>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                  Select the teacher&apos;s subject major from available school subjects.
+                </p>
+                <select 
+                  required
+                  name="subjectMajor" 
+                  value={selectedMajor}
+                  onChange={(e) => handleMajorChange(e.target.value)}
+                  style={{ 
+                    width: '100%', 
+                    padding: '0.75rem', 
+                    borderRadius: '8px', 
+                    border: '1px solid var(--border-color)', 
+                    background: 'transparent',
+                    color: 'inherit',
+                    fontSize: '0.875rem'
+                  }}
+                >
+                  <option value="">Select Available Subject Major...</option>
+                  {availableMajors.map(m => {
+                    const count = subjects.filter(s => s.name.trim().toUpperCase() === m.name.trim().toUpperCase()).length;
+                    return (
+                      <option key={m.name} value={m.name}>
+                        {m.name} {m.code ? `(${m.code})` : ''} {count > 0 ? `— ${count} class${count > 1 ? 'es' : ''} available` : '— (No unassigned classes)'}
+                      </option>
+                    );
+                  })}
+                </select>
+
+                {selectedMajor && (
+                  <div style={{ marginTop: '0.75rem', padding: '0.875rem 1rem', borderRadius: '8px', background: 'rgba(99, 102, 241, 0.04)', border: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>
+                        Available Subjects for {selectedMajor}
+                      </span>
+                      {matchingSubjects.length > 0 && (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          {selectedSubjects.length} of {matchingSubjects.length} classes selected
+                        </span>
+                      )}
+                    </div>
+
+                    {matchingSubjects.length > 0 ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        {matchingSubjects.map(s => {
+                          const isChecked = selectedSubjects.includes(s.id);
+                          return (
+                            <label 
+                              key={s.id} 
+                              style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '0.5rem', 
+                                cursor: 'pointer', 
+                                background: isChecked ? 'rgba(99, 102, 241, 0.12)' : 'var(--card-bg)', 
+                                padding: '0.45rem 0.75rem', 
+                                borderRadius: '6px', 
+                                border: isChecked ? '1px solid var(--primary)' : '1px solid var(--border-color)',
+                                fontSize: '0.85rem',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <input 
+                                type="checkbox" 
+                                checked={isChecked}
+                                onChange={() => toggleSubject(s.id)}
+                              />
+                              <span><strong>{s.class.name} - {s.class.section}</strong> ({s.code})</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        All current classes for {selectedMajor} already have assigned teachers, or classes have not been created yet. The teacher will be registered with {selectedMajor} as their subject major.
+                      </p>
+                    )}
                   </div>
-                  <a 
-                    href="/templates/teacher_upload_template.csv" 
-                    download="teacher_upload_template.csv"
-                    style={{ 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      gap: '0.4rem', 
-                      padding: '0.5rem 0.85rem', 
-                      borderRadius: '6px', 
-                      backgroundColor: 'var(--primary)', 
-                      color: '#ffffff', 
-                      fontSize: '0.8rem', 
-                      fontWeight: 600, 
-                      textDecoration: 'none' 
-                    }}
-                  >
-                    Download CSV Template
-                  </a>
-                </div>
+                )}
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Class Teacher Of (Optional)</label>
