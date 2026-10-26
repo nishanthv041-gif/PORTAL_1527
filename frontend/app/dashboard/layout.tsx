@@ -11,6 +11,7 @@ import { SettingsProvider } from "@/frontend/contexts/SettingsContext";
 import NavigationProgressBar from "@/frontend/components/NavigationProgressBar";
 import { getUnifiedNotificationsAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
 import NotificationPopupModal from "@/frontend/components/notifications/NotificationPopupModal";
+import PortalBreadcrumb from "@/frontend/components/PortalBreadcrumb";
 import { prisma } from "@/backend/db/prisma";
 
 export const metadata: Metadata = {
@@ -224,7 +225,10 @@ export default async function DashboardLayout({
             </label>
             <Topbar user={{ ...session.user, name: displayName }} />
           </div>
-          <main className={styles.pageContent}>{children}</main>
+          <main className={styles.pageContent}>
+            <PortalBreadcrumb />
+            {children}
+          </main>
         </div>
       </div>
     </SettingsProvider>

@@ -1,0 +1,55 @@
+.breadcrumbBar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+  user-select: none;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--primary, #6366f1);
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  border-radius: 6px;
+  padding: 0.2rem 0.4rem;
+  margin-left: -0.4rem;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+  background-color: rgba(99, 102, 241, 0.08);
+  color: var(--primary-hover, #4f46e5);
+}
+
+.backLink:focus-visible {
+  outline: 2px solid var(--primary, #6366f1);
+  outline-offset: 2px;
+}
+
+.separator {
+  color: var(--text-secondary);
+  opacity: 0.6;
+  font-weight: 400;
+}
+
+.currentPage {
+  color: var(--foreground);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .breadcrumbBar {
+    margin-bottom: 0.85rem;
+    font-size: 0.8125rem;
+  }
+}

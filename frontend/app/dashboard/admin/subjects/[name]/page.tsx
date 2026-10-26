@@ -92,22 +92,6 @@ export default async function SubjectDetailsPage({
 
   return (
     <div className={styles.dashboard} style={{ maxWidth: '100%', overflowX: 'hidden' }}>
-      <Link 
-        href="/dashboard/admin/subjects" 
-        style={{ 
-          display: 'inline-flex', 
-          alignItems: 'center', 
-          gap: '0.5rem', 
-          color: 'var(--text-secondary)', 
-          textDecoration: 'none', 
-          marginBottom: '1.5rem', 
-          fontWeight: 600,
-          fontSize: '0.875rem' 
-        }}
-      >
-        <ArrowLeft size={16} /> Back to Subjects
-      </Link>
-
       {/* Header Banner */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
         <div style={{ background: 'rgba(236, 72, 153, 0.1)', color: '#ec4899', padding: '1rem', borderRadius: '14px', flexShrink: 0 }}>

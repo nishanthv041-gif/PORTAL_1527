@@ -368,24 +368,6 @@ export default function MeetingsClient({
       {/* BREADCRUMB & HEADER */}
       {/* ======================================================== */}
       <div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem", fontSize: "0.875rem", color: "var(--text-secondary)" }}>
-          <Link 
-            href="/dashboard/admin/activity-centre" 
-            style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              gap: "0.35rem", 
-              color: "var(--primary, #6366f1)", 
-              textDecoration: "none",
-              fontWeight: 600 
-            }}
-          >
-            <ArrowLeft size={16} /> Activity Centre
-          </Link>
-          <span>/</span>
-          <span style={{ color: "var(--foreground)", fontWeight: 600 }}>Meetings Management</span>
-        </div>
-
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
           <div>
             <h1 style={{ margin: 0, fontSize: "1.875rem", fontWeight: 800, color: "var(--foreground)", letterSpacing: "-0.02em" }}>

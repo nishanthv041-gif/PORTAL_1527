@@ -30,10 +30,7 @@ export default async function AdminExamDetailsPage({ params }: { params: Promise
 
   return (
     <div className={styles.dashboard}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-        <Link href="/dashboard/admin/exams" style={{ color: 'var(--foreground)', opacity: 0.7 }}>
-          <ArrowLeft size={20} />
-        </Link>
+      <div style={{ marginBottom: '1rem' }}>
         <div>
           <h1 className={styles.title} style={{ margin: 0 }}>
             {exam.name}

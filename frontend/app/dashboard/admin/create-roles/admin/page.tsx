@@ -11,10 +11,7 @@ export default async function CreateAdminPage() {
 
   return (
     <div className={styles.dashboard}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-        <Link href="/dashboard/admin/create-roles" style={{ padding: '0.5rem', background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <ArrowLeft size={20} />
-        </Link>
+      <div style={{ marginBottom: '2rem' }}>
         <h1 className={styles.title} style={{ margin: 0 }}>Add New Admin</h1>
       </div>
 
