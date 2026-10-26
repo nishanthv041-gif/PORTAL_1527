@@ -24,7 +24,6 @@ export default function CreateTeacherClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [selectedMajor, setSelectedMajor] = useState<string>("");
-  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
 
   // Collect distinct subject majors from active school subjects + available subjects
   const subjectMajorsMap = new Map<string, string>();
@@ -53,24 +52,6 @@ export default function CreateTeacherClient({
     code
   })).sort((a, b) => a.name.localeCompare(b.name));
 
-  const matchingSubjects = selectedMajor
-    ? subjects.filter(s => s.name.trim().toUpperCase() === selectedMajor.trim().toUpperCase())
-    : [];
-
-  const handleMajorChange = (major: string) => {
-    setSelectedMajor(major);
-    const matching = subjects.filter(s => s.name.trim().toUpperCase() === major.trim().toUpperCase());
-    setSelectedSubjects(matching.map(s => s.id));
-  };
-
-  const toggleSubject = (subjectId: string) => {
-    if (selectedSubjects.includes(subjectId)) {
-      setSelectedSubjects(selectedSubjects.filter(id => id !== subjectId));
-    } else {
-      setSelectedSubjects([...selectedSubjects, subjectId]);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!confirmed) {
@@ -86,7 +67,6 @@ export default function CreateTeacherClient({
 
     const formData = new FormData(e.currentTarget);
     formData.set("subjectMajor", selectedMajor);
-    formData.set("subjectIds", selectedSubjects.join(","));
 
     const googleEmail = (formData.get("googleEmail") as string)?.trim().toLowerCase();
     if (googleEmail && !googleEmail.endsWith("@gmail.com") && !googleEmail.endsWith("@googlemail.com")) {
@@ -177,13 +157,13 @@ export default function CreateTeacherClient({
                   Subject Major *
                 </label>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-                  Select the teacher&apos;s subject major from available school subjects.
+                  Select the teacher&apos;s subject major.
                 </p>
                 <select 
                   required
                   name="subjectMajor" 
                   value={selectedMajor}
-                  onChange={(e) => handleMajorChange(e.target.value)}
+                  onChange={(e) => setSelectedMajor(e.target.value)}
                   style={{ 
                     width: '100%', 
                     padding: '0.75rem', 
@@ -195,66 +175,12 @@ export default function CreateTeacherClient({
                   }}
                 >
                   <option value="">Select Available Subject Major...</option>
-                  {availableMajors.map(m => {
-                    const count = subjects.filter(s => s.name.trim().toUpperCase() === m.name.trim().toUpperCase()).length;
-                    return (
-                      <option key={m.name} value={m.name}>
-                        {m.name} {m.code ? `(${m.code})` : ''} {count > 0 ? `— ${count} class${count > 1 ? 'es' : ''} available` : '— (No unassigned classes)'}
-                      </option>
-                    );
-                  })}
+                  {availableMajors.map(m => (
+                    <option key={m.name} value={m.name}>
+                      {m.name} {m.code ? `(${m.code})` : ''}
+                    </option>
+                  ))}
                 </select>
-
-                {selectedMajor && (
-                  <div style={{ marginTop: '0.75rem', padding: '0.875rem 1rem', borderRadius: '8px', background: 'rgba(99, 102, 241, 0.04)', border: '1px solid var(--border-color)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>
-                        Available Subjects for {selectedMajor}
-                      </span>
-                      {matchingSubjects.length > 0 && (
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                          {selectedSubjects.length} of {matchingSubjects.length} classes selected
-                        </span>
-                      )}
-                    </div>
-
-                    {matchingSubjects.length > 0 ? (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                        {matchingSubjects.map(s => {
-                          const isChecked = selectedSubjects.includes(s.id);
-                          return (
-                            <label 
-                              key={s.id} 
-                              style={{ 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                gap: '0.5rem', 
-                                cursor: 'pointer', 
-                                background: isChecked ? 'rgba(99, 102, 241, 0.12)' : 'var(--card-bg)', 
-                                padding: '0.45rem 0.75rem', 
-                                borderRadius: '6px', 
-                                border: isChecked ? '1px solid var(--primary)' : '1px solid var(--border-color)',
-                                fontSize: '0.85rem',
-                                transition: 'all 0.15s ease'
-                              }}
-                            >
-                              <input 
-                                type="checkbox" 
-                                checked={isChecked}
-                                onChange={() => toggleSubject(s.id)}
-                              />
-                              <span><strong>{s.class.name} - {s.class.section}</strong> ({s.code})</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                        All current classes for {selectedMajor} already have assigned teachers, or classes have not been created yet. The teacher will be registered with {selectedMajor} as their subject major.
-                      </p>
-                    )}
-                  </div>
-                )}
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Class Teacher Of (Optional)</label>
