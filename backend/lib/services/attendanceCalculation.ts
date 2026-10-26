@@ -266,6 +266,42 @@ export async function countSchoolWorkingDays(
 }
 
 /**
+ * Standard utility to produce the exact UTC DateTime for a given date and session:
+ * FORENOON -> Date.UTC(year, month - 1, day, 0, 0, 0, 0)
+ * AFTERNOON -> Date.UTC(year, month - 1, day, 12, 0, 0, 0)
+ */
+export function getSessionDateTime(
+  dateStr: string | Date,
+  session: "FORENOON" | "AFTERNOON"
+): Date {
+  const str = toDateString(dateStr);
+  const [year, month, day] = str.split("-").map(Number);
+  const hour = session === "AFTERNOON" ? 12 : 0;
+  return new Date(Date.UTC(year, month - 1, day, hour, 0, 0, 0));
+}
+
+/**
+ * Checks if an attendance record corresponds to the Forenoon session.
+ */
+export function isForenoonRecord(record: { date: Date | string; remarks?: string | null }): boolean {
+  if (record.remarks?.toUpperCase().includes("AFTERNOON") || record.remarks?.includes("[AN]")) {
+    return false;
+  }
+  if (record.remarks?.toUpperCase().includes("FORENOON") || record.remarks?.includes("[FN]")) {
+    return true;
+  }
+  const d = new Date(record.date);
+  return d.getUTCHours() < 12;
+}
+
+/**
+ * Checks if an attendance record corresponds to the Afternoon session.
+ */
+export function isAfternoonRecord(record: { date: Date | string; remarks?: string | null }): boolean {
+  return !isForenoonRecord(record);
+}
+
+/**
  * Standard module of percentage calculation.
  * Ensures consistent precision and capping between 0.0% and 100.0%.
  */
@@ -283,8 +319,8 @@ export function calculateAttendancePercentage(
 
 /**
  * Standard Calculation for Student Attendance:
- * Evaluates present sessions/days against official school working days for their class
- * starting from the active batch's startDate.
+ * Evaluates present & late sessions against official school working days for their class
+ * (where each worked calendar day contains 2 sessions: Forenoon and Afternoon).
  */
 export async function getStudentStandardAttendanceStats(
   studentId: string,
@@ -307,20 +343,28 @@ export async function getStudentStandardAttendanceStats(
 
   const presentCount = records.filter((r) => r.status === "PRESENT").length;
   const absentCount = records.filter((r) => r.status === "ABSENT").length;
+  const lateCount = records.filter((r) => r.status === "LATE").length;
   const leaveCount = records.filter((r) => r.status === "LEAVE").length;
 
   // 2. Count official school working days for this student's class
   const officialWorkingDays = await countSchoolWorkingDays(academicStart, referenceDate, classId);
+  // Each calendar worked day consists of 2 sessions: Forenoon and Afternoon
+  const officialWorkingSessions = officialWorkingDays * 2;
 
-  const totalSessionsOrDays = Math.max(officialWorkingDays, presentCount + absentCount + leaveCount);
+  const totalRecordedSessions = presentCount + absentCount + lateCount + leaveCount;
+  const totalSessionsOrDays = Math.max(officialWorkingSessions, totalRecordedSessions, 1);
 
-  const percentage = calculateAttendancePercentage(presentCount, totalSessionsOrDays);
+  // Present and Late are counted in attendance percentage; Late tracks tardiness
+  const attendedSessions = presentCount + lateCount;
+  const percentage = calculateAttendancePercentage(attendedSessions, totalSessionsOrDays);
 
   return {
     studentId,
     officialWorkingDays,
+    officialWorkingSessions,
     presentCount,
     absentCount,
+    lateCount,
     leaveCount,
     totalSessionsOrDays,
     percentage,
@@ -329,8 +373,8 @@ export async function getStudentStandardAttendanceStats(
 
 /**
  * Standard Calculation for Teacher Attendance:
- * Evaluates present days against official school working days
- * starting from the active batch's startDate.
+ * Evaluates present & late sessions against official school working days
+ * (where each worked calendar day contains 2 sessions: Forenoon and Afternoon).
  */
 export async function getTeacherStandardAttendanceStats(
   teacherId: string,
@@ -351,20 +395,27 @@ export async function getTeacherStandardAttendanceStats(
 
   const presentCount = records.filter((r) => r.status === "PRESENT").length;
   const absentCount = records.filter((r) => r.status === "ABSENT").length;
+  const lateCount = records.filter((r) => r.status === "LATE").length;
   const leaveCount = records.filter((r) => r.status === "LEAVE").length;
 
   const officialWorkingDays = await countSchoolWorkingDays(academicStart, referenceDate);
-  const totalDays = Math.max(officialWorkingDays, presentCount + absentCount + leaveCount);
+  const officialWorkingSessions = officialWorkingDays * 2;
+  const totalRecordedSessions = presentCount + absentCount + lateCount + leaveCount;
+  const totalDays = Math.max(officialWorkingSessions, totalRecordedSessions, 1);
 
-  const percentage = calculateAttendancePercentage(presentCount, totalDays);
+  const attendedSessions = presentCount + lateCount;
+  const percentage = calculateAttendancePercentage(attendedSessions, totalDays);
 
   return {
     teacherId,
     officialWorkingDays,
+    officialWorkingSessions,
     presentCount,
     absentCount,
+    lateCount,
     leaveCount,
     totalDays,
     percentage,
   };
 }
+

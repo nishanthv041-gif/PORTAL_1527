@@ -51,22 +51,41 @@ export default async function AdminTeacherAttendancePage({
 
   // Precompute baseline statistics for each teacher using official school working days
   const serializedTeachers: TeacherRecordItem[] = teachers.map((teacher) => {
-    const todayRecord = dateAttendances.find((a) => a.teacherId === teacher.id);
-    const rawStatus = todayRecord?.status;
-    const todayStatus: "PRESENT" | "ABSENT" | "LEAVE" | "NOT_MARKED" = 
-      rawStatus === "PRESENT" ? "PRESENT" :
-      rawStatus === "ABSENT" ? "ABSENT" :
-      rawStatus === "LEAVE" ? "LEAVE" :
-      "NOT_MARKED";
+    const teacherTodayRecords = dateAttendances.filter((a) => a.teacherId === teacher.id);
+    const fnRecord = teacherTodayRecords.find((a) => {
+      if (a.remarks?.toUpperCase().includes("AFTERNOON") || a.remarks?.includes("[AN]")) return false;
+      if (a.remarks?.toUpperCase().includes("FORENOON") || a.remarks?.includes("[FN]")) return true;
+      return new Date(a.date).getUTCHours() < 12;
+    });
+    const anRecord = teacherTodayRecords.find((a) => {
+      if (a.remarks?.toUpperCase().includes("AFTERNOON") || a.remarks?.includes("[AN]")) return true;
+      if (a.remarks?.toUpperCase().includes("FORENOON") || a.remarks?.includes("[FN]")) return false;
+      return new Date(a.date).getUTCHours() >= 12;
+    });
+
+    const normalizeStatus = (st?: string | null): "PRESENT" | "ABSENT" | "LATE" | "NOT_MARKED" => {
+      if (st === "PRESENT") return "PRESENT";
+      if (st === "ABSENT") return "ABSENT";
+      if (st === "LATE") return "LATE";
+      if (st === "LEAVE") return "LATE";
+      return "NOT_MARKED";
+    };
+
+    const forenoonStatus = normalizeStatus(fnRecord?.status);
+    const afternoonStatus = normalizeStatus(anRecord?.status);
 
     const presentedDays = teacher.attendances.filter((a) => a.status === "PRESENT").length;
     const absentedDays = teacher.attendances.filter((a) => a.status === "ABSENT").length;
+    const lateDays = teacher.attendances.filter((a) => a.status === "LATE").length;
     const leaveDays = teacher.attendances.filter((a) => a.status === "LEAVE").length;
-    const recordedTotal = presentedDays + absentedDays + leaveDays;
+    const recordedTotal = presentedDays + absentedDays + lateDays + leaveDays;
 
-    // Use official school working days as authoritative base
-    const effectiveWorkingUnits = Math.max(officialWorkingDays, recordedTotal, 1);
-    const attendancePercentage = calculateAttendancePercentage(presentedDays, effectiveWorkingUnits);
+    // Each school worked day in calendar has 2 sessions (FN and AN)
+    const officialWorkingSessions = officialWorkingDays * 2;
+    const effectiveWorkingUnits = Math.max(officialWorkingSessions, recordedTotal, 1);
+
+    const attendedSessions = presentedDays + lateDays;
+    const attendancePercentage = calculateAttendancePercentage(attendedSessions, effectiveWorkingUnits);
 
     return {
       id: teacher.id,
@@ -79,16 +98,25 @@ export default async function AdminTeacherAttendancePage({
       totalSessions: effectiveWorkingUnits,
       presentedDays,
       absentedDays,
+      lateDays,
       leaveDays,
       attendancePercentage,
-      todayStatus,
-      todayRemarks: todayRecord?.remarks || "",
-      attendances: teacher.attendances.map((a) => ({
-        id: a.id,
-        date: a.date,
-        status: a.status,
-        remarks: a.remarks,
-      })),
+      forenoonStatus,
+      forenoonRemarks: fnRecord?.remarks || "",
+      afternoonStatus,
+      afternoonRemarks: anRecord?.remarks || "",
+      todayStatus: forenoonStatus,
+      todayRemarks: fnRecord?.remarks || "",
+      attendances: teacher.attendances.map((a) => {
+        const isAN = a.remarks?.toUpperCase().includes("AFTERNOON") || new Date(a.date).getUTCHours() >= 12;
+        return {
+          id: a.id,
+          date: a.date,
+          session: isAN ? "Afternoon" : "Forenoon",
+          status: a.status === "LEAVE" ? "LATE" : a.status,
+          remarks: a.remarks,
+        };
+      }),
     };
   });
 

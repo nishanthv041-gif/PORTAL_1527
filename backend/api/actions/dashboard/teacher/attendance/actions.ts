@@ -6,6 +6,14 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 
 import { isDateInCurrentWeek } from "@/frontend/utils/attendanceDateUtils";
+import { getSessionDateTime } from "@/backend/lib/services/attendanceCalculation";
+
+function formatRemarksWithSession(remarks: string | undefined | null, session: "FORENOON" | "AFTERNOON"): string {
+  const cleanRemarks = (remarks || "").replace(/\s*\((FORENOON|AFTERNOON)\)/gi, "").trim();
+  const sessionTag = session === "FORENOON" ? "(Forenoon)" : "(Afternoon)";
+  if (!cleanRemarks) return sessionTag;
+  return `${cleanRemarks} ${sessionTag}`;
+}
 
 /**
  * Auto-registers / updates attendance for a single student immediately (no save button needed).
@@ -17,6 +25,7 @@ export async function updateSingleAttendance(data: {
   classId: string;
   date: string;
   status: string;
+  session?: "FORENOON" | "AFTERNOON";
   remarks?: string;
 }) {
   try {
@@ -45,14 +54,15 @@ export async function updateSingleAttendance(data: {
       }
     }
 
-    const [year, month, day] = data.date.split("-").map(Number);
-    const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-    const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+    const sessionType: "FORENOON" | "AFTERNOON" = data.session ||
+      (data.remarks?.toUpperCase().includes("AFTERNOON") ? "AFTERNOON" : "FORENOON");
+    const sessionDate = getSessionDateTime(data.date, sessionType);
+    const finalRemarks = formatRemarksWithSession(data.remarks, sessionType);
 
     const existing = await prisma.attendance.findFirst({
       where: {
         studentId: data.studentId,
-        date: { gte: startOfDay, lte: endOfDay },
+        date: sessionDate,
       },
     });
 
@@ -61,8 +71,8 @@ export async function updateSingleAttendance(data: {
         where: { id: existing.id },
         data: {
           status: data.status,
-          date: startOfDay,
-          remarks: data.remarks !== undefined ? data.remarks : existing.remarks,
+          date: sessionDate,
+          remarks: data.remarks !== undefined ? finalRemarks : existing.remarks,
         },
       });
     } else {
@@ -70,9 +80,9 @@ export async function updateSingleAttendance(data: {
         data: {
           studentId: data.studentId,
           classId: data.classId,
-          date: startOfDay,
+          date: sessionDate,
           status: data.status,
-          remarks: data.remarks || null,
+          remarks: finalRemarks,
         },
       });
     }
@@ -95,7 +105,14 @@ export async function updateSingleAttendance(data: {
  * Bulk auto-registers attendance (e.g. Quick Mark: All Present).
  */
 export async function saveBulkAttendance(
-  data: { studentId: string; status: string; date: string; classId: string; remarks?: string }[]
+  data: {
+    studentId: string;
+    status: string;
+    date: string;
+    classId: string;
+    session?: "FORENOON" | "AFTERNOON";
+    remarks?: string;
+  }[]
 ) {
   try {
     const session = await getServerSession(getAuthOptions());
@@ -134,14 +151,15 @@ export async function saveBulkAttendance(
     }
 
     for (const record of data) {
-      const [year, month, day] = record.date.split("-").map(Number);
-      const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-      const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+      const sessionType: "FORENOON" | "AFTERNOON" = record.session ||
+        (record.remarks?.toUpperCase().includes("AFTERNOON") ? "AFTERNOON" : "FORENOON");
+      const sessionDate = getSessionDateTime(record.date, sessionType);
+      const finalRemarks = formatRemarksWithSession(record.remarks, sessionType);
 
       const existing = await prisma.attendance.findFirst({
         where: {
           studentId: record.studentId,
-          date: { gte: startOfDay, lte: endOfDay },
+          date: sessionDate,
         },
       });
 
@@ -150,8 +168,8 @@ export async function saveBulkAttendance(
           where: { id: existing.id },
           data: {
             status: record.status,
-            date: startOfDay,
-            remarks: record.remarks !== undefined ? record.remarks : existing.remarks,
+            date: sessionDate,
+            remarks: record.remarks !== undefined ? finalRemarks : existing.remarks,
           },
         });
       } else {
@@ -159,9 +177,9 @@ export async function saveBulkAttendance(
           data: {
             studentId: record.studentId,
             classId: record.classId,
-            date: startOfDay,
+            date: sessionDate,
             status: record.status,
-            remarks: record.remarks || null,
+            remarks: finalRemarks,
           },
         });
       }

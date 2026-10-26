@@ -3,12 +3,13 @@ import { prisma } from "@/backend/db/prisma";
 import styles from "./ParentDashboard.module.css";
 import { 
   Percent, CheckCircle2, AlertCircle, CalendarCheck, 
-  GraduationCap, BookOpen, ArrowRight, CalendarDays 
+  GraduationCap, BookOpen, ArrowRight, CalendarDays, Clock 
 } from "lucide-react";
 import ParentChildBanner from "./ParentChildBanner";
 import Link from "next/link";
 import ExamClassPerformancePieChart from "./ExamClassPerformancePieChart";
 import { getSchoolCalendarStats } from "@/backend/api/actions/dashboard/attendance/calendarStats";
+import { isForenoonRecord } from "@/backend/lib/services/attendanceCalculation";
 
 export default async function ParentDashboard({
   searchParams
@@ -68,11 +69,13 @@ export default async function ParentDashboard({
   const calendarStats = await getSchoolCalendarStats(new Date(), selectedChild.classId);
   const presentedDays = attendanceRecords.filter((a) => a.status === "PRESENT").length;
   const absentedDays = attendanceRecords.filter((a) => a.status === "ABSENT").length;
+  const lateDays = attendanceRecords.filter((a) => a.status === "LATE").length;
   const leaveDays = attendanceRecords.filter((a) => a.status === "LEAVE").length;
   const recordedTotal = attendanceRecords.length;
 
-  const totalSessions = Math.max(calendarStats.totalActiveDays, recordedTotal, 1);
-  const attendancePercentage = ((presentedDays / totalSessions) * 100).toFixed(1);
+  // Each calendar worked day consists of 2 sessions: Forenoon and Afternoon
+  const totalSessions = Math.max(calendarStats.totalActiveDays * 2, recordedTotal, 1);
+  const attendancePercentage = (((presentedDays + lateDays) / totalSessions) * 100).toFixed(1);
 
   // Recent attendance entries (last 5 recorded days)
   const recentAttendance = attendanceRecords.slice(0, 5);
@@ -338,12 +341,19 @@ export default async function ParentDashboard({
               <tbody>
                 {recentAttendance.map((record) => {
                   const isPresent = record.status === "PRESENT";
-                  const isLeave = record.status === "LEAVE" || record.status === "ABSENT";
+                  const isLate = record.status === "LATE";
+                  const isAbsent = record.status === "ABSENT" || record.status === "LEAVE";
+                  const sessionName = isForenoonRecord(record) ? "Forenoon" : "Afternoon";
 
                   return (
                     <tr key={record.id} className={styles.tableRow}>
                       <td className={styles.tdDate}>
-                        {formatDisplayDate(record.date)}
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                          <span>{formatDisplayDate(record.date)}</span>
+                          <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                            {sessionName} Session
+                          </span>
+                        </div>
                       </td>
 
                       <td className={styles.tdStatus}>
@@ -353,13 +363,29 @@ export default async function ParentDashboard({
                             Present
                           </span>
                         )}
-                        {isLeave && (
-                          <span className={styles.badgeLeave}>
-                            <CalendarCheck size={13} />
-                            Leave / Absent
+                        {isLate && (
+                          <span style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.25rem",
+                            padding: "4px 8px",
+                            borderRadius: "12px",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            backgroundColor: "rgba(217, 119, 6, 0.12)",
+                            color: "#d97706",
+                          }}>
+                            <Clock size={13} />
+                            Late
                           </span>
                         )}
-                        {!isPresent && !isLeave && (
+                        {isAbsent && (
+                          <span className={styles.badgeLeave}>
+                            <AlertCircle size={13} />
+                            Absent
+                          </span>
+                        )}
+                        {!isPresent && !isLate && !isAbsent && (
                           <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
                             {record.status}
                           </span>
@@ -367,7 +393,7 @@ export default async function ParentDashboard({
                       </td>
 
                       <td className={styles.tdRemarks}>
-                        {record.remarks || (isPresent ? "Regular class attendance" : "Reported leave / absent")}
+                        {record.remarks || (isPresent ? "Regular class attendance" : isLate ? "Late arrival" : "Absent")}
                       </td>
                     </tr>
                   );

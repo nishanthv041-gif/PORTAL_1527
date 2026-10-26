@@ -105,7 +105,7 @@ export default async function AdminDashboardPage({
 
       attendanceStats.total = studentsData.length;
       todaysAttendances.forEach(att => {
-        if (att.status === 'PRESENT') attendanceStats.present++;
+        if (att.status === 'PRESENT' || att.status === 'LATE') attendanceStats.present++;
         if (att.status === 'ABSENT' || att.status === 'LEAVE') attendanceStats.absent++;
       });
 

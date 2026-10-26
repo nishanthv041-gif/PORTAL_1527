@@ -4,21 +4,28 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getSessionDateTime } from "@/backend/lib/services/attendanceCalculation";
+
+function formatRemarksWithSession(remarks: string | undefined | null, session: "FORENOON" | "AFTERNOON"): string {
+  const cleanRemarks = (remarks || "").replace(/\s*\((FORENOON|AFTERNOON)\)/gi, "").trim();
+  const sessionTag = session === "FORENOON" ? "(Forenoon)" : "(Afternoon)";
+  if (!cleanRemarks) return sessionTag;
+  return `${cleanRemarks} ${sessionTag}`;
+}
 
 export async function adminUpdateTeacherAttendance(
   teacherId: string,
   dateStr: string,
   status: string,
-  remarks?: string
+  remarks?: string,
+  sessionType: "FORENOON" | "AFTERNOON" = "FORENOON"
 ) {
   try {
     const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== "ADMIN") return { error: "Unauthorized" };
 
     if (!dateStr) return { error: "Date is required to mark teacher attendance." };
-    const [year, month, day] = dateStr.split("-").map(Number);
-    const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-    const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+    const sessionDate = getSessionDateTime(dateStr, sessionType);
 
     const teacher = await prisma.teacher.findUnique({
       where: { id: teacherId },
@@ -26,15 +33,15 @@ export async function adminUpdateTeacherAttendance(
     });
     if (!teacher) return { error: "Teacher not found" };
 
-    let finalRemarks = remarks;
-    if (!finalRemarks?.includes("Marked by Admin")) {
-      finalRemarks = finalRemarks ? `${finalRemarks} (Marked by Admin)` : "Marked by Admin";
+    let finalRemarks = formatRemarksWithSession(remarks, sessionType);
+    if (!finalRemarks.includes("Marked by Admin")) {
+      finalRemarks = `${finalRemarks} (Marked by Admin)`;
     }
 
     const existing = await prisma.teacherAttendance.findFirst({
       where: {
         teacherId,
-        date: { gte: startOfDay, lte: endOfDay }
+        date: sessionDate,
       }
     });
 
@@ -43,7 +50,7 @@ export async function adminUpdateTeacherAttendance(
         where: { id: existing.id },
         data: {
           status,
-          date: startOfDay,
+          date: sessionDate,
           remarks: finalRemarks
         }
       });
@@ -51,7 +58,7 @@ export async function adminUpdateTeacherAttendance(
       await prisma.teacherAttendance.create({
         data: {
           teacherId,
-          date: startOfDay,
+          date: sessionDate,
           status,
           remarks: finalRemarks
         }
@@ -71,21 +78,29 @@ export async function adminUpdateTeacherAttendance(
 }
 
 export async function adminBulkTeacherAttendance(
-  data: { teacherId: string; date: string; status: string; remarks?: string }[]
+  data: {
+    teacherId: string;
+    date: string;
+    status: string;
+    session?: "FORENOON" | "AFTERNOON";
+    remarks?: string;
+  }[]
 ) {
   try {
     const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== "ADMIN") return { error: "Unauthorized" };
 
     for (const item of data) {
-      const [year, month, day] = item.date.split("-").map(Number);
-      const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-      const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+      const sessionType: "FORENOON" | "AFTERNOON" = item.session || 
+        (item.remarks?.toUpperCase().includes("AFTERNOON") ? "AFTERNOON" : "FORENOON");
+      
+      const sessionDate = getSessionDateTime(item.date, sessionType);
+      const finalRemarks = formatRemarksWithSession(item.remarks, sessionType);
 
       const existing = await prisma.teacherAttendance.findFirst({
         where: {
           teacherId: item.teacherId,
-          date: { gte: startOfDay, lte: endOfDay }
+          date: sessionDate,
         }
       });
 
@@ -94,17 +109,17 @@ export async function adminBulkTeacherAttendance(
           where: { id: existing.id },
           data: {
             status: item.status,
-            date: startOfDay,
-            remarks: item.remarks !== undefined ? item.remarks : existing.remarks
+            date: sessionDate,
+            remarks: item.remarks !== undefined ? finalRemarks : existing.remarks
           }
         });
       } else {
         await prisma.teacherAttendance.create({
           data: {
             teacherId: item.teacherId,
-            date: startOfDay,
+            date: sessionDate,
             status: item.status,
-            remarks: item.remarks || null
+            remarks: finalRemarks
           }
         });
       }
@@ -120,3 +135,4 @@ export async function adminBulkTeacherAttendance(
     return { error: "Failed to perform bulk teacher attendance update." };
   }
 }
+

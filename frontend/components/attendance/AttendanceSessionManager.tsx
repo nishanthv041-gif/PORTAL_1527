@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo, useEffect } from "react";
 import { 
   Search, RotateCw, Check, AlertCircle, 
   X, Award, Users, Loader2, CheckCircle2, 
-  XCircle, Palmtree, Calendar 
+  XCircle, Clock, Calendar 
 } from "lucide-react";
 import styles from "./AttendanceSessionManager.module.css";
 
@@ -13,16 +13,24 @@ export type AttendancePersonItem = {
   name: string;
   codeOrRoll: string; // e.g. "EMP-89" or "Roll: 7376252AD114"
   category?: string;
-  currentStatus: "PRESENT" | "ABSENT" | "LEAVE" | "NOT_MARKED";
+  // Session-specific initial statuses
+  forenoonStatus?: "PRESENT" | "ABSENT" | "LATE" | "LEAVE" | "NOT_MARKED";
+  forenoonRemarks?: string;
+  afternoonStatus?: "PRESENT" | "ABSENT" | "LATE" | "LEAVE" | "NOT_MARKED";
+  afternoonRemarks?: string;
+  // Fallback status
+  currentStatus?: "PRESENT" | "ABSENT" | "LATE" | "LEAVE" | "NOT_MARKED";
   currentRemarks?: string;
   attendancePercentage: string;
   totalSessions: number;
   presentCount: number;
   absentCount: number;
-  leaveCount: number;
+  lateCount: number;
+  leaveCount?: number;
   recentHistory?: {
     id: string;
     date: Date | string;
+    session?: string;
     status: string;
     remarks?: string | null;
   }[];
@@ -60,20 +68,24 @@ export default function AttendanceSessionManager({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPersonForModal, setSelectedPersonForModal] = useState<AttendancePersonItem | null>(null);
 
-  // Local attendance state: id -> { status, remarks }
-  const [localMap, setLocalMap] = useState<Record<string, { status: string; remarks: string }>>(() => {
-    const map: Record<string, { status: string; remarks: string }> = {};
+  // Maintain separate, independent local state for FORENOON and AFTERNOON
+  const [sessionMap, setSessionMap] = useState<{
+    FORENOON: Record<string, { status: string; remarks: string }>;
+    AFTERNOON: Record<string, { status: string; remarks: string }>;
+  }>(() => {
+    const fn: Record<string, { status: string; remarks: string }> = {};
+    const an: Record<string, { status: string; remarks: string }> = {};
     people.forEach((p) => {
-      map[p.id] = {
-        status: p.currentStatus,
-        remarks: p.currentRemarks || "",
-      };
+      const fnStatus = p.forenoonStatus || (p.currentStatus === "LEAVE" ? "LATE" : p.currentStatus) || "NOT_MARKED";
+      const anStatus = p.afternoonStatus || (p.currentStatus === "LEAVE" ? "LATE" : p.currentStatus) || "NOT_MARKED";
+      fn[p.id] = { status: fnStatus, remarks: p.forenoonRemarks || p.currentRemarks || "" };
+      an[p.id] = { status: anStatus, remarks: p.afternoonRemarks || p.currentRemarks || "" };
     });
-    return map;
+    return { FORENOON: fn, AFTERNOON: an };
   });
 
-  // Track original snapshot to know if there are unsaved changes
-  const [originalSnapshot, setOriginalSnapshot] = useState(localMap);
+  // Track original snapshot for each session
+  const [originalSnapshot, setOriginalSnapshot] = useState(sessionMap);
   const [isPending, startTransition] = useTransition();
   const [saveSuccessMsg, setSaveSuccessMsg] = useState(false);
 
@@ -84,32 +96,36 @@ export default function AttendanceSessionManager({
     );
   }, [categories]);
 
-  // Update when people / initialDate props change
+  // Update session maps when `people` or `initialDate` props change
   useEffect(() => {
     setSelectedDate(initialDate);
-    const map: Record<string, { status: string; remarks: string }> = {};
+    const fn: Record<string, { status: string; remarks: string }> = {};
+    const an: Record<string, { status: string; remarks: string }> = {};
     people.forEach((p) => {
-      map[p.id] = {
-        status: p.currentStatus,
-        remarks: p.currentRemarks || "",
-      };
+      const fnStatus = p.forenoonStatus || (p.currentStatus === "LEAVE" ? "LATE" : p.currentStatus) || "NOT_MARKED";
+      const anStatus = p.afternoonStatus || (p.currentStatus === "LEAVE" ? "LATE" : p.currentStatus) || "NOT_MARKED";
+      fn[p.id] = { status: fnStatus, remarks: p.forenoonRemarks || p.currentRemarks || "" };
+      an[p.id] = { status: anStatus, remarks: p.afternoonRemarks || p.currentRemarks || "" };
     });
-    setLocalMap(map);
-    setOriginalSnapshot(map);
+    const newSessionMap = { FORENOON: fn, AFTERNOON: an };
+    setSessionMap(newSessionMap);
+    setOriginalSnapshot(newSessionMap);
   }, [people, initialDate]);
 
-  // Determine if there are unsaved changes
+  // Determine if there are unsaved changes in the currently active session
   const hasUnsavedChanges = useMemo(() => {
+    const activeMap = sessionMap[session];
+    const origMap = originalSnapshot[session];
     for (const p of people) {
-      const cur = localMap[p.id];
-      const orig = originalSnapshot[p.id];
+      const cur = activeMap[p.id];
+      const orig = origMap[p.id];
       if (!orig || !cur) continue;
       if (cur.status !== orig.status || cur.remarks !== orig.remarks) {
         return true;
       }
     }
     return false;
-  }, [people, localMap, originalSnapshot]);
+  }, [people, sessionMap, originalSnapshot, session]);
 
   // Filtered members list based on category & search
   const filteredPeople = useMemo(() => {
@@ -126,17 +142,18 @@ export default function AttendanceSessionManager({
     });
   }, [people, activeCategoryId, searchQuery, filteredCategories.length]);
 
-  // Dynamic counter pills based on localMap (Present, Absent, Leave)
+  // Dynamic counter pills based on currently active session (Present, Absent, Late)
   const counters = useMemo(() => {
     let present = 0;
     let absent = 0;
-    let leave = 0;
+    let late = 0;
     let marked = 0;
 
-    Object.values(localMap).forEach(({ status }) => {
+    const activeMap = sessionMap[session] || {};
+    Object.values(activeMap).forEach(({ status }) => {
       if (status === "PRESENT") present++;
       else if (status === "ABSENT") absent++;
-      else if (status === "LEAVE") leave++;
+      else if (status === "LATE") late++;
 
       if (status !== "NOT_MARKED" && status !== "") {
         marked++;
@@ -146,38 +163,62 @@ export default function AttendanceSessionManager({
     return {
       present,
       absent,
-      leave,
+      late,
       marked,
       total: people.length,
     };
-  }, [localMap, people.length]);
+  }, [sessionMap, session, people.length]);
+
+  // Separate session progress counts for overview
+  const sessionOverviewCounts = useMemo(() => {
+    let fnMarked = 0;
+    let anMarked = 0;
+
+    Object.values(sessionMap.FORENOON || {}).forEach(({ status }) => {
+      if (status && status !== "NOT_MARKED") fnMarked++;
+    });
+    Object.values(sessionMap.AFTERNOON || {}).forEach(({ status }) => {
+      if (status && status !== "NOT_MARKED") anMarked++;
+    });
+
+    return {
+      fnMarked,
+      anMarked,
+      total: people.length,
+    };
+  }, [sessionMap, people.length]);
 
   // Calculate dynamic live percentage & breakdown connected to database state
   const getLivePersonStats = (person: AttendancePersonItem) => {
-    const curStatus = localMap[person.id]?.status || person.currentStatus;
-    const origStatus = originalSnapshot[person.id]?.status || person.currentStatus;
+    const curStatus = sessionMap[session][person.id]?.status || 
+      (session === "FORENOON" ? person.forenoonStatus : person.afternoonStatus) || 
+      person.currentStatus || "NOT_MARKED";
+    
+    const origStatus = originalSnapshot[session][person.id]?.status || 
+      (session === "FORENOON" ? person.forenoonStatus : person.afternoonStatus) || 
+      person.currentStatus || "NOT_MARKED";
 
-    // Check if the initial database record already had a marked status today
+    // Check if the initial database record already had a marked status in this session
     const wasAlreadyMarkedInDb = origStatus !== "NOT_MARKED" && origStatus !== "";
 
-    // Baseline sessions count from DB without today's slot
+    // Baseline sessions count from DB without today's active slot
     const baseTotalSessions = wasAlreadyMarkedInDb
       ? Math.max(0, person.totalSessions - 1)
       : person.totalSessions;
 
-    // Baseline counts from DB without today's slot
+    // Baseline counts from DB without today's active slot
     let basePresent = person.presentCount - (wasAlreadyMarkedInDb && origStatus === "PRESENT" ? 1 : 0);
     let baseAbsent = person.absentCount - (wasAlreadyMarkedInDb && origStatus === "ABSENT" ? 1 : 0);
-    let baseLeave = person.leaveCount - (wasAlreadyMarkedInDb && origStatus === "LEAVE" ? 1 : 0);
+    let baseLate = person.lateCount - (wasAlreadyMarkedInDb && origStatus === "LATE" ? 1 : 0);
 
     basePresent = Math.max(0, basePresent);
     baseAbsent = Math.max(0, baseAbsent);
-    baseLeave = Math.max(0, baseLeave);
+    baseLate = Math.max(0, baseLate);
 
-    // Apply the active live choice (PRESENT = 1.0, ABSENT = 0, LEAVE = 0)
+    // Apply the active live choice (PRESENT = 1.0, LATE = 1.0 attended, ABSENT = 0)
     let livePresent = basePresent;
     let liveAbsent = baseAbsent;
-    let liveLeave = baseLeave;
+    let liveLate = baseLate;
     let liveTotalSessions = baseTotalSessions;
 
     if (curStatus === "PRESENT") {
@@ -186,13 +227,15 @@ export default function AttendanceSessionManager({
     } else if (curStatus === "ABSENT") {
       liveAbsent += 1;
       liveTotalSessions += 1;
-    } else if (curStatus === "LEAVE") {
-      liveLeave += 1;
+    } else if (curStatus === "LATE") {
+      liveLate += 1;
       liveTotalSessions += 1;
     }
 
+    // Both Present and Late count as attended session for overall percentage
+    const attendedSessions = livePresent + liveLate;
     const percentage = liveTotalSessions > 0
-      ? ((livePresent / liveTotalSessions) * 100).toFixed(1)
+      ? ((attendedSessions / liveTotalSessions) * 100).toFixed(1)
       : "100.0";
 
     return {
@@ -200,37 +243,44 @@ export default function AttendanceSessionManager({
       totalSessions: liveTotalSessions,
       presentCount: livePresent,
       absentCount: liveAbsent,
-      leaveCount: liveLeave,
+      lateCount: liveLate,
       currentStatus: curStatus,
     };
   };
 
-  // Toggle single member status (PRESENT, ABSENT, LEAVE)
+  // Toggle single member status (PRESENT, ABSENT, LATE)
   const setMemberStatus = (
     personId: string,
-    newStatus: "PRESENT" | "ABSENT" | "LEAVE",
+    newStatus: "PRESENT" | "ABSENT" | "LATE",
     remarks?: string
   ) => {
-    setLocalMap((prev) => ({
-      ...prev,
-      [personId]: {
+    setSessionMap((prev) => {
+      const activeMap = { ...prev[session] };
+      activeMap[personId] = {
         status: newStatus,
-        remarks: remarks !== undefined ? remarks : prev[personId]?.remarks || "",
-      },
-    }));
+        remarks: remarks !== undefined ? remarks : activeMap[personId]?.remarks || "",
+      };
+      return {
+        ...prev,
+        [session]: activeMap,
+      };
+    });
   };
 
-  // Quick mark all currently filtered members (P or A)
-  const handleQuickMarkAll = (status: "PRESENT" | "ABSENT") => {
-    setLocalMap((prev) => {
-      const updated = { ...prev };
+  // Quick mark all currently filtered members in active session (P, A, or L)
+  const handleQuickMarkAll = (status: "PRESENT" | "ABSENT" | "LATE") => {
+    setSessionMap((prev) => {
+      const activeMap = { ...prev[session] };
       filteredPeople.forEach((p) => {
-        updated[p.id] = {
+        activeMap[p.id] = {
           status,
-          remarks: prev[p.id]?.remarks || "",
+          remarks: activeMap[p.id]?.remarks || "",
         };
       });
-      return updated;
+      return {
+        ...prev,
+        [session]: activeMap,
+      };
     });
   };
 
@@ -240,15 +290,19 @@ export default function AttendanceSessionManager({
     onDateChange(newDate);
   };
 
-  // Discard changes and revert to original snapshot
+  // Discard changes and revert to original snapshot for active session
   const handleDiscard = () => {
-    setLocalMap(originalSnapshot);
+    setSessionMap((prev) => ({
+      ...prev,
+      [session]: { ...originalSnapshot[session] },
+    }));
   };
 
-  // Save changes to database
+  // Save changes to database for active session
   const handleSave = () => {
     startTransition(async () => {
-      const recordsToSave = Object.entries(localMap).map(([id, item]) => ({
+      const activeMap = sessionMap[session];
+      const recordsToSave = Object.entries(activeMap).map(([id, item]) => ({
         id,
         status: item.status,
         remarks: item.remarks,
@@ -256,7 +310,10 @@ export default function AttendanceSessionManager({
 
       const res = await onSave(recordsToSave, selectedDate, session);
       if (res.success) {
-        setOriginalSnapshot(localMap);
+        setOriginalSnapshot((prev) => ({
+          ...prev,
+          [session]: { ...activeMap },
+        }));
         setSaveSuccessMsg(true);
         setTimeout(() => setSaveSuccessMsg(false), 3000);
       }
@@ -353,12 +410,19 @@ export default function AttendanceSessionManager({
           {hasUnsavedChanges && (
             <div className={styles.unsavedBadge}>
               <AlertCircle size={13} />
-              <span>Unsaved changes</span>
+              <span>Unsaved changes ({session === "FORENOON" ? "Forenoon" : "Afternoon"})</span>
+            </div>
+          )}
+
+          {saveSuccessMsg && (
+            <div className={styles.unsavedBadge} style={{ background: "rgba(5, 150, 105, 0.15)", color: "#059669" }}>
+              <Check size={13} />
+              <span>{session === "FORENOON" ? "Forenoon" : "Afternoon"} saved successfully!</span>
             </div>
           )}
         </div>
 
-        {/* Status Counter Pills Row (Present, Absent, On Leave, Total) */}
+        {/* Status Counter Pills Row (Present, Absent, Late, Total) */}
         <div className={styles.metricsRow}>
           <span className={`${styles.metricPill} ${styles.pillPresent}`}>
             Present: {counters.present}
@@ -366,8 +430,8 @@ export default function AttendanceSessionManager({
           <span className={`${styles.metricPill} ${styles.pillAbsent}`}>
             Absent: {counters.absent}
           </span>
-          <span className={`${styles.metricPill} ${styles.pillLeave}`}>
-            On Leave: {counters.leave}
+          <span className={`${styles.metricPill} ${styles.pillLate}`}>
+            Late: {counters.late}
           </span>
           <span className={styles.pillTotalCount}>
             <Users size={14} />
@@ -375,9 +439,9 @@ export default function AttendanceSessionManager({
           </span>
         </div>
 
-        {/* Quick Mark All Row: P / A */}
+        {/* Quick Mark All Row: P / A / L */}
         <div className={styles.markAllRow}>
-          <span>Mark all:</span>
+          <span>Mark all {session === "FORENOON" ? "Forenoon" : "Afternoon"}:</span>
           <button
             type="button"
             onClick={() => handleQuickMarkAll("PRESENT")}
@@ -394,10 +458,18 @@ export default function AttendanceSessionManager({
           >
             A
           </button>
+          <button
+            type="button"
+            onClick={() => handleQuickMarkAll("LATE")}
+            className={`${styles.quickBtn} ${styles.quickL}`}
+            title="Mark all as Late"
+          >
+            L
+          </button>
         </div>
       </div>
 
-      {/* 4. Table of Members (Clean 3-column table: #, Member, Status: P, A, LE) */}
+      {/* 4. Table of Members (Clean 3-column table: #, Member, Status: P, A, L) */}
       <div className={styles.tableCard}>
         <div className={styles.tableWrapper}>
           <table className={styles.table}>
@@ -407,12 +479,14 @@ export default function AttendanceSessionManager({
                 <th className={styles.th}>
                   {title.toLowerCase().includes("teacher") ? "FACULTY MEMBER" : "STUDENT"}
                 </th>
-                <th className={styles.th} style={{ textAlign: "center" }}>ATTENDANCE STATUS</th>
+                <th className={styles.th} style={{ textAlign: "center" }}>
+                  {session === "FORENOON" ? "FORENOON STATUS" : "AFTERNOON STATUS"}
+                </th>
               </tr>
             </thead>
             <tbody>
               {filteredPeople.map((person, index) => {
-                const cur = localMap[person.id] || { status: "NOT_MARKED", remarks: "" };
+                const cur = sessionMap[session][person.id] || { status: "NOT_MARKED", remarks: "" };
                 const st = cur.status;
                 const liveStats = getLivePersonStats(person);
 
@@ -430,7 +504,7 @@ export default function AttendanceSessionManager({
                           <span 
                             className={styles.personName}
                             onClick={() => setSelectedPersonForModal(person)}
-                            title="Click to view overall attendance percentage"
+                            title="Click to view overall attendance breakdown"
                           >
                             {person.name}
                           </span>
@@ -452,7 +526,7 @@ export default function AttendanceSessionManager({
                       </div>
                     </td>
 
-                    {/* Attendance Status Buttons: P, A, LE */}
+                    {/* Attendance Status Buttons: P, A, L */}
                     <td className={styles.td} style={{ textAlign: "center" }}>
                       <div className={styles.statusButtonGroup}>
                         {/* P: Present */}
@@ -475,14 +549,14 @@ export default function AttendanceSessionManager({
                           A
                         </button>
 
-                        {/* LE: Leave */}
+                        {/* L: Late (Replaced Leave) */}
                         <button
                           type="button"
-                          onClick={() => setMemberStatus(person.id, "LEAVE")}
-                          className={`${styles.statusBtn} ${st === "LEAVE" ? styles.btnLE_active : styles.btnLE_inactive}`}
-                          title="On Leave"
+                          onClick={() => setMemberStatus(person.id, "LATE")}
+                          className={`${styles.statusBtn} ${st === "LATE" ? styles.btnL_active : styles.btnL_inactive}`}
+                          title="Late"
                         >
-                          LE
+                          L
                         </button>
                       </div>
                     </td>
@@ -502,12 +576,12 @@ export default function AttendanceSessionManager({
           <div className={styles.sessionCard}>
             <span className={styles.sessionCardHeader}>Forenoon</span>
             <span className={styles.sessionCardCount}>
-              {session === "FORENOON" ? counters.marked : 0}/{counters.total}
+              {sessionOverviewCounts.fnMarked}/{sessionOverviewCounts.total}
             </span>
             <div className={styles.progressBarTrack}>
               <div 
                 className={styles.progressBarFill} 
-                style={{ width: `${counters.total > 0 ? ((session === "FORENOON" ? counters.marked : 0) / counters.total) * 100 : 0}%` }}
+                style={{ width: `${sessionOverviewCounts.total > 0 ? (sessionOverviewCounts.fnMarked / sessionOverviewCounts.total) * 100 : 0}%` }}
               />
             </div>
           </div>
@@ -516,12 +590,12 @@ export default function AttendanceSessionManager({
           <div className={styles.sessionCard}>
             <span className={styles.sessionCardHeader}>Afternoon</span>
             <span className={styles.sessionCardCount}>
-              {session === "AFTERNOON" ? counters.marked : 0}/{counters.total}
+              {sessionOverviewCounts.anMarked}/{sessionOverviewCounts.total}
             </span>
             <div className={styles.progressBarTrack}>
               <div 
                 className={styles.progressBarFill} 
-                style={{ width: `${counters.total > 0 ? ((session === "AFTERNOON" ? counters.marked : 0) / counters.total) * 100 : 0}%` }}
+                style={{ width: `${sessionOverviewCounts.total > 0 ? (sessionOverviewCounts.anMarked / sessionOverviewCounts.total) * 100 : 0}%` }}
               />
             </div>
           </div>
@@ -540,35 +614,27 @@ export default function AttendanceSessionManager({
           Discard
         </button>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
-          {saveSuccessMsg && (
-            <span style={{ fontSize: "0.825rem", color: "var(--success)", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px" }}>
-              <Check size={14} /> Saved!
-            </span>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isPending}
+          className={styles.saveBtn}
+        >
+          {isPending ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              <span>Saving {session === "FORENOON" ? "Forenoon" : "Afternoon"}...</span>
+            </>
+          ) : (
+            <>
+              <Check size={16} strokeWidth={2.5} />
+              <span>Save {session === "FORENOON" ? "Forenoon" : "Afternoon"}</span>
+            </>
           )}
-
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isPending}
-            className={styles.saveBtn}
-          >
-            {isPending ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                <span>Saving...</span>
-              </>
-            ) : (
-              <>
-                <Check size={16} strokeWidth={2.5} />
-                <span>Save Attendance</span>
-              </>
-            )}
-          </button>
-        </div>
+        </button>
       </div>
 
-      {/* 7. Percentage View Modal with Box Viewing & Beautiful Table (Present, Absent, Leave) */}
+      {/* 7. Percentage View Modal with Box Viewing & Beautiful Table (Present, Absent, Late) */}
       {selectedPersonForModal && (() => {
         const liveModalStats = getLivePersonStats(selectedPersonForModal);
 
@@ -611,7 +677,7 @@ export default function AttendanceSessionManager({
                     </span>
                   </div>
                   <p className={styles.modalHeroSubtext}>
-                    Calculated from <strong>{liveModalStats.totalSessions}</strong> total recorded sessions
+                    Calculated from <strong>{liveModalStats.totalSessions}</strong> official school working sessions
                   </p>
                 </div>
                 <div className={styles.modalHeroIconWrapper}>
@@ -619,7 +685,7 @@ export default function AttendanceSessionManager({
                 </div>
               </div>
 
-              {/* 1. Box Viewing: Attendance Summary Boxes (Present, Absent, On Leave) */}
+              {/* 1. Box Viewing: Attendance Summary Boxes (Present, Absent, Late) */}
               <div className={styles.boxViewingSection}>
                 <h4 className={styles.sectionHeading}>Attendance Summary</h4>
                 <div className={styles.statsBoxesGrid}>
@@ -630,7 +696,7 @@ export default function AttendanceSessionManager({
                       <CheckCircle2 size={16} className={styles.boxIcon} />
                     </div>
                     <div className={styles.boxValue}>{liveModalStats.presentCount}</div>
-                    <span className={styles.boxSubtext}>Full Attendance</span>
+                    <span className={styles.boxSubtext}>On-Time Sessions</span>
                   </div>
 
                   {/* Box 2: Absent */}
@@ -643,14 +709,14 @@ export default function AttendanceSessionManager({
                     <span className={styles.boxSubtext}>Unexcused</span>
                   </div>
 
-                  {/* Box 3: On Leave */}
-                  <div className={`${styles.statBox} ${styles.boxLeave}`}>
+                  {/* Box 3: Late */}
+                  <div className={`${styles.statBox} ${styles.boxLate}`}>
                     <div className={styles.boxHeader}>
-                      <span className={styles.boxLabel}>On Leave</span>
-                      <Palmtree size={16} className={styles.boxIcon} />
+                      <span className={styles.boxLabel}>Late</span>
+                      <Clock size={16} className={styles.boxIcon} />
                     </div>
-                    <div className={styles.boxValue}>{liveModalStats.leaveCount}</div>
-                    <span className={styles.boxSubtext}>Approved Leave</span>
+                    <div className={styles.boxValue}>{liveModalStats.lateCount}</div>
+                    <span className={styles.boxSubtext}>Late Arrival</span>
                   </div>
                 </div>
               </div>
@@ -686,11 +752,11 @@ export default function AttendanceSessionManager({
                               year: "numeric",
                             });
                             const weekday = itemDate.toLocaleDateString("en-GB", { weekday: "short" });
-                            const sessionName = item.remarks?.includes("FORENOON")
-                              ? "Forenoon"
-                              : item.remarks?.includes("AFTERNOON")
-                              ? "Afternoon"
-                              : "Full Day";
+                            const sessionName = item.session ? item.session : (
+                              item.remarks?.toUpperCase().includes("AFTERNOON") || itemDate.getUTCHours() >= 12
+                                ? "Afternoon"
+                                : "Forenoon"
+                            );
 
                             return (
                               <tr key={item.id || idx} className={styles.modalTr}>
@@ -717,12 +783,17 @@ export default function AttendanceSessionManager({
                                       <XCircle size={12} /> Absent
                                     </span>
                                   )}
-                                  {item.status === "LEAVE" && (
-                                    <span className={`${styles.statusPill} ${styles.pillStatusLeave}`}>
-                                      <Palmtree size={12} /> Leave
+                                  {item.status === "LATE" && (
+                                    <span className={`${styles.statusPill} ${styles.pillStatusLate}`}>
+                                      <Clock size={12} /> Late
                                     </span>
                                   )}
-                                  {!["PRESENT", "ABSENT", "LEAVE"].includes(item.status) && (
+                                  {item.status === "LEAVE" && (
+                                    <span className={`${styles.statusPill} ${styles.pillStatusLate}`}>
+                                      <Clock size={12} /> Late / Leave
+                                    </span>
+                                  )}
+                                  {!["PRESENT", "ABSENT", "LATE", "LEAVE"].includes(item.status) && (
                                     <span className={styles.statusPill}>
                                       {item.status}
                                     </span>

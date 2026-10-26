@@ -4,30 +4,42 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getSessionDateTime, isForenoonRecord, isAfternoonRecord } from "@/backend/lib/services/attendanceCalculation";
 
-export async function adminUpdateAttendance(studentId: string, dateStr: string, status: string, remarks: string) {
+function formatRemarksWithSession(remarks: string | undefined | null, session: "FORENOON" | "AFTERNOON"): string {
+  const cleanRemarks = (remarks || "").replace(/\s*\((FORENOON|AFTERNOON)\)/gi, "").trim();
+  const sessionTag = session === "FORENOON" ? "(Forenoon)" : "(Afternoon)";
+  if (!cleanRemarks) return sessionTag;
+  return `${cleanRemarks} ${sessionTag}`;
+}
+
+export async function adminUpdateAttendance(
+  studentId: string,
+  dateStr: string,
+  status: string,
+  remarks: string,
+  sessionType: "FORENOON" | "AFTERNOON" = "FORENOON"
+) {
   try {
     const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
     if (!dateStr) return { error: "Date is required to mark attendance." };
-    const [year, month, day] = dateStr.split("-").map(Number);
-    const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-    const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+    const sessionDate = getSessionDateTime(dateStr, sessionType);
     
     const student = await prisma.student.findUnique({ where: { id: studentId } });
     if (!student || !student.classId) return { error: 'Student or class not found' };
 
-    // Add "Edited by Admin" flag to remarks if modified
-    let finalRemarks = remarks;
-    if (!finalRemarks?.includes("Edited by Admin")) {
-      finalRemarks = finalRemarks ? `${finalRemarks} (Edited by Admin)` : "Edited by Admin";
+    let finalRemarks = formatRemarksWithSession(remarks, sessionType);
+    if (!finalRemarks.includes("Edited by Admin")) {
+      finalRemarks = `${finalRemarks} (Edited by Admin)`;
     }
 
+    // Match exact session record
     const existing = await prisma.attendance.findFirst({
       where: {
         studentId,
-        date: { gte: startOfDay, lte: endOfDay }
+        date: sessionDate,
       }
     });
 
@@ -36,7 +48,7 @@ export async function adminUpdateAttendance(studentId: string, dateStr: string, 
         where: { id: existing.id },
         data: {
           status,
-          date: startOfDay,
+          date: sessionDate,
           remarks: finalRemarks
         }
       });
@@ -45,7 +57,7 @@ export async function adminUpdateAttendance(studentId: string, dateStr: string, 
         data: {
           studentId,
           classId: student.classId,
-          date: startOfDay,
+          date: sessionDate,
           status,
           remarks: finalRemarks
         }
@@ -64,20 +76,29 @@ export async function adminUpdateAttendance(studentId: string, dateStr: string, 
   }
 }
 
-export async function adminBulkAttendance(data: { studentId: string; date: string; status: string; classId?: string; remarks?: string }[]) {
+export async function adminBulkAttendance(data: {
+  studentId: string;
+  date: string;
+  status: string;
+  session?: "FORENOON" | "AFTERNOON";
+  classId?: string;
+  remarks?: string;
+}[]) {
   try {
     const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
     for (const item of data) {
-      const [year, month, day] = item.date.split("-").map(Number);
-      const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-      const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+      const sessionType: "FORENOON" | "AFTERNOON" = item.session || 
+        (item.remarks?.toUpperCase().includes("AFTERNOON") ? "AFTERNOON" : "FORENOON");
+      
+      const sessionDate = getSessionDateTime(item.date, sessionType);
+      const finalRemarks = formatRemarksWithSession(item.remarks, sessionType);
 
       const existing = await prisma.attendance.findFirst({
         where: {
           studentId: item.studentId,
-          date: { gte: startOfDay, lte: endOfDay }
+          date: sessionDate,
         }
       });
 
@@ -86,8 +107,8 @@ export async function adminBulkAttendance(data: { studentId: string; date: strin
           where: { id: existing.id },
           data: {
             status: item.status,
-            date: startOfDay,
-            remarks: item.remarks !== undefined ? item.remarks : existing.remarks
+            date: sessionDate,
+            remarks: item.remarks !== undefined ? finalRemarks : existing.remarks
           }
         });
       } else {
@@ -101,9 +122,9 @@ export async function adminBulkAttendance(data: { studentId: string; date: strin
           data: {
             studentId: item.studentId,
             classId: finalClassId,
-            date: startOfDay,
+            date: sessionDate,
             status: item.status,
-            remarks: item.remarks || null
+            remarks: finalRemarks
           }
         });
       }
@@ -120,3 +141,4 @@ export async function adminBulkAttendance(data: { studentId: string; date: strin
     return { error: "Failed to save bulk attendance." };
   }
 }
+

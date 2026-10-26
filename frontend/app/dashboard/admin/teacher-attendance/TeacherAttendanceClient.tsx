@@ -18,13 +18,19 @@ export type TeacherRecordItem = {
   totalSessions: number;
   presentedDays: number;
   absentedDays: number;
-  leaveDays: number;
+  lateDays: number;
+  leaveDays?: number;
   attendancePercentage: string;
-  todayStatus: "PRESENT" | "ABSENT" | "LEAVE" | "NOT_MARKED";
+  forenoonStatus?: "PRESENT" | "ABSENT" | "LATE" | "NOT_MARKED";
+  forenoonRemarks?: string;
+  afternoonStatus?: "PRESENT" | "ABSENT" | "LATE" | "NOT_MARKED";
+  afternoonRemarks?: string;
+  todayStatus?: "PRESENT" | "ABSENT" | "LATE" | "NOT_MARKED";
   todayRemarks?: string;
   attendances: {
     id: string;
     date: Date | string;
+    session?: string;
     status: string;
     remarks?: string | null;
   }[];
@@ -41,31 +47,33 @@ export default function TeacherAttendanceClient({
 
   const people: AttendancePersonItem[] = useMemo(() => {
     return teachers.map((t) => {
-      // Normalize any legacy status
-      const normalizedStatus: AttendancePersonItem["currentStatus"] = 
-        t.todayStatus === "PRESENT" ? "PRESENT" :
-        t.todayStatus === "ABSENT" ? "ABSENT" :
-        t.todayStatus === "LEAVE" ? "LEAVE" :
-        "NOT_MARKED";
-
       return {
         id: t.id,
         name: t.user.name,
         codeOrRoll: `EMP-${t.id.slice(-4).toUpperCase()}`,
         category: "TEACHERS",
-        currentStatus: normalizedStatus,
+        forenoonStatus: t.forenoonStatus || "NOT_MARKED",
+        forenoonRemarks: t.forenoonRemarks || "",
+        afternoonStatus: t.afternoonStatus || "NOT_MARKED",
+        afternoonRemarks: t.afternoonRemarks || "",
+        currentStatus: t.todayStatus || "NOT_MARKED",
         currentRemarks: t.todayRemarks || "",
         attendancePercentage: t.attendancePercentage,
         totalSessions: t.totalSessions,
         presentCount: t.presentedDays,
         absentCount: t.absentedDays,
-        leaveCount: t.leaveDays,
-        recentHistory: t.attendances.slice(0, 15).map((a) => ({
-          id: a.id,
-          date: a.date,
-          status: a.status,
-          remarks: a.remarks,
-        })),
+        lateCount: t.lateDays,
+        leaveCount: t.leaveDays || 0,
+        recentHistory: t.attendances.slice(0, 30).map((a) => {
+          const isAN = a.remarks?.toUpperCase().includes("AFTERNOON") || new Date(a.date).getUTCHours() >= 12;
+          return {
+            id: a.id,
+            date: a.date,
+            session: isAN ? "Afternoon" : "Forenoon",
+            status: a.status === "LEAVE" ? "LATE" : a.status,
+            remarks: a.remarks,
+          };
+        }),
       };
     });
   }, [teachers]);
@@ -83,7 +91,8 @@ export default function TeacherAttendanceClient({
       teacherId: r.id,
       date,
       status: r.status,
-      remarks: r.remarks ? `${r.remarks} (${session})` : session,
+      session,
+      remarks: r.remarks,
     }));
 
     const res = await adminBulkTeacherAttendance(payload);

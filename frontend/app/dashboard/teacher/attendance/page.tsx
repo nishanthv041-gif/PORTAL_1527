@@ -72,43 +72,73 @@ export default async function TeacherAttendancePage({
   const officialWorkingDays = await countSchoolWorkingDays(academicStart, endOfDay, myClass.id);
 
   const serializedStudents: TeacherStudentItem[] = myClass.students.map((s) => {
-    const todayRecord = s.attendances.find((a) => {
+    const todayRecords = s.attendances.filter((a) => {
       const attDate = new Date(a.date).toISOString().split("T")[0];
       return attDate === todayStr;
     });
 
-    const rawStatus = todayRecord?.status;
-    const currentStatus: TeacherStudentItem["currentStatus"] =
-      rawStatus === "PRESENT" ? "PRESENT" :
-      rawStatus === "ABSENT" ? "ABSENT" :
-      rawStatus === "LEAVE" ? "LEAVE" :
-      "NOT_MARKED";
+    const fnRecord = todayRecords.find((a) => {
+      if (a.remarks?.toUpperCase().includes("AFTERNOON") || a.remarks?.includes("[AN]")) return false;
+      if (a.remarks?.toUpperCase().includes("FORENOON") || a.remarks?.includes("[FN]")) return true;
+      return new Date(a.date).getUTCHours() < 12;
+    });
+
+    const anRecord = todayRecords.find((a) => {
+      if (a.remarks?.toUpperCase().includes("AFTERNOON") || a.remarks?.includes("[AN]")) return true;
+      if (a.remarks?.toUpperCase().includes("FORENOON") || a.remarks?.includes("[FN]")) return false;
+      return new Date(a.date).getUTCHours() >= 12;
+    });
+
+    const normalizeStatus = (st?: string | null): "PRESENT" | "ABSENT" | "LATE" | "NOT_MARKED" => {
+      if (st === "PRESENT") return "PRESENT";
+      if (st === "ABSENT") return "ABSENT";
+      if (st === "LATE") return "LATE";
+      if (st === "LEAVE") return "LATE";
+      return "NOT_MARKED";
+    };
+
+    const forenoonStatus = normalizeStatus(fnRecord?.status);
+    const afternoonStatus = normalizeStatus(anRecord?.status);
 
     const presentCount = s.attendances.filter((a) => a.status === "PRESENT").length;
     const absentCount = s.attendances.filter((a) => a.status === "ABSENT").length;
+    const lateCount = s.attendances.filter((a) => a.status === "LATE").length;
     const leaveCount = s.attendances.filter((a) => a.status === "LEAVE").length;
-    const recordedTotal = presentCount + absentCount + leaveCount;
+    const recordedTotal = presentCount + absentCount + lateCount + leaveCount;
 
-    const totalWorkingSessions = Math.max(officialWorkingDays, recordedTotal, 1);
-    const attendancePercentage = calculateAttendancePercentage(presentCount, totalWorkingSessions);
+    // Each school worked day in calendar has 2 sessions (FN and AN)
+    const officialWorkingSessions = officialWorkingDays * 2;
+    const totalWorkingSessions = Math.max(officialWorkingSessions, recordedTotal, 1);
+
+    const attendedSessions = presentCount + lateCount;
+    const attendancePercentage = calculateAttendancePercentage(attendedSessions, totalWorkingSessions);
 
     return {
       id: s.id,
       name: `${s.firstName} ${s.lastName}`.trim(),
       rollNumber: s.rollNumber,
-      currentStatus,
-      currentRemarks: todayRecord?.remarks || "",
+      forenoonStatus,
+      forenoonRemarks: fnRecord?.remarks || "",
+      afternoonStatus,
+      afternoonRemarks: anRecord?.remarks || "",
+      currentStatus: forenoonStatus,
+      currentRemarks: fnRecord?.remarks || "",
       attendancePercentage,
       totalSessions: totalWorkingSessions,
       presentCount,
       absentCount,
+      lateCount,
       leaveCount,
-      recentHistory: s.attendances.slice(0, 15).map((a) => ({
-        id: a.id,
-        date: a.date,
-        status: a.status,
-        remarks: a.remarks,
-      })),
+      recentHistory: s.attendances.slice(0, 30).map((a) => {
+        const isAN = a.remarks?.toUpperCase().includes("AFTERNOON") || new Date(a.date).getUTCHours() >= 12;
+        return {
+          id: a.id,
+          date: a.date,
+          session: isAN ? "Afternoon" : "Forenoon",
+          status: a.status === "LEAVE" ? "LATE" : a.status,
+          remarks: a.remarks,
+        };
+      }),
     };
   });
 

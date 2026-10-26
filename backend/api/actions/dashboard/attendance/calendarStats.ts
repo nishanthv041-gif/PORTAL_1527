@@ -8,6 +8,7 @@ import {
 
 export interface SchoolCalendarStats {
   totalActiveDays: number;
+  totalActiveSessions: number;
   totalLeaveDays: number;
   academicYearStart: string;
 }
@@ -40,6 +41,7 @@ export async function getSchoolCalendarStats(
 
     return {
       totalActiveDays,
+      totalActiveSessions: totalActiveDays * 2,
       totalLeaveDays,
       academicYearStart: toDateString(academicStart),
     };
@@ -47,6 +49,7 @@ export async function getSchoolCalendarStats(
     console.error("Error calculating school calendar stats:", error);
     return {
       totalActiveDays: 0,
+      totalActiveSessions: 0,
       totalLeaveDays: 0,
       academicYearStart: toDateString(new Date()),
     };

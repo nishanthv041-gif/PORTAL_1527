@@ -14,16 +14,22 @@ export type AdminStudentItem = {
   admissionNo?: string;
   classId: string;
   className: string;
-  currentStatus: "PRESENT" | "ABSENT" | "LEAVE" | "NOT_MARKED";
+  forenoonStatus?: "PRESENT" | "ABSENT" | "LATE" | "NOT_MARKED";
+  forenoonRemarks?: string;
+  afternoonStatus?: "PRESENT" | "ABSENT" | "LATE" | "NOT_MARKED";
+  afternoonRemarks?: string;
+  currentStatus?: "PRESENT" | "ABSENT" | "LATE" | "NOT_MARKED";
   currentRemarks?: string;
   attendancePercentage: string;
   totalSessions: number;
   presentCount: number;
   absentCount: number;
-  leaveCount: number;
+  lateCount: number;
+  leaveCount?: number;
   recentHistory?: {
     id: string;
     date: Date | string;
+    session?: string;
     status: string;
     remarks?: string | null;
   }[];
@@ -51,24 +57,23 @@ export default function AttendanceClient({
 
   const people: AttendancePersonItem[] = useMemo(() => {
     return students.map((s) => {
-      const normalizedStatus: AttendancePersonItem["currentStatus"] = 
-        s.currentStatus === "PRESENT" ? "PRESENT" :
-        s.currentStatus === "ABSENT" ? "ABSENT" :
-        s.currentStatus === "LEAVE" ? "LEAVE" :
-        "NOT_MARKED";
-
       return {
         id: s.id,
         name: s.name,
         codeOrRoll: s.rollNumber ? `Roll: ${s.rollNumber}` : s.admissionNo ? `Adm: ${s.admissionNo}` : "Student",
         category: s.classId,
-        currentStatus: normalizedStatus,
+        forenoonStatus: s.forenoonStatus || "NOT_MARKED",
+        forenoonRemarks: s.forenoonRemarks || "",
+        afternoonStatus: s.afternoonStatus || "NOT_MARKED",
+        afternoonRemarks: s.afternoonRemarks || "",
+        currentStatus: s.currentStatus || "NOT_MARKED",
         currentRemarks: s.currentRemarks || "",
         attendancePercentage: s.attendancePercentage,
         totalSessions: s.totalSessions,
         presentCount: s.presentCount,
         absentCount: s.absentCount,
-        leaveCount: s.leaveCount,
+        lateCount: s.lateCount,
+        leaveCount: s.leaveCount || 0,
         recentHistory: s.recentHistory,
       };
     });
@@ -92,7 +97,8 @@ export default function AttendanceClient({
       classId: selectedClassId,
       date,
       status: r.status,
-      remarks: r.remarks ? `${r.remarks} (${session})` : session,
+      session,
+      remarks: r.remarks,
     }));
 
     const res = await adminBulkAttendance(payload);
