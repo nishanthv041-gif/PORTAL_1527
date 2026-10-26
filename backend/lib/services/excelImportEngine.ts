@@ -1004,8 +1004,12 @@ export async function validateAndCorrelateBatch(
         // DB conflict check
         if (existingUsersByEmail.has(email)) {
           const existing = existingUsersByEmail.get(email);
-          fieldErrors.email = `Email '${email}' already exists in database (${existing?.role} account).`;
-          conflictWarnings.push(`Account with email '${email}' already exists in database.`);
+          if (existing?.role === "TEACHER") {
+            row.isExistingTeacher = true;
+          } else {
+            fieldErrors.email = `Email '${email}' already exists in database (${existing?.role} account).`;
+            conflictWarnings.push(`Account with email '${email}' already exists in database as ${existing?.role}.`);
+          }
         }
       }
 
@@ -1216,6 +1220,12 @@ export async function executeImportTransaction(
 
   result.batchId = batch.id;
 
+  // Pre-fetch classes once outside row loop to avoid duplicate queries inside transactions
+  const allDbClasses = await prisma.class.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true, section: true }
+  });
+
   // Execute row imports in database transaction
   try {
     for (const row of rowsToImport) {
@@ -1245,12 +1255,22 @@ export async function executeImportTransaction(
             parentAddress
           } = row;
 
-          // Wrap single student+parent pair in atomic transaction
+          // Compute hashed password and string values outside database transaction
+          const hashedPass = await hash(String(parentPassword || "Parent@123"), 10);
+          const rollStr = String(studentRollNo).trim();
+          const admStr = String(admissionNo || `ADM${rollStr}`).trim();
+          const cleanParentEmail = String(parentEmail).trim().toLowerCase();
+          const dobDate = studentDob ? new Date(studentDob) : null;
+          const resType = residenceType === "HOSTEL" ? "HOSTEL" : "DAYSCHOLAR";
+          const studentFullName = `${studentFirstName} ${studentLastName || ""}`.trim();
+          const parentFullName = `${parentFirstName} ${parentLastName || ""}`.trim();
+
+          let accountToPushParent: { role: string; identifier: string; name: string } | null = null;
+          let accountToPushStudent: { role: string; identifier: string; name: string } | null = null;
+
+          // Wrap single student+parent pair in atomic transaction with generous timeout
           await prisma.$transaction(async (tx) => {
             // Check student uniqueness
-            const rollStr = String(studentRollNo).trim();
-            const admStr = String(admissionNo || `ADM${rollStr}`).trim();
-
             const existingStudent = await tx.student.findFirst({
               where: {
                 OR: [
@@ -1265,7 +1285,6 @@ export async function executeImportTransaction(
             }
 
             // Handle parent
-            const cleanParentEmail = String(parentEmail).trim().toLowerCase();
             let parentUser = await tx.user.findUnique({
               where: { email: cleanParentEmail },
               include: { parent: true }
@@ -1275,13 +1294,10 @@ export async function executeImportTransaction(
 
             if (!parentUser) {
               // Create new Parent user account
-              const hashedPass = await hash(String(parentPassword || "Parent@123"), 10);
-              const fullName = `${parentFirstName} ${parentLastName || ""}`.trim();
-
               parentUser = await tx.user.create({
                 data: {
                   email: cleanParentEmail,
-                  name: fullName,
+                  name: parentFullName,
                   password: hashedPass,
                   role: "PARENT",
                   status: "ACTIVE",
@@ -1296,11 +1312,11 @@ export async function executeImportTransaction(
               });
 
               parentId = parentUser.parent!.id;
-              result.createdAccounts.push({
+              accountToPushParent = {
                 role: "PARENT",
                 identifier: cleanParentEmail,
-                name: fullName
-              });
+                name: parentFullName
+              };
             } else {
               if (parentUser.role !== "PARENT") {
                 throw new Error(`User with email '${cleanParentEmail}' exists but has role '${parentUser.role}'.`);
@@ -1320,11 +1336,7 @@ export async function executeImportTransaction(
             }
 
             // Create Student
-            const dobDate = studentDob ? new Date(studentDob) : null;
-            const resType = residenceType === "HOSTEL" ? "HOSTEL" : "DAYSCHOLAR";
-            const studentFullName = `${studentFirstName} ${studentLastName || ""}`.trim();
-
-            const createdStudent = await tx.student.create({
+            await tx.student.create({
               data: {
                 firstName: String(studentFirstName).trim(),
                 lastName: String(studentLastName || ".").trim(),
@@ -1343,14 +1355,24 @@ export async function executeImportTransaction(
               }
             });
 
-            result.createdAccounts.push({
+            accountToPushStudent = {
               role: "STUDENT",
               identifier: rollStr,
               name: studentFullName
-            });
-
-            result.importedCount++;
+            };
+          }, {
+            maxWait: 15000,
+            timeout: 30000
           });
+
+          // Only record success after database transaction successfully commits
+          if (accountToPushParent) {
+            result.createdAccounts.push(accountToPushParent);
+          }
+          if (accountToPushStudent) {
+            result.createdAccounts.push(accountToPushStudent);
+            result.importedCount++;
+          }
 
         } else if (type === "TEACHER") {
           // TEACHER IMPORT
@@ -1367,80 +1389,96 @@ export async function executeImportTransaction(
             classTeacherRaw
           } = row;
 
+          const cleanEmail = String(email).trim().toLowerCase();
+          const cleanGoogleEmail = googleEmail 
+            ? String(googleEmail).trim().toLowerCase() 
+            : (cleanEmail.endsWith("@gmail.com") || cleanEmail.endsWith("@googlemail.com") ? cleanEmail : null);
+
+          // Compute password hash and class target outside database transaction
+          const hashedPass = await hash(String(password || "Teacher@123").trim(), 10);
+          const teacherFullName = `${firstName} ${lastName || ""}`.trim();
+          const joinDate = joiningDate ? new Date(joiningDate) : new Date();
+
+          let targetClassId = classTeacherClassId;
+          if (!targetClassId && classTeacherRaw) {
+            const resolved = resolveClass(classTeacherRaw, allDbClasses);
+            if (resolved) targetClassId = resolved.id;
+          }
+
+          const rawSubjects = row.subjects;
+          let accountToPushTeacher: { role: string; identifier: string; name: string } | null = null;
+
           await prisma.$transaction(async (tx) => {
-            const cleanEmail = String(email).trim().toLowerCase();
             const existing = await tx.user.findUnique({
-              where: { email: cleanEmail }
-            });
-
-            if (existing) {
-              throw new Error(`Email '${cleanEmail}' is already registered in the system.`);
-            }
-
-            const cleanGoogleEmail = googleEmail 
-              ? String(googleEmail).trim().toLowerCase() 
-              : (cleanEmail.endsWith("@gmail.com") || cleanEmail.endsWith("@googlemail.com") ? cleanEmail : null);
-
-            const hashedPass = await hash(String(password || "Teacher@123").trim(), 10);
-            const teacherFullName = `${firstName} ${lastName || ""}`.trim();
-            const joinDate = joiningDate ? new Date(joiningDate) : new Date();
-
-            const rawSubjects = row.subjects;
-            let matchedSubjectIds: string[] = [];
-            if (rawSubjects) {
-              const tokens = String(rawSubjects)
-                .split(',')
-                .map(s => s.trim().toLowerCase())
-                .filter(Boolean);
-              if (tokens.length > 0) {
-                const dbSubjects = await tx.subject.findMany({
-                  select: { id: true, name: true, code: true }
-                });
-                matchedSubjectIds = dbSubjects
-                  .filter(s => tokens.includes(s.name.toLowerCase()) || tokens.includes(s.code.toLowerCase()))
-                  .map(s => s.id);
-              }
-            }
-
-            const createdUser = await tx.user.create({
-              data: {
-                email: cleanEmail,
-                name: teacherFullName,
-                password: hashedPass,
-                role: "TEACHER",
-                status: "ACTIVE",
-                googleEmail: cleanGoogleEmail,
-                googleEmailVerified: Boolean(cleanGoogleEmail),
-                teacher: {
-                  create: {
-                    phone: phone ? String(phone).trim() : null,
-                    qualification: qualification ? String(qualification).trim() : null,
-                    joinDate,
-                    isActive: true,
-                    ...(matchedSubjectIds.length > 0 ? {
-                      subjects: {
-                        connect: matchedSubjectIds.map(id => ({ id }))
-                      }
-                    } : {})
-                  }
-                }
-              },
+              where: { email: cleanEmail },
               include: { teacher: true }
             });
 
-            const teacherId = createdUser.teacher?.id;
+            let teacherId: string;
 
-            // Handle Class Teacher Assignment
-            let targetClassId = classTeacherClassId;
-            if (!targetClassId && classTeacherRaw) {
-              const allDbClasses = await tx.class.findMany({
-                where: { isActive: true },
-                select: { id: true, name: true, section: true }
+            if (existing) {
+              if (existing.role !== "TEACHER") {
+                throw new Error(`Email '${cleanEmail}' is already registered in the system as a ${existing.role} account.`);
+              }
+
+              // Existing teacher account - update profile idempotently
+              const existingTeacher = existing.teacher || await tx.teacher.findUnique({ where: { userId: existing.id } });
+              if (!existingTeacher) {
+                const createdTeacher = await tx.teacher.create({
+                  data: {
+                    userId: existing.id,
+                    phone: phone ? String(phone).trim() : null,
+                    qualification: qualification ? String(qualification).trim() : null,
+                    joinDate,
+                    isActive: true
+                  }
+                });
+                teacherId = createdTeacher.id;
+              } else {
+                teacherId = existingTeacher.id;
+                await tx.teacher.update({
+                  where: { id: teacherId },
+                  data: {
+                    ...(phone ? { phone: String(phone).trim() } : {}),
+                    ...(qualification ? { qualification: String(qualification).trim() } : {}),
+                    isActive: true
+                  }
+                });
+              }
+
+              await tx.user.update({
+                where: { id: existing.id },
+                data: {
+                  name: teacherFullName,
+                  ...(cleanGoogleEmail ? { googleEmail: cleanGoogleEmail, googleEmailVerified: true } : {})
+                }
               });
-              const resolved = resolveClass(classTeacherRaw, allDbClasses);
-              if (resolved) targetClassId = resolved.id;
+            } else {
+              // Create new teacher
+              const createdUser = await tx.user.create({
+                data: {
+                  email: cleanEmail,
+                  name: teacherFullName,
+                  password: hashedPass,
+                  role: "TEACHER",
+                  status: "ACTIVE",
+                  googleEmail: cleanGoogleEmail,
+                  googleEmailVerified: Boolean(cleanGoogleEmail),
+                  teacher: {
+                    create: {
+                      phone: phone ? String(phone).trim() : null,
+                      qualification: qualification ? String(qualification).trim() : null,
+                      joinDate,
+                      isActive: true
+                    }
+                  }
+                },
+                include: { teacher: true }
+              });
+              teacherId = createdUser.teacher!.id;
             }
 
+            // Handle Class Teacher Assignment
             if (targetClassId && teacherId) {
               // Ensure this teacher is not left as classTeacher on an older class
               await tx.class.updateMany({
@@ -1493,49 +1531,77 @@ export async function executeImportTransaction(
               }
             }
 
-            result.createdAccounts.push({
+            accountToPushTeacher = {
               role: "TEACHER",
               identifier: cleanEmail,
               name: teacherFullName
-            });
-
-            result.importedCount++;
+            };
+          }, {
+            maxWait: 15000,
+            timeout: 30000
           });
+
+          // Only record success after database transaction successfully commits
+          if (accountToPushTeacher) {
+            result.createdAccounts.push(accountToPushTeacher);
+            result.importedCount++;
+          }
+
         } else {
           // ADMIN IMPORT
           const { name, email } = row;
+          const cleanEmail = String(email).trim().toLowerCase();
+          const adminFullName = String(name).trim();
+
+          let accountToPushAdmin: { role: string; identifier: string; name: string } | null = null;
 
           await prisma.$transaction(async (tx) => {
-            const cleanEmail = String(email).trim().toLowerCase();
             const existing = await tx.user.findUnique({
               where: { email: cleanEmail }
             });
 
             if (existing) {
-              throw new Error(`Email '${cleanEmail}' is already registered in the system (${existing.role} account).`);
+              if (existing.role === "ADMIN") {
+                await tx.user.update({
+                  where: { id: existing.id },
+                  data: {
+                    name: adminFullName,
+                    status: "ACTIVE",
+                    googleEmail: cleanEmail,
+                    googleEmailVerified: true
+                  }
+                });
+              } else {
+                throw new Error(`Email '${cleanEmail}' is already registered in the system (${existing.role} account).`);
+              }
+            } else {
+              await tx.user.create({
+                data: {
+                  email: cleanEmail,
+                  name: adminFullName,
+                  role: "ADMIN",
+                  status: "ACTIVE",
+                  googleEmail: cleanEmail,
+                  googleEmailVerified: true
+                }
+              });
             }
 
-            const adminFullName = String(name).trim();
-
-            await tx.user.create({
-              data: {
-                email: cleanEmail,
-                name: adminFullName,
-                role: "ADMIN",
-                status: "ACTIVE",
-                googleEmail: cleanEmail,
-                googleEmailVerified: true
-              }
-            });
-
-            result.createdAccounts.push({
+            accountToPushAdmin = {
               role: "ADMIN",
               identifier: cleanEmail,
               name: adminFullName
-            });
-
-            result.importedCount++;
+            };
+          }, {
+            maxWait: 15000,
+            timeout: 30000
           });
+
+          // Only record success after database transaction successfully commits
+          if (accountToPushAdmin) {
+            result.createdAccounts.push(accountToPushAdmin);
+            result.importedCount++;
+          }
         }
       } catch (rowErr) {
         result.failedCount++;

@@ -587,20 +587,20 @@ export default function BulkUpload({
                     width: "48px",
                     height: "48px",
                     borderRadius: "50%",
-                    backgroundColor: commitResult.success ? "rgba(16, 185, 129, 0.2)" : "rgba(245, 158, 11, 0.2)",
-                    color: commitResult.success ? "#10b981" : "#f59e0b",
+                    backgroundColor: commitResult.success ? "rgba(16, 185, 129, 0.2)" : (commitResult.importedCount > 0 ? "rgba(245, 158, 11, 0.2)" : "rgba(239, 68, 68, 0.2)"),
+                    color: commitResult.success ? "#10b981" : (commitResult.importedCount > 0 ? "#f59e0b" : "#ef4444"),
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center"
                   }}>
-                    <CheckCircle2 size={28} />
+                    {commitResult.success ? <CheckCircle2 size={28} /> : <AlertTriangle size={28} />}
                   </div>
                   <div>
                     <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "var(--foreground)" }}>
-                      {commitResult.success ? "Import Completed Successfully!" : "Import Completed with Partial Results"}
+                      {commitResult.success ? "Import Completed Successfully!" : (commitResult.importedCount > 0 ? "Import Completed with Partial Results" : "Import Failed")}
                     </h3>
                     <p style={{ margin: "0.25rem 0 0", fontSize: "0.875rem", color: "var(--text-secondary)" }}>
-                      Batch ID: <code>{commitResult.batchId}</code> • Database transaction successfully committed.
+                      Batch ID: <code>{commitResult.batchId}</code> • {commitResult.success ? "Database transaction successfully committed." : (commitResult.importedCount > 0 ? "Some rows were imported, but others encountered issues." : "Import failed during execution.")}
                     </p>
                   </div>
                 </div>

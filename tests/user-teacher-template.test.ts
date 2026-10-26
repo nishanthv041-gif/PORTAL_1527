@@ -44,7 +44,49 @@ async function testUserTemplate() {
     console.error("\n>>> FAILED: Check errors above <<<");
     process.exit(1);
   }
+
+  console.log("\n--- Executing Import Transaction for all 3 teachers ---");
+  const importRows = result.rows.map(r => r.data);
+  const commitRes = await executeImportTransaction(
+    "TEACHER",
+    importRows,
+    { email: "admin@test.internal" },
+    "Teachers.xlsx",
+    buf.length
+  );
+
+  console.log("commitRes:", {
+    success: commitRes.success,
+    importedCount: commitRes.importedCount,
+    failedCount: commitRes.failedCount,
+    skippedCount: commitRes.skippedCount,
+    errors: commitRes.errors,
+    createdAccounts: commitRes.createdAccounts
+  });
+
+  if (!commitRes.success || commitRes.importedCount !== 3 || commitRes.failedCount !== 0) {
+    console.error("\n>>> TRANSACTION FAILED! <<<");
+    process.exit(1);
+  }
+
+  // Verify all 3 teachers are in the database
+  const emails = ["kgvivin@gmail.com", "mounithavenkatesan@gmail.com", "deepikaviswanathan2007@gmail.com"];
+  const dbUsers = await prisma.user.findMany({
+    where: { email: { in: emails } },
+    include: { teacher: true }
+  });
+
+  console.log("\nFound in DB:", dbUsers.map(u => ({ email: u.email, name: u.name, role: u.role, teacherId: u.teacher?.id })));
+
+  if (dbUsers.length === 3 && dbUsers.every(u => u.role === "TEACHER" && !!u.teacher)) {
+    console.log("\n>>> VERIFIED: All 3 teachers exist in DB with TEACHER role and valid teacher profile! <<<");
+  } else {
+    console.error("\n>>> DATABASE VERIFICATION FAILED! <<<");
+    process.exit(1);
+  }
 }
+
+import { executeImportTransaction } from "../backend/lib/services/excelImportEngine";
 
 import { prisma } from "../backend/db/prisma";
 
