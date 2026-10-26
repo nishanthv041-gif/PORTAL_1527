@@ -79,6 +79,61 @@ export function getAcademicYearRange(refDate: Date = new Date()): { start: Date;
 }
 
 /**
+ * Resolves the effective academic year range for attendance counting.
+ * If an active batch has an explicit startDate, it uses that exact startDate!
+ * That way, day-to-day working day counting for attendance only begins from the batch starting date!
+ */
+export async function getEffectiveAcademicYearRange(
+  refDate: Date = new Date(),
+  classId?: string | null
+): Promise<{ start: Date; end: Date }> {
+  try {
+    let batch: { startDate: Date | null; endDate: Date | null } | null = null;
+
+    if (classId) {
+      const cls = await prisma.class.findUnique({
+        where: { id: classId },
+        select: {
+          batch: {
+            select: { startDate: true, endDate: true, isCurrent: true }
+          }
+        }
+      });
+      if (cls?.batch?.startDate) {
+        batch = cls.batch;
+      }
+    }
+
+    if (!batch) {
+      batch = await prisma.academicBatch.findFirst({
+        where: { isCurrent: true },
+        select: { startDate: true, endDate: true, isCurrent: true }
+      });
+    }
+
+    if (batch?.startDate) {
+      const start = new Date(batch.startDate);
+      start.setHours(0, 0, 0, 0);
+
+      let end: Date;
+      if (batch.endDate) {
+        end = new Date(batch.endDate);
+        end.setHours(23, 59, 59, 999);
+      } else {
+        end = new Date(start.getFullYear() + 1, start.getMonth(), start.getDate(), 23, 59, 59, 999);
+      }
+
+      return { start, end };
+    }
+  } catch (error) {
+    console.error("Error finding effective academic year range:", error);
+  }
+
+  // Fallback to default calendar cycle
+  return getAcademicYearRange(refDate);
+}
+
+/**
  * Default rule if no explicit override exists:
  * - Sunday (0): LEAVE_DAY
  * - Monday to Friday (1-5): WORKING_DAY
@@ -173,6 +228,11 @@ export async function countSchoolWorkingDays(
   const end = new Date(endDate);
   end.setHours(23, 59, 59, 999);
 
+  // If start date is after end date (e.g. today is before batch start date), 0 working days
+  if (cursor > end) {
+    return 0;
+  }
+
   while (cursor <= end) {
     const key = toDateString(cursor);
     const existing = scheduleMap.get(key);
@@ -223,14 +283,15 @@ export function calculateAttendancePercentage(
 
 /**
  * Standard Calculation for Student Attendance:
- * Evaluates present sessions/days against official school working days for their class.
+ * Evaluates present sessions/days against official school working days for their class
+ * starting from the active batch's startDate.
  */
 export async function getStudentStandardAttendanceStats(
   studentId: string,
   classId?: string | null,
   referenceDate: Date = new Date()
 ) {
-  const { start: academicStart } = getAcademicYearRange(referenceDate);
+  const { start: academicStart } = await getEffectiveAcademicYearRange(referenceDate, classId);
 
   // 1. Fetch attendance records for this student in current academic period
   const records = await prisma.attendance.findMany({
@@ -268,13 +329,14 @@ export async function getStudentStandardAttendanceStats(
 
 /**
  * Standard Calculation for Teacher Attendance:
- * Evaluates present days against official school working days.
+ * Evaluates present days against official school working days
+ * starting from the active batch's startDate.
  */
 export async function getTeacherStandardAttendanceStats(
   teacherId: string,
   referenceDate: Date = new Date()
 ) {
-  const { start: academicStart } = getAcademicYearRange(referenceDate);
+  const { start: academicStart } = await getEffectiveAcademicYearRange(referenceDate);
 
   const records = await prisma.teacherAttendance.findMany({
     where: {

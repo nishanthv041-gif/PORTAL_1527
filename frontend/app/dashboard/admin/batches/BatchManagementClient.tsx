@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { 
   Layers, Plus, ArrowRight, Sparkles, GraduationCap, Users, 
   Calendar, Check, AlertCircle, RefreshCw, Star, ShieldCheck, 
-  Clock, BookOpen, X, Loader2, Edit3, Trash2
+  Clock, BookOpen, X, Loader2, Edit3, Trash2, History
 } from "lucide-react";
 import PromotionWizardModal from "./PromotionWizardModal";
 import GraduatedStudentsTable from "./GraduatedStudentsTable";
@@ -149,6 +149,7 @@ export default function BatchManagementClient({
   const [feedbackSuccess, setFeedbackSuccess] = useState<string | null>(null);
 
   const currentBatch = initialBatches.find(b => b.isCurrent) || initialCurrentBatch || initialBatches[0] || null;
+  const previousBatches = initialBatches.filter(b => !b.isCurrent);
 
   // Total metrics
   const totalStudentsInCurrentBatch = (currentBatch?.classes || []).reduce((acc, c) => acc + c._count.students, 0);
@@ -721,6 +722,171 @@ export default function BatchManagementClient({
               })}
             </div>
           )}
+
+          {/* ======================================================== */}
+          {/* PREVIOUS BATCHES & ACADEMIC YEARS DELETION & MANAGEMENT */}
+          {/* ======================================================== */}
+          <div style={{
+            marginTop: "0.5rem",
+            padding: "1.5rem",
+            borderRadius: "16px",
+            border: "1px solid var(--border-color)",
+            backgroundColor: "var(--card-bg, #ffffff)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1.25rem"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <div style={{
+                  padding: "0.5rem",
+                  borderRadius: "10px",
+                  backgroundColor: "rgba(99, 102, 241, 0.1)",
+                  color: "var(--primary, #6366f1)"
+                }}>
+                  <History size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "var(--foreground)" }}>
+                    Previous Batches &amp; Academic Years
+                  </h3>
+                  <p style={{ margin: 0, fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
+                    Manage or permanently delete past batches and academic years. Unlinks assigned classes while protecting enrolled student records.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{
+                fontSize: "0.8125rem",
+                fontWeight: 700,
+                padding: "0.35rem 0.75rem",
+                borderRadius: "20px",
+                backgroundColor: previousBatches.length > 0 ? "rgba(239, 68, 68, 0.1)" : "rgba(107, 114, 128, 0.1)",
+                color: previousBatches.length > 0 ? "#ef4444" : "var(--text-secondary)"
+              }}>
+                {previousBatches.length} Previous Batch{previousBatches.length === 1 ? "" : "es"}
+              </div>
+            </div>
+
+            {previousBatches.length === 0 ? (
+              <div style={{
+                textAlign: "center",
+                padding: "2rem",
+                borderRadius: "12px",
+                border: "1px dashed var(--border-color)",
+                color: "var(--text-secondary)",
+                fontSize: "0.875rem"
+              }}>
+                No previous batches found. When new batches are created or rotated, older academic sessions will appear here with deletion options.
+              </div>
+            ) : (
+              <div style={{ width: "100%", overflowX: "auto" }}>
+                <table style={{ width: "100%", minWidth: "650px", borderCollapse: "collapse", fontSize: "0.875rem" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid var(--border-color)", textAlign: "left", color: "var(--text-secondary)", fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Batch Name</th>
+                      <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Academic Year</th>
+                      <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Calendar Dates</th>
+                      <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Classes &amp; Students</th>
+                      <th style={{ padding: "0.75rem 1rem", fontWeight: 700, textAlign: "right" }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previousBatches.map((b) => {
+                      const totalStudents = b.classes.reduce((sum, c) => sum + c._count.students, 0);
+                      return (
+                        <tr key={b.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <div style={{ fontWeight: 700, color: "var(--foreground)" }}>{b.name}</div>
+                            <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Status: {b.status}</span>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem", color: "var(--text-secondary)" }}>
+                            {b.academicYear || "—"}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            {b.startDate || b.endDate ? (
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8125rem" }}>
+                                <Calendar size={13} color="var(--primary)" />
+                                <span>{formatDateDisplay(b.startDate) || "TBD"} – {formatDateDisplay(b.endDate) || "TBD"}</span>
+                              </div>
+                            ) : (
+                              <span style={{ fontStyle: "italic", opacity: 0.6 }}>Not set</span>
+                            )}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <div>{b.classes.length} class{b.classes.length === 1 ? "" : "es"}</div>
+                            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>{totalStudents} student{totalStudents === 1 ? "" : "s"}</div>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem", textAlign: "right" }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "0.5rem" }}>
+                              <button
+                                type="button"
+                                onClick={() => handleSetCurrent(b.id, b.name)}
+                                disabled={isPending}
+                                style={{
+                                  padding: "0.4rem 0.75rem",
+                                  borderRadius: "6px",
+                                  border: "1px solid var(--border-color)",
+                                  backgroundColor: "transparent",
+                                  color: "var(--foreground)",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                Restore Active
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditDates(b)}
+                                disabled={isPending}
+                                style={{
+                                  padding: "0.4rem 0.75rem",
+                                  borderRadius: "6px",
+                                  border: "1px solid var(--border-color)",
+                                  backgroundColor: "transparent",
+                                  color: "var(--foreground)",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.3rem"
+                                }}
+                              >
+                                <Edit3 size={13} /> Dates
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeletingBatch(b)}
+                                disabled={isPending}
+                                style={{
+                                  padding: "0.4rem 0.85rem",
+                                  borderRadius: "6px",
+                                  border: "1px solid rgba(239, 68, 68, 0.4)",
+                                  backgroundColor: "rgba(239, 68, 68, 0.1)",
+                                  color: "#ef4444",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.35rem"
+                                }}
+                                title="Permanently delete this previous batch and its academic year"
+                              >
+                                <Trash2 size={13} /> Delete Batch &amp; Year
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1084,6 +1250,9 @@ export default function BatchManagementClient({
                       fontSize: "0.875rem"
                     }}
                   />
+                  <span style={{ display: "block", fontSize: "0.725rem", color: "var(--text-secondary)", marginTop: "0.3rem", lineHeight: 1.35 }}>
+                    📅 <strong>Calendar &amp; Attendance:</strong> Connects to School Calendar and starts day-to-day working day attendance count from this date.
+                  </span>
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
@@ -1277,6 +1446,9 @@ export default function BatchManagementClient({
                       fontSize: "0.875rem"
                     }}
                   />
+                  <span style={{ display: "block", fontSize: "0.725rem", color: "var(--text-secondary)", marginTop: "0.3rem", lineHeight: 1.35 }}>
+                    📅 <strong>Calendar &amp; Attendance:</strong> Syncs with School Calendar and calculates attendance working days starting from this date.
+                  </span>
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
@@ -1383,7 +1555,7 @@ export default function BatchManagementClient({
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <Trash2 size={20} color="#ef4444" />
                 <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700, color: "#ef4444" }}>
-                  Delete Batch {deletingBatch.name}
+                  Delete Batch &amp; Academic Year ({deletingBatch.name})
                 </h3>
               </div>
               <button
@@ -1397,7 +1569,7 @@ export default function BatchManagementClient({
 
             <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
               <p style={{ margin: 0, fontSize: "0.9375rem", color: "var(--foreground)", lineHeight: 1.5 }}>
-                Are you sure you want to permanently delete <strong>Batch &apos;{deletingBatch.name}&apos;</strong>?
+                Are you sure you want to permanently delete <strong>Batch &apos;{deletingBatch.name}&apos;</strong> and its academic year data?
               </p>
               
               <div style={{
@@ -1468,7 +1640,7 @@ export default function BatchManagementClient({
                     gap: "0.4rem"
                   }}
                 >
-                  {isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} Delete Batch
+                  {isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} Delete Batch &amp; Year
                 </button>
               </div>
             </div>

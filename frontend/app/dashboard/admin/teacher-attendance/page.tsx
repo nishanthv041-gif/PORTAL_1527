@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import TeacherAttendanceClient, { TeacherRecordItem } from "./TeacherAttendanceClient";
 import {
   getAcademicYearRange,
+  getEffectiveAcademicYearRange,
   countSchoolWorkingDays,
   calculateAttendancePercentage,
 } from "@/backend/lib/services/attendanceCalculation";
@@ -23,8 +24,8 @@ export default async function AdminTeacherAttendancePage({
   const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
   const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
 
-  // Determine official academic working days up to current date
-  const { start: academicStart } = getAcademicYearRange(startOfDay);
+  // Determine official academic working days up to current date (starting from batch start date)
+  const { start: academicStart } = await getEffectiveAcademicYearRange(startOfDay);
   const officialWorkingDaysPromise = countSchoolWorkingDays(academicStart, endOfDay);
 
   // Fetch all active teachers and today's attendance records

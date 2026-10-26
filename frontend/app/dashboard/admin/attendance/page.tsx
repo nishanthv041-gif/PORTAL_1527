@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import AttendanceClient, { AdminStudentItem } from "./AttendanceClient";
 import {
   getAcademicYearRange,
+  getEffectiveAcademicYearRange,
   countSchoolWorkingDays,
   calculateAttendancePercentage,
 } from "@/backend/lib/services/attendanceCalculation";
@@ -32,8 +33,8 @@ export default async function AdminAttendancePage({
 
   const selectedClassId = resolvedSearchParams?.classId || (classes.length > 0 ? classes[0].id : "");
 
-  // Determine official school working days up to current date for the selected class
-  const { start: academicStart } = getAcademicYearRange(startOfDay);
+  // Determine official school working days up to current date for the selected class (starting from batch start date)
+  const { start: academicStart } = await getEffectiveAcademicYearRange(startOfDay, selectedClassId);
   const officialWorkingDays = await countSchoolWorkingDays(academicStart, endOfDay, selectedClassId);
 
   let serializedStudents: AdminStudentItem[] = [];

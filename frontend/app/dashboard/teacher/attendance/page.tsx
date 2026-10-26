@@ -6,6 +6,7 @@ import AttendanceForm, { TeacherStudentItem } from "./AttendanceForm";
 import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
 import {
   getAcademicYearRange,
+  getEffectiveAcademicYearRange,
   countSchoolWorkingDays,
   calculateAttendancePercentage,
 } from "@/backend/lib/services/attendanceCalculation";
@@ -66,8 +67,8 @@ export default async function TeacherAttendancePage({
 
   const myClass = teacher.classTeacherOf;
 
-  // Determine official school working days up to current date for this specific class
-  const { start: academicStart } = getAcademicYearRange(startOfDay);
+  // Determine official school working days up to current date for this specific class (starting from batch start date)
+  const { start: academicStart } = await getEffectiveAcademicYearRange(startOfDay, myClass.id);
   const officialWorkingDays = await countSchoolWorkingDays(academicStart, endOfDay, myClass.id);
 
   const serializedStudents: TeacherStudentItem[] = myClass.students.map((s) => {

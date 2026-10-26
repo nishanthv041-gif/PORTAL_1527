@@ -1,5 +1,6 @@
 import {
   getAcademicYearRange,
+  getEffectiveAcademicYearRange,
   countSchoolWorkingDays,
   getSchoolScheduleMap,
   toDateString,
@@ -13,14 +14,15 @@ export interface SchoolCalendarStats {
 
 /**
  * Calculates total school active (working) days and total leave/holiday days
- * based on the School Calendar (SchoolDaySchedule overrides + CalendarEvent holidays).
+ * based on the School Calendar (SchoolDaySchedule overrides + CalendarEvent holidays),
+ * starting strictly from the active batch's configured start date.
  */
 export async function getSchoolCalendarStats(
   referenceDate: Date = new Date(),
   classId?: string | null
 ): Promise<SchoolCalendarStats> {
   try {
-    const { start: academicStart, end: academicEnd } = getAcademicYearRange(referenceDate);
+    const { start: academicStart, end: academicEnd } = await getEffectiveAcademicYearRange(referenceDate, classId);
 
     // Get schedule map for the entire academic year
     const scheduleMap = await getSchoolScheduleMap(academicStart, academicEnd);

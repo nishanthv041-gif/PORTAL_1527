@@ -12,6 +12,8 @@ import {
   revalidateExcelRowsAction, 
   commitExcelImportAction, 
   getImportHistoryAction,
+  clearImportHistoryAction,
+  deleteImportBatchAction,
   generateErrorReportAction
 } from "@/backend/api/actions/dashboard/admin/excel-import/actions";
 import { RowValidationResult, ExcelScanResult, ImportCommitResult } from "@/backend/lib/services/excelImportEngine";
@@ -73,6 +75,8 @@ export default function BulkUpload({
   // History state
   const [history, setHistory] = useState<ImportHistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [clearingHistory, setClearingHistory] = useState(false);
+  const [showClearHistoryModal, setShowClearHistoryModal] = useState(false);
 
   // Available classes (combines props and those returned from scan)
   const activeClasses = (scanResult?.availableClasses && scanResult.availableClasses.length > 0)
@@ -89,7 +93,7 @@ export default function BulkUpload({
   const fetchHistory = async () => {
     setLoadingHistory(true);
     try {
-      const res = await getImportHistoryAction(25);
+      const res = await getImportHistoryAction(50);
       if (res.success && res.history) {
         setHistory(res.history as unknown as ImportHistoryItem[]);
       }
@@ -97,6 +101,37 @@ export default function BulkUpload({
       // Ignore
     } finally {
       setLoadingHistory(false);
+    }
+  };
+
+  const handleClearAllHistory = async () => {
+    setClearingHistory(true);
+    try {
+      const res = await clearImportHistoryAction();
+      if (res.success) {
+        setHistory([]);
+        setShowClearHistoryModal(false);
+      } else {
+        alert(res.error || "Failed to clear import history.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Failed to clear import history.");
+    } finally {
+      setClearingHistory(false);
+    }
+  };
+
+  const handleDeleteSingleHistory = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this import audit entry?")) return;
+    try {
+      const res = await deleteImportBatchAction(id);
+      if (res.success) {
+        setHistory(prev => prev.filter(h => h.id !== id));
+      } else {
+        alert(res.error || "Failed to delete record.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Failed to delete record.");
     }
   };
 
@@ -1501,31 +1536,55 @@ export default function BulkUpload({
         {/* ======================================================== */}
         {activeTab === "HISTORY" && (
           <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700 }}>Past Import Batches & Audit Trail</h3>
                 <p style={{ margin: "0.25rem 0 0", fontSize: "0.875rem", color: "var(--text-secondary)" }}>
                   Review historical Excel uploads, imported account volumes, and download non-sensitive error summaries.
                 </p>
               </div>
-              <button
-                onClick={fetchHistory}
-                disabled={loadingHistory}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.4rem",
-                  padding: "0.5rem 0.875rem",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color)",
-                  background: "transparent",
-                  fontSize: "0.8125rem",
-                  fontWeight: 600,
-                  cursor: "pointer"
-                }}
-              >
-                <RefreshCw size={14} className={loadingHistory ? "animate-spin" : ""} /> Refresh
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <button
+                  onClick={fetchHistory}
+                  disabled={loadingHistory || clearingHistory}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    padding: "0.5rem 0.875rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color)",
+                    background: "transparent",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    cursor: "pointer"
+                  }}
+                >
+                  <RefreshCw size={14} className={loadingHistory ? "animate-spin" : ""} /> Refresh
+                </button>
+                {history.length > 0 && (
+                  <button
+                    onClick={() => setShowClearHistoryModal(true)}
+                    disabled={loadingHistory || clearingHistory}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      padding: "0.5rem 0.875rem",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(239, 68, 68, 0.3)",
+                      background: "rgba(239, 68, 68, 0.08)",
+                      color: "#ef4444",
+                      fontSize: "0.8125rem",
+                      fontWeight: 700,
+                      cursor: "pointer"
+                    }}
+                    title="Erase all stored import history"
+                  >
+                    <Trash2 size={14} /> Clear All
+                  </button>
+                )}
+              </div>
             </div>
 
             {loadingHistory ? (
@@ -1557,6 +1616,7 @@ export default function BulkUpload({
                       <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Imported</th>
                       <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Failed</th>
                       <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Status</th>
+                      <th style={{ padding: "0.75rem 1rem", fontWeight: 600, color: "var(--text-secondary)", textAlign: "right" }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1593,10 +1653,123 @@ export default function BulkUpload({
                             {h.status}
                           </span>
                         </td>
+                        <td style={{ padding: "0.75rem 1rem", textAlign: "right" }}>
+                          <button
+                            onClick={() => handleDeleteSingleHistory(h.id)}
+                            style={{
+                              padding: "0.3rem 0.5rem",
+                              borderRadius: "6px",
+                              border: "1px solid rgba(239, 68, 68, 0.2)",
+                              background: "transparent",
+                              color: "#ef4444",
+                              fontSize: "0.75rem",
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.25rem"
+                            }}
+                            title="Delete this record"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Clear All Confirmation Modal */}
+            {showClearHistoryModal && (
+              <div style={{
+                position: "fixed",
+                inset: 0,
+                backgroundColor: "rgba(0, 0, 0, 0.6)",
+                backdropFilter: "blur(4px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 99999,
+                padding: "1rem"
+              }}>
+                <div style={{
+                  backgroundColor: "var(--card-bg, #ffffff)",
+                  borderRadius: "16px",
+                  border: "1px solid var(--border-color, #e5e7eb)",
+                  width: "100%",
+                  maxWidth: "480px",
+                  padding: "1.75rem",
+                  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)"
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+                    <div style={{
+                      width: "42px",
+                      height: "42px",
+                      borderRadius: "50%",
+                      backgroundColor: "rgba(239, 68, 68, 0.1)",
+                      color: "#ef4444",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}>
+                      <Trash2 size={22} />
+                    </div>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700, color: "var(--foreground)" }}>
+                        Clear All Import History
+                      </h3>
+                      <p style={{ margin: 0, fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
+                        Permanently erase current stored audit records
+                      </p>
+                    </div>
+                  </div>
+
+                  <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: "1.5rem" }}>
+                    Are you sure you want to erase all <strong>{history.length}</strong> stored import history and audit entries? This action will permanently remove these logs and cannot be undone.
+                  </p>
+
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "0.75rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowClearHistoryModal(false)}
+                      disabled={clearingHistory}
+                      style={{
+                        padding: "0.6rem 1.15rem",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border-color)",
+                        background: "transparent",
+                        color: "var(--foreground)",
+                        fontSize: "0.875rem",
+                        fontWeight: 600,
+                        cursor: "pointer"
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearAllHistory}
+                      disabled={clearingHistory}
+                      style={{
+                        padding: "0.6rem 1.15rem",
+                        borderRadius: "8px",
+                        border: "none",
+                        backgroundColor: "#ef4444",
+                        color: "#ffffff",
+                        fontSize: "0.875rem",
+                        fontWeight: 700,
+                        cursor: clearingHistory ? "not-allowed" : "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem"
+                      }}
+                    >
+                      {clearingHistory ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                      {clearingHistory ? "Erasing..." : "Erase All History"}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

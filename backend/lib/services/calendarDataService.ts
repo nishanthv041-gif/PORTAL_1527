@@ -4,6 +4,7 @@ import {
   getDefaultDayStatus,
   toDateString,
   getAcademicYearRange,
+  getEffectiveAcademicYearRange,
   countSchoolWorkingDays,
 } from "./attendanceCalculation";
 
@@ -241,7 +242,7 @@ export async function getMonthCalendarData(
   }
 
   // 4. Academic stats up to today
-  const { start: academicStart } = getAcademicYearRange(now);
+  const { start: academicStart } = await getEffectiveAcademicYearRange(now);
   const academicWorkingDaysToDate = await countSchoolWorkingDays(academicStart, now);
 
   return {

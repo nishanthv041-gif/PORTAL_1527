@@ -212,3 +212,49 @@ export async function generateErrorReportAction(rows: RowValidationResult[]) {
     };
   }
 }
+
+/**
+ * Erase / clear all stored import history audit batches
+ */
+export async function clearImportHistoryAction() {
+  const auth = await verifyAdminAuth();
+  if (!auth.authorized) {
+    return { success: false, error: auth.error };
+  }
+
+  try {
+    const result = await prisma.importBatch.deleteMany({});
+    revalidatePath("/dashboard/admin/users");
+    revalidatePath("/dashboard/admin/create-roles");
+    return { success: true, count: result.count };
+  } catch (err) {
+    return {
+      success: false,
+      error: `Failed to clear import history: ${err instanceof Error ? err.message : String(err)}`
+    };
+  }
+}
+
+/**
+ * Delete a single import batch record
+ */
+export async function deleteImportBatchAction(batchId: string) {
+  const auth = await verifyAdminAuth();
+  if (!auth.authorized) {
+    return { success: false, error: auth.error };
+  }
+
+  try {
+    await prisma.importBatch.delete({
+      where: { id: batchId }
+    });
+    revalidatePath("/dashboard/admin/users");
+    revalidatePath("/dashboard/admin/create-roles");
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: `Failed to delete import record: ${err instanceof Error ? err.message : String(err)}`
+    };
+  }
+}

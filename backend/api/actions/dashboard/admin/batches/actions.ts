@@ -158,11 +158,116 @@ export async function createBatchAction(formData: FormData) {
       });
     }
 
+    // Connect starting date and ending date to Calendar and working day schedules
+    await syncBatchDatesWithCalendar(created.name, created.academicYear || created.name, created.startDate, created.endDate);
+
     revalidatePath("/dashboard/admin/batches");
     revalidatePath("/dashboard/admin/classes");
+    revalidatePath("/dashboard/admin/calendar");
+    revalidatePath("/dashboard/admin/attendance");
     return { success: true, batch: created };
   } catch (err: any) {
     return { success: false, error: err.message || "Failed to create batch." };
+  }
+}
+
+/**
+ * Synchronize batch starting date and ending date with the school calendar
+ * and working day schedules so day-to-day attendance begins counting on the start date.
+ */
+async function syncBatchDatesWithCalendar(
+  batchName: string,
+  academicYear: string,
+  startDate?: Date | null,
+  endDate?: Date | null
+) {
+  try {
+    if (startDate) {
+      const startTitle = `Academic Session Starts (${batchName})`;
+      const existingStartEvent = await prisma.calendarEvent.findFirst({
+        where: {
+          title: { contains: batchName },
+          description: { contains: "working days begin" }
+        }
+      });
+
+      if (existingStartEvent) {
+        await prisma.calendarEvent.update({
+          where: { id: existingStartEvent.id },
+          data: {
+            title: startTitle,
+            date: startDate,
+            description: `Official school working days begin for academic session ${batchName} (${academicYear}). Attendance counting begins from this date.`,
+            isPublished: true
+          }
+        });
+      } else {
+        await prisma.calendarEvent.create({
+          data: {
+            title: startTitle,
+            type: "OTHER",
+            date: startDate,
+            startTime: "08:30",
+            endTime: "16:00",
+            audience: "ALL",
+            isPublished: true,
+            description: `Official school working days begin for academic session ${batchName} (${academicYear}). Attendance counting begins from this date.`
+          }
+        });
+      }
+
+      // Mark startDate as an official working day in SchoolDaySchedule
+      const existingSchedule = await prisma.schoolDaySchedule.findUnique({
+        where: { date: startDate }
+      });
+      if (!existingSchedule) {
+        await prisma.schoolDaySchedule.create({
+          data: {
+            date: startDate,
+            status: "WORKING_DAY",
+            title: `Academic Session Begins - Batch ${batchName}`,
+            isCustom: true
+          }
+        });
+      }
+    }
+
+    if (endDate) {
+      const endTitle = `Academic Session Conclusion (${batchName})`;
+      const existingEndEvent = await prisma.calendarEvent.findFirst({
+        where: {
+          title: { contains: batchName },
+          description: { contains: "conclusion" }
+        }
+      });
+
+      if (existingEndEvent) {
+        await prisma.calendarEvent.update({
+          where: { id: existingEndEvent.id },
+          data: {
+            title: endTitle,
+            date: endDate,
+            description: `Official conclusion of academic year for batch ${batchName}.`,
+            isPublished: true
+          }
+        });
+      } else {
+        await prisma.calendarEvent.create({
+          data: {
+            title: endTitle,
+            type: "OTHER",
+            date: endDate,
+            startTime: "08:30",
+            endTime: "16:00",
+            audience: "ALL",
+            isPublished: true,
+            description: `Official conclusion of academic year for batch ${batchName}.`
+          }
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Error syncing batch dates with calendar:", err);
   }
 }
 
@@ -413,7 +518,17 @@ export async function updateBatchDatesAction(input: {
       data
     });
 
+    // Sync updated dates to school calendar and attendance working days
+    await syncBatchDatesWithCalendar(
+      updated.name,
+      updated.academicYear || updated.name,
+      updated.startDate,
+      updated.endDate
+    );
+
     revalidatePath("/dashboard/admin/batches");
+    revalidatePath("/dashboard/admin/calendar");
+    revalidatePath("/dashboard/admin/attendance");
     revalidatePath("/dashboard/admin");
     return { success: true, batch: updated };
   } catch (err: any) {
@@ -443,13 +558,20 @@ export async function deleteBatchAction(batchId: string) {
       data: { batchId: null }
     });
 
-    // Remove promotion audits referring to this batch
-    await prisma.promotionAudit.deleteMany({
+    // Safely unlink promotion audits referring to this batch so student records remain intact
+    await prisma.promotionAudit.updateMany({
+      where: { fromBatchId: batchId },
+      data: { fromBatchId: null }
+    });
+    await prisma.promotionAudit.updateMany({
+      where: { toBatchId: batchId },
+      data: { toBatchId: null }
+    });
+
+    // Clean up calendar events created for this batch
+    await prisma.calendarEvent.deleteMany({
       where: {
-        OR: [
-          { fromBatchId: batchId },
-          { toBatchId: batchId }
-        ]
+        title: { contains: batch.name }
       }
     });
 
@@ -474,6 +596,8 @@ export async function deleteBatchAction(batchId: string) {
     revalidatePath("/dashboard/admin/batches");
     revalidatePath("/dashboard/admin/classes");
     revalidatePath("/dashboard/admin/students");
+    revalidatePath("/dashboard/admin/calendar");
+    revalidatePath("/dashboard/admin/attendance");
     revalidatePath("/dashboard/admin");
 
     return { success: true };
