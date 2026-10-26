@@ -34,11 +34,18 @@ export interface TeacherData {
   excelRowNumber: number;
   firstName: string;
   lastName: string;
+  fullName?: string;
   email: string;
+  googleEmail?: string;
   password?: string;
   phone?: string;
   joiningDate?: string;
   qualification: string;
+  gender?: string;
+  subjects?: string;
+  classTeacherRaw?: string;
+  classTeacherClassId?: string;
+  classTeacherClassName?: string;
   [key: string]: unknown;
 }
 
@@ -266,13 +273,42 @@ export function isSampleTemplateRow(type: ImportType, row: Record<string, any>):
 export function resolveClass(rawClass: string | undefined, classes: { id: string; name: string; section: string }[]) {
   if (!rawClass) return null;
   const target = rawClass.trim().toLowerCase();
+  const cleanTarget = target.replace(/[^a-z0-9]/g, "").replace(/section/g, "");
 
   return classes.find(c => {
-    const idMatch = c.id.toLowerCase() === target;
-    const nameSection = `${c.name} - ${c.section}`.toLowerCase();
-    const nameSectionNoHyphen = `${c.name} ${c.section}`.toLowerCase();
-    const sectionName = `${c.name} - section ${c.section}`.toLowerCase();
-    return idMatch || nameSection === target || nameSectionNoHyphen === target || sectionName === target || c.name.toLowerCase() === target;
+    if (c.id.toLowerCase() === target) return true;
+    const cName = c.name.toLowerCase();
+    const cSec = c.section.toLowerCase();
+
+    const nameSection = `${cName} - ${cSec}`;
+    const nameSectionNoHyphen = `${cName} ${cSec}`;
+    const sectionName = `${cName} - section ${cSec}`;
+    const sectionNameSpaced = `${cName} section ${cSec}`;
+
+    if (
+      nameSection === target ||
+      nameSectionNoHyphen === target ||
+      sectionName === target ||
+      sectionNameSpaced === target ||
+      cName === target
+    ) {
+      return true;
+    }
+
+    // Compare alphanumeric normalized (e.g. "class2a" vs "class2a")
+    const cleanClass = `${cName}${cSec}`.replace(/[^a-z0-9]/g, "").replace(/section/g, "");
+    if (cleanClass && cleanTarget && cleanClass === cleanTarget) {
+      return true;
+    }
+
+    // Also support interchangeability between "class" and "grade" (e.g. "grade 2" vs "class 2")
+    const gradeVsClassTarget = cleanTarget.replace(/grade/g, "class");
+    const gradeVsClassClass = cleanClass.replace(/grade/g, "class");
+    if (gradeVsClassClass && gradeVsClassTarget && gradeVsClassClass === gradeVsClassTarget) {
+      return true;
+    }
+
+    return false;
   }) || null;
 }
 
@@ -367,9 +403,29 @@ export async function parseAndScanWorkbook(
   const normalizedFound = headerRow.map(normalizeHeader);
 
   // Detect which template headers are present
-  const isTeacherTemplate = normalizedFound.includes("qualification") || (normalizedFound.includes("joiningdate") && !normalizedFound.includes("studentrollno"));
-  const isStudentTemplate = normalizedFound.includes("studentrollno") || normalizedFound.includes("admissionno") || normalizedFound.includes("parentemail");
-  const isAdminTemplate = !isTeacherTemplate && !isStudentTemplate && normalizedFound.includes("email") && (normalizedFound.includes("name") || normalizedFound.includes("adminname") || normalizedFound.includes("fullname") || normalizedFound.includes("firstname"));
+  const isStudentTemplate = 
+    normalizedFound.includes("studentrollno") || 
+    normalizedFound.includes("admissionno") || 
+    normalizedFound.includes("parentemail") ||
+    normalizedFound.includes("studentfirstname") ||
+    normalizedFound.includes("residencetype");
+
+  const hasTeacherSpecifics = 
+    normalizedFound.includes("qualification") ||
+    normalizedFound.includes("classteacher") ||
+    normalizedFound.includes("subjects") ||
+    normalizedFound.includes("subject") ||
+    normalizedFound.includes("teachername") ||
+    normalizedFound.includes("joiningdate");
+
+  const isTeacherTemplate = !isStudentTemplate && (
+    hasTeacherSpecifics || 
+    (expectedType === "TEACHER" && (normalizedFound.includes("userid") || normalizedFound.includes("signinwithgooglemailid")))
+  );
+
+  const isAdminTemplate = !isStudentTemplate && !isTeacherTemplate && 
+    (normalizedFound.includes("email") || normalizedFound.includes("gmail") || normalizedFound.includes("adminemail")) && 
+    (normalizedFound.includes("name") || normalizedFound.includes("adminname") || normalizedFound.includes("fullname") || normalizedFound.includes("firstname"));
 
   const detectedTemplate: "STUDENT_PARENT" | "TEACHER" | "ADMIN" | "UNKNOWN" = 
     isStudentTemplate ? "STUDENT_PARENT" : (isTeacherTemplate ? "TEACHER" : (isAdminTemplate ? "ADMIN" : "UNKNOWN"));
@@ -438,16 +494,66 @@ export async function parseAndScanWorkbook(
     };
   }
 
-  // Check expected headers
-  const expectedList = expectedType === "STUDENT_PARENT" 
-    ? EXPECTED_STUDENT_PARENT_HEADERS 
-    : (expectedType === "TEACHER" ? EXPECTED_TEACHER_HEADERS : EXPECTED_ADMIN_HEADERS);
+  // Check expected headers with intelligent flexibility
   const missingHeaders: string[] = [];
 
-  for (const expected of expectedList) {
-    const norm = normalizeHeader(expected);
-    if (!normalizedFound.includes(norm)) {
-      missingHeaders.push(expected);
+  if (expectedType === "TEACHER") {
+    // 1. Name: either (firstName & lastName) OR fullName OR name OR teacherName
+    const hasName = (normalizedFound.includes("firstname") && normalizedFound.includes("lastname")) ||
+      normalizedFound.includes("fullname") ||
+      normalizedFound.includes("name") ||
+      normalizedFound.includes("teachername");
+    if (!hasName) {
+      missingHeaders.push("Full Name (or First Name & Last Name)");
+    }
+
+    // 2. Email / User ID
+    const hasEmail = normalizedFound.includes("email") ||
+      normalizedFound.includes("userid") ||
+      normalizedFound.includes("username") ||
+      normalizedFound.includes("signinwithgooglemailid") ||
+      normalizedFound.includes("googlemailid") ||
+      normalizedFound.includes("googleemail") ||
+      normalizedFound.includes("useremail");
+    if (!hasEmail) {
+      missingHeaders.push("User ID / Email");
+    }
+
+    // If it's the standard official template with firstName, check standard headers
+    if (normalizedFound.includes("firstname")) {
+      for (const expected of EXPECTED_TEACHER_HEADERS) {
+        if (expected === "firstName" || expected === "lastName" || expected === "email") continue;
+        if (expected === "joiningDate") continue; // optional in modern imports
+        const norm = normalizeHeader(expected);
+        if (!normalizedFound.includes(norm)) {
+          if (expected === "qualification" && (normalizedFound.includes("degree") || normalizedFound.includes("qual"))) continue;
+          if (expected === "phone" && (normalizedFound.includes("mobile") || normalizedFound.includes("contact"))) continue;
+          missingHeaders.push(expected);
+        }
+      }
+    }
+  } else if (expectedType === "STUDENT_PARENT") {
+    for (const expected of EXPECTED_STUDENT_PARENT_HEADERS) {
+      const norm = normalizeHeader(expected);
+      if (!normalizedFound.includes(norm)) {
+        // Allow flexible aliases
+        if (expected === "studentFirstName" && (normalizedFound.includes("studentfullname") || normalizedFound.includes("studentname") || normalizedFound.includes("fullname"))) continue;
+        if (expected === "studentLastName" && (normalizedFound.includes("studentfullname") || normalizedFound.includes("studentname") || normalizedFound.includes("fullname"))) continue;
+        if (expected === "studentRollNo" && (normalizedFound.includes("rollnumber") || normalizedFound.includes("rollno") || normalizedFound.includes("roll"))) continue;
+        if (expected === "parentEmail" && normalizedFound.includes("email")) continue;
+        if (expected === "parentFirstName" && (normalizedFound.includes("parentname") || normalizedFound.includes("parentfullname"))) continue;
+        if (expected === "parentLastName" && (normalizedFound.includes("parentname") || normalizedFound.includes("parentfullname"))) continue;
+        missingHeaders.push(expected);
+      }
+    }
+  } else {
+    for (const expected of EXPECTED_ADMIN_HEADERS) {
+      const norm = normalizeHeader(expected);
+      if (!normalizedFound.includes(norm)) {
+        if (expected === "name" && (normalizedFound.includes("fullname") || normalizedFound.includes("adminname"))) continue;
+        if (expected === "email" && (normalizedFound.includes("adminemail") || normalizedFound.includes("gmail") || normalizedFound.includes("googleemail") || normalizedFound.includes("signinwithgooglemailid"))) continue;
+        missingHeaders.push(expected);
+      }
     }
   }
 
@@ -547,24 +653,66 @@ export async function parseAndScanWorkbook(
         parentAddress
       };
     } else if (expectedType === "TEACHER") {
-      const firstName = String(norm.firstname || "").trim();
-      const lastName = String(norm.lastname || "").trim();
-      const email = String(norm.email || "").trim().toLowerCase();
-      const password = String(norm.password || "").trim();
-      const phone = String(norm.phone || "").trim();
-      const joiningDate = norm.joiningdate;
-      const qualification = String(norm.qualification || "").trim();
+      let firstName = String(norm.firstname || "").trim();
+      let lastName = String(norm.lastname || "").trim();
+      const rawFullName = String(norm.fullname || norm.name || norm.teachername || "").trim();
+
+      if ((!firstName || !lastName) && rawFullName) {
+        const parts = rawFullName.split(/\s+/).filter(Boolean);
+        if (parts.length === 1) {
+          firstName = parts[0];
+          lastName = ".";
+        } else {
+          firstName = parts[0];
+          lastName = parts.slice(1).join(" ");
+        }
+      }
+
+      const email = String(
+        norm.email || 
+        norm.userid || 
+        norm.username || 
+        norm.signinwithgooglemailid || 
+        norm.googlemailid || 
+        norm.googleemail || 
+        norm.useremail || 
+        ""
+      ).trim().toLowerCase();
+
+      const googleEmail = String(
+        norm.signinwithgooglemailid || 
+        norm.googlemailid || 
+        norm.googleemail || 
+        (email.endsWith("@gmail.com") || email.endsWith("@googlemail.com") ? email : "")
+      ).trim().toLowerCase();
+
+      const rawPassword = norm.password !== undefined && norm.password !== null ? String(norm.password).trim() : "";
+      const password = rawPassword;
+      const phone = String(norm.phone || norm.phonenumber || norm.mobile || norm.contact || norm.contactno || "").trim();
+      const joiningDate = norm.joiningdate || new Date().toISOString().split("T")[0];
+      const qualification = String(norm.qualification || norm.degree || norm.qual || "").trim();
+      const gender = String(norm.gender || norm.sex || "").trim();
+      const subjects = String(norm.subjects || norm.subject || "").trim();
+
+      const rawClassTeacher = String(norm.classteacher || norm.classteacherof || norm.assignedclass || norm.class || "").trim();
+      const matchedClass = resolveClass(rawClassTeacher, availableClasses);
 
       return {
         excelRowNumber,
         firstName,
         lastName,
+        fullName: rawFullName || (firstName ? `${firstName} ${lastName || ""}`.trim() : ""),
         email,
+        googleEmail,
         password,
         phone,
         joiningDate,
         qualification,
-        subjects: String(norm.subjects || norm.subject || "").trim()
+        gender,
+        subjects,
+        classTeacherRaw: rawClassTeacher,
+        classTeacherClassId: matchedClass?.id || "",
+        classTeacherClassName: matchedClass ? `${matchedClass.name} - ${matchedClass.section}` : rawClassTeacher
       };
     } else {
       // ADMIN
@@ -832,17 +980,16 @@ export async function validateAndCorrelateBatch(
 
       // 2. Last Name
       if (!row.lastName || !String(row.lastName).trim()) {
-        fieldErrors.lastName = "Teacher last name is required.";
-        missingFields.push("lastName");
+        row.lastName = ".";
       }
 
-      // 3. Email
+      // 3. User ID / Email
       const email = String(row.email || "").trim().toLowerCase();
       if (!email) {
-        fieldErrors.email = "Official email address is required.";
+        fieldErrors.email = "User ID / Email address is required.";
         missingFields.push("email");
       } else if (!isValidEmail(email)) {
-        fieldErrors.email = "Official email address is invalid.";
+        fieldErrors.email = "User ID / Email address is invalid.";
         invalidFields.push("email");
       } else {
         // In-file duplicate check
@@ -866,9 +1013,6 @@ export async function validateAndCorrelateBatch(
       if (!row.password || !String(row.password).trim()) {
         fieldErrors.password = "Initial password is required.";
         missingFields.push("password");
-      } else if (String(row.password).trim().length < 6) {
-        fieldErrors.password = "Password must be at least 6 characters long.";
-        invalidFields.push("password");
       }
 
       // 5. Phone
@@ -878,18 +1022,31 @@ export async function validateAndCorrelateBatch(
       }
 
       // 6. Joining Date
-      const joinResult = parseDateSafe(row.joiningDate);
-      if (!joinResult.isValid) {
-        fieldErrors.joiningDate = "Joining date is invalid. Enter valid date (YYYY-MM-DD or DD/MM/YYYY).";
-        invalidFields.push("joiningDate");
+      if (row.joiningDate) {
+        const joinResult = parseDateSafe(row.joiningDate);
+        if (!joinResult.isValid) {
+          fieldErrors.joiningDate = "Joining date is invalid. Enter valid date (YYYY-MM-DD or DD/MM/YYYY).";
+          invalidFields.push("joiningDate");
+        } else {
+          row.joiningDate = joinResult.isoDate;
+        }
       } else {
-        row.joiningDate = joinResult.isoDate;
+        row.joiningDate = new Date().toISOString().split("T")[0];
       }
 
       // 7. Qualification
       if (!row.qualification || !String(row.qualification).trim()) {
         fieldErrors.qualification = "Teacher qualification is required.";
         missingFields.push("qualification");
+      }
+
+      // 8. Class Teacher resolution if specified
+      if (row.classTeacherRaw && !row.classTeacherClassId) {
+        const resClass = resolveClass(row.classTeacherRaw, classes);
+        if (resClass) {
+          row.classTeacherClassId = resClass.id;
+          row.classTeacherClassName = `${resClass.name} - ${resClass.section}`;
+        }
       }
     } else {
       // ADMIN VALIDATION
@@ -1201,10 +1358,13 @@ export async function executeImportTransaction(
             firstName,
             lastName,
             email,
+            googleEmail,
             password,
             phone,
             joiningDate,
-            qualification
+            qualification,
+            classTeacherClassId,
+            classTeacherRaw
           } = row;
 
           await prisma.$transaction(async (tx) => {
@@ -1217,7 +1377,11 @@ export async function executeImportTransaction(
               throw new Error(`Email '${cleanEmail}' is already registered in the system.`);
             }
 
-            const hashedPass = await hash(String(password).trim(), 10);
+            const cleanGoogleEmail = googleEmail 
+              ? String(googleEmail).trim().toLowerCase() 
+              : (cleanEmail.endsWith("@gmail.com") || cleanEmail.endsWith("@googlemail.com") ? cleanEmail : null);
+
+            const hashedPass = await hash(String(password || "Teacher@123").trim(), 10);
             const teacherFullName = `${firstName} ${lastName || ""}`.trim();
             const joinDate = joiningDate ? new Date(joiningDate) : new Date();
 
@@ -1238,13 +1402,15 @@ export async function executeImportTransaction(
               }
             }
 
-            await tx.user.create({
+            const createdUser = await tx.user.create({
               data: {
                 email: cleanEmail,
                 name: teacherFullName,
                 password: hashedPass,
                 role: "TEACHER",
                 status: "ACTIVE",
+                googleEmail: cleanGoogleEmail,
+                googleEmailVerified: Boolean(cleanGoogleEmail),
                 teacher: {
                   create: {
                     phone: phone ? String(phone).trim() : null,
@@ -1258,8 +1424,74 @@ export async function executeImportTransaction(
                     } : {})
                   }
                 }
-              }
+              },
+              include: { teacher: true }
             });
+
+            const teacherId = createdUser.teacher?.id;
+
+            // Handle Class Teacher Assignment
+            let targetClassId = classTeacherClassId;
+            if (!targetClassId && classTeacherRaw) {
+              const allDbClasses = await tx.class.findMany({
+                where: { isActive: true },
+                select: { id: true, name: true, section: true }
+              });
+              const resolved = resolveClass(classTeacherRaw, allDbClasses);
+              if (resolved) targetClassId = resolved.id;
+            }
+
+            if (targetClassId && teacherId) {
+              // Ensure this teacher is not left as classTeacher on an older class
+              await tx.class.updateMany({
+                where: { classTeacherId: teacherId },
+                data: { classTeacherId: null }
+              });
+
+              // Assign teacher as classTeacher and teacher of the class
+              await tx.class.update({
+                where: { id: targetClassId },
+                data: {
+                  classTeacherId: teacherId,
+                  teacherId: teacherId
+                }
+              });
+
+              // Auto-associate or create subjects for this class if specified
+              if (rawSubjects) {
+                const subjectTokens = String(rawSubjects)
+                  .split(',')
+                  .map(s => s.trim())
+                  .filter(Boolean);
+
+                for (const subName of subjectTokens) {
+                  const existingForClass = await tx.subject.findFirst({
+                    where: {
+                      classId: targetClassId,
+                      name: { equals: subName, mode: "insensitive" }
+                    }
+                  });
+
+                  if (existingForClass) {
+                    await tx.subject.update({
+                      where: { id: existingForClass.id },
+                      data: { teacherId }
+                    });
+                  } else {
+                    const cleanCode = subName.replace(/[^a-zA-Z0-9]/g, "").slice(0, 4).toUpperCase() || "SUB";
+                    const code = `${cleanCode}001`;
+                    await tx.subject.create({
+                      data: {
+                        name: subName.toUpperCase(),
+                        code,
+                        classId: targetClassId,
+                        teacherId
+                      }
+                    });
+                  }
+                }
+              }
+            }
 
             result.createdAccounts.push({
               role: "TEACHER",

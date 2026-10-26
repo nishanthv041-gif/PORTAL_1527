@@ -1196,7 +1196,23 @@ export default function BulkUpload({
                                   </div>
                                 ) : type === "teacher" ? (
                                   <div>
-                                    <div style={{ fontWeight: 600 }}>{r.data.firstName} {r.data.lastName}</div>
+                                    <div style={{ fontWeight: 600 }}>{r.data.fullName || `${r.data.firstName} ${r.data.lastName}`.trim()}</div>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "flex", gap: "0.4rem", alignItems: "center", marginTop: "2px" }}>
+                                      {r.data.gender && (
+                                        <span style={{
+                                          display: "inline-block",
+                                          padding: "1px 6px",
+                                          borderRadius: "4px",
+                                          backgroundColor: String(r.data.gender).toLowerCase() === "female" ? "rgba(236, 72, 153, 0.1)" : "rgba(59, 130, 246, 0.1)",
+                                          color: String(r.data.gender).toLowerCase() === "female" ? "#db2777" : "#2563eb",
+                                          fontWeight: 700,
+                                          fontSize: "0.7rem"
+                                        }}>
+                                          {r.data.gender}
+                                        </span>
+                                      )}
+                                      <span>Qual: <strong>{r.data.qualification || "Teaching Staff"}</strong></span>
+                                    </div>
                                   </div>
                                 ) : (
                                   <div>
@@ -1217,7 +1233,12 @@ export default function BulkUpload({
                                 ) : type === "teacher" ? (
                                   <div>
                                     <div style={{ fontWeight: 500 }}>{r.data.email || "Missing"}</div>
-                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>{r.data.phone || "No phone"}</div>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                                      {r.data.phone ? `Phone: ${r.data.phone}` : "No phone"}
+                                      {r.data.googleEmail && r.data.googleEmail !== r.data.email && (
+                                        <span> • Google: {r.data.googleEmail}</span>
+                                      )}
+                                    </div>
                                   </div>
                                 ) : (
                                   <div>
@@ -1278,8 +1299,10 @@ export default function BulkUpload({
                                   </div>
                                 ) : type === "teacher" ? (
                                   <div>
-                                    <div>Qual: {r.data.qualification || "Missing"}</div>
-                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                                    <div style={{ fontWeight: 600, color: r.data.classTeacherClassName ? "var(--primary, #6366f1)" : "inherit" }}>
+                                      {r.data.classTeacherClassName ? `Class: ${r.data.classTeacherClassName}` : "No Class Assigned"}
+                                    </div>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "2px" }}>
                                       {r.data.subjects ? `Subjects: ${r.data.subjects}` : `Join: ${r.data.joiningDate || "N/A"}`}
                                     </div>
                                   </div>
@@ -2132,7 +2155,29 @@ export default function BulkUpload({
 
                     <div>
                       <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                        User ID *
+                        Gender
+                      </label>
+                      <select
+                        value={editFormData.gender || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, gender: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          background: "var(--card-bg)"
+                        }}
+                      >
+                        <option value="">Select Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        User ID (Login Email) *
                       </label>
                       <input
                         type="email"
@@ -2147,6 +2192,25 @@ export default function BulkUpload({
                         }}
                       />
                       {editRowErrors.email && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.email}</span>}
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Sign In with Google Mail ID
+                      </label>
+                      <input
+                        type="email"
+                        value={editFormData.googleEmail || ""}
+                        onChange={(e) => setEditFormData({ ...editFormData, googleEmail: e.target.value })}
+                        placeholder="e.g. teacher@gmail.com"
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          background: "transparent"
+                        }}
+                      />
                     </div>
 
                     <div>
@@ -2206,7 +2270,7 @@ export default function BulkUpload({
                       {editRowErrors.joiningDate && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.joiningDate}</span>}
                     </div>
 
-                    <div style={{ gridColumn: "1 / -1" }}>
+                    <div>
                       <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
                         Qualification *
                       </label>
@@ -2223,6 +2287,38 @@ export default function BulkUpload({
                         }}
                       />
                       {editRowErrors.qualification && <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>{editRowErrors.qualification}</span>}
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        Class Teacher (Assigned Class)
+                      </label>
+                      <select
+                        value={editFormData.classTeacherClassId || ""}
+                        onChange={(e) => {
+                          const selected = activeClasses.find(c => c.id === e.target.value);
+                          setEditFormData({
+                            ...editFormData,
+                            classTeacherClassId: e.target.value,
+                            classTeacherClassName: selected ? `${selected.name} - ${selected.section}` : "",
+                            classTeacherRaw: selected ? `${selected.name} - ${selected.section}` : ""
+                          });
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          background: "var(--card-bg)"
+                        }}
+                      >
+                        <option value="">No Class Assigned</option>
+                        {activeClasses.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} - Section {c.section}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div style={{ gridColumn: "1 / -1" }}>
