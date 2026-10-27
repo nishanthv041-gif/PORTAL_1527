@@ -16,60 +16,21 @@ export default function VoiceNotePlayer({ src, duration, isMine }: VoiceNotePlay
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    const audio = new Audio(src);
-    audioRef.current = audio;
-
-    const handleLoadedMetadata = () => {
-      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
-        setTotalDuration(Math.round(audio.duration));
-      }
-    };
-
-    const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
-    };
-
-    const handlePlay = () => {
-      setIsPlaying(true);
-    };
-
-    const handlePause = () => {
-      setIsPlaying(false);
-    };
-
-    const handleEnded = () => {
-      setIsPlaying(false);
-      audio.currentTime = 0;
-      setCurrentTime(0);
-    };
-
-    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
-    audio.addEventListener("timeupdate", handleTimeUpdate);
-    audio.addEventListener("play", handlePlay);
-    audio.addEventListener("pause", handlePause);
-    audio.addEventListener("ended", handleEnded);
-
-    return () => {
-      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      audio.removeEventListener("timeupdate", handleTimeUpdate);
-      audio.removeEventListener("play", handlePlay);
-      audio.removeEventListener("pause", handlePause);
-      audio.removeEventListener("ended", handleEnded);
-      audio.pause();
-      audioRef.current = null;
-    };
-  }, [src]);
+    if (duration && duration > 0) {
+      setTotalDuration(duration);
+    }
+  }, [duration]);
 
   const togglePlay = () => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    if (!audio.paused) {
+    if (!audio.paused && !audio.ended) {
       audio.pause();
       setIsPlaying(false);
     } else {
-      // If at or past the end, restart from beginning
-      if (audio.currentTime >= (audio.duration || totalDuration || 0.1)) {
+      const effDuration = (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : (totalDuration || 0.1);
+      if (audio.currentTime >= effDuration - 0.1) {
         audio.currentTime = 0;
         setCurrentTime(0);
       }
@@ -182,6 +143,41 @@ export default function VoiceNotePlayer({ src, duration, isMine }: VoiceNotePlay
           <Volume2 size={13} style={{ opacity: 0.7 }} />
         </div>
       </div>
+
+      {/* Hidden native HTML5 Audio element */}
+      <audio
+        ref={audioRef}
+        src={src}
+        preload="metadata"
+        onLoadedMetadata={(e) => {
+          const audio = e.currentTarget;
+          if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+            setTotalDuration(Math.round(audio.duration));
+          }
+        }}
+        onTimeUpdate={(e) => {
+          const audio = e.currentTarget;
+          setCurrentTime(audio.currentTime);
+          const effDuration = (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : totalDuration;
+          if (effDuration > 0 && audio.currentTime >= effDuration) {
+            setIsPlaying(false);
+            audio.currentTime = 0;
+            setCurrentTime(0);
+          }
+        }}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => {
+          setIsPlaying(false);
+          if (audioRef.current) audioRef.current.currentTime = 0;
+          setCurrentTime(0);
+        }}
+        onError={(err) => {
+          console.warn("Voice note audio error:", err);
+          setIsPlaying(false);
+        }}
+        style={{ display: "none" }}
+      />
     </div>
   );
 }

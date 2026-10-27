@@ -59,63 +59,21 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // Manage preview audio element lifecycle and event listeners
+  const previewUrlRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!previewAudioUrl) {
-      if (previewAudioElementRef.current) {
-        previewAudioElementRef.current.pause();
-        previewAudioElementRef.current = null;
-      }
-      setIsPreviewPlaying(false);
-      setPreviewCurrentTime(0);
-      setPreviewDuration(0);
-      return;
-    }
-
-    const audio = new Audio(previewAudioUrl);
-    previewAudioElementRef.current = audio;
-
-    const handleLoadedMetadata = () => {
-      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
-        setPreviewDuration(Math.round(audio.duration));
-      }
-    };
-    const handleTimeUpdate = () => {
-      setPreviewCurrentTime(audio.currentTime);
-    };
-    const handlePlay = () => setIsPreviewPlaying(true);
-    const handlePause = () => setIsPreviewPlaying(false);
-    const handleEnded = () => {
-      setIsPreviewPlaying(false);
-      audio.currentTime = 0;
-      setPreviewCurrentTime(0);
-    };
-
-    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
-    audio.addEventListener("timeupdate", handleTimeUpdate);
-    audio.addEventListener("play", handlePlay);
-    audio.addEventListener("pause", handlePause);
-    audio.addEventListener("ended", handleEnded);
-
-    return () => {
-      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      audio.removeEventListener("timeupdate", handleTimeUpdate);
-      audio.removeEventListener("play", handlePlay);
-      audio.removeEventListener("pause", handlePause);
-      audio.removeEventListener("ended", handleEnded);
-      audio.pause();
-      previewAudioElementRef.current = null;
-    };
+    previewUrlRef.current = previewAudioUrl;
   }, [previewAudioUrl]);
 
-  // Clean up media streams and timers on unmount
+  // Clean up media streams and timers on unmount only
   useEffect(() => {
     return () => {
       stopMediaTracks();
       if (recordTimerRef.current) clearInterval(recordTimerRef.current);
-      if (previewAudioUrl) URL.revokeObjectURL(previewAudioUrl);
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
     };
-  }, [previewAudioUrl]);
+  }, []);
 
   // Adjust textarea height automatically
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -143,7 +101,6 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
     }
     if (previewAudioElementRef.current) {
       previewAudioElementRef.current.pause();
-      previewAudioElementRef.current = null;
     }
     setIsPreviewPlaying(false);
     setPreviewCurrentTime(0);
@@ -159,16 +116,18 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
       mediaStreamRef.current = stream;
 
       // Select supported audio MIME type
-      let mimeType = "audio/webm";
+      let mimeType = "";
       if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
         mimeType = "audio/webm;codecs=opus";
       } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
         mimeType = "audio/mp4";
+      } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+        mimeType = "audio/webm";
       } else if (MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")) {
         mimeType = "audio/ogg;codecs=opus";
       }
 
-      const recorder = new MediaRecorder(stream, { mimeType });
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
 
@@ -197,68 +156,54 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
     }
   };
 
-  // Pause active voice recording
-  const pauseRecording = () => {
-    if (!mediaRecorderRef.current || !isRecording || isRecordingPaused) return;
-    if (mediaRecorderRef.current.state === "recording") {
-      try {
-        mediaRecorderRef.current.pause();
-      } catch (err) {
-        console.warn("Pause recording error:", err);
-      }
-    }
+  // Pause/Stop voice recording and open audio preview so user can hear it
+  const stopRecordingAndPreview = () => {
+    if (!mediaRecorderRef.current || !isRecording) return;
     if (recordTimerRef.current) {
       clearInterval(recordTimerRef.current);
       recordTimerRef.current = null;
     }
-    setIsRecordingPaused(true);
-  };
 
-  // Resume paused voice recording
-  const resumeRecording = () => {
-    if (!mediaRecorderRef.current || !isRecording || !isRecordingPaused) return;
-    if (mediaRecorderRef.current.state === "paused") {
-      try {
-        mediaRecorderRef.current.resume();
-      } catch (err) {
-        console.warn("Resume recording error:", err);
-      }
-    }
-    setIsRecordingPaused(false);
-    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
-    recordTimerRef.current = setInterval(() => {
-      setRecordingSeconds((prev) => prev + 1);
-    }, 1000);
-  };
+    const recorder = mediaRecorderRef.current;
+    const mime = recorder.mimeType || "audio/webm";
+    const duration = recordingSeconds || 1;
 
-  // Stop recording and create playable preview
-  const stopRecordingAndPreview = () => {
-    if (!mediaRecorderRef.current || !isRecording) return;
-    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
-
-    const mime = mediaRecorderRef.current.mimeType || "audio/webm";
-
-    mediaRecorderRef.current.onstop = () => {
+    recorder.onstop = () => {
       const audioBlob = new Blob(audioChunksRef.current, { type: mime });
       setRecordedAudioBlob(audioBlob);
       const url = URL.createObjectURL(audioBlob);
       setPreviewAudioUrl(url);
-      setPreviewDuration(recordingSeconds || 1);
+      setPreviewDuration(duration);
       stopMediaTracks();
+      setIsRecording(false);
+      setIsRecordingPaused(false);
     };
 
-    if (mediaRecorderRef.current.state !== "inactive") {
+    if (recorder.state !== "inactive") {
       try {
-        mediaRecorderRef.current.stop();
-      } catch {}
+        recorder.stop();
+      } catch (err) {
+        console.warn("Recorder stop error:", err);
+      }
     }
-    setIsRecording(false);
-    setIsRecordingPaused(false);
+  };
+
+  // Pause active voice recording (transitions to preview to hear the audio)
+  const pauseRecording = () => {
+    stopRecordingAndPreview();
+  };
+
+  // Resume recording (starts fresh or appends)
+  const resumeRecording = () => {
+    startRecording();
   };
 
   // Cancel & discard recording
   const cancelRecording = () => {
-    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    if (recordTimerRef.current) {
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       try {
         mediaRecorderRef.current.stop();
@@ -272,7 +217,6 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
 
     if (previewAudioElementRef.current) {
       previewAudioElementRef.current.pause();
-      previewAudioElementRef.current = null;
     }
     if (previewAudioUrl) {
       URL.revokeObjectURL(previewAudioUrl);
@@ -283,7 +227,7 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
     setPreviewDuration(0);
   };
 
-  // Preview audio play/pause toggle
+  // Preview audio play/pause toggle - Click to hear the audio!
   const togglePreviewPlay = () => {
     const audio = previewAudioElementRef.current;
     if (!audio) return;
@@ -292,8 +236,9 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
       audio.pause();
       setIsPreviewPlaying(false);
     } else {
-      // If at or past the end, restart from beginning
-      if (audio.currentTime >= (audio.duration || previewDuration || 0.1)) {
+      const effDuration = (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : (previewDuration || 1);
+      // If at or near the end, restart from beginning
+      if (audio.currentTime >= effDuration - 0.2) {
         audio.currentTime = 0;
         setPreviewCurrentTime(0);
       }
@@ -696,59 +641,35 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
                     <Trash2 size={16} />
                   </button>
 
-                  {/* Pause / Resume Recording Button */}
-                  {isRecordingPaused ? (
-                    <button
-                      type="button"
-                      onClick={resumeRecording}
-                      disabled={isUploading}
-                      title="Resume recording"
-                      style={{
-                        width: "34px",
-                        height: "34px",
-                        background: "rgba(99, 102, 241, 0.12)",
-                        border: "1px solid rgba(99, 102, 241, 0.3)",
-                        color: "var(--primary, #6366f1)",
-                        cursor: "pointer",
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      <Mic size={16} />
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={pauseRecording}
-                      disabled={isUploading}
-                      title="Pause recording"
-                      style={{
-                        width: "34px",
-                        height: "34px",
-                        background: "rgba(245, 158, 11, 0.12)",
-                        border: "1px solid rgba(245, 158, 11, 0.3)",
-                        color: "#d97706",
-                        cursor: "pointer",
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      <Pause size={15} fill="currentColor" />
-                    </button>
-                  )}
-
-                  {/* Stop & Preview button */}
+                  {/* Pause / Listen button */}
                   <button
                     type="button"
                     onClick={stopRecordingAndPreview}
                     disabled={isUploading}
-                    title="Stop & play preview"
+                    title="Pause & listen to audio"
+                    style={{
+                      width: "34px",
+                      height: "34px",
+                      background: "rgba(245, 158, 11, 0.12)",
+                      border: "1px solid rgba(245, 158, 11, 0.3)",
+                      color: "#d97706",
+                      cursor: "pointer",
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <Pause size={15} fill="currentColor" />
+                  </button>
+
+                  {/* Stop & Listen button */}
+                  <button
+                    type="button"
+                    onClick={stopRecordingAndPreview}
+                    disabled={isUploading}
+                    title="Stop & listen to audio"
                     style={{
                       width: "34px",
                       height: "34px",
@@ -766,7 +687,7 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
                     <Square size={14} fill="currentColor" />
                   </button>
 
-                  {/* Send button */}
+                  {/* Direct Send button */}
                   <button
                     type="button"
                     onClick={sendVoiceNote}
@@ -795,12 +716,12 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
               /* Preview State (Recording finished, listening to audio before sending) */
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flex: 1, minWidth: 0 }}>
-                  {/* Play / Pause Toggle Button */}
+                  {/* Play / Pause Toggle Button - Click to hear the audio */}
                   <button
                     type="button"
                     onClick={togglePreviewPlay}
-                    title={isPreviewPlaying ? "Pause audio preview" : "Play audio preview"}
-                    aria-label={isPreviewPlaying ? "Pause preview" : "Play preview"}
+                    title={isPreviewPlaying ? "Pause audio playback" : "Click to hear the audio"}
+                    aria-label={isPreviewPlaying ? "Pause preview" : "Click to hear audio"}
                     style={{
                       width: "36px",
                       height: "36px",
@@ -1065,6 +986,43 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
           </>
         )}
       </div>
+
+      {/* Hidden native HTML5 Audio element for audio preview */}
+      <audio
+        ref={previewAudioElementRef}
+        src={previewAudioUrl || undefined}
+        preload="auto"
+        onLoadedMetadata={(e) => {
+          const audio = e.currentTarget;
+          if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+            setPreviewDuration(Math.round(audio.duration));
+          }
+        }}
+        onTimeUpdate={(e) => {
+          const audio = e.currentTarget;
+          setPreviewCurrentTime(audio.currentTime);
+          const effDuration = (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : previewDuration;
+          if (effDuration > 0 && audio.currentTime >= effDuration) {
+            setIsPreviewPlaying(false);
+            audio.currentTime = 0;
+            setPreviewCurrentTime(0);
+          }
+        }}
+        onPlay={() => setIsPreviewPlaying(true)}
+        onPause={() => setIsPreviewPlaying(false)}
+        onEnded={() => {
+          setIsPreviewPlaying(false);
+          if (previewAudioElementRef.current) {
+            previewAudioElementRef.current.currentTime = 0;
+          }
+          setPreviewCurrentTime(0);
+        }}
+        onError={(err) => {
+          console.warn("Audio preview playback error:", err);
+          setIsPreviewPlaying(false);
+        }}
+        style={{ display: "none" }}
+      />
     </div>
   );
 }
