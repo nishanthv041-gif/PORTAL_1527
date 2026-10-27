@@ -29,18 +29,31 @@ export default function VoiceNotePlayer({ src, duration, isMine }: VoiceNotePlay
       setCurrentTime(audio.currentTime);
     };
 
+    const handlePlay = () => {
+      setIsPlaying(true);
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
+
     const handleEnded = () => {
       setIsPlaying(false);
+      audio.currentTime = 0;
       setCurrentTime(0);
     };
 
     audio.addEventListener("loadedmetadata", handleLoadedMetadata);
     audio.addEventListener("timeupdate", handleTimeUpdate);
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
     audio.addEventListener("ended", handleEnded);
 
     return () => {
       audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
       audio.removeEventListener("timeupdate", handleTimeUpdate);
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("ended", handleEnded);
       audio.pause();
       audioRef.current = null;
@@ -48,15 +61,23 @@ export default function VoiceNotePlayer({ src, duration, isMine }: VoiceNotePlay
   }, [src]);
 
   const togglePlay = () => {
-    if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (!audio.paused) {
+      audio.pause();
       setIsPlaying(false);
     } else {
-      audioRef.current.play().then(() => {
+      // If at or past the end, restart from beginning
+      if (audio.currentTime >= (audio.duration || totalDuration || 0.1)) {
+        audio.currentTime = 0;
+        setCurrentTime(0);
+      }
+      audio.play().then(() => {
         setIsPlaying(true);
       }).catch(err => {
-        console.error("Audio playback error:", err);
+        console.warn("Audio playback error:", err);
+        setIsPlaying(false);
       });
     }
   };

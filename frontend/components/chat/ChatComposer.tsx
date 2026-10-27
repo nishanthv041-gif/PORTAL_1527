@@ -12,7 +12,8 @@ import {
   Pause, 
   Loader2, 
   FileText, 
-  AlertCircle 
+  AlertCircle,
+  RotateCcw 
 } from "lucide-react";
 
 interface QueuedAttachment {
@@ -42,10 +43,13 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
+  const [isRecordingPaused, setIsRecordingPaused] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [previewAudioUrl, setPreviewAudioUrl] = useState<string | null>(null);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  const [previewCurrentTime, setPreviewCurrentTime] = useState(0);
+  const [previewDuration, setPreviewDuration] = useState(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -54,6 +58,55 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
   const previewAudioElementRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Manage preview audio element lifecycle and event listeners
+  useEffect(() => {
+    if (!previewAudioUrl) {
+      if (previewAudioElementRef.current) {
+        previewAudioElementRef.current.pause();
+        previewAudioElementRef.current = null;
+      }
+      setIsPreviewPlaying(false);
+      setPreviewCurrentTime(0);
+      setPreviewDuration(0);
+      return;
+    }
+
+    const audio = new Audio(previewAudioUrl);
+    previewAudioElementRef.current = audio;
+
+    const handleLoadedMetadata = () => {
+      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+        setPreviewDuration(Math.round(audio.duration));
+      }
+    };
+    const handleTimeUpdate = () => {
+      setPreviewCurrentTime(audio.currentTime);
+    };
+    const handlePlay = () => setIsPreviewPlaying(true);
+    const handlePause = () => setIsPreviewPlaying(false);
+    const handleEnded = () => {
+      setIsPreviewPlaying(false);
+      audio.currentTime = 0;
+      setPreviewCurrentTime(0);
+    };
+
+    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+    audio.addEventListener("timeupdate", handleTimeUpdate);
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
+    audio.addEventListener("ended", handleEnded);
+
+    return () => {
+      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.removeEventListener("timeupdate", handleTimeUpdate);
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
+      audio.removeEventListener("ended", handleEnded);
+      audio.pause();
+      previewAudioElementRef.current = null;
+    };
+  }, [previewAudioUrl]);
 
   // Clean up media streams and timers on unmount
   useEffect(() => {
@@ -88,6 +141,13 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
       URL.revokeObjectURL(previewAudioUrl);
       setPreviewAudioUrl(null);
     }
+    if (previewAudioElementRef.current) {
+      previewAudioElementRef.current.pause();
+      previewAudioElementRef.current = null;
+    }
+    setIsPreviewPlaying(false);
+    setPreviewCurrentTime(0);
+    setPreviewDuration(0);
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setUploadError("Audio recording is not supported in this browser.");
@@ -113,15 +173,17 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
       audioChunksRef.current = [];
 
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
       recorder.start(100);
       setIsRecording(true);
+      setIsRecordingPaused(false);
       setRecordingSeconds(0);
 
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
       recordTimerRef.current = setInterval(() => {
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
@@ -135,55 +197,121 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
     }
   };
 
-  // Stop recording and create preview
+  // Pause active voice recording
+  const pauseRecording = () => {
+    if (!mediaRecorderRef.current || !isRecording || isRecordingPaused) return;
+    if (mediaRecorderRef.current.state === "recording") {
+      try {
+        mediaRecorderRef.current.pause();
+      } catch (err) {
+        console.warn("Pause recording error:", err);
+      }
+    }
+    if (recordTimerRef.current) {
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+    setIsRecordingPaused(true);
+  };
+
+  // Resume paused voice recording
+  const resumeRecording = () => {
+    if (!mediaRecorderRef.current || !isRecording || !isRecordingPaused) return;
+    if (mediaRecorderRef.current.state === "paused") {
+      try {
+        mediaRecorderRef.current.resume();
+      } catch (err) {
+        console.warn("Resume recording error:", err);
+      }
+    }
+    setIsRecordingPaused(false);
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    recordTimerRef.current = setInterval(() => {
+      setRecordingSeconds((prev) => prev + 1);
+    }, 1000);
+  };
+
+  // Stop recording and create playable preview
   const stopRecordingAndPreview = () => {
     if (!mediaRecorderRef.current || !isRecording) return;
     if (recordTimerRef.current) clearInterval(recordTimerRef.current);
 
+    const mime = mediaRecorderRef.current.mimeType || "audio/webm";
+
     mediaRecorderRef.current.onstop = () => {
-      const audioBlob = new Blob(audioChunksRef.current, {
-        type: mediaRecorderRef.current?.mimeType || "audio/webm",
-      });
+      const audioBlob = new Blob(audioChunksRef.current, { type: mime });
       setRecordedAudioBlob(audioBlob);
       const url = URL.createObjectURL(audioBlob);
       setPreviewAudioUrl(url);
+      setPreviewDuration(recordingSeconds || 1);
       stopMediaTracks();
     };
 
-    mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+    }
     setIsRecording(false);
+    setIsRecordingPaused(false);
   };
 
   // Cancel & discard recording
   const cancelRecording = () => {
     if (recordTimerRef.current) clearInterval(recordTimerRef.current);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
     }
     stopMediaTracks();
     setIsRecording(false);
+    setIsRecordingPaused(false);
     setRecordingSeconds(0);
     setRecordedAudioBlob(null);
+
+    if (previewAudioElementRef.current) {
+      previewAudioElementRef.current.pause();
+      previewAudioElementRef.current = null;
+    }
     if (previewAudioUrl) {
       URL.revokeObjectURL(previewAudioUrl);
       setPreviewAudioUrl(null);
     }
     setIsPreviewPlaying(false);
+    setPreviewCurrentTime(0);
+    setPreviewDuration(0);
   };
 
-  // Preview audio play/pause
+  // Preview audio play/pause toggle
   const togglePreviewPlay = () => {
-    if (!previewAudioUrl) return;
-    if (!previewAudioElementRef.current) {
-      previewAudioElementRef.current = new Audio(previewAudioUrl);
-      previewAudioElementRef.current.onended = () => setIsPreviewPlaying(false);
-    }
+    const audio = previewAudioElementRef.current;
+    if (!audio) return;
 
-    if (isPreviewPlaying) {
-      previewAudioElementRef.current.pause();
+    if (!audio.paused && !audio.ended) {
+      audio.pause();
       setIsPreviewPlaying(false);
     } else {
-      previewAudioElementRef.current.play().then(() => setIsPreviewPlaying(true));
+      // If at or past the end, restart from beginning
+      if (audio.currentTime >= (audio.duration || previewDuration || 0.1)) {
+        audio.currentTime = 0;
+        setPreviewCurrentTime(0);
+      }
+      audio.play().then(() => {
+        setIsPreviewPlaying(true);
+      }).catch((err) => {
+        console.warn("Audio preview playback error:", err);
+        setIsPreviewPlaying(false);
+      });
+    }
+  };
+
+  // Seek within preview audio
+  const handlePreviewSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTime = parseFloat(e.target.value);
+    setPreviewCurrentTime(newTime);
+    if (previewAudioElementRef.current) {
+      previewAudioElementRef.current.currentTime = newTime;
     }
   };
 
@@ -218,19 +346,25 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
     let blobToSend = recordedAudioBlob;
     let durationSecs = recordingSeconds;
 
-    // If currently still recording, stop and grab blob
+    // If currently still recording or paused, stop and grab blob
     if (isRecording && mediaRecorderRef.current) {
       if (recordTimerRef.current) clearInterval(recordTimerRef.current);
       await new Promise<void>((resolve) => {
-        if (!mediaRecorderRef.current) return resolve();
+        if (!mediaRecorderRef.current || mediaRecorderRef.current.state === "inactive") {
+          return resolve();
+        }
+        const mime = mediaRecorderRef.current.mimeType || "audio/webm";
         mediaRecorderRef.current.onstop = () => {
-          blobToSend = new Blob(audioChunksRef.current, {
-            type: mediaRecorderRef.current?.mimeType || "audio/webm",
-          });
+          blobToSend = new Blob(audioChunksRef.current, { type: mime });
           resolve();
         };
-        mediaRecorderRef.current.stop();
+        try {
+          mediaRecorderRef.current.stop();
+        } catch {
+          resolve();
+        }
         setIsRecording(false);
+        setIsRecordingPaused(false);
       });
       stopMediaTracks();
     }
@@ -267,7 +401,7 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
         fileName: data.fileName,
         fileSize: data.fileSize,
         fileType: data.fileType,
-        duration: durationSecs || 1,
+        duration: durationSecs || previewDuration || 1,
       });
 
       cancelRecording();
@@ -495,41 +629,181 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "0.6rem 1rem",
+            padding: "0.5rem 0.85rem",
             borderRadius: "24px",
             backgroundColor: "var(--card-bg, #ffffff)",
-            border: "1px solid var(--border-color, #e2e8f0)",
-            minHeight: "44px",
+            border: "1.5px solid var(--border-color, #e2e8f0)",
+            minHeight: "46px",
             boxSizing: "border-box",
+            gap: "0.6rem",
+            flexWrap: "nowrap",
           }}>
-            {/* Left: Timer / Recording Indicator */}
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-              {isRecording ? (
-                <>
+            {/* If actively recording or recording is paused */}
+            {isRecording ? (
+              <>
+                {/* Left: Recording status & timer */}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0, flex: 1 }}>
                   <div style={{
                     width: "10px",
                     height: "10px",
                     borderRadius: "50%",
-                    backgroundColor: "#ef4444",
-                    boxShadow: "0 0 8px #ef4444",
-                    animation: "pulse 1.2s infinite ease-in-out",
+                    backgroundColor: isRecordingPaused ? "#f59e0b" : "#ef4444",
+                    boxShadow: isRecordingPaused ? "0 0 6px #f59e0b" : "0 0 8px #ef4444",
+                    animation: isRecordingPaused ? "none" : "pulse 1.2s infinite ease-in-out",
+                    flexShrink: 0,
                   }} />
-                  <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "#ef4444" }}>
+                  <span style={{
+                    fontWeight: 700,
+                    fontSize: "0.92rem",
+                    color: isRecordingPaused ? "#d97706" : "#ef4444",
+                    minWidth: "40px",
+                  }}>
                     {formatTimer(recordingSeconds)}
                   </span>
-                  <span style={{ fontSize: "0.8rem", opacity: 0.6, marginLeft: "0.5rem" }}>
-                    Recording voice message...
+                  <span style={{
+                    fontSize: "0.8rem",
+                    opacity: 0.7,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}>
+                    {isRecordingPaused ? "Paused" : "Recording voice..."}
                   </span>
-                </>
-              ) : (
-                /* Preview State */
-                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                </div>
+
+                {/* Right: Controls (Discard, Pause/Resume, Stop&Preview, Send) */}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
+                  {/* Discard */}
+                  <button
+                    type="button"
+                    onClick={cancelRecording}
+                    disabled={isUploading}
+                    title="Discard recording"
+                    style={{
+                      width: "34px",
+                      height: "34px",
+                      background: "rgba(239, 68, 68, 0.08)",
+                      border: "none",
+                      color: "#ef4444",
+                      cursor: "pointer",
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+
+                  {/* Pause / Resume Recording Button */}
+                  {isRecordingPaused ? (
+                    <button
+                      type="button"
+                      onClick={resumeRecording}
+                      disabled={isUploading}
+                      title="Resume recording"
+                      style={{
+                        width: "34px",
+                        height: "34px",
+                        background: "rgba(99, 102, 241, 0.12)",
+                        border: "1px solid rgba(99, 102, 241, 0.3)",
+                        color: "var(--primary, #6366f1)",
+                        cursor: "pointer",
+                        borderRadius: "50%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <Mic size={16} />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={pauseRecording}
+                      disabled={isUploading}
+                      title="Pause recording"
+                      style={{
+                        width: "34px",
+                        height: "34px",
+                        background: "rgba(245, 158, 11, 0.12)",
+                        border: "1px solid rgba(245, 158, 11, 0.3)",
+                        color: "#d97706",
+                        cursor: "pointer",
+                        borderRadius: "50%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <Pause size={15} fill="currentColor" />
+                    </button>
+                  )}
+
+                  {/* Stop & Preview button */}
+                  <button
+                    type="button"
+                    onClick={stopRecordingAndPreview}
+                    disabled={isUploading}
+                    title="Stop & play preview"
+                    style={{
+                      width: "34px",
+                      height: "34px",
+                      background: "rgba(0, 0, 0, 0.06)",
+                      border: "1px solid var(--border-color, #e2e8f0)",
+                      color: "var(--foreground, #1e293b)",
+                      cursor: "pointer",
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <Square size={14} fill="currentColor" />
+                  </button>
+
+                  {/* Send button */}
+                  <button
+                    type="button"
+                    onClick={sendVoiceNote}
+                    disabled={isUploading}
+                    title="Send voice message directly"
+                    style={{
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "50%",
+                      backgroundColor: "var(--primary, #6366f1)",
+                      color: "#ffffff",
+                      border: "none",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: isUploading ? "not-allowed" : "pointer",
+                      boxShadow: "0 2px 6px rgba(99, 102, 241, 0.3)",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isUploading ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
+                  </button>
+                </div>
+              </>
+            ) : (
+              /* Preview State (Recording finished, listening to audio before sending) */
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flex: 1, minWidth: 0 }}>
+                  {/* Play / Pause Toggle Button */}
                   <button
                     type="button"
                     onClick={togglePreviewPlay}
+                    title={isPreviewPlaying ? "Pause audio preview" : "Play audio preview"}
+                    aria-label={isPreviewPlaying ? "Pause preview" : "Play preview"}
                     style={{
-                      width: "32px",
-                      height: "32px",
+                      width: "36px",
+                      height: "36px",
                       borderRadius: "50%",
                       backgroundColor: "var(--primary, #6366f1)",
                       color: "#ffffff",
@@ -538,89 +812,133 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
                       alignItems: "center",
                       justifyContent: "center",
                       cursor: "pointer",
+                      flexShrink: 0,
+                      boxShadow: "0 2px 6px rgba(99, 102, 241, 0.25)",
                     }}
                   >
-                    {isPreviewPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                    {isPreviewPlaying ? (
+                      <Pause size={16} fill="currentColor" />
+                    ) : (
+                      <Play size={16} fill="currentColor" style={{ marginLeft: "2px" }} />
+                    )}
                   </button>
-                  <span style={{ fontWeight: 600, fontSize: "0.875rem" }}>
-                    {formatTimer(recordingSeconds)}
-                  </span>
-                  <span style={{ fontSize: "0.8rem", opacity: 0.6 }}>
-                    Preview ready
-                  </span>
+
+                  {/* Scrubber & Time Display */}
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+                    <div style={{ position: "relative", width: "100%", height: "6px", display: "flex", alignItems: "center" }}>
+                      <div style={{
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        height: "4px",
+                        borderRadius: "2px",
+                        backgroundColor: "rgba(0, 0, 0, 0.12)",
+                      }} />
+                      <div style={{
+                        position: "absolute",
+                        left: 0,
+                        width: `${(previewDuration || recordingSeconds || 1) > 0 ? (previewCurrentTime / (previewDuration || recordingSeconds || 1)) * 100 : 0}%`,
+                        height: "4px",
+                        borderRadius: "2px",
+                        backgroundColor: "var(--primary, #6366f1)",
+                      }} />
+                      <input
+                        type="range"
+                        min={0}
+                        max={previewDuration || recordingSeconds || 1}
+                        step={0.1}
+                        value={previewCurrentTime}
+                        onChange={handlePreviewSeek}
+                        style={{
+                          position: "absolute",
+                          width: "100%",
+                          height: "100%",
+                          opacity: 0,
+                          cursor: "pointer",
+                          margin: 0,
+                        }}
+                      />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.74rem", opacity: 0.8 }}>
+                      <span>{formatTimer(previewCurrentTime)}</span>
+                      <span>{formatTimer(previewDuration || recordingSeconds)}</span>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
 
-            {/* Right: Controls (Cancel, Stop, Send) */}
-            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              {/* Discard / Delete */}
-              <button
-                type="button"
-                onClick={cancelRecording}
-                disabled={isUploading}
-                title="Discard recording"
-                style={{
-                  padding: "0.45rem",
-                  background: "transparent",
-                  border: "none",
-                  color: "var(--danger, #ef4444)",
-                  cursor: "pointer",
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Trash2 size={18} />
-              </button>
+                {/* Right: Discard, Re-record, Send */}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
+                  {/* Discard */}
+                  <button
+                    type="button"
+                    onClick={cancelRecording}
+                    disabled={isUploading}
+                    title="Discard voice message"
+                    style={{
+                      width: "34px",
+                      height: "34px",
+                      background: "rgba(239, 68, 68, 0.08)",
+                      border: "none",
+                      color: "#ef4444",
+                      cursor: "pointer",
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
 
-              {/* Stop & Preview button (if recording) */}
-              {isRecording && (
-                <button
-                  type="button"
-                  onClick={stopRecordingAndPreview}
-                  title="Stop and preview"
-                  style={{
-                    padding: "0.45rem",
-                    background: "rgba(0,0,0,0.06)",
-                    border: "none",
-                    color: "inherit",
-                    cursor: "pointer",
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Square size={16} fill="currentColor" />
-                </button>
-              )}
+                  {/* Re-record */}
+                  <button
+                    type="button"
+                    onClick={startRecording}
+                    disabled={isUploading}
+                    title="Re-record voice message"
+                    style={{
+                      width: "34px",
+                      height: "34px",
+                      background: "rgba(0, 0, 0, 0.05)",
+                      border: "1px solid var(--border-color, #e2e8f0)",
+                      color: "var(--foreground, #1e293b)",
+                      cursor: "pointer",
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <RotateCcw size={15} />
+                  </button>
 
-              {/* Send voice message */}
-              <button
-                type="button"
-                onClick={sendVoiceNote}
-                disabled={isUploading}
-                title="Send voice message"
-                style={{
-                  width: "38px",
-                  height: "38px",
-                  borderRadius: "50%",
-                  backgroundColor: "var(--primary, #6366f1)",
-                  color: "#ffffff",
-                  border: "none",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: isUploading ? "not-allowed" : "pointer",
-                  opacity: isUploading ? 0.7 : 1,
-                  boxShadow: "0 2px 6px rgba(99, 102, 241, 0.3)",
-                }}
-              >
-                {isUploading ? <Loader2 size={18} className="animate-spin" /> : <Send size={16} />}
-              </button>
-            </div>
+                  {/* Send voice note */}
+                  <button
+                    type="button"
+                    onClick={sendVoiceNote}
+                    disabled={isUploading}
+                    title="Send voice message"
+                    style={{
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "50%",
+                      backgroundColor: "var(--primary, #6366f1)",
+                      color: "#ffffff",
+                      border: "none",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: isUploading ? "not-allowed" : "pointer",
+                      opacity: isUploading ? 0.7 : 1,
+                      boxShadow: "0 2px 6px rgba(99, 102, 241, 0.3)",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isUploading ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           /* Normal Message Input Toolbar */
