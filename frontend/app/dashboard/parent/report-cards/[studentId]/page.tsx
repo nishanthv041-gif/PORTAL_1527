@@ -1,7 +1,11 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
-import IndividualReportCardClient from "@/frontend/components/ReportCards/IndividualReportCardClient";
+import ParentReportCardsClient from "../ParentReportCardsClient";
+import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/settings/actions";
+import { ProfessionalReportCardData } from "@/frontend/components/ReportCards/ProfessionalReportCard";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 export default async function ParentIndividualReportCardPage({ 
   params 
@@ -28,48 +32,90 @@ export default async function ParentIndividualReportCardPage({
     return <div style={{ padding: '2rem', color: 'var(--danger)' }}>Unauthorized. You can only view your own child&apos;s report card.</div>;
   }
 
-  const student = await prisma.student.findUnique({
-    where: { id: studentId },
-    include: { class: true }
-  });
+  const [student, reportCards, settings] = await Promise.all([
+    prisma.student.findUnique({
+      where: { id: studentId },
+      include: { class: true }
+    }),
+    prisma.reportCard.findMany({
+      where: { 
+        studentId: studentId,
+        published: true 
+      },
+      include: {
+        exam: {
+          include: {
+            marks: {
+              where: { studentId: studentId },
+              include: { subject: true }
+            }
+          }
+        }
+      },
+      orderBy: {
+        exam: { date: 'desc' }
+      }
+    }),
+    getSystemSettings()
+  ]);
 
-  if (!student || !student.class) {
+  if (!student) {
     return <div style={{ padding: '2rem' }}>Student not found.</div>;
   }
 
-  // Fetch all exams for this class
-  const exams = await prisma.exam.findMany({
-    where: { classId: student.classId! },
-    orderBy: { date: 'asc' }
-  });
+  const fullName = `${student.firstName} ${student.lastName}`.trim();
 
-  // Fetch all subjects for this class
-  const subjects = await prisma.subject.findMany({
-    where: { classId: student.classId! },
-    orderBy: { name: 'asc' }
-  });
+  const formattedCards: ProfessionalReportCardData[] = reportCards.map(rc => {
+    const studentMarks = (rc.exam.marks || []).map(m => ({
+      id: m.id,
+      subjectName: m.subject?.name || "Subject",
+      score: m.score,
+      maxScore: m.maxScore,
+      passMarks: m.subject?.passMarks || 35,
+      remarks: m.remarks
+    }));
 
-  // Fetch marks for this student
-  const marks = await prisma.mark.findMany({
-    where: { studentId: studentId }
+    return {
+      id: rc.id,
+      studentId: rc.studentId,
+      studentName: fullName,
+      rollNumber: student.rollNumber,
+      className: student.class ? `${student.class.name} - ${student.class.section}` : "Class",
+      examId: rc.examId,
+      examName: rc.exam.name,
+      examDate: rc.exam.date.toISOString(),
+      totalMarks: rc.totalMarks,
+      percentage: rc.percentage,
+      grade: rc.grade,
+      remarks: rc.remarks,
+      parentVerified: rc.parentVerified,
+      marks: studentMarks,
+      schoolLogo: settings.SCHOOL_LOGO || null
+    };
   });
 
   return (
-    <div style={{ padding: '2rem' }}>
-      <IndividualReportCardClient 
-        student={{
-          id: student.id,
-          firstName: student.firstName,
-          lastName: student.lastName,
-          rollNumber: student.rollNumber,
-          class: student.class
-        }}
-        exams={exams}
-        subjects={subjects}
-        marks={marks}
-        sentAt={null} // Parent doesn't need to see "Sent at"
-        baseUrl="/dashboard/parent/report-cards"
-        isReadOnly={true}
+    <div style={{ padding: 'clamp(0.5rem, 2vw, 1.5rem)' }}>
+      <div style={{ marginBottom: '1rem' }}>
+        <Link 
+          href="/dashboard/parent/report-cards"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            color: 'var(--primary)',
+            fontWeight: 700,
+            textDecoration: 'none',
+            fontSize: '0.88rem'
+          }}
+        >
+          <ArrowLeft size={16} /> Back to All Report Cards
+        </Link>
+      </div>
+
+      <ParentReportCardsClient 
+        reportCards={formattedCards} 
+        studentName={fullName}
       />
     </div>
   );
