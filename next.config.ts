@@ -16,12 +16,17 @@ const cspHeader = `
 `;
 
 const nextConfig: NextConfig = {
+  compress: true,
+  poweredByHeader: false,
   devIndicators: false,
+  images: {
+    formats: ['image/avif', 'image/webp'],
+  },
   turbopack: {
     root: __dirname,
   },
   experimental: {
-    optimizePackageImports: ['lucide-react', 'recharts'],
+    optimizePackageImports: ['lucide-react', 'recharts', 'date-fns'],
     serverActions: {
       bodySizeLimit: '25mb',
     },

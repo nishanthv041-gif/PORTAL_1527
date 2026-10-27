@@ -7,23 +7,14 @@ import Link from "next/link";
 
 const DAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 
+import { getTeacherByUserId } from "./teacherHelper";
+
 export default async function TeacherDashboard() {
   const session = await getServerSession(getAuthOptions());
   
   if (!session) return null;
 
-  const teacher = await prisma.teacher.findUnique({
-    where: { userId: session.user.id },
-    include: {
-      classes: {
-        include: {
-          _count: {
-            select: { students: true }
-          }
-        }
-      }
-    }
-  });
+  const teacher = await getTeacherByUserId(session.user.id);
 
   if (!teacher) {
     return (

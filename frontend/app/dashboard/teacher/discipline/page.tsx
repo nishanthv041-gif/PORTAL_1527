@@ -5,22 +5,13 @@ import styles from "../../dashboard.module.css";
 import CreateDisciplineForm from "./CreateDisciplineForm";
 import { AlertTriangle, User, Clock, ShieldAlert } from "lucide-react";
 
+import { getTeacherWithStudents } from "../teacherHelper";
+
 export default async function TeacherDisciplinePage() {
   const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
-  const teacher = await prisma.teacher.findUnique({
-    where: { userId: session.user.id },
-    include: {
-      classes: {
-        include: {
-          students: {
-            orderBy: { firstName: 'asc' }
-          }
-        }
-      }
-    }
-  });
+  const teacher = await getTeacherWithStudents(session.user.id);
 
   if (!teacher) return null;
 

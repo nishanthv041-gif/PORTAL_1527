@@ -158,7 +158,6 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
             <div key={link.href} className={styles.navItemWrapper}>
               <Link
                 href={link.href}
-                prefetch={true}
                 onClick={() => {
                   const checkbox = document.getElementById("mobile-menu-toggle") as HTMLInputElement | null;
                   if (checkbox && checkbox.checked) {

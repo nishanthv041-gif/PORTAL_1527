@@ -68,6 +68,13 @@ const MONTH_NAMES = [
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+// 3-minute in-memory cache for month calendar data
+const monthDataCache = new Map<string, { data: MonthCalendarData; expiresAt: number }>();
+
+export function invalidateMonthCalendarCache() {
+  monthDataCache.clear();
+}
+
 export async function getMonthCalendarData(
   targetYear?: number,
   targetMonth?: number,
@@ -76,6 +83,12 @@ export async function getMonthCalendarData(
   const now = new Date();
   const year = targetYear !== undefined && !isNaN(targetYear) ? targetYear : now.getFullYear();
   const month = targetMonth !== undefined && !isNaN(targetMonth) ? targetMonth : now.getMonth();
+
+  const cacheKey = `${year}-${month}-${audienceFilter || "ALL"}`;
+  const cached = monthDataCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data;
+  }
 
   const monthStart = new Date(year, month, 1, 0, 0, 0, 0);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -245,7 +258,7 @@ export async function getMonthCalendarData(
   const { start: academicStart } = await getEffectiveAcademicYearRange(now);
   const academicWorkingDaysToDate = await countSchoolWorkingDays(academicStart, now);
 
-  return {
+  const result: MonthCalendarData = {
     year,
     month,
     monthName: MONTH_NAMES[month],
@@ -263,4 +276,7 @@ export async function getMonthCalendarData(
       academicYearStart: toDateString(academicStart),
     },
   };
+
+  monthDataCache.set(cacheKey, { data: result, expiresAt: Date.now() + 180_000 });
+  return result;
 }

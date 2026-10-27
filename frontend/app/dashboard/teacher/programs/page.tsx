@@ -5,6 +5,8 @@ import styles from "../../dashboard.module.css";
 import ProgramsTeacherClient from "./ProgramsTeacherClient";
 import { redirect } from "next/navigation";
 
+import { getTeacherByUserId } from "../teacherHelper";
+
 export default async function TeacherProgramsPage() {
   const session = await getServerSession(getAuthOptions());
   if (!session) {
@@ -14,14 +16,7 @@ export default async function TeacherProgramsPage() {
     redirect("/dashboard");
   }
 
-  const teacher = await prisma.teacher.findUnique({
-    where: { userId: session.user.id },
-    include: {
-      classes: {
-        select: { id: true, name: true, section: true }
-      }
-    }
-  });
+  const teacher = await getTeacherByUserId(session.user.id);
 
   // Teachers view published school programs
   const programs = await prisma.calendarEvent.findMany({

@@ -32,41 +32,43 @@ export default async function ParentDashboard({
 
   if (!selectedChild) return null;
 
-  // 1. Fetch selected student's attendance records and the latest class exam with marks
-  const [attendanceRecords, lastExamWithMarks] = await Promise.all([
+  // Helper to fetch latest exam with marks
+  const fetchLatestExam = async (classId: string) => {
+    const withMarks = await prisma.exam.findFirst({
+      where: { classId, marks: { some: {} } },
+      orderBy: { date: 'desc' },
+      include: {
+        marks: {
+          select: { score: true, maxScore: true, studentId: true, subjectId: true, subject: { select: { id: true, name: true } } }
+        }
+      }
+    });
+    if (withMarks) return withMarks;
+
+    return prisma.exam.findFirst({
+      where: { classId },
+      orderBy: { date: 'desc' },
+      include: {
+        marks: {
+          select: { score: true, maxScore: true, studentId: true, subjectId: true, subject: { select: { id: true, name: true } } }
+        }
+      }
+    });
+  };
+
+  // 1. Fetch attendance, latest exam, and calendar statistics concurrently
+  const [attendanceRecords, lastExamWithMarks, calendarStats] = await Promise.all([
     prisma.attendance.findMany({
       where: { studentId: selectedChild.id },
       orderBy: { date: 'desc' },
-      take: 60
+      take: 60,
+      select: { id: true, status: true, date: true, remarks: true }
     }),
-    selectedChild.classId ? (
-      await prisma.exam.findFirst({
-        where: { 
-          classId: selectedChild.classId,
-          marks: { some: {} }
-        },
-        orderBy: { date: 'desc' },
-        include: {
-          marks: {
-            include: { subject: true, student: true }
-          }
-        }
-      }) || await prisma.exam.findFirst({
-        where: { classId: selectedChild.classId },
-        orderBy: { date: 'desc' },
-        include: {
-          marks: {
-            include: { subject: true, student: true }
-          }
-        }
-      })
-    ) : Promise.resolve(null)
+    selectedChild.classId ? fetchLatestExam(selectedChild.classId) : Promise.resolve(null),
+    getSchoolCalendarStats(new Date(), selectedChild.classId)
   ]);
 
   const childClass = selectedChild.class;
-
-  // 2. Compute student attendance statistics using official school working days
-  const calendarStats = await getSchoolCalendarStats(new Date(), selectedChild.classId);
   const presentedDays = attendanceRecords.filter((a) => a.status === "PRESENT").length;
   const absentedDays = attendanceRecords.filter((a) => a.status === "ABSENT").length;
   const lateDays = attendanceRecords.filter((a) => a.status === "LATE").length;

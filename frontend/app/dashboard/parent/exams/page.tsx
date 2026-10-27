@@ -34,7 +34,31 @@ export default async function ParentExamsPage({
     );
   }
 
-  // 1. Fetch exams for this child and the last exam with full class marks
+  // Helper to fetch latest exam with marks
+  const fetchLastExamWithMarks = async (classId: string) => {
+    const withMarks = await prisma.exam.findFirst({
+      where: { classId, marks: { some: {} } },
+      orderBy: { date: 'desc' },
+      include: {
+        marks: {
+          select: { score: true, maxScore: true, studentId: true, subjectId: true, subject: { select: { id: true, name: true } } }
+        }
+      }
+    });
+    if (withMarks) return withMarks;
+
+    return prisma.exam.findFirst({
+      where: { classId },
+      orderBy: { date: 'desc' },
+      include: {
+        marks: {
+          select: { score: true, maxScore: true, studentId: true, subjectId: true, subject: { select: { id: true, name: true } } }
+        }
+      }
+    });
+  };
+
+  // 1. Fetch exams for this child and the last exam concurrently
   const [exams, lastExamWithMarks] = await Promise.all([
     selectedChild.classId ? prisma.exam.findMany({
       where: { classId: selectedChild.classId },
@@ -46,28 +70,7 @@ export default async function ParentExamsPage({
       },
       orderBy: { date: 'desc' }
     }) : Promise.resolve([]),
-    selectedChild.classId ? (
-      await prisma.exam.findFirst({
-        where: { 
-          classId: selectedChild.classId,
-          marks: { some: {} }
-        },
-        orderBy: { date: 'desc' },
-        include: {
-          marks: {
-            include: { subject: true, student: true }
-          }
-        }
-      }) || await prisma.exam.findFirst({
-        where: { classId: selectedChild.classId },
-        orderBy: { date: 'desc' },
-        include: {
-          marks: {
-            include: { subject: true, student: true }
-          }
-        }
-      })
-    ) : Promise.resolve(null)
+    selectedChild.classId ? fetchLastExamWithMarks(selectedChild.classId) : Promise.resolve(null)
   ]);
 
   const childClass = selectedChild.class;

@@ -5,22 +5,13 @@ import Link from "next/link";
 import styles from "../../dashboard.module.css";
 import { Users } from "lucide-react";
 
+import { getTeacherByUserId } from "../teacherHelper";
+
 export default async function TeacherClassesPage() {
   const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
-  const teacher = await prisma.teacher.findUnique({
-    where: { userId: session.user.id },
-    include: {
-      classes: {
-        include: {
-          _count: {
-            select: { students: true }
-          }
-        }
-      }
-    }
-  });
+  const teacher = await getTeacherByUserId(session.user.id);
 
   if (!teacher) {
     return <p>Teacher not found.</p>;

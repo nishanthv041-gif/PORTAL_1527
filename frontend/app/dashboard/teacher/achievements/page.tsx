@@ -5,22 +5,13 @@ import styles from "../../dashboard.module.css";
 import CreateAchievementForm from "./CreateAchievementForm";
 import { Award, User, Calendar, CheckCircle, Clock } from "lucide-react";
 
+import { getTeacherWithStudents } from "../teacherHelper";
+
 export default async function TeacherAchievementsPage() {
   const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
-  const teacher = await prisma.teacher.findUnique({
-    where: { userId: session.user.id },
-    include: {
-      classes: {
-        include: {
-          students: {
-            orderBy: { firstName: 'asc' }
-          }
-        }
-      }
-    }
-  });
+  const teacher = await getTeacherWithStudents(session.user.id);
 
   if (!teacher) return null;
 

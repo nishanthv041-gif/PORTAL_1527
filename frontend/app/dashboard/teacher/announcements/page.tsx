@@ -4,14 +4,13 @@ import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import TeacherAnnouncementsClient from "./TeacherAnnouncementsClient";
 
+import { getTeacherByUserId } from "../teacherHelper";
+
 export default async function TeacherAnnouncementsPage() {
   const session = await getServerSession(getAuthOptions());
   if (!session || session.user.role !== 'TEACHER') return null;
 
-  const teacher = await prisma.teacher.findUnique({
-    where: { userId: session.user.id },
-    include: { classes: true }
-  });
+  const teacher = await getTeacherByUserId(session.user.id);
 
   if (!teacher) return null;
 
