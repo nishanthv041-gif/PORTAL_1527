@@ -22,6 +22,7 @@ import {
   VoiceRecorderPipeline, 
   playbackEnhancer 
 } from "@/frontend/utils/audioProcessor";
+import { audioPlaybackCoordinator } from "@/frontend/utils/audioPlaybackManager";
 
 interface QueuedAttachment {
   file: File;
@@ -87,14 +88,10 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
     };
   }, []);
 
-  // Connect preview audio to playback enhancer
+  // Clean up enhancer on unmount or preview close
   useEffect(() => {
-    const audio = previewAudioElementRef.current;
-    if (!audio || !previewAudioUrl) return;
-
-    enhancerControlsRef.current = playbackEnhancer.attachElement(audio, previewEnhanced, 1.0);
-
     return () => {
+      audioPlaybackCoordinator.releasePlayback("composer-preview");
       if (enhancerControlsRef.current) {
         enhancerControlsRef.current.disconnect();
       }
@@ -288,29 +285,46 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
   };
 
   // Preview audio play/pause toggle - Click to hear the audio!
-  const togglePreviewPlay = () => {
+  const togglePreviewPlay = async () => {
     const audio = previewAudioElementRef.current;
     if (!audio) return;
 
-    // Resume shared audio context on user gesture
-    playbackEnhancer.resumeContext().catch(() => {});
-
-    if (!audio.paused && !audio.ended) {
-      audio.pause();
-      setIsPreviewPlaying(false);
-    } else {
-      const effDuration = (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : (previewDuration || 1);
-      // If at or near the end, restart from beginning
-      if (audio.currentTime >= effDuration - 0.2) {
-        audio.currentTime = 0;
-        setPreviewCurrentTime(0);
-      }
-      audio.play().then(() => {
-        setIsPreviewPlaying(true);
-      }).catch((err) => {
-        console.warn("Audio preview playback error:", err);
+    try {
+      if (!audio.paused && !audio.ended) {
+        audio.pause();
         setIsPreviewPlaying(false);
-      });
+        audioPlaybackCoordinator.releasePlayback("composer-preview");
+      } else {
+        // Stop any other currently playing voice message in the chat
+        audioPlaybackCoordinator.requestPlayback("composer-preview", () => {
+          if (previewAudioElementRef.current && !previewAudioElementRef.current.paused) {
+            previewAudioElementRef.current.pause();
+          }
+          setIsPreviewPlaying(false);
+        });
+
+        // Resume shared audio context on user gesture if enhanced
+        if (previewEnhanced) {
+          try {
+            await playbackEnhancer.resumeContext();
+            if (!enhancerControlsRef.current) {
+              enhancerControlsRef.current = playbackEnhancer.attachElement(audio, true, 1.0);
+            }
+          } catch {}
+        }
+
+        const effDuration = (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : (previewDuration || 1);
+        if (audio.ended || audio.currentTime >= effDuration - 0.2) {
+          audio.currentTime = 0;
+          setPreviewCurrentTime(0);
+        }
+        await audio.play();
+        setIsPreviewPlaying(true);
+      }
+    } catch (err) {
+      console.warn("Audio preview playback error:", err);
+      setIsPreviewPlaying(false);
+      audioPlaybackCoordinator.releasePlayback("composer-preview");
     }
   };
 
@@ -1126,25 +1140,24 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
         onTimeUpdate={(e) => {
           const audio = e.currentTarget;
           setPreviewCurrentTime(audio.currentTime);
-          const effDuration = (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : previewDuration;
-          if (effDuration > 0 && audio.currentTime >= effDuration) {
-            setIsPreviewPlaying(false);
-            audio.currentTime = 0;
-            setPreviewCurrentTime(0);
+          if (audio.currentTime > previewDuration) {
+            setPreviewDuration(Math.ceil(audio.currentTime));
           }
         }}
         onPlay={() => setIsPreviewPlaying(true)}
         onPause={() => setIsPreviewPlaying(false)}
         onEnded={() => {
           setIsPreviewPlaying(false);
+          setPreviewCurrentTime(0);
           if (previewAudioElementRef.current) {
             previewAudioElementRef.current.currentTime = 0;
           }
-          setPreviewCurrentTime(0);
+          audioPlaybackCoordinator.releasePlayback("composer-preview");
         }}
         onError={(err) => {
           console.warn("Audio preview playback error:", err);
           setIsPreviewPlaying(false);
+          audioPlaybackCoordinator.releasePlayback("composer-preview");
         }}
         style={{ display: "none" }}
       />

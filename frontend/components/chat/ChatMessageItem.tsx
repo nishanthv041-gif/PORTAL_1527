@@ -136,11 +136,12 @@ export default function ChatMessageItem({
             )}
 
             {/* 2. Audio Voice Note */}
-            {message.messageType === "AUDIO" && message.fileUrl && (
+            {((message.messageType || "").toUpperCase() === "AUDIO" || message.fileType?.startsWith("audio/")) && message.fileUrl && (
               <VoiceNotePlayer
                 src={message.fileUrl}
                 duration={message.duration}
                 isMine={isMine}
+                messageId={message.id}
               />
             )}
 

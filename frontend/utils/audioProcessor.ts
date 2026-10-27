@@ -224,8 +224,14 @@ class PlaybackEnhancementManager {
 
     if (!nodes) {
       try {
-        // Ensure crossOrigin is set for remote resources if needed
-        if (!element.crossOrigin && !element.src.startsWith("data:") && !element.src.startsWith("blob:")) {
+        // Only set crossOrigin if loading from a distinct third-party remote origin
+        const src = element.src || "";
+        const isThirdPartyRemote = 
+          (src.startsWith("http://") || src.startsWith("https://")) &&
+          typeof window !== "undefined" && 
+          !src.startsWith(window.location.origin);
+
+        if (isThirdPartyRemote && !element.crossOrigin) {
           element.crossOrigin = "anonymous";
         }
 
@@ -318,12 +324,15 @@ class PlaybackEnhancementManager {
   /**
    * Resumes shared audio context on user interaction (Play button click)
    */
-  public resumeContext(): Promise<void> {
+  public async resumeContext(): Promise<void> {
     const ctx = this.getContext();
     if (ctx && ctx.state === "suspended") {
-      return ctx.resume();
+      try {
+        await ctx.resume();
+      } catch (err) {
+        console.warn("Failed to resume playback AudioContext:", err);
+      }
     }
-    return Promise.resolve();
   }
 }
 
