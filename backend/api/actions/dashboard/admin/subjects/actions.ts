@@ -72,6 +72,141 @@ export async function createSubjectAction(formData: FormData) {
   }
 }
 
+export async function updateSubjectGroupAction(formData: FormData) {
+  try {
+    const originalName = (formData.get("originalName") as string)?.trim();
+    const newName = (formData.get("name") as string)?.trim();
+    const code = (formData.get("code") as string)?.trim();
+    const maxMarks = parseInt(formData.get("maxMarks") as string || "100", 10);
+    const passMarks = parseInt(formData.get("passMarks") as string || "35", 10);
+
+    const classAssignmentsRaw = formData.get("classAssignments") as string;
+    let assignments: { classId: string; teacherId?: string | null }[] = [];
+
+    if (classAssignmentsRaw) {
+      try {
+        assignments = JSON.parse(classAssignmentsRaw);
+      } catch (err) {
+        console.error("Failed to parse classAssignments JSON:", err);
+      }
+    }
+
+    if (assignments.length === 0) {
+      const classIdsInput = formData.get("classIds") as string;
+      const defaultTeacherId = (formData.get("teacherId") as string) || null;
+      const classIds = classIdsInput ? classIdsInput.split(',').filter(Boolean) : [];
+      assignments = classIds.map(cid => ({ classId: cid, teacherId: defaultTeacherId }));
+    }
+
+    if (!originalName || !newName || !code || assignments.length === 0) {
+      return { error: "Subject Name, Code, and at least one Class are required." };
+    }
+
+    // Check if newName conflicts with an existing different subject
+    if (newName.toLowerCase() !== originalName.toLowerCase()) {
+      const conflict = await prisma.subject.findFirst({
+        where: { 
+          name: { equals: newName, mode: "insensitive" },
+          NOT: { name: originalName }
+        }
+      });
+      if (conflict) {
+        return { error: `A subject named "${newName}" already exists.` };
+      }
+    }
+
+    // Fetch existing subject records for originalName
+    const existingRecords = await prisma.subject.findMany({
+      where: { name: originalName }
+    });
+
+    const selectedClassIds = new Set(assignments.map(a => a.classId));
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Remove classes no longer selected
+      const toRemove = existingRecords.filter(r => !selectedClassIds.has(r.classId));
+      for (const rec of toRemove) {
+        // Cascade Marks & MarkHistory
+        const marks = await tx.mark.findMany({
+          where: { subjectId: rec.id },
+          select: { id: true }
+        });
+        const markIds = marks.map(m => m.id);
+        if (markIds.length > 0) {
+          await tx.markHistory.deleteMany({
+            where: { markId: { in: markIds } }
+          });
+          await tx.mark.deleteMany({
+            where: { id: { in: markIds } }
+          });
+        }
+
+        // Cascade Timetable
+        await tx.timetable.deleteMany({
+          where: { subjectId: rec.id }
+        });
+
+        // Cascade Exam Requests
+        await tx.examRequest.deleteMany({
+          where: { subjectId: rec.id }
+        });
+
+        // Delete Subject for this class
+        await tx.subject.delete({
+          where: { id: rec.id }
+        });
+      }
+
+      // 2. Update existing class records or insert newly assigned classes
+      for (const item of assignments) {
+        const { classId, teacherId } = item;
+        const existing = existingRecords.find(r => r.classId === classId);
+
+        if (existing) {
+          await tx.subject.update({
+            where: { id: existing.id },
+            data: {
+              name: newName,
+              code,
+              maxMarks,
+              passMarks,
+              teacherId: teacherId || null,
+              isActive: true,
+            }
+          });
+        } else {
+          await tx.subject.create({
+            data: {
+              name: newName,
+              code,
+              maxMarks,
+              passMarks,
+              classId,
+              teacherId: teacherId || null,
+              isActive: true,
+            }
+          });
+        }
+      }
+    });
+
+    revalidatePath("/dashboard/admin/subjects");
+    revalidatePath(`/dashboard/admin/subjects/${encodeURIComponent(newName)}`);
+    if (newName !== originalName) {
+      revalidatePath(`/dashboard/admin/subjects/${encodeURIComponent(originalName)}`);
+    }
+    revalidatePath("/dashboard/admin/timetable");
+
+    return { success: true, message: "Subject updated successfully.", newName };
+  } catch (error: unknown) {
+    console.error("Update subject error:", error);
+    if (error instanceof Error) {
+      return { error: error.message || "Failed to update subject." };
+    }
+    return { error: "Failed to update subject." };
+  }
+}
+
 export async function deactivateSubject(id: string) {
   try {
     await prisma.subject.update({

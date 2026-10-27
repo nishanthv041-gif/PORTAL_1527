@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Download, Eye, CheckCircle2, XCircle, Building2, Home, FileSpreadsheet } from "lucide-react";
+import { Search, Download, Eye, CheckCircle2, XCircle, Building2, Home } from "lucide-react";
 import Link from "next/link";
-import BulkUpload from "../create-roles/BulkUpload";
 
 import { Student, Class, ParentStudent, Parent, User, Attendance } from "@prisma/client";
 
@@ -18,7 +17,6 @@ type StudentWithRelations = Student & {
 };
 
 export default function StudentListClient({ students, classes }: { students: StudentWithRelations[], classes: Class[] }) {
-  const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [classFilter, setClassFilter] = useState("");
@@ -97,27 +95,6 @@ export default function StudentListClient({ students, classes }: { students: Stu
           />
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button
-            type="button"
-            onClick={() => setShowBulkUpload(!showBulkUpload)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              padding: "0.75rem 1rem",
-              borderRadius: "8px",
-              border: "1px solid var(--primary, #6366f1)",
-              backgroundColor: showBulkUpload ? "var(--primary, #6366f1)" : "rgba(99, 102, 241, 0.08)",
-              color: showBulkUpload ? "#ffffff" : "var(--primary, #6366f1)",
-              fontWeight: 600,
-              fontSize: "0.875rem",
-              cursor: "pointer",
-              transition: "all 0.2s ease"
-            }}
-          >
-            <FileSpreadsheet size={18} />
-            {showBulkUpload ? "Hide Bulk Import" : "Bulk Import Students"}
-          </button>
           <select 
             value={classFilter}
             onChange={(e) => setClassFilter(e.target.value)}
@@ -159,11 +136,6 @@ export default function StudentListClient({ students, classes }: { students: Stu
         </div>
       </div>
 
-      {showBulkUpload && (
-        <div style={{ marginBottom: "2rem" }}>
-          <BulkUpload type="student" classes={classes} />
-        </div>
-      )}
 
       <div style={{ overflowX: 'auto', width: '100%', maxWidth: '100%', minWidth: 0, WebkitOverflowScrolling: 'touch' }}>
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "850px" }}>

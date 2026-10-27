@@ -6,6 +6,8 @@ import Link from "next/link";
 import { ArrowLeft, TrendingUp, BookOpen, CheckCircle2, XCircle, School } from "lucide-react";
 import AssignTeacherDropdown from "./AssignTeacherDropdown";
 
+import EditSubjectButton from "./EditSubjectButton";
+
 export default async function SubjectDetailsPage({
   params
 }: {
@@ -17,7 +19,7 @@ export default async function SubjectDetailsPage({
   const resolvedParams = await params;
   const decodedName = decodeURIComponent(resolvedParams.name);
 
-  const [subjects, allTeachersRaw] = await Promise.all([
+  const [subjects, allClasses, allTeachersRaw] = await Promise.all([
     prisma.subject.findMany({
       where: { name: decodedName },
       include: {
@@ -29,6 +31,10 @@ export default async function SubjectDetailsPage({
         },
         marks: true
       }
+    }),
+    prisma.class.findMany({
+      where: { isActive: true },
+      orderBy: [{ name: 'asc' }, { section: 'asc' }]
     }),
     prisma.teacher.findMany({
       where: { isActive: true },
@@ -93,32 +99,41 @@ export default async function SubjectDetailsPage({
   return (
     <div className={styles.dashboard} style={{ maxWidth: '100%', overflowX: 'hidden' }}>
       {/* Header Banner */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
-        <div style={{ background: 'rgba(236, 72, 153, 0.1)', color: '#ec4899', padding: '1rem', borderRadius: '14px', flexShrink: 0 }}>
-          <BookOpen size={30} />
-        </div>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-            <h1 className={styles.title} style={{ margin: 0, fontSize: 'clamp(1.5rem, 4vw, 2.2rem)' }}>
-              {decodedName}
-            </h1>
-            {subjectCode && (
-              <span style={{ 
-                fontSize: '0.8rem', 
-                fontWeight: 600, 
-                background: 'var(--primary-bg)', 
-                color: 'var(--primary)', 
-                padding: '3px 10px', 
-                borderRadius: '8px' 
-              }}>
-                {subjectCode}
-              </span>
-            )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ background: 'rgba(236, 72, 153, 0.1)', color: '#ec4899', padding: '1rem', borderRadius: '14px', flexShrink: 0 }}>
+            <BookOpen size={30} />
           </div>
-          <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
-            Subject Details &amp; Class-wise Performance
-          </p>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <h1 className={styles.title} style={{ margin: 0, fontSize: 'clamp(1.5rem, 4vw, 2.2rem)' }}>
+                {decodedName}
+              </h1>
+              {subjectCode && (
+                <span style={{ 
+                  fontSize: '0.8rem', 
+                  fontWeight: 600, 
+                  background: 'var(--primary-bg)', 
+                  color: 'var(--primary)', 
+                  padding: '3px 10px', 
+                  borderRadius: '8px' 
+                }}>
+                  {subjectCode}
+                </span>
+              )}
+            </div>
+            <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
+              Subject Details &amp; Class-wise Performance
+            </p>
+          </div>
         </div>
+
+        <EditSubjectButton
+          subjectName={decodedName}
+          instances={subjects}
+          classes={allClasses}
+          teachers={allTeachersRaw}
+        />
       </div>
 
       {/* Top Metric Cards (Total Enrolled removed per requirement) */}

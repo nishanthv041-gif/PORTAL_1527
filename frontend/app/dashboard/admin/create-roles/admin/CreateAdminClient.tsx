@@ -4,7 +4,6 @@ import { useState, FormEvent } from "react";
 import { Shield } from "lucide-react";
 import { createAdminAction } from "@/backend/api/actions/dashboard/admin/create-roles/actions";
 import { useRouter } from "next/navigation";
-import BulkUpload from "../BulkUpload";
 
 export default function CreateAdminClient() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -68,8 +67,6 @@ export default function CreateAdminClient() {
           </button>
         </div>
       </form>
-
-      <BulkUpload type="admin" />
     </div>
   );
 }

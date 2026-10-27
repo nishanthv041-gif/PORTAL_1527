@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Plus, LayoutDashboard, Trash2, UserCheck, Check, School, FileSpreadsheet, Download } from "lucide-react";
+import { BookOpen, Plus, LayoutDashboard, Trash2, UserCheck, Check, School, Pencil } from "lucide-react";
 import Link from "next/link";
-import { createSubjectAction, deleteSubjectGroupByName, importSubjectsFromCsvAction } from "@/backend/api/actions/dashboard/admin/subjects/actions";
+import { createSubjectAction, deleteSubjectGroupByName } from "@/backend/api/actions/dashboard/admin/subjects/actions";
 import { Subject, Class, Teacher, User, Student, Mark } from "@prisma/client";
+import EditSubjectModal from "./EditSubjectModal";
 
 type TeacherWithUser = Teacher & { user: User };
 type SubjectWithRelations = Subject & {
@@ -26,11 +27,7 @@ export default function SubjectListClient({
   const router = useRouter();
   const [subjectList, setSubjectList] = useState(subjects);
   const [showCreate, setShowCreate] = useState(false);
-  const [showCsvUpload, setShowCsvUpload] = useState(false);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvLoading, setCsvLoading] = useState(false);
-  const [csvMessage, setCsvMessage] = useState<string | null>(null);
-  const [csvError, setCsvError] = useState<string | null>(null);
+  const [editingSubject, setEditingSubject] = useState<{ name: string; instances: SubjectWithRelations[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -120,25 +117,6 @@ export default function SubjectListClient({
     }
   };
 
-  const handleCsvSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!csvFile) return;
-    setCsvLoading(true);
-    setCsvError(null);
-    setCsvMessage(null);
-    const fd = new FormData();
-    fd.set("file", csvFile);
-    const res = await importSubjectsFromCsvAction(fd);
-    setCsvLoading(false);
-    if (res.error) {
-      setCsvError(res.error);
-    } else {
-      setCsvMessage(`Successfully imported/updated ${res.count} subject(s)!`);
-      setCsvFile(null);
-      router.refresh();
-    }
-  };
-
   // Group subjects by shared name across all classes
   const groupedSubjects = subjectList.reduce((acc, curr) => {
     if (!acc[curr.name]) acc[curr.name] = [];
@@ -148,48 +126,11 @@ export default function SubjectListClient({
 
   return (
     <div>
+      {/* Top Action Bar: Add Subject Button (CSV buttons removed) */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
-        <a 
-          href="/templates/subject_upload_template.csv" 
-          download="subject_upload_template.csv"
-          style={{ 
-            padding: '0.75rem 1.25rem', 
-            background: 'var(--card-bg)', 
-            color: 'inherit', 
-            border: '1px solid var(--border-color)', 
-            borderRadius: '8px', 
-            fontWeight: 600, 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.5rem',
-            textDecoration: 'none',
-            fontSize: '0.875rem'
-          }}
-        >
-          <Download size={16} /> Download CSV Template
-        </a>
         <button 
           type="button"
-          onClick={() => { setShowCsvUpload(!showCsvUpload); setShowCreate(false); }}
-          style={{ 
-            padding: '0.75rem 1.25rem', 
-            background: showCsvUpload ? 'var(--primary)' : 'rgba(99, 102, 241, 0.1)', 
-            color: showCsvUpload ? '#ffffff' : 'var(--primary)', 
-            border: '1px solid var(--primary)', 
-            borderRadius: '8px', 
-            fontWeight: 600, 
-            cursor: 'pointer', 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.5rem',
-            fontSize: '0.875rem'
-          }}
-        >
-          <FileSpreadsheet size={16} /> {showCsvUpload ? "Close CSV Import" : "Import via CSV"}
-        </button>
-        <button 
-          type="button"
-          onClick={() => { setShowCreate(!showCreate); setShowCsvUpload(false); }}
+          onClick={() => setShowCreate(!showCreate)}
           style={{ 
             padding: '0.75rem 1.5rem', 
             backgroundColor: "var(--primary)", 
@@ -200,7 +141,7 @@ export default function SubjectListClient({
             cursor: 'pointer', 
             display: 'flex', 
             alignItems: 'center', 
-            gap: '0.5rem',
+            gap: '0.5rem', 
             boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
             fontSize: '0.875rem'
           }}
@@ -208,61 +149,6 @@ export default function SubjectListClient({
           {showCreate ? "Cancel" : <><Plus size={18} /> Add Subject</>}
         </button>
       </div>
-
-      {showCsvUpload && (
-        <div style={{
-          background: 'var(--card-bg)',
-          borderRadius: '16px',
-          padding: '1.75rem',
-          border: '1px solid var(--border-color)',
-          marginBottom: '2rem',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-        }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <FileSpreadsheet size={20} className="text-primary" />
-            Bulk Import Subjects via CSV / Excel
-          </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
-            Upload a CSV containing <code>name, code, maxMarks, passMarks, class, teacherEmail</code> to batch activate subjects and assign teachers.
-          </p>
-
-          {csvError && (
-            <div style={{ background: 'var(--danger-bg)', color: "var(--danger)", padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid var(--danger)', fontSize: '0.875rem' }}>
-              {csvError}
-            </div>
-          )}
-          {csvMessage && (
-            <div style={{ background: 'var(--success-bg)', color: "var(--success)", padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid var(--success)', fontSize: '0.875rem' }}>
-              {csvMessage}
-            </div>
-          )}
-
-          <form onSubmit={handleCsvSubmit} style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <input 
-              type="file" 
-              accept=".csv,.xlsx,.xls" 
-              required
-              onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-              style={{ padding: '0.5rem', border: '1px solid var(--border-color)', borderRadius: '8px', background: 'transparent' }} 
-            />
-            <button 
-              type="submit" 
-              disabled={csvLoading || !csvFile}
-              style={{
-                padding: '0.65rem 1.5rem',
-                backgroundColor: 'var(--primary)',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '8px',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              {csvLoading ? "Uploading..." : "Upload & Activate Subjects"}
-            </button>
-          </form>
-        </div>
-      )}
 
       {showCreate && (
         <div style={{ 
@@ -298,11 +184,11 @@ export default function SubjectListClient({
               <input 
                 required 
                 name="name" 
-                value={subjectName} 
-                onChange={handleNameChange} 
                 type="text" 
-                placeholder="e.g. Science" 
-                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', color: 'inherit' }} 
+                placeholder="e.g. Mathematics" 
+                value={subjectName}
+                onChange={handleNameChange}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} 
               />
             </div>
 
@@ -312,101 +198,152 @@ export default function SubjectListClient({
                 required 
                 name="code" 
                 type="text" 
-                defaultValue={subjectName ? subjectName.substring(0, 3).toUpperCase() : ""} 
-                placeholder="e.g. SCI" 
-                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', color: 'inherit' }} 
+                placeholder="e.g. MATH101" 
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} 
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.35rem' }}>Max Marks *</label>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.35rem' }}>Max Marks</label>
               <input 
-                required 
+                type="number" 
                 name="maxMarks" 
-                type="number" 
                 defaultValue="100" 
-                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', color: 'inherit' }} 
+                min="1"
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} 
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.35rem' }}>Pass Marks *</label>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.35rem' }}>Passing Marks</label>
               <input 
-                required 
-                name="passMarks" 
                 type="number" 
+                name="passMarks" 
                 defaultValue="35" 
-                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', color: 'inherit' }} 
+                min="0"
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} 
               />
             </div>
 
-            {/* Class Selecting Option with Inline Staff Assigning */}
+            {/* Class Selection & Teacher Assignment Section */}
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.35rem' }}>
-                Select Classes & Assign Teaching Staff *
-              </label>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
-                Click to select each class where this subject is taught, and assign the teaching staff for that class.
-              </p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ fontSize: '0.875rem', fontWeight: 600 }}>
+                  Assign to Classes &amp; Teachers * ({selectedClasses.length} selected)
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedClasses(classes.map(c => c.id))}
+                    style={{ fontSize: '0.75rem', background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Select All
+                  </button>
+                  <span style={{ color: 'var(--border-color)' }}>|</span>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedClasses([]); setClassStaffMap({}); }}
+                    style={{ fontSize: '0.75rem', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))', gap: '0.85rem', width: '100%', minWidth: 0 }}>
-                {classes.map(c => {
-                  const isSelected = selectedClasses.includes(c.id);
-
+              {/* Class Chips */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: selectedClasses.length > 0 ? '1rem' : 0 }}>
+                {classes.map(cls => {
+                  const isSelected = selectedClasses.includes(cls.id);
                   return (
-                    <div 
-                      key={c.id} 
-                      style={{ 
-                        border: isSelected ? '1.5px solid var(--primary)' : '1px solid var(--border-color)', 
-                        background: isSelected ? 'rgba(99, 102, 241, 0.04)' : 'var(--card-bg)', 
-                        borderRadius: '10px', 
-                        padding: '0.85rem',
-                        transition: 'all 0.2s ease',
+                    <button
+                      key={cls.id}
+                      type="button"
+                      onClick={() => toggleClass(cls.id)}
+                      style={{
+                        padding: '0.45rem 0.85rem',
+                        borderRadius: '8px',
+                        border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border-color)',
+                        background: isSelected ? 'var(--primary)' : 'transparent',
+                        color: isSelected ? '#ffffff' : 'inherit',
+                        fontWeight: 600,
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
                         display: 'flex',
-                        flexDirection: 'column',
-                        gap: '0.6rem'
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        transition: 'all 0.15s ease'
                       }}
                     >
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
-                        <input 
-                          type="checkbox" 
-                          checked={isSelected}
-                          onChange={() => toggleClass(c.id)}
-                          style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: 'pointer' }}
-                        />
-                        <School size={16} color="var(--primary)" />
-                        <span>{c.name} - Section {c.section}</span>
-                      </label>
+                      {isSelected && <Check size={14} />}
+                      {cls.name} - {cls.section}
+                    </button>
+                  );
+                })}
+              </div>
 
-                      {isSelected && (
-                        <div style={{ paddingLeft: '1.6rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                            <UserCheck size={12} /> Assign Teaching Staff:
+              {/* Individual Staff Assignment per Selected Class */}
+              {selectedClasses.length > 0 && (
+                <div style={{ 
+                  background: 'rgba(0,0,0,0.02)', 
+                  border: '1px solid var(--border-color)', 
+                  borderRadius: '12px', 
+                  padding: '1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem',
+                  maxHeight: '260px',
+                  overflowY: 'auto'
+                }}>
+                  <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    Assign a specific teacher for each selected class (optional):
+                  </p>
+                  {selectedClasses.map(classId => {
+                    const cls = classes.find(c => c.id === classId);
+                    if (!cls) return null;
+                    return (
+                      <div key={classId} style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between',
+                        gap: '1rem',
+                        padding: '0.5rem 0.75rem',
+                        background: 'var(--card-bg)',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-color)',
+                        flexWrap: 'wrap'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <School size={16} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                          <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                            {cls.name} - {cls.section}
                           </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '0 0 240px' }}>
+                          <UserCheck size={16} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
                           <select
-                            value={classStaffMap[c.id] || ""}
-                            onChange={(e) => handleStaffChange(c.id, e.target.value)}
-                            style={{ 
-                              width: '100%', 
-                              padding: '0.45rem 0.65rem', 
-                              borderRadius: '6px', 
-                              border: '1px solid var(--border-color)', 
-                              background: 'var(--card-bg)', 
-                              color: 'inherit',
-                              fontSize: '0.8rem' 
+                            value={classStaffMap[classId] || ""}
+                            onChange={(e) => handleStaffChange(classId, e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '0.45rem',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-color)',
+                              background: 'transparent',
+                              fontSize: '0.825rem',
+                              color: 'inherit'
                             }}
                           >
-                            <option value="">Leave Unassigned</option>
+                            <option value="">No Teacher Assigned</option>
                             {teachers.map(t => (
                               <option key={t.id} value={t.id}>{t.user.name}</option>
                             ))}
                           </select>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'flex-end', gridColumn: '1 / -1' }}>
@@ -517,52 +454,77 @@ export default function SubjectListClient({
                 </p>
               </div>
 
-              {/* Action Buttons: View Details & Instant Delete */}
-              <div style={{ display: 'flex', gap: '0.75rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+              {/* Action Buttons: View Details, Edit, & Instant Delete */}
+              <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)', flexWrap: 'wrap' }}>
                 <Link 
                   href={`/dashboard/admin/subjects/${encodeURIComponent(subjectName)}`} 
                   style={{ 
-                    flex: 1, 
+                    flex: '1 1 auto', 
                     textAlign: 'center', 
-                    padding: '0.65rem 1rem', 
+                    padding: '0.6rem 0.75rem', 
                     background: 'var(--primary-bg)', 
                     color: 'var(--primary)', 
                     borderRadius: '8px', 
-                    fontSize: '0.875rem', 
+                    fontSize: '0.85rem', 
                     fontWeight: 600, 
                     textDecoration: 'none', 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center', 
-                    gap: '0.5rem' 
+                    gap: '0.35rem' 
                   }}
                 >
-                  <LayoutDashboard size={15} /> View Details
+                  <LayoutDashboard size={14} /> View
                 </Link>
+
+                <button
+                  type="button"
+                  onClick={() => setEditingSubject({ name: subjectName, instances })}
+                  title={`Edit ${subjectName}`}
+                  style={{ 
+                    flex: '1 1 auto', 
+                    textAlign: 'center', 
+                    padding: '0.6rem 0.75rem', 
+                    background: 'rgba(234, 179, 8, 0.12)', 
+                    color: 'var(--warning, #eab308)', 
+                    border: '1px solid rgba(234, 179, 8, 0.25)', 
+                    borderRadius: '8px', 
+                    fontSize: '0.85rem', 
+                    fontWeight: 600, 
+                    cursor: 'pointer', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    gap: '0.35rem',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Pencil size={14} /> Edit
+                </button>
                 
                 <button
                   type="button"
                   onClick={() => handleDeleteSubjectGroup(subjectName)}
                   title={`Delete ${subjectName}`}
                   style={{ 
-                    flex: 1, 
+                    flex: '1 1 auto', 
                     textAlign: 'center', 
-                    padding: '0.65rem 1rem', 
+                    padding: '0.6rem 0.75rem', 
                     background: 'var(--danger-bg)', 
                     color: "var(--danger)", 
                     border: '1px solid rgba(239, 68, 68, 0.2)', 
                     borderRadius: '8px', 
-                    fontSize: '0.875rem', 
+                    fontSize: '0.85rem', 
                     fontWeight: 600, 
                     cursor: 'pointer', 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center', 
-                    gap: '0.5rem',
+                    gap: '0.35rem',
                     transition: 'all 0.15s ease'
                   }}
                 >
-                  <Trash2 size={15} /> Delete
+                  <Trash2 size={14} /> Delete
                 </button>
               </div>
             </div>
@@ -576,6 +538,21 @@ export default function SubjectListClient({
           </div>
         )}
       </div>
+
+      {/* Edit Subject Modal */}
+      {editingSubject && (
+        <EditSubjectModal
+          subjectName={editingSubject.name}
+          instances={editingSubject.instances}
+          classes={classes}
+          teachers={teachers}
+          isOpen={true}
+          onClose={() => setEditingSubject(null)}
+          onSuccess={() => {
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
