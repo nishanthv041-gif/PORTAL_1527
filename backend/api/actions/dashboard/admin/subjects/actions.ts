@@ -122,48 +122,46 @@ export async function updateSubjectGroupAction(formData: FormData) {
 
     const selectedClassIds = new Set(assignments.map(a => a.classId));
 
-    await prisma.$transaction(async (tx) => {
-      // 1. Remove classes no longer selected
-      const toRemove = existingRecords.filter(r => !selectedClassIds.has(r.classId));
-      for (const rec of toRemove) {
-        // Cascade Marks & MarkHistory
-        const marks = await tx.mark.findMany({
-          where: { subjectId: rec.id },
-          select: { id: true }
-        });
-        const markIds = marks.map(m => m.id);
-        if (markIds.length > 0) {
-          await tx.markHistory.deleteMany({
-            where: { markId: { in: markIds } }
-          });
-          await tx.mark.deleteMany({
-            where: { id: { in: markIds } }
-          });
-        }
+    // 1. Remove classes no longer selected (batched)
+    const toRemove = existingRecords.filter(r => !selectedClassIds.has(r.classId));
+    const toRemoveIds = toRemove.map(r => r.id);
 
-        // Cascade Timetable
-        await tx.timetable.deleteMany({
-          where: { subjectId: rec.id }
+    if (toRemoveIds.length > 0) {
+      const marks = await prisma.mark.findMany({
+        where: { subjectId: { in: toRemoveIds } },
+        select: { id: true }
+      });
+      const markIds = marks.map(m => m.id);
+      if (markIds.length > 0) {
+        await prisma.markHistory.deleteMany({
+          where: { markId: { in: markIds } }
         });
-
-        // Cascade Exam Requests
-        await tx.examRequest.deleteMany({
-          where: { subjectId: rec.id }
-        });
-
-        // Delete Subject for this class
-        await tx.subject.delete({
-          where: { id: rec.id }
+        await prisma.mark.deleteMany({
+          where: { id: { in: markIds } }
         });
       }
 
-      // 2. Update existing class records or insert newly assigned classes
-      for (const item of assignments) {
+      await prisma.timetable.deleteMany({
+        where: { subjectId: { in: toRemoveIds } }
+      });
+
+      await prisma.examRequest.deleteMany({
+        where: { subjectId: { in: toRemoveIds } }
+      });
+
+      await prisma.subject.deleteMany({
+        where: { id: { in: toRemoveIds } }
+      });
+    }
+
+    // 2. Update existing class records or insert newly assigned classes in parallel
+    await Promise.all(
+      assignments.map(async (item) => {
         const { classId, teacherId } = item;
         const existing = existingRecords.find(r => r.classId === classId);
 
         if (existing) {
-          await tx.subject.update({
+          return prisma.subject.update({
             where: { id: existing.id },
             data: {
               name: newName,
@@ -175,7 +173,7 @@ export async function updateSubjectGroupAction(formData: FormData) {
             }
           });
         } else {
-          await tx.subject.create({
+          return prisma.subject.create({
             data: {
               name: newName,
               code,
@@ -187,8 +185,8 @@ export async function updateSubjectGroupAction(formData: FormData) {
             }
           });
         }
-      }
-    });
+      })
+    );
 
     revalidatePath("/dashboard/admin/subjects");
     revalidatePath(`/dashboard/admin/subjects/${encodeURIComponent(newName)}`);
@@ -230,37 +228,35 @@ export async function deleteSubject(id: string) {
 
     if (!subject) return { error: "Subject not found." };
 
-    await prisma.$transaction(async (tx) => {
-      // 1. Cascade Marks & MarkHistory
-      const marks = await tx.mark.findMany({
-        where: { subjectId: id },
-        select: { id: true }
-      });
-      const markIds = marks.map(m => m.id);
+    // 1. Cascade Marks & MarkHistory
+    const marks = await prisma.mark.findMany({
+      where: { subjectId: id },
+      select: { id: true }
+    });
+    const markIds = marks.map(m => m.id);
 
-      if (markIds.length > 0) {
-        await tx.markHistory.deleteMany({
-          where: { markId: { in: markIds } }
-        });
-        await tx.mark.deleteMany({
-          where: { id: { in: markIds } }
-        });
-      }
-
-      // 2. Cascade Timetable slots
-      await tx.timetable.deleteMany({
-        where: { subjectId: id }
+    if (markIds.length > 0) {
+      await prisma.markHistory.deleteMany({
+        where: { markId: { in: markIds } }
       });
-
-      // 3. Cascade Exam Requests
-      await tx.examRequest.deleteMany({
-        where: { subjectId: id }
+      await prisma.mark.deleteMany({
+        where: { id: { in: markIds } }
       });
+    }
 
-      // 4. Delete Subject record
-      await tx.subject.delete({
-        where: { id }
-      });
+    // 2. Cascade Timetable slots
+    await prisma.timetable.deleteMany({
+      where: { subjectId: id }
+    });
+
+    // 3. Cascade Exam Requests
+    await prisma.examRequest.deleteMany({
+      where: { subjectId: id }
+    });
+
+    // 4. Delete Subject record
+    await prisma.subject.delete({
+      where: { id }
     });
 
     revalidatePath("/dashboard/admin/subjects");
@@ -285,37 +281,35 @@ export async function deleteSubjectGroupByName(name: string) {
     if (subjects.length === 0) return { error: "Subject not found." };
     const subjectIds = subjects.map(s => s.id);
 
-    await prisma.$transaction(async (tx) => {
-      // 1. Cascade Marks & MarkHistory
-      const marks = await tx.mark.findMany({
-        where: { subjectId: { in: subjectIds } },
-        select: { id: true }
-      });
-      const markIds = marks.map(m => m.id);
+    // 1. Cascade Marks & MarkHistory
+    const marks = await prisma.mark.findMany({
+      where: { subjectId: { in: subjectIds } },
+      select: { id: true }
+    });
+    const markIds = marks.map(m => m.id);
 
-      if (markIds.length > 0) {
-        await tx.markHistory.deleteMany({
-          where: { markId: { in: markIds } }
-        });
-        await tx.mark.deleteMany({
-          where: { id: { in: markIds } }
-        });
-      }
-
-      // 2. Cascade Timetable slots
-      await tx.timetable.deleteMany({
-        where: { subjectId: { in: subjectIds } }
+    if (markIds.length > 0) {
+      await prisma.markHistory.deleteMany({
+        where: { markId: { in: markIds } }
       });
-
-      // 3. Cascade Exam Requests
-      await tx.examRequest.deleteMany({
-        where: { subjectId: { in: subjectIds } }
+      await prisma.mark.deleteMany({
+        where: { id: { in: markIds } }
       });
+    }
 
-      // 4. Delete all subjects with this name
-      await tx.subject.deleteMany({
-        where: { id: { in: subjectIds } }
-      });
+    // 2. Cascade Timetable slots
+    await prisma.timetable.deleteMany({
+      where: { subjectId: { in: subjectIds } }
+    });
+
+    // 3. Cascade Exam Requests
+    await prisma.examRequest.deleteMany({
+      where: { subjectId: { in: subjectIds } }
+    });
+
+    // 4. Delete all subjects with this name
+    await prisma.subject.deleteMany({
+      where: { id: { in: subjectIds } }
     });
 
     revalidatePath("/dashboard/admin/subjects");
