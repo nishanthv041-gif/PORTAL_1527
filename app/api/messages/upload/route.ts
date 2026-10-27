@@ -63,7 +63,7 @@ export async function POST(request: Request) {
 
     let fileUrl: string;
 
-    // Use Vercel Blob in production if configured
+    // 1. Try Vercel Blob if configured
     if (process.env.BLOB_READ_WRITE_TOKEN) {
       try {
         const { put } = await import("@vercel/blob");
@@ -73,11 +73,11 @@ export async function POST(request: Request) {
         });
         fileUrl = blob.url;
       } catch (blobErr) {
-        console.warn("Vercel Blob upload failed, attempting local fallback:", blobErr);
-        fileUrl = await saveLocalFile(file, uniqueFileName);
+        console.warn("Vercel Blob upload failed, falling back to robust storage:", blobErr);
+        fileUrl = await saveFileRobust(file, uniqueFileName);
       }
     } else {
-      fileUrl = await saveLocalFile(file, uniqueFileName);
+      fileUrl = await saveFileRobust(file, uniqueFileName);
     }
 
     return NextResponse.json({
@@ -95,14 +95,33 @@ export async function POST(request: Request) {
   }
 }
 
-async function saveLocalFile(file: File, uniqueFileName: string): Promise<string> {
-  const uploadDir = path.join(process.cwd(), "public", "uploads", "messages");
-  await fs.mkdir(uploadDir, { recursive: true });
-  const filePath = path.join(uploadDir, uniqueFileName);
-  
+async function saveFileRobust(file: File, uniqueFileName: string): Promise<string> {
+  const mime = file.type || "application/octet-stream";
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
-  await fs.writeFile(filePath, buffer);
-  
-  return `/uploads/messages/${uniqueFileName}`;
+
+  // In serverless environments (Vercel, AWS Lambda), the filesystem is read-only
+  // and local writes to /var/task/public throw ENOENT / EROFS.
+  const isServerless = Boolean(
+    process.env.VERCEL || 
+    process.env.AWS_LAMBDA_FUNCTION_NAME || 
+    process.env.LAMBDA_TASK_ROOT
+  );
+
+  if (!isServerless) {
+    try {
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "messages");
+      await fs.mkdir(uploadDir, { recursive: true });
+      const filePath = path.join(uploadDir, uniqueFileName);
+      await fs.writeFile(filePath, buffer);
+      return `/uploads/messages/${uniqueFileName}`;
+    } catch (localErr) {
+      console.warn("Local filesystem write failed, using data URI fallback:", localErr);
+    }
+  }
+
+  // Universal Serverless fallback: Self-contained Data URI
+  // Native HTML5 audio, video, img and download support with zero filesystem requirements
+  const base64 = buffer.toString("base64");
+  return `data:${mime};base64,${base64}`;
 }

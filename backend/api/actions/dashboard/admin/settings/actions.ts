@@ -1,15 +1,14 @@
 "use server";
 
 import { prisma } from "@/backend/db/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache, updateTag } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 
-// In-memory cache for system settings (0ms response, 5 min TTL)
-let cachedSettings: { data: Record<string, string>; expiresAt: number } | null = null;
-
 export async function invalidateSettingsCache() {
-  cachedSettings = null;
+  try {
+    updateTag("system-settings");
+  } catch {}
 }
 
 export async function saveSystemSettingAction(formData: FormData) {
@@ -31,7 +30,7 @@ export async function saveSystemSettingAction(formData: FormData) {
       create: { key, value, category }
     });
 
-    cachedSettings = null;
+    try { updateTag("system-settings"); } catch {}
     revalidatePath("/dashboard/admin/settings");
     return { success: true };
   } catch (error: unknown) {
@@ -59,7 +58,7 @@ export async function saveSystemSettingsBatchAction(settings: { key: string; val
 
     await prisma.$transaction(upserts);
 
-    cachedSettings = null;
+    try { updateTag("system-settings"); } catch {}
     revalidatePath("/dashboard/admin/settings");
     return { success: true };
   } catch (error: unknown) {
@@ -73,7 +72,7 @@ export async function deleteSystemSettingAction(key: string) {
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
     await prisma.systemSetting.delete({ where: { key } });
-    cachedSettings = null;
+    try { updateTag("system-settings"); } catch {}
     revalidatePath("/dashboard/admin/settings");
     return { success: true };
   } catch (error: unknown) {
@@ -84,20 +83,24 @@ export async function deleteSystemSettingAction(key: string) {
   }
 }
 
-export async function getSystemSettings(): Promise<Record<string, string>> {
-  const now = Date.now();
-  if (cachedSettings && cachedSettings.expiresAt > now) {
-    return cachedSettings.data;
-  }
-
-  const settings = await prisma.systemSetting.findMany({
-    select: { key: true, value: true }
-  });
-  const settingsMap: Record<string, string> = {};
-  settings.forEach(s => { settingsMap[s.key] = s.value; });
-  cachedSettings = { data: settingsMap, expiresAt: now + 300_000 }; // 5 min TTL
-  return settingsMap;
-}
+// 0ms cached query across serverless requests with 5 min TTL
+export const getSystemSettings = unstable_cache(
+  async (): Promise<Record<string, string>> => {
+    try {
+      const settings = await prisma.systemSetting.findMany({
+        select: { key: true, value: true }
+      });
+      const settingsMap: Record<string, string> = {};
+      settings.forEach(s => { settingsMap[s.key] = s.value; });
+      return settingsMap;
+    } catch (e) {
+      console.error("Failed to load system settings:", e);
+      return {};
+    }
+  },
+  ["system-settings-map"],
+  { revalidate: 300, tags: ["system-settings"] }
+);
 
 export async function getSystemSetting(key: string, defaultValue: string = "") {
   const settings = await getSystemSettings();

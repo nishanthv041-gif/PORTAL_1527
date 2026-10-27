@@ -67,16 +67,6 @@ const SETTINGS_CATEGORIES = [
     ]
   },
   {
-    id: "FEES",
-    label: "Fee Settings",
-    icon: <Wallet size={18} />,
-    fields: [
-      { key: "FEE_CURRENCY", label: "Default Currency Symbol", type: "text", default: "$" },
-      { key: "LATE_FEE_ENABLED", label: "Enable Late Fee Charges", type: "boolean", default: "false" },
-      { key: "RECEIPT_PREFIX", label: "Receipt Number Prefix", type: "text", default: "REC-" }
-    ]
-  },
-  {
     id: "NOTIFICATIONS",
     label: "Notification Settings",
     icon: <Bell size={18} />,
@@ -84,7 +74,6 @@ const SETTINGS_CATEGORIES = [
       { key: "EMAIL_NOTIFICATIONS", label: "Enable Email Notifications", type: "boolean", default: "true" },
       { key: "SMS_NOTIFICATIONS", label: "Enable SMS Notifications", type: "boolean", default: "false" },
       { key: "APP_NOTIFICATIONS", label: "Enable In-App Alerts", type: "boolean", default: "true" },
-      { key: "FEE_ALERTS", label: "Automated Fee Reminders", type: "boolean", default: "true" },
       { key: "EXAM_RESULT_ALERTS", label: "Exam Result Publications", type: "boolean", default: "true" }
     ]
   },

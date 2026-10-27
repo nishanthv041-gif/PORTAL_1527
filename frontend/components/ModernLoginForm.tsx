@@ -101,7 +101,23 @@ export default function ModernLoginForm({
           sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
           sessionStorage.setItem("srt_portal_fresh_login", "true");
         } catch {}
-        router.push("/dashboard");
+
+        // Direct fast-path routing: eliminates double-redirect delay
+        let target = "/dashboard";
+        if (defaultRole) {
+          target = `/dashboard/${defaultRole.toLowerCase()}`;
+        } else {
+          try {
+            const sessRes = await fetch("/api/auth/session");
+            if (sessRes.ok) {
+              const sess = await sessRes.json();
+              if (sess?.user?.role) {
+                target = `/dashboard/${sess.user.role.toLowerCase()}`;
+              }
+            }
+          } catch {}
+        }
+        window.location.href = target;
       }
     } catch {
       setError("An unexpected connection error occurred. Please try again.");
@@ -116,7 +132,8 @@ export default function ModernLoginForm({
       sessionStorage.setItem("srt_portal_fresh_login", "true");
     } catch {}
     try {
-      await signIn("google", { callbackUrl: "/dashboard" });
+      const target = defaultRole ? `/dashboard/${defaultRole.toLowerCase()}` : "/dashboard";
+      await signIn("google", { callbackUrl: target });
     } catch {
       setGoogleLoading(false);
     }
@@ -128,36 +145,22 @@ export default function ModernLoginForm({
 
   return (
     <div className={styles.pageWrapper}>
-      {/* Outer Browser Window Frame */}
-      <div className={styles.browserFrame}>
-        {/* Safari / Mac Simulated Browser Top Bar */}
-        <div className={styles.browserTopBar}>
-          {/* Traffic Light Dots */}
-          <div className={styles.windowDots}>
-            <div className={styles.dotRed} />
-            <div className={styles.dotYellow} />
-            <div className={styles.dotGreen} />
-          </div>
-
-          {/* Centered URL Address Pill */}
-          <div className={styles.browserUrlPill}>
-            <Lock size={12} style={{ opacity: 0.7 }} />
-            <span>portal.srt-school.edu</span>
-          </div>
-
-          {/* Right Top Actions (Theme Toggle) */}
-          <div className={styles.browserTopActions}>
-            <ThemeToggle />
-          </div>
+      {/* Floating Top Bar (Clean, no fake browser/traffic lights) */}
+      <header className={styles.topBar}>
+        <div className={styles.brandPill}>
+          <Sparkles size={14} className={styles.sparkleIcon} />
+          <span>{portalDisplayName}</span>
         </div>
+        <ThemeToggle />
+      </header>
 
-        {/* Main Split-Screen Canvas */}
-        <div className={styles.mainCanvas}>
-          {/* ========================================================
-              LEFT PANEL: FORM & PORTAL BRANDING
-              ======================================================== */}
-          <div className={styles.leftPanel}>
-            {/* Brand Header */}
+      {/* Main Split-Screen Canvas Card */}
+      <div className={styles.mainCanvas}>
+        {/* ========================================================
+            LEFT PANEL: FORM & PORTAL BRANDING
+            ======================================================== */}
+        <div className={styles.leftPanel}>
+          {/* Brand Header */}
             <div className={styles.brandRow}>
               {schoolLogo ? (
                 <div
@@ -379,6 +382,5 @@ export default function ModernLoginForm({
           </div>
         </div>
       </div>
-    </div>
   );
 }

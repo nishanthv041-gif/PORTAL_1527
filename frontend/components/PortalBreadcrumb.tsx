@@ -338,11 +338,6 @@ const ROUTE_MAP: Record<string, BreadcrumbInfo> = {
     parentLabel: "Dashboard",
     currentLabel: "Complaints & Help Desk"
   },
-  "/dashboard/parent/fees": {
-    parentHref: "/dashboard/parent",
-    parentLabel: "Dashboard",
-    currentLabel: "Fee Details"
-  },
   "/dashboard/parent/settings": {
     parentHref: "/dashboard/parent",
     parentLabel: "Dashboard",
