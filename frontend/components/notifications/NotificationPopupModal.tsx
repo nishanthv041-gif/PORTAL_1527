@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { 
   Bell, ChevronLeft, ChevronRight, ExternalLink, 
   Megaphone, MessageSquare, Award, BookOpen, Calendar, Info,
-  FileText, Clock, Users, AlertCircle, BellOff, CheckCheck, Trash2
+  FileText, Clock, Users, AlertCircle, BellOff, CheckCheck
 } from "lucide-react";
 import styles from "./NotificationPopupModal.module.css";
 import { 
@@ -13,7 +13,6 @@ import {
   getUnifiedNotificationsAction, 
   markNotificationReadAction, 
   clearAllNotificationsAction, 
-  deleteUnifiedNotificationAction,
   markNotificationsAsSeenInPopupAction
 } from "@/backend/api/actions/notifications/unifiedNotificationActions";
 
@@ -198,28 +197,6 @@ export default function NotificationPopupModal({
   };
 
 
-  const handleDeleteCurrent = async () => {
-    if (!current) return;
-    if (!confirm("Are you sure you want to delete this notification?")) return;
-
-    try {
-      await deleteUnifiedNotificationAction(current.id);
-    } catch {
-      // silent
-    }
-
-    const updated = notifications.filter((_, idx) => idx !== currentIndex);
-    setNotifications(updated);
-
-    if (updated.length === 0) {
-      setIsOpen(false);
-      sessionStorage.setItem(DISMISSED_KEY, "true");
-    } else if (currentIndex >= updated.length) {
-      setCurrentIndex(Math.max(0, updated.length - 1));
-    }
-
-    router.refresh();
-  };
 
   const handleOpen = async () => {
     if (!current) return;
@@ -392,7 +369,7 @@ export default function NotificationPopupModal({
           </div>
         )}
 
-        {/* Action Buttons: Open (Blue), Delete (Red/Trash), Close */}
+        {/* Action Buttons: Open (Blue), Close */}
         <div className={styles.actionButtonGroup}>
           <button
             type="button"
@@ -402,16 +379,6 @@ export default function NotificationPopupModal({
           >
             <span>Open</span>
             <ExternalLink size={15} />
-          </button>
-
-          <button
-            type="button"
-            onClick={handleDeleteCurrent}
-            className={styles.deleteBtn}
-            title="Delete this notification"
-          >
-            <Trash2 size={15} />
-            <span>Delete</span>
           </button>
 
           <button
