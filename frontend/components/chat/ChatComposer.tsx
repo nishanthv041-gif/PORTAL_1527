@@ -13,8 +13,15 @@ import {
   Loader2, 
   FileText, 
   AlertCircle,
-  RotateCcw 
+  RotateCcw,
+  Sparkles
 } from "lucide-react";
+import { 
+  getOptimalAudioConstraints, 
+  createVoiceRecordingPipeline, 
+  VoiceRecorderPipeline, 
+  playbackEnhancer 
+} from "@/frontend/utils/audioProcessor";
 
 interface QueuedAttachment {
   file: File;
@@ -50,12 +57,17 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [previewCurrentTime, setPreviewCurrentTime] = useState(0);
   const [previewDuration, setPreviewDuration] = useState(0);
+  const [audioLevel, setAudioLevel] = useState(0); // Live RMS vocal volume 0.0 - 1.0
+  const [previewEnhanced, setPreviewEnhanced] = useState(true);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioPipelineRef = useRef<VoiceRecorderPipeline | null>(null);
+  const visualizerRafRef = useRef<number | null>(null);
   const previewAudioElementRef = useRef<HTMLAudioElement | null>(null);
+  const enhancerControlsRef = useRef<ReturnType<typeof playbackEnhancer.attachElement> | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -75,6 +87,20 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
     };
   }, []);
 
+  // Connect preview audio to playback enhancer
+  useEffect(() => {
+    const audio = previewAudioElementRef.current;
+    if (!audio || !previewAudioUrl) return;
+
+    enhancerControlsRef.current = playbackEnhancer.attachElement(audio, previewEnhanced, 1.0);
+
+    return () => {
+      if (enhancerControlsRef.current) {
+        enhancerControlsRef.current.disconnect();
+      }
+    };
+  }, [previewAudioUrl]);
+
   // Adjust textarea height automatically
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
@@ -85,13 +111,22 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
   };
 
   const stopMediaTracks = () => {
+    if (visualizerRafRef.current) {
+      cancelAnimationFrame(visualizerRafRef.current);
+      visualizerRafRef.current = null;
+    }
+    if (audioPipelineRef.current) {
+      audioPipelineRef.current.cleanup();
+      audioPipelineRef.current = null;
+    }
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
     }
+    setAudioLevel(0);
   };
 
-  // Start Voice Recording
+  // Start Voice Recording with Smart Amplification & Audio Stabilization
   const startRecording = async () => {
     setUploadError(null);
     setRecordedAudioBlob(null);
@@ -102,9 +137,11 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
     if (previewAudioElementRef.current) {
       previewAudioElementRef.current.pause();
     }
+    stopMediaTracks();
     setIsPreviewPlaying(false);
     setPreviewCurrentTime(0);
     setPreviewDuration(0);
+    setAudioLevel(0);
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setUploadError("Audio recording is not supported in this browser.");
@@ -112,10 +149,16 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
+      // 1. Get raw microphone stream with browser AGC and noise suppression
+      const constraints = getOptimalAudioConstraints();
+      const rawStream = await navigator.mediaDevices.getUserMedia({ audio: constraints });
+      mediaStreamRef.current = rawStream;
 
-      // Select supported audio MIME type
+      // 2. Build real-time Web Audio pipeline: High-pass (85Hz) -> AGC PreGain -> Compressor -> Makeup Gain -> Analyser
+      const pipeline = createVoiceRecordingPipeline(rawStream);
+      audioPipelineRef.current = pipeline;
+
+      // 3. Select optimal audio MIME type
       let mimeType = "";
       if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
         mimeType = "audio/webm;codecs=opus";
@@ -127,7 +170,9 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
         mimeType = "audio/ogg;codecs=opus";
       }
 
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      // 4. Pass the amplified, stabilized stream to MediaRecorder
+      const streamToRecord = pipeline ? pipeline.stream : rawStream;
+      const recorder = mimeType ? new MediaRecorder(streamToRecord, { mimeType }) : new MediaRecorder(streamToRecord);
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
 
@@ -146,6 +191,16 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
       recordTimerRef.current = setInterval(() => {
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
+
+      // 5. Start live visual audio waveform / level meter loop
+      const pollAudioLevel = () => {
+        if (audioPipelineRef.current) {
+          const level = audioPipelineRef.current.getAudioLevel();
+          setAudioLevel(level);
+        }
+        visualizerRafRef.current = requestAnimationFrame(pollAudioLevel);
+      };
+      visualizerRafRef.current = requestAnimationFrame(pollAudioLevel);
     } catch (err: unknown) {
       console.error("Microphone access error:", err);
       if (err instanceof Error && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")) {
@@ -163,6 +218,11 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
       clearInterval(recordTimerRef.current);
       recordTimerRef.current = null;
     }
+    if (visualizerRafRef.current) {
+      cancelAnimationFrame(visualizerRafRef.current);
+      visualizerRafRef.current = null;
+    }
+    setAudioLevel(0);
 
     const recorder = mediaRecorderRef.current;
     const mime = recorder.mimeType || "audio/webm";
@@ -231,6 +291,9 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
   const togglePreviewPlay = () => {
     const audio = previewAudioElementRef.current;
     if (!audio) return;
+
+    // Resume shared audio context on user gesture
+    playbackEnhancer.resumeContext().catch(() => {});
 
     if (!audio.paused && !audio.ended) {
       audio.pause();
@@ -586,7 +649,7 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
             {/* If actively recording or recording is paused */}
             {isRecording ? (
               <>
-                {/* Left: Recording status & timer */}
+                {/* Left: Recording status, timer & live audio waveform meter */}
                 <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0, flex: 1 }}>
                   <div style={{
                     width: "10px",
@@ -605,18 +668,50 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
                   }}>
                     {formatTimer(recordingSeconds)}
                   </span>
+
+                  {/* Real-Time Live Audio Waveform Meter */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "2.5px",
+                      height: "20px",
+                      padding: "0 4px",
+                    }}
+                    title="Live Audio Level (Smart Voice Amplification & Anti-Clipping Active)"
+                  >
+                    {[0.6, 1.1, 1.7, 2.2, 1.5, 0.9, 0.5].map((multiplier, i) => {
+                      const barH = isRecordingPaused
+                        ? 4
+                        : Math.max(4, Math.min(22, Math.round(4 + audioLevel * 18 * multiplier)));
+                      return (
+                        <div
+                          key={i}
+                          style={{
+                            width: "3px",
+                            height: `${barH}px`,
+                            backgroundColor: "var(--primary, #6366f1)",
+                            borderRadius: "1.5px",
+                            transition: "height 0.05s ease",
+                            opacity: isRecordingPaused ? 0.35 : 0.85,
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+
                   <span style={{
-                    fontSize: "0.8rem",
+                    fontSize: "0.78rem",
                     opacity: 0.7,
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                   }}>
-                    {isRecordingPaused ? "Paused" : "Recording voice..."}
+                    {isRecordingPaused ? "Paused" : "Smart Recording..."}
                   </span>
                 </div>
 
-                {/* Right: Controls (Discard, Pause/Resume, Stop&Preview, Send) */}
+                {/* Right: Controls (Discard, Pause/Listen, Stop&Listen, Direct Send) */}
                 <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
                   {/* Discard */}
                   <button
@@ -780,15 +875,45 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
                         }}
                       />
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.74rem", opacity: 0.8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.74rem", opacity: 0.85 }}>
                       <span>{formatTimer(previewCurrentTime)}</span>
                       <span>{formatTimer(previewDuration || recordingSeconds)}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Right: Discard, Re-record, Send */}
+                {/* Right: Enhancement Toggle, Discard, Re-record, Send */}
                 <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
+                  {/* Smart Amplification Toggle in Preview */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !previewEnhanced;
+                      setPreviewEnhanced(next);
+                      if (enhancerControlsRef.current) {
+                        enhancerControlsRef.current.setEnhanced(next);
+                      }
+                    }}
+                    title={previewEnhanced ? "Smart Amplification: Active (Loudness stabilized & boosted)" : "Smart Amplification: Inactive (Raw audio)"}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "2.5px",
+                      background: previewEnhanced ? "rgba(99, 102, 241, 0.12)" : "rgba(0, 0, 0, 0.05)",
+                      color: previewEnhanced ? "var(--primary, #6366f1)" : "inherit",
+                      border: "1px solid var(--border-color, #e2e8f0)",
+                      borderRadius: "10px",
+                      padding: "2px 7px",
+                      cursor: "pointer",
+                      fontSize: "0.68rem",
+                      fontWeight: previewEnhanced ? 600 : 400,
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <Sparkles size={11} fill={previewEnhanced ? "currentColor" : "none"} />
+                    <span>{previewEnhanced ? "Boosted" : "Raw"}</span>
+                  </button>
+
                   {/* Discard */}
                   <button
                     type="button"

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Play, Pause, Volume2 } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Sparkles } from "lucide-react";
+import { playbackEnhancer } from "@/frontend/utils/audioProcessor";
 
 interface VoiceNotePlayerProps {
   src: string;
@@ -13,7 +14,13 @@ export default function VoiceNotePlayer({ src, duration, isMine }: VoiceNotePlay
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [totalDuration, setTotalDuration] = useState(duration || 0);
+  const [isEnhanced, setIsEnhanced] = useState(true);
+  const [userVolume, setUserVolume] = useState(1.0);
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const enhancerControlsRef = useRef<ReturnType<typeof playbackEnhancer.attachElement> | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (duration && duration > 0) {
@@ -21,9 +28,58 @@ export default function VoiceNotePlayer({ src, duration, isMine }: VoiceNotePlay
     }
   }, [duration]);
 
+  // Attach to shared playback audio enhancer
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    enhancerControlsRef.current = playbackEnhancer.attachElement(audio, isEnhanced, userVolume);
+
+    return () => {
+      if (enhancerControlsRef.current) {
+        enhancerControlsRef.current.disconnect();
+      }
+    };
+  }, [src]);
+
+  // Close volume popover when clicking outside
+  useEffect(() => {
+    if (!showVolumeSlider) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setShowVolumeSlider(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showVolumeSlider]);
+
+  // Toggle voice amplification & loudness normalization
+  const toggleEnhanced = () => {
+    const next = !isEnhanced;
+    setIsEnhanced(next);
+    if (enhancerControlsRef.current) {
+      enhancerControlsRef.current.setEnhanced(next);
+    }
+  };
+
+  // Adjust playback gain (0% to 200%)
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const vol = parseFloat(e.target.value);
+    setUserVolume(vol);
+    if (enhancerControlsRef.current) {
+      enhancerControlsRef.current.setVolume(vol);
+    } else if (audioRef.current) {
+      audioRef.current.volume = Math.min(1.0, vol);
+    }
+  };
+
   const togglePlay = () => {
     const audio = audioRef.current;
     if (!audio) return;
+
+    // Resume shared audio context on user gesture
+    playbackEnhancer.resumeContext().catch(() => {});
 
     if (!audio.paused && !audio.ended) {
       audio.pause();
@@ -65,8 +121,8 @@ export default function VoiceNotePlayer({ src, duration, isMine }: VoiceNotePlay
       alignItems: "center",
       gap: "0.75rem",
       padding: "0.5rem 0.25rem",
-      minWidth: "220px",
-      maxWidth: "320px",
+      minWidth: "230px",
+      maxWidth: "340px",
     }}>
       {/* Play/Pause Button */}
       <button
@@ -131,16 +187,99 @@ export default function VoiceNotePlayer({ src, duration, isMine }: VoiceNotePlay
           />
         </div>
 
-        {/* Timers & Audio Icon */}
+        {/* Timers & Audio Enhancements Toolbar */}
         <div style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           fontSize: "0.72rem",
-          opacity: 0.85,
+          opacity: 0.9,
+          position: "relative",
         }}>
           <span>{formatTime(isPlaying ? currentTime : totalDuration)}</span>
-          <Volume2 size={13} style={{ opacity: 0.7 }} />
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+            {/* Audio Enhancement (AGC / Loudness Lift) Toggle */}
+            <button
+              type="button"
+              onClick={toggleEnhanced}
+              title={isEnhanced ? "Smart Amplification: Active (Loudness stabilized & boosted)" : "Smart Amplification: Inactive (Raw audio)"}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "2.5px",
+                background: isEnhanced
+                  ? (isMine ? "rgba(255, 255, 255, 0.25)" : "rgba(99, 102, 241, 0.15)")
+                  : "transparent",
+                color: isMine ? "#ffffff" : (isEnhanced ? "var(--primary, #6366f1)" : "inherit"),
+                border: "none",
+                borderRadius: "10px",
+                padding: "1px 6px",
+                cursor: "pointer",
+                fontSize: "0.65rem",
+                fontWeight: isEnhanced ? 600 : 400,
+                opacity: isEnhanced ? 1 : 0.65,
+                transition: "all 0.15s ease",
+              }}
+            >
+              <Sparkles size={11} fill={isEnhanced ? "currentColor" : "none"} />
+              <span>{isEnhanced ? "Boost" : "Raw"}</span>
+            </button>
+
+            {/* Volume Control Button & Popover */}
+            <div style={{ position: "relative" }} ref={popoverRef}>
+              <button
+                type="button"
+                onClick={() => setShowVolumeSlider((prev) => !prev)}
+                title={`Playback Volume: ${Math.round(userVolume * 100)}%`}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: isMine ? "#ffffff" : "inherit",
+                  cursor: "pointer",
+                  padding: "1px 2px",
+                  display: "flex",
+                  alignItems: "center",
+                  opacity: userVolume === 0 ? 0.5 : 0.85,
+                }}
+              >
+                {userVolume === 0 ? <VolumeX size={13} /> : <Volume2 size={13} />}
+              </button>
+
+              {showVolumeSlider && (
+                <div style={{
+                  position: "absolute",
+                  bottom: "100%",
+                  right: 0,
+                  marginBottom: "8px",
+                  backgroundColor: "var(--card-bg, #ffffff)",
+                  color: "var(--foreground, #1e293b)",
+                  border: "1px solid var(--border-color, #e2e8f0)",
+                  borderRadius: "8px",
+                  padding: "0.45rem 0.65rem",
+                  boxShadow: "0 4px 14px rgba(0, 0, 0, 0.15)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                  zIndex: 50,
+                  minWidth: "130px",
+                }}>
+                  <input
+                    type="range"
+                    min={0}
+                    max={2.0}
+                    step={0.05}
+                    value={userVolume}
+                    onChange={handleVolumeChange}
+                    style={{ width: "80px", cursor: "pointer", accentColor: "var(--primary, #6366f1)" }}
+                  />
+                  <span style={{ fontSize: "0.7rem", fontWeight: 600, minWidth: "32px", textAlign: "right" }}>
+                    {Math.round(userVolume * 100)}%
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
