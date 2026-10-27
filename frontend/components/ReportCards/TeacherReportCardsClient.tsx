@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { 
   Send, Trash2, Eye, CheckCircle2, Clock, Sparkles, 
   BookOpen, Users, Award, AlertCircle, Calendar,
-  Search, Check, X, ShieldAlert, FileText, ChevronRight
+  Search, Check, X, ShieldAlert, FileText, ChevronRight,
+  Sliders, Settings2, Target
 } from "lucide-react";
 import styles from "./TeacherReportCardsClient.module.css";
 import { 
@@ -81,6 +82,13 @@ const EXAM_PRESETS = [
   "Annual Examination"
 ];
 
+const MARK_CRITERIA_PRESETS = [
+  { label: "100 / 35", max: 100, pass: 35, desc: "Standard (100 Max / 35 Pass)" },
+  { label: "50 / 20", max: 50, pass: 20, desc: "Midterm (50 Max / 20 Pass)" },
+  { label: "75 / 30", max: 75, pass: 30, desc: "Quarterly (75 Max / 30 Pass)" },
+  { label: "25 / 10", max: 25, pass: 10, desc: "Unit Test (25 Max / 10 Pass)" }
+];
+
 const REMARK_PRESETS = [
   "⭐ Excellent overall performance and exemplary academic conduct!",
   "👍 Good understanding of core concepts. Keep up the high standard!",
@@ -107,8 +115,13 @@ export default function TeacherReportCardsClient({
   const [examName, setExamName] = useState<string>("Midterm Examination");
   const [examDate, setExamDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
 
-  // Subject Marks Mapping: { [subjectId]: { score: number | "", maxScore: number, remarks: string } }
-  const [subjectMarks, setSubjectMarks] = useState<Record<string, { score: number | ""; maxScore: number; remarks: string }>>({});
+  // Exam Criteria State (Set Pass Mark & Max Mark after Exam Name & Date)
+  const [examMaxMarks, setExamMaxMarks] = useState<number>(100);
+  const [examPassMarks, setExamPassMarks] = useState<number>(35);
+  const [customizingSubjectId, setCustomizingSubjectId] = useState<string | null>(null);
+
+  // Subject Marks Mapping: { [subjectId]: { score: number | "", maxScore: number, passMarks: number, remarks: string } }
+  const [subjectMarks, setSubjectMarks] = useState<Record<string, { score: number | ""; maxScore: number; passMarks: number; remarks: string }>>({});
 
   // General Teacher Remarks
   const [generalRemarks, setGeneralRemarks] = useState<string>("");
@@ -155,26 +168,79 @@ export default function TeacherReportCardsClient({
     setSuccessBanner(null);
     setErrorMessage(null);
 
-    // Initialize subject marks with empty values
-    const initialMarks: Record<string, { score: number | ""; maxScore: number; remarks: string }> = {};
+    // Initialize subject marks with empty values and current criteria
+    const initialMarks: Record<string, { score: number | ""; maxScore: number; passMarks: number; remarks: string }> = {};
     currentSubjects.forEach(sub => {
       initialMarks[sub.id] = {
         score: "",
-        maxScore: sub.maxMarks || 100,
+        maxScore: examMaxMarks || sub.maxMarks || 100,
+        passMarks: examPassMarks || sub.passMarks || 35,
         remarks: ""
       };
     });
     setSubjectMarks(initialMarks);
   };
 
+  // Apply Max Mark & Pass Mark to all subjects
+  const handleApplyCriteriaToAll = (newMax: number, newPass: number) => {
+    const validMax = Math.max(1, newMax || 100);
+    const validPass = Math.max(0, Math.min(validMax, newPass || 35));
+
+    setExamMaxMarks(validMax);
+    setExamPassMarks(validPass);
+
+    setSubjectMarks(prev => {
+      const updated: Record<string, { score: number | ""; maxScore: number; passMarks: number; remarks: string }> = {};
+      currentSubjects.forEach(sub => {
+        const existing = prev[sub.id];
+        const existingScore = existing?.score;
+        const clampedScore = existingScore !== undefined && existingScore !== "" 
+          ? Math.min(validMax, Number(existingScore)) 
+          : (existingScore ?? "");
+
+        updated[sub.id] = {
+          score: clampedScore,
+          maxScore: validMax,
+          passMarks: validPass,
+          remarks: existing?.remarks || ""
+        };
+      });
+      return updated;
+    });
+  };
+
+  // Customize criteria for a single subject
+  const handleCustomSubjectCriteria = (subjectId: string, customMax: number, customPass: number) => {
+    const validMax = Math.max(1, customMax || 100);
+    const validPass = Math.max(0, Math.min(validMax, customPass || 35));
+
+    setSubjectMarks(prev => {
+      const existing = prev[subjectId] || { score: "", maxScore: examMaxMarks, passMarks: examPassMarks, remarks: "" };
+      const clampedScore = existing.score !== "" ? Math.min(validMax, Number(existing.score)) : "";
+      return {
+        ...prev,
+        [subjectId]: {
+          ...existing,
+          score: clampedScore,
+          maxScore: validMax,
+          passMarks: validPass
+        }
+      };
+    });
+  };
+
   // Update mark for an individual subject
-  const handleMarkChange = (subjectId: string, val: string, maxMarks: number) => {
-    const num = val === "" ? "" : Math.max(0, Math.min(maxMarks, Number(val)));
+  const handleMarkChange = (subjectId: string, val: string) => {
+    const currentMax = subjectMarks[subjectId]?.maxScore ?? examMaxMarks;
+    const currentPass = subjectMarks[subjectId]?.passMarks ?? examPassMarks;
+    const num = val === "" ? "" : Math.max(0, Math.min(currentMax, Number(val)));
+
     setSubjectMarks(prev => ({
       ...prev,
       [subjectId]: {
         score: num,
-        maxScore: maxMarks,
+        maxScore: currentMax,
+        passMarks: currentPass,
         remarks: prev[subjectId]?.remarks || ""
       }
     }));
@@ -189,14 +255,15 @@ export default function TeacherReportCardsClient({
 
     currentSubjects.forEach(sub => {
       const entry = subjectMarks[sub.id];
-      const max = entry?.maxScore || sub.maxMarks || 100;
+      const max = entry?.maxScore ?? examMaxMarks;
+      const pass = entry?.passMarks ?? examPassMarks;
       maximum += max;
 
       if (entry && entry.score !== "") {
         hasAnyMarks = true;
         const scoreNum = Number(entry.score);
         obtained += scoreNum;
-        if (scoreNum < (sub.passMarks || 35)) {
+        if (scoreNum < pass) {
           hasFail = true;
         }
       }
@@ -225,7 +292,7 @@ export default function TeacherReportCardsClient({
       hasAnyMarks,
       isPass
     };
-  }, [currentSubjects, subjectMarks]);
+  }, [currentSubjects, subjectMarks, examMaxMarks, examPassMarks]);
 
   // SUBMIT & SEND REPORT CARD
   const handleSendReportCard = async (e: React.FormEvent) => {
@@ -256,7 +323,8 @@ export default function TeacherReportCardsClient({
       return {
         subjectId: sub.id,
         score: entry && entry.score !== "" ? Number(entry.score) : 0,
-        maxScore: entry?.maxScore || sub.maxMarks || 100,
+        maxScore: entry?.maxScore ?? examMaxMarks ?? 100,
+        passMarks: entry?.passMarks ?? examPassMarks ?? 35,
         remarks: entry?.remarks || ""
       };
     });
@@ -305,8 +373,8 @@ export default function TeacherReportCardsClient({
               subjectId: s.id,
               subjectName: s.name,
               score: entry && entry.score !== "" ? Number(entry.score) : 0,
-              maxScore: entry?.maxScore || s.maxMarks || 100,
-              passMarks: s.passMarks,
+              maxScore: entry?.maxScore ?? examMaxMarks ?? 100,
+              passMarks: entry?.passMarks ?? examPassMarks ?? 35,
               remarks: entry?.remarks || null
             };
           })
@@ -610,10 +678,105 @@ export default function TeacherReportCardsClient({
             </div>
           </div>
 
-          {/* STEP 3: SUBJECT MARKS ENTRY (MOBILE CARD BASED) */}
+          {/* STEP 3: SET PASS MARK & MAX MARK (EXAM SCORING CRITERIA) */}
           <div className={styles.sectionGroup}>
             <div className={styles.sectionHeader}>
               <span className={styles.stepNumber}>3</span>
+              <h2 className={styles.sectionTitle}>Set Pass Mark &amp; Max Mark</h2>
+            </div>
+
+            <div className={styles.criteriaContainer}>
+              <p className={styles.criteriaSubtext}>
+                Set the global maximum score and passing mark for this exam. Presets automatically configure both values:
+              </p>
+
+              {/* Fast Presets Chips */}
+              <div className={styles.presetChipsRow}>
+                {MARK_CRITERIA_PRESETS.map((p) => {
+                  const isActive = examMaxMarks === p.max && examPassMarks === p.pass;
+                  return (
+                    <button
+                      type="button"
+                      key={p.label}
+                      className={`${styles.presetChipBtn} ${isActive ? styles.presetChipBtnActive : ""}`}
+                      onClick={() => handleApplyCriteriaToAll(p.max, p.pass)}
+                    >
+                      <Target size={13} />
+                      <span>{p.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Max & Pass Mark Input Cards */}
+              <div className={styles.criteriaInputsGrid}>
+                {/* Max Marks Card */}
+                <div className={styles.criteriaInputCard}>
+                  <label htmlFor="exam-max-marks-input" className={styles.criteriaFieldLabel}>
+                    <Sliders size={14} /> Maximum Mark (Out of) *
+                  </label>
+                  <div className={styles.criteriaInputFieldWrapper}>
+                    <input
+                      id="exam-max-marks-input"
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={1000}
+                      className={styles.criteriaNumberInput}
+                      value={examMaxMarks}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        if (!isNaN(val) && val > 0) {
+                          handleApplyCriteriaToAll(val, Math.min(val, examPassMarks));
+                        }
+                      }}
+                      required
+                    />
+                    <span className={styles.criteriaUnitTag}>Marks</span>
+                  </div>
+                </div>
+
+                {/* Pass Mark Card */}
+                <div className={styles.criteriaInputCard}>
+                  <label htmlFor="exam-pass-marks-input" className={styles.criteriaFieldLabel}>
+                    <Award size={14} /> Pass Mark (Minimum) *
+                  </label>
+                  <div className={styles.criteriaInputFieldWrapper}>
+                    <input
+                      id="exam-pass-marks-input"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={examMaxMarks}
+                      className={styles.criteriaNumberInput}
+                      value={examPassMarks}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        if (!isNaN(val) && val >= 0) {
+                          handleApplyCriteriaToAll(examMaxMarks, val);
+                        }
+                      }}
+                      required
+                    />
+                    <span className={styles.criteriaUnitTag}>Marks</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Active Threshold Indicator */}
+              <div className={styles.criteriaStatusNotice}>
+                <Check size={14} className={styles.criteriaCheckIcon} />
+                <span>
+                  Threshold: <strong>{examPassMarks}</strong> / <strong>{examMaxMarks}</strong> to pass ({examMaxMarks > 0 ? ((examPassMarks / examMaxMarks) * 100).toFixed(0) : 0}% required). Applied to all subjects below.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* STEP 4: SUBJECT MARKS ENTRY (MOBILE PHONE OPTIMIZED) */}
+          <div className={styles.sectionGroup}>
+            <div className={styles.sectionHeader}>
+              <span className={styles.stepNumber}>4</span>
               <h2 className={styles.sectionTitle}>Enter Subject Marks</h2>
             </div>
 
@@ -627,42 +790,96 @@ export default function TeacherReportCardsClient({
                 {currentSubjects.map((sub) => {
                   const entry = subjectMarks[sub.id];
                   const currentScore = entry?.score;
+                  const currentMax = entry?.maxScore ?? examMaxMarks;
+                  const currentPass = entry?.passMarks ?? examPassMarks;
                   const isEntered = currentScore !== undefined && currentScore !== "";
-                  const isPass = isEntered && Number(currentScore) >= (sub.passMarks || 35);
+                  const scoreNum = Number(currentScore);
+                  const isPass = isEntered && scoreNum >= currentPass;
+                  const isExceeding = isEntered && scoreNum > currentMax;
+                  const isCustomizing = customizingSubjectId === sub.id;
 
                   return (
                     <div key={sub.id} className={styles.subjectRowCard}>
-                      <div className={styles.subjectInfo}>
-                        <h4 className={styles.subjectName}>{sub.name}</h4>
-                        <span className={styles.subjectCriteria}>
-                          Max: {sub.maxMarks || 100} • Pass Marks: {sub.passMarks || 35}
-                        </span>
+                      <div className={styles.subjectCardTop}>
+                        <div className={styles.subjectInfo}>
+                          <h4 className={styles.subjectName}>{sub.name}</h4>
+                          <div className={styles.subjectCriteriaBadges}>
+                            <span className={styles.subjectCriteria}>
+                              Max: <strong>{currentMax}</strong> • Pass: <strong>{currentPass}</strong>
+                            </span>
+                            <button
+                              type="button"
+                              className={styles.subjectCriteriaToggle}
+                              onClick={() => setCustomizingSubjectId(isCustomizing ? null : sub.id)}
+                              title="Customize max or pass mark for this subject"
+                            >
+                              <Settings2 size={12} />
+                              <span>{isCustomizing ? "Close" : "Custom"}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Pass / Fail Status Pill */}
+                        <div className={styles.pillContainer}>
+                          {isEntered && (
+                            <span className={`${styles.passFailPill} ${isPass ? styles.passPill : styles.failPill}`}>
+                              {isPass ? "PASS" : "FAIL"}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      <div className={styles.markInputGroup}>
-                        {isEntered && (
-                          <span className={`${styles.passFailPill} ${isPass ? styles.passPill : styles.failPill}`}>
-                            {isPass ? "PASS" : "FAIL"}
+                      {/* Optional inline customizer for this single subject */}
+                      {isCustomizing && (
+                        <div className={styles.customCriteriaInline}>
+                          <div className={styles.customCriteriaField}>
+                            <label className={styles.customCriteriaLabel}>Subject Max:</label>
+                            <input
+                              type="number"
+                              min={1}
+                              max={1000}
+                              value={currentMax}
+                              onChange={(e) => handleCustomSubjectCriteria(sub.id, Number(e.target.value), currentPass)}
+                              className={styles.customCriteriaInput}
+                            />
+                          </div>
+                          <div className={styles.customCriteriaField}>
+                            <label className={styles.customCriteriaLabel}>Subject Pass:</label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={currentMax}
+                              value={currentPass}
+                              onChange={(e) => handleCustomSubjectCriteria(sub.id, currentMax, Number(e.target.value))}
+                              className={styles.customCriteriaInput}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Main Mark Input Box */}
+                      <div className={styles.subjectScoreSection}>
+                        <div className={styles.markInputGroup}>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            max={currentMax}
+                            step="any"
+                            className={`${styles.markInput} ${isExceeding ? styles.markInputError : ""}`}
+                            placeholder="0"
+                            value={currentScore ?? ""}
+                            onChange={(e) => handleMarkChange(sub.id, e.target.value)}
+                            aria-label={`Marks for ${sub.name}`}
+                            required={selectedStudentId !== ""}
+                          />
+                          <span className={styles.maxScoreTag}>
+                            / {currentMax}
                           </span>
+                        </div>
+                        {isExceeding && (
+                          <span className={styles.scoreErrorText}>Score cannot exceed max marks ({currentMax})</span>
                         )}
-
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          min={0}
-                          max={sub.maxMarks || 100}
-                          step="any"
-                          className={styles.markInput}
-                          placeholder="Marks"
-                          value={currentScore ?? ""}
-                          onChange={(e) => handleMarkChange(sub.id, e.target.value, sub.maxMarks || 100)}
-                          aria-label={`Marks for ${sub.name}`}
-                          required={selectedStudentId !== ""}
-                        />
-
-                        <span className={styles.maxScoreTag}>
-                          / {sub.maxMarks || 100}
-                        </span>
                       </div>
                     </div>
                   );
@@ -671,56 +888,75 @@ export default function TeacherReportCardsClient({
             )}
           </div>
 
-          {/* STEP 4: AUTOMATIC LIVE CALCULATION (THE TOTAL SPACE) */}
+          {/* STEP 5: AUTOMATIC LIVE CALCULATION (THE TOTAL SPACE) */}
           <div className={styles.calculationPanel} aria-live="polite">
+            <div className={styles.calcHeaderRow}>
+              <div className={styles.calcHeaderTitleArea}>
+                <Sparkles size={16} className={styles.calcSparkleIcon} />
+                <span className={styles.calcHeaderTitle}>Live Academic Summary</span>
+              </div>
+              <div className={styles.statusIndicator}>
+                {totals.hasAnyMarks && totals.isPass ? (
+                  <span className={styles.statusPassBadge}>
+                    <CheckCircle2 size={15} />
+                    <span>ALL SUBJECTS PASSED</span>
+                  </span>
+                ) : totals.hasAnyMarks ? (
+                  <span className={styles.statusFailBadge}>
+                    <ShieldAlert size={15} />
+                    <span>NEEDS IMPROVEMENT</span>
+                  </span>
+                ) : (
+                  <span className={styles.statusPendingBadge}>
+                    <span>AWAITING MARKS</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
             <div className={styles.calcMetricGroup}>
               {/* Total Marks */}
               <div className={styles.calcItem}>
-                <span className={styles.calcLabel}>Total Marks</span>
+                <span className={styles.calcLabel}>Total Score</span>
                 <span className={styles.calcValue}>
-                  {totals.obtained} <span style={{ fontSize: "1rem", opacity: 0.6 }}>/ {totals.maximum}</span>
+                  {totals.obtained}
+                  <span className={styles.calcMaxDenom}> / {totals.maximum}</span>
                 </span>
               </div>
+
+              <div className={styles.calcDivider} />
 
               {/* Percentage */}
               <div className={styles.calcItem}>
                 <span className={styles.calcLabel}>Percentage</span>
-                <span className={styles.calcValue}>
+                <span className={styles.calcValuePercentage}>
                   {totals.hasAnyMarks ? `${totals.percentage}%` : "0.0%"}
                 </span>
               </div>
 
+              <div className={styles.calcDivider} />
+
               {/* Grade Badge */}
               <div className={styles.calcItem}>
                 <span className={styles.calcLabel}>Overall Grade</span>
-                <span className={`${styles.gradeBadgeLarge} ${totals.grade === 'F' ? styles.gradeBadgeRed : totals.grade === 'D' ? styles.gradeBadgeAmber : ''}`}>
-                  {totals.hasAnyMarks ? totals.grade : "-"}
-                </span>
+                <div className={styles.gradeBadgeWrapper}>
+                  <span className={`${styles.gradeBadgeLarge} ${
+                    totals.grade === 'A+' ? styles.gradeBadgeGreen :
+                    totals.grade === 'A' || totals.grade === 'B' ? styles.gradeBadgeIndigo :
+                    totals.grade === 'C' || totals.grade === 'D' ? styles.gradeBadgeAmber :
+                    totals.grade === 'F' ? styles.gradeBadgeRed : ''
+                  }`}>
+                    {totals.hasAnyMarks ? totals.grade : "-"}
+                  </span>
+                </div>
               </div>
-            </div>
-
-            {/* Overall Status Badge */}
-            <div className={styles.statusIndicator}>
-              {totals.hasAnyMarks && totals.isPass ? (
-                <>
-                  <CheckCircle2 size={16} color="#34d399" />
-                  <span>RESULT: PASSED</span>
-                </>
-              ) : totals.hasAnyMarks ? (
-                <>
-                  <ShieldAlert size={16} color="#f87171" />
-                  <span>NEEDS IMPROVEMENT</span>
-                </>
-              ) : (
-                <span>ENTER MARKS TO CALCULATE</span>
-              )}
             </div>
           </div>
 
-          {/* STEP 5: TEACHER REMARKS & SEND */}
+          {/* STEP 6: TEACHER REMARKS & DISPATCH */}
           <div className={styles.sectionGroup}>
             <div className={styles.sectionHeader}>
-              <span className={styles.stepNumber}>4</span>
+              <span className={styles.stepNumber}>5</span>
               <h2 className={styles.sectionTitle}>Teacher Feedback &amp; Dispatch</h2>
             </div>
 

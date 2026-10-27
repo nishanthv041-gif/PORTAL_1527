@@ -213,7 +213,6 @@ export default async function ParentDashboard({
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Attendance %</span>
             <span className={styles.statValue}>{attendancePercentage}%</span>
-            <span className={styles.statSubtext}>Based on recorded sessions</span>
           </div>
         </Link>
 
@@ -229,7 +228,6 @@ export default async function ParentDashboard({
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Total Presented Days</span>
             <span className={styles.statValue}>{presentedDays} Days</span>
-            <span className={styles.statSubtext}>Attended school sessions</span>
           </div>
         </Link>
 
@@ -245,7 +243,6 @@ export default async function ParentDashboard({
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Absented Days</span>
             <span className={styles.statValue}>{absentedDays} Days</span>
-            <span className={styles.statSubtext}>Approved leaves &amp; absences</span>
           </div>
         </Link>
 
@@ -263,13 +260,10 @@ export default async function ParentDashboard({
             <span className={styles.statValue}>
               {childClass ? `${childClass.name} - ${childClass.section}` : "N/A"}
             </span>
-            <span className={styles.statSubtext}>
-              {childClass?.subjects ? `${childClass.subjects.length} Subjects • View Class` : "View Class Details"}
-            </span>
           </div>
         </Link>
 
-        {/* 5. Total Subjects (Replaced timetable option as requested) */}
+        {/* 5. Total Subjects */}
         <Link 
           href={`/dashboard/parent/classes?childId=${selectedChild.id}`} 
           prefetch={true} 
@@ -283,7 +277,6 @@ export default async function ParentDashboard({
             <span className={styles.statValue}>
               {childClass?.subjects ? `${childClass.subjects.length} Subjects` : "0 Subjects"}
             </span>
-            <span className={styles.statSubtext}>Curriculum subjects</span>
           </div>
         </Link>
       </div>

@@ -323,6 +323,7 @@ export interface CreateReportCardSubjectMark {
   subjectId: string;
   score: number;
   maxScore: number;
+  passMarks?: number;
   remarks?: string;
 }
 
@@ -426,11 +427,26 @@ export async function createAndSendReportCardAction(payload: CreateReportCardPay
       const sub = subjectMap.get(m.subjectId);
       const score = Math.max(0, Number(m.score) || 0);
       const maxScore = Math.max(1, Number(m.maxScore) || sub?.maxMarks || 100);
-      const passMarks = sub?.passMarks ?? 35;
+      const passMarks = m.passMarks !== undefined ? Number(m.passMarks) : (sub?.passMarks ?? 35);
       const isFail = score < passMarks;
 
       totalScore += score;
       maxTotal += maxScore;
+
+      // Keep Subject defaults updated if teacher customized pass or max marks
+      if (sub && (sub.maxMarks !== Math.round(maxScore) || sub.passMarks !== Math.round(passMarks))) {
+        try {
+          await prisma.subject.update({
+            where: { id: m.subjectId },
+            data: {
+              maxMarks: Math.round(maxScore),
+              passMarks: Math.round(passMarks)
+            }
+          });
+        } catch {
+          // ignore concurrent update errors
+        }
+      }
 
       await prisma.mark.upsert({
         where: {

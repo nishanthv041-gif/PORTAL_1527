@@ -269,7 +269,135 @@
   gap: 0.35rem;
 }
 
-/* Subjects & Marks Entry List (Mobile Optimized) */
+/* STEP 3: Exam Marks Criteria Section */
+.criteriaContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  background: rgba(99, 102, 241, 0.04);
+  border: 1px solid rgba(99, 102, 241, 0.16);
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.criteriaSubtext {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.presetChipsRow {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.presetChipBtn {
+  background: var(--card-bg);
+  border: 1.5px solid var(--border-color);
+  color: var(--foreground);
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.15s ease;
+  min-height: 36px;
+}
+
+.presetChipBtn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.presetChipBtnActive {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.criteriaInputsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 0.75rem;
+}
+
+.criteriaInputCard {
+  background: var(--card-bg);
+  border: 1.5px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  transition: all 0.2s ease;
+}
+
+.criteriaInputCard:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.criteriaFieldLabel {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--foreground);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.criteriaInputFieldWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.criteriaNumberInput {
+  flex: 1;
+  width: 100%;
+  font-size: 1.25rem;
+  font-weight: 800;
+  padding: 0.3rem 0.4rem;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  outline: none;
+  min-width: 0;
+}
+
+.criteriaUnitTag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.criteriaStatusNotice {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  padding-top: 0.25rem;
+}
+
+.criteriaCheckIcon {
+  color: #10b981;
+  flex-shrink: 0;
+}
+
+/* STEP 4: Subjects & Marks Entry List (Mobile Phone First) */
 .subjectsList {
   display: flex;
   flex-direction: column;
@@ -282,28 +410,41 @@
   border-radius: 14px;
   padding: 0.9rem 1.1rem;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-direction: column;
+  gap: 0.75rem;
   transition: all 0.2s ease;
-  flex-wrap: wrap;
 }
 
 .subjectRowCard:focus-within {
   border-color: var(--primary);
-  background: rgba(99, 102, 241, 0.02);
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.08);
+}
+
+.subjectCardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .subjectInfo {
   flex: 1;
-  min-width: 140px;
+  min-width: 0;
 }
 
 .subjectName {
-  font-size: 1rem;
+  font-size: 0.98rem;
   font-weight: 700;
   color: var(--foreground);
-  margin: 0 0 0.2rem 0;
+  margin: 0 0 0.25rem 0;
+  line-height: 1.3;
+}
+
+.subjectCriteriaBadges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .subjectCriteria {
@@ -311,37 +452,27 @@
   color: var(--text-secondary);
 }
 
-.markInputGroup {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-}
-
-.markInput {
-  width: 90px;
-  text-align: center;
-  padding: 0.65rem 0.5rem;
-  font-size: 1.15rem;
-  font-weight: 800;
-  border-radius: 10px;
-  border: 1.5px solid var(--border-color);
-  background: var(--card-bg);
-  color: var(--foreground);
-  box-sizing: border-box;
-  min-height: 46px;
-}
-
-.markInput:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
-}
-
-.maxScoreTag {
-  font-size: 0.85rem;
+.subjectCriteriaToggle {
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: var(--primary);
+  border-radius: 6px;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  color: var(--text-secondary);
-  white-space: nowrap;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.subjectCriteriaToggle:hover {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.pillContainer {
+  flex-shrink: 0;
 }
 
 .passFailPill {
@@ -355,87 +486,276 @@
 }
 
 .passPill {
-  background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
+  background: rgba(16, 185, 129, 0.14);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
 .failPill {
-  background: rgba(239, 68, 68, 0.12);
+  background: rgba(239, 68, 68, 0.14);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+/* Custom criteria inline for single subject */
+.customCriteriaInline {
+  display: flex;
+  gap: 0.75rem;
+  background: rgba(0, 0, 0, 0.02);
+  padding: 0.55rem 0.8rem;
+  border-radius: 10px;
+  border: 1px dashed var(--border-color);
+  flex-wrap: wrap;
+}
+
+.customCriteriaField {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.customCriteriaLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.customCriteriaInput {
+  width: 65px;
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--foreground);
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.subjectScoreSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.markInputGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.markInput {
+  width: 100px;
+  text-align: center;
+  padding: 0.65rem 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  border-radius: 10px;
+  border: 1.5px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--foreground);
+  box-sizing: border-box;
+  min-height: 48px;
+  font-family: inherit;
+}
+
+.markInput:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.markInputError {
+  border-color: #ef4444 !important;
   color: #ef4444;
 }
 
-/* Live Automatic Calculation Panel (The Total Space) */
+.maxScoreTag {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.scoreErrorText {
+  font-size: 0.75rem;
+  color: #ef4444;
+  font-weight: 600;
+}
+
+/* STEP 5: Live Automatic Calculation Panel (The Total Space) */
 .calculationPanel {
-  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-  color: #ffffff;
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.08) 0%, rgba(14, 165, 233, 0.08) 100%);
+  border: 1.5px solid rgba(99, 102, 241, 0.25);
   border-radius: 18px;
-  padding: 1.35rem 1.5rem;
+  padding: 1.25rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.06);
+}
+
+.calcHeaderRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1.25rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
-  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.3);
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.15);
 }
 
-.calcMetricGroup {
+.calcHeaderTitleArea {
   display: flex;
   align-items: center;
-  gap: clamp(1rem, 3vw, 2rem);
-  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
-.calcItem {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+.calcSparkleIcon {
+  color: var(--primary);
 }
 
-.calcLabel {
-  font-size: 0.75rem;
+.calcHeaderTitle {
+  font-size: 0.85rem;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.65);
-  font-weight: 700;
-}
-
-.calcValue {
-  font-size: clamp(1.3rem, 3vw, 1.8rem);
-  font-weight: 900;
-  color: #ffffff;
-  line-height: 1;
-}
-
-.gradeBadgeLarge {
-  font-size: 1.4rem;
-  font-weight: 900;
-  padding: 0.35rem 1rem;
-  border-radius: 12px;
-  background: #10b981;
-  color: #ffffff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 52px;
-}
-
-.gradeBadgeRed {
-  background: #ef4444 !important;
-}
-
-.gradeBadgeAmber {
-  background: #f59e0b !important;
+  letter-spacing: 0.06em;
+  color: var(--foreground);
 }
 
 .statusIndicator {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.9rem;
-  border-radius: 999px;
-  font-size: 0.85rem;
+  gap: 0.35rem;
+}
+
+.statusPassBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(16, 185, 129, 0.14);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  font-size: 0.78rem;
   font-weight: 800;
-  background: rgba(255, 255, 255, 0.12);
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  letter-spacing: 0.03em;
+}
+
+.statusFailBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(239, 68, 68, 0.14);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  letter-spacing: 0.03em;
+}
+
+.statusPendingBadge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+}
+
+.calcMetricGroup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.calcItem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: center;
+  text-align: center;
+}
+
+.calcDivider {
+  width: 1px;
+  height: 40px;
+  background: rgba(99, 102, 241, 0.18);
+}
+
+.calcLabel {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.calcValue {
+  font-size: clamp(1.15rem, 3.2vw, 1.5rem);
+  font-weight: 900;
+  color: var(--foreground);
+  line-height: 1.1;
+}
+
+.calcMaxDenom {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.calcValuePercentage {
+  font-size: clamp(1.2rem, 3.5vw, 1.6rem);
+  font-weight: 900;
+  color: var(--primary);
+  line-height: 1.1;
+}
+
+.gradeBadgeWrapper {
+  display: flex;
+  justify-content: center;
+}
+
+.gradeBadgeLarge {
+  font-size: 1.15rem;
+  font-weight: 900;
+  padding: 0.25rem 0.85rem;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 36px;
+}
+
+.gradeBadgeGreen {
+  background: #10b981;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+}
+
+.gradeBadgeIndigo {
+  background: #6366f1;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+}
+
+.gradeBadgeAmber {
+  background: #f59e0b;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
+}
+
+.gradeBadgeRed {
+  background: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
 }
 
 /* Quick Remarks */
@@ -762,51 +1082,212 @@
   border-radius: 16px;
 }
 
-/* Mobile responsive fine-tuning */
+/* Mobile responsive fine-tuning (Phone UI/UX size & ergonomics) */
 @media (max-width: 600px) {
+  .container {
+    padding: 0.4rem 0.25rem;
+    gap: 1rem;
+  }
+
   .headerCard {
-    padding: 1.1rem;
-  }
-  
-  .formCard {
-    padding: 1rem;
+    padding: 1rem 0.9rem;
     border-radius: 16px;
-  }
-  
-  .subjectRowCard {
-    padding: 0.75rem;
-    flex-direction: column;
-    align-items: stretch;
     gap: 0.75rem;
   }
   
+  .mainTitle {
+    font-size: 1.35rem;
+  }
+  
+  .subtitle {
+    font-size: 0.82rem;
+  }
+
+  .tabNav {
+    padding: 0.25rem;
+    border-radius: 12px;
+    gap: 0.35rem;
+  }
+
+  .tabBtn {
+    padding: 0.6rem 0.4rem;
+    font-size: 0.82rem;
+    min-height: 40px;
+    gap: 0.35rem;
+  }
+  
+  .formCard {
+    padding: 0.85rem;
+    border-radius: 16px;
+    gap: 1.25rem;
+  }
+
+  .sectionHeader {
+    padding-bottom: 0.45rem;
+    gap: 0.5rem;
+  }
+
+  .stepNumber {
+    width: 26px;
+    height: 26px;
+    font-size: 0.8rem;
+  }
+
+  .sectionTitle {
+    font-size: 0.98rem;
+  }
+
+  .criteriaContainer {
+    padding: 0.85rem;
+    gap: 0.75rem;
+    border-radius: 12px;
+  }
+
+  .criteriaInputsGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .criteriaInputCard {
+    padding: 0.6rem 0.7rem;
+    border-radius: 10px;
+  }
+
+  .criteriaFieldLabel {
+    font-size: 0.75rem;
+  }
+
+  .criteriaNumberInput {
+    font-size: 1.15rem;
+    padding: 0.2rem 0.3rem;
+  }
+
+  .criteriaUnitTag {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.4rem;
+  }
+  
+  .subjectRowCard {
+    padding: 0.8rem;
+    border-radius: 12px;
+    gap: 0.65rem;
+  }
+
+  .subjectName {
+    font-size: 0.92rem;
+  }
+
+  .subjectCriteria {
+    font-size: 0.74rem;
+  }
+
+  .customCriteriaInline {
+    gap: 0.5rem;
+    padding: 0.45rem 0.6rem;
+  }
+
+  .customCriteriaInput {
+    width: 55px;
+  }
+  
   .markInputGroup {
-    justify-content: space-between;
     width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .markInput {
+    width: 90px;
+    min-height: 46px;
+    font-size: 1.1rem;
+  }
+
+  .maxScoreTag {
+    font-size: 0.82rem;
   }
   
   .calculationPanel {
+    padding: 1rem 0.9rem;
+    border-radius: 16px;
+    gap: 0.85rem;
+  }
+
+  .calcHeaderRow {
     flex-direction: column;
-    align-items: stretch;
-    text-align: center;
-    gap: 1rem;
+    align-items: flex-start;
+    gap: 0.45rem;
+  }
+
+  .calcHeaderTitle {
+    font-size: 0.78rem;
+  }
+
+  .statusPassBadge, .statusFailBadge {
+    font-size: 0.74rem;
+    padding: 0.25rem 0.6rem;
   }
   
   .calcMetricGroup {
-    justify-content: space-around;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 0.4rem;
+  }
+
+  .calcItem {
+    flex: 1;
+    align-items: center;
+    text-align: center;
+  }
+
+  .calcDivider {
+    height: 35px;
+  }
+
+  .calcLabel {
+    font-size: 0.68rem;
+  }
+
+  .calcValue {
+    font-size: 1.1rem;
+  }
+
+  .calcValuePercentage {
+    font-size: 1.25rem;
+  }
+
+  .gradeBadgeLarge {
+    font-size: 1.05rem;
+    min-width: 40px;
+    min-height: 34px;
+    padding: 0.2rem 0.65rem;
+  }
+
+  .sendBtn {
+    width: 100%;
+    min-height: 48px;
+    font-size: 0.92rem;
+    justify-content: center;
   }
   
   .cardActionFooter {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.65rem;
   }
   
   .cardButtonGrp {
     width: 100%;
+    display: flex;
+    gap: 0.5rem;
   }
   
   .previewBtn, .deleteBtn {
     flex: 1;
     justify-content: center;
+    min-height: 40px;
+    font-size: 0.8rem;
   }
 }
