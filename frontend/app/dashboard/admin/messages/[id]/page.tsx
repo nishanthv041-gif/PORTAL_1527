@@ -111,6 +111,19 @@ export default async function AdminMessageThreadPage({ params }: { params: Promi
     }
   });
 
+  // Also mark corresponding message notifications as read
+  await prisma.notification.updateMany({
+    where: {
+      userId: currentUserId,
+      type: "MESSAGE",
+      link: { contains: otherUserId },
+      isRead: false
+    },
+    data: {
+      isRead: true
+    }
+  });
+
   // Context descriptions
   const isTeacher = otherUser.role === 'TEACHER';
   const isParent = otherUser.role === 'PARENT';

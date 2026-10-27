@@ -315,29 +315,6 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
       console.error("Error fetching announcements for notifications:", annErr);
     }
 
-    // 4. Direct Messages sent to this user
-    const messages = await prisma.message.findMany({
-      where: { receiverId: userId },
-      include: { sender: { select: { name: true, role: true } } },
-      orderBy: { createdAt: "desc" },
-      take: 4
-    });
-
-    for (const msg of messages) {
-      items.push({
-        id: `msg-${msg.id}`,
-        category: "MESSAGE",
-        title: `Message from ${msg.sender.name}`,
-        description: msg.content,
-        senderOrAuthor: msg.sender.name,
-        timestamp: msg.createdAt.toISOString(),
-        link: userRole === "PARENT" ? "/dashboard/parent/messages" : userRole === "TEACHER" ? "/dashboard/teacher/messages" : "/dashboard/admin/messages",
-        isRead: msg.isRead,
-        badgeLabel: "Message",
-        badgeColors: { bg: "rgba(6, 182, 212, 0.12)", text: "#0284c7", border: "rgba(6, 182, 212, 0.25)" }
-      });
-    }
-
     // 5. Role-Specific Alerts: If Parent, check children's published report cards and assignments
     if (userRole === "PARENT") {
       const parentRecord = await prisma.parent.findUnique({
@@ -547,8 +524,9 @@ export async function deleteUnifiedNotificationAction(notificationId: string): P
       });
     } else if (notificationId.startsWith("msg-")) {
       const realId = notificationId.replace("msg-", "");
-      await prisma.message.deleteMany({
-        where: { id: realId, receiverId: userId }
+      await prisma.message.updateMany({
+        where: { id: realId, receiverId: userId },
+        data: { deletedForReceiver: true, isRead: true }
       });
     } else if (notificationId.startsWith("ann-")) {
       const realId = notificationId.replace("ann-", "");

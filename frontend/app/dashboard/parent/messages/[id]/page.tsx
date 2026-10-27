@@ -85,6 +85,19 @@ export default async function ParentMessageThreadPage({ params }: { params: Prom
     }
   });
 
+  // Also mark corresponding message notifications as read
+  await prisma.notification.updateMany({
+    where: {
+      userId: currentUserId,
+      type: "MESSAGE",
+      link: { contains: otherUserId },
+      isRead: false
+    },
+    data: {
+      isRead: true
+    }
+  });
+
   const initialMessages = rawMessages.map(m => ({
     ...m,
     createdAt: m.createdAt.toISOString(),

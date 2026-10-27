@@ -97,27 +97,28 @@ export default function NotificationPopupModal({
         .then((fresh) => {
           if (!isMounted) return;
           const activeFresh = filterActiveUnread(fresh);
-          if (activeFresh.length > 0) {
-            setNotifications(activeFresh);
+          // Only auto-pop up for urgent school notices, announcements, or meetings (never routine 1-to-1 chat messages)
+          const autoPopupItems = activeFresh.filter(n => n.category !== "MESSAGE");
+          if (autoPopupItems.length > 0) {
+            setNotifications(autoPopupItems);
 
             const isFreshLogin = sessionStorage.getItem(FRESH_LOGIN_KEY) === "true";
             const isDismissed = sessionStorage.getItem(DISMISSED_KEY) === "true";
 
-            // If user just logged in or hasn't dismissed yet, pop up automatically!
             if (isFreshLogin) {
               sessionStorage.removeItem(FRESH_LOGIN_KEY);
               sessionStorage.removeItem(DISMISSED_KEY);
               setTimeout(() => {
                 if (isMounted) {
                   setIsOpen(true);
-                  markShownNotificationsAsSeen(activeFresh);
+                  markShownNotificationsAsSeen(autoPopupItems);
                 }
               }, 350);
             } else if (!isDismissed) {
               setTimeout(() => {
                 if (isMounted) {
                   setIsOpen(true);
-                  markShownNotificationsAsSeen(activeFresh);
+                  markShownNotificationsAsSeen(autoPopupItems);
                 }
               }, 500);
             }
@@ -130,23 +131,27 @@ export default function NotificationPopupModal({
     const isFreshLogin = sessionStorage.getItem(FRESH_LOGIN_KEY) === "true";
     const isDismissed = sessionStorage.getItem(DISMISSED_KEY) === "true";
     const activeInitial = filterActiveUnread(initialNotifications);
+    // Exclude routine 1-to-1 chat messages from auto-blocking popup dialog
+    const autoPopupInitial = activeInitial.filter(n => n.category !== "MESSAGE");
 
-    if (activeInitial.length > 0) {
+    if (autoPopupInitial.length > 0) {
       if (isFreshLogin) {
         sessionStorage.removeItem(FRESH_LOGIN_KEY);
         sessionStorage.removeItem(DISMISSED_KEY);
         const timer = setTimeout(() => {
           if (isMounted) {
+            setNotifications(autoPopupInitial);
             setIsOpen(true);
-            markShownNotificationsAsSeen(activeInitial);
+            markShownNotificationsAsSeen(autoPopupInitial);
           }
         }, 350);
         return () => clearTimeout(timer);
       } else if (!isDismissed) {
         const timer = setTimeout(() => {
           if (isMounted) {
+            setNotifications(autoPopupInitial);
             setIsOpen(true);
-            markShownNotificationsAsSeen(activeInitial);
+            markShownNotificationsAsSeen(autoPopupInitial);
           }
         }, 500);
         return () => clearTimeout(timer);

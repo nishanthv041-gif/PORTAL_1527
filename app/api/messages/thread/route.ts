@@ -101,6 +101,25 @@ export async function GET(request: Request) {
           isRead: true
         }
       });
+
+      // Also mark corresponding message notifications as read
+      await prisma.notification.updateMany({
+        where: {
+          userId: currentUserId,
+          type: "MESSAGE",
+          link: { contains: otherUserId },
+          isRead: false,
+        },
+        data: {
+          isRead: true,
+        }
+      });
+
+      try {
+        const { invalidateUserNotifCache } = await import("@/backend/api/actions/notifications/unifiedNotificationActions");
+        await invalidateUserNotifCache(currentUserId);
+      } catch {}
+
       // Reflect isRead in returned list
       unreadReceivedIds.forEach(id => {
         const found = messages.find(m => m.id === id);

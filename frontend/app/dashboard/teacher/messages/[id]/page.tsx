@@ -85,6 +85,19 @@ export default async function TeacherMessageThreadPage({ params }: { params: Pro
     }
   });
 
+  // Also mark corresponding message notifications as read
+  await prisma.notification.updateMany({
+    where: {
+      userId: currentUserId,
+      type: "MESSAGE",
+      link: { contains: otherUserId },
+      isRead: false
+    },
+    data: {
+      isRead: true
+    }
+  });
+
   const initialMessages = rawMessages.map(m => ({
     ...m,
     createdAt: m.createdAt.toISOString(),
