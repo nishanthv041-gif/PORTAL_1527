@@ -1,11 +1,8 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
-import Link from "next/link";
 import styles from "../../../dashboard.module.css";
-import { ArrowLeft } from "lucide-react";
-import MessageForm from "../../../teacher/messages/[id]/MessageForm"; // We can reuse the teacher's form
-import MessageItem from "@/frontend/components/MessageItem";
+import ChatThreadClient from "@/frontend/components/chat/ChatThreadClient";
 
 export default async function ParentMessageThreadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,24 +13,67 @@ export default async function ParentMessageThreadPage({ params }: { params: Prom
   const otherUserId = id;
 
   const otherUser = await prisma.user.findUnique({
-    where: { id: otherUserId }
+    where: { id: otherUserId },
+    select: { id: true, name: true, role: true, email: true },
   });
 
   if (!otherUser) return <p>User not found.</p>;
 
-  const messages = await prisma.message.findMany({
+  // Check per-user clearedAt boundary
+  const meta = await prisma.conversationMeta.findUnique({
     where: {
+      userId_otherUserId: {
+        userId: currentUserId,
+        otherUserId,
+      }
+    }
+  });
+
+  const conditions: any[] = [
+    {
       OR: [
         { senderId: currentUserId, receiverId: otherUserId },
         { senderId: otherUserId, receiverId: currentUserId }
       ]
     },
+    {
+      NOT: {
+        OR: [
+          { senderId: currentUserId, deletedForSender: true },
+          { receiverId: currentUserId, deletedForReceiver: true }
+        ]
+      }
+    }
+  ];
+
+  if (meta?.clearedAt) {
+    conditions.push({ createdAt: { gt: meta.clearedAt } });
+  }
+
+  const rawMessages = await prisma.message.findMany({
+    where: { AND: conditions },
     orderBy: {
       createdAt: 'asc'
+    },
+    select: {
+      id: true,
+      content: true,
+      senderId: true,
+      receiverId: true,
+      isRead: true,
+      isDeleted: true,
+      messageType: true,
+      fileUrl: true,
+      fileName: true,
+      fileSize: true,
+      fileType: true,
+      duration: true,
+      editedAt: true,
+      createdAt: true,
     }
   });
 
-  // Mark messages as read
+  // Mark unread received messages as read
   await prisma.message.updateMany({
     where: {
       senderId: otherUserId,
@@ -45,29 +85,23 @@ export default async function ParentMessageThreadPage({ params }: { params: Prom
     }
   });
 
-  return (
-    <div className={styles.dashboard}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-        <Link href="/dashboard/parent/messages" style={{ color: 'var(--foreground)', opacity: 0.7 }}>
-          <ArrowLeft size={20} />
-        </Link>
-        <h1 className={styles.title} style={{ margin: 0 }}>
-          {otherUser.name}
-        </h1>
-      </div>
+  const initialMessages = rawMessages.map(m => ({
+    ...m,
+    createdAt: m.createdAt.toISOString(),
+    editedAt: m.editedAt ? m.editedAt.toISOString() : null,
+    status: "sent" as const,
+  }));
 
-      <div className={styles.chartCard} style={{ display: 'flex', flexDirection: 'column', height: '60vh' }}>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '1rem' }}>
-          {messages.map((msg) => (
-            <MessageItem key={msg.id} message={msg} currentUserId={currentUserId} />
-          ))}
-          {messages.length === 0 && (
-            <p style={{ textAlign: 'center', opacity: 0.5, marginTop: '2rem' }}>No messages yet. Send a message to start the conversation.</p>
-          )}
-        </div>
-        
-        <MessageForm receiverId={otherUserId} senderId={currentUserId} />
-      </div>
+  return (
+    <div className={styles.dashboard} style={{ maxWidth: '1100px', margin: '0 auto' }}>
+      <ChatThreadClient
+        initialMessages={initialMessages}
+        currentUserId={currentUserId}
+        otherUserId={otherUserId}
+        otherUser={otherUser}
+        isAdmin={session.user.role === "ADMIN"}
+        backHref="/dashboard/parent/messages"
+      />
     </div>
   );
 }

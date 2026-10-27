@@ -3,9 +3,8 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import Link from "next/link";
 import styles from "../../../dashboard.module.css";
-import { ArrowLeft, User, GraduationCap, BookOpen, Mail, Phone, ShieldCheck } from "lucide-react";
-import MessageForm from "./MessageForm";
-import MessageItem from "@/frontend/components/MessageItem";
+import { ArrowLeft, GraduationCap, BookOpen, Mail, ShieldCheck } from "lucide-react";
+import ChatThreadClient from "@/frontend/components/chat/ChatThreadClient";
 import { redirect } from "next/navigation";
 
 export default async function AdminMessageThreadPage({ params }: { params: Promise<{ id: string }> }) {
@@ -48,19 +47,59 @@ export default async function AdminMessageThreadPage({ params }: { params: Promi
     redirect('/dashboard/admin/messages');
   }
 
-  const messages = await prisma.message.findMany({
+  // Check per-user clearedAt boundary
+  const meta = await prisma.conversationMeta.findUnique({
     where: {
+      userId_otherUserId: {
+        userId: currentUserId,
+        otherUserId,
+      }
+    }
+  });
+
+  const conditions: any[] = [
+    {
       OR: [
         { senderId: currentUserId, receiverId: otherUserId },
         { senderId: otherUserId, receiverId: currentUserId }
       ]
     },
-    orderBy: {
-      createdAt: 'asc'
+    {
+      NOT: {
+        OR: [
+          { senderId: currentUserId, deletedForSender: true },
+          { receiverId: currentUserId, deletedForReceiver: true }
+        ]
+      }
+    }
+  ];
+
+  if (meta?.clearedAt) {
+    conditions.push({ createdAt: { gt: meta.clearedAt } });
+  }
+
+  const rawMessages = await prisma.message.findMany({
+    where: { AND: conditions },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      content: true,
+      senderId: true,
+      receiverId: true,
+      isRead: true,
+      isDeleted: true,
+      messageType: true,
+      fileUrl: true,
+      fileName: true,
+      fileSize: true,
+      fileType: true,
+      duration: true,
+      editedAt: true,
+      createdAt: true,
     }
   });
 
-  // Mark messages as read
+  // Mark unread received messages as read
   await prisma.message.updateMany({
     where: {
       senderId: otherUserId,
@@ -86,8 +125,15 @@ export default async function AdminMessageThreadPage({ params }: { params: Promi
     ? (otherUser.teacher?.subjects?.map(s => s.name).join(", ") || "General Faculty")
     : "";
 
+  const initialMessages = rawMessages.map(m => ({
+    ...m,
+    createdAt: m.createdAt.toISOString(),
+    editedAt: m.editedAt ? m.editedAt.toISOString() : null,
+    status: "sent" as const,
+  }));
+
   return (
-    <div className={styles.dashboard}>
+    <div className={styles.dashboard} style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Top Header Card */}
       <div style={{
         display: 'flex',
@@ -95,13 +141,12 @@ export default async function AdminMessageThreadPage({ params }: { params: Promi
         justifyContent: 'space-between',
         flexWrap: 'wrap',
         gap: '1rem',
-        marginBottom: '1.25rem',
-        padding: '1rem 1.25rem',
+        padding: '0.85rem 1.25rem',
         borderRadius: '12px',
         backgroundColor: 'var(--card-bg, #ffffff)',
         border: '1px solid var(--border-color)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
           <Link 
             href="/dashboard/admin/messages" 
             style={{ 
@@ -120,24 +165,9 @@ export default async function AdminMessageThreadPage({ params }: { params: Promi
             <ArrowLeft size={18} />
           </Link>
 
-          <div style={{
-            width: 44,
-            height: 44,
-            borderRadius: '50%',
-            backgroundColor: isParent ? 'rgba(139, 92, 246, 0.12)' : 'rgba(99, 102, 241, 0.12)',
-            color: isParent ? '#8b5cf6' : 'var(--primary, #6366f1)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 800,
-            fontSize: '1rem'
-          }}>
-            {otherUser.name.charAt(0).toUpperCase()}
-          </div>
-
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--foreground)' }}>
+              <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--foreground)' }}>
                 {otherUser.name}
               </h2>
               <span style={{
@@ -185,33 +215,21 @@ export default async function AdminMessageThreadPage({ params }: { params: Promi
         </div>
       </div>
 
-      {/* Messages Thread Container */}
-      <div className={styles.chartCard} style={{ display: 'flex', flexDirection: 'column', height: '65vh' }}>
-        <div style={{ 
-          flex: 1, 
-          overflowY: 'auto', 
-          padding: '1.25rem', 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: '1rem', 
-          border: '1px solid var(--border-color)', 
-          borderRadius: '10px', 
-          marginBottom: '1rem',
-          backgroundColor: 'var(--background)'
-        }}>
-          {messages.map((msg) => (
-            <MessageItem key={msg.id} message={msg} currentUserId={currentUserId} />
-          ))}
-          {messages.length === 0 && (
-            <div style={{ textAlign: 'center', margin: 'auto', opacity: 0.6, padding: '2rem' }}>
-              <p style={{ margin: 0, fontWeight: 600 }}>No messages yet with {otherUser.name}.</p>
-              <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem' }}>Send a direct message below to start this administrative conversation.</p>
-            </div>
-          )}
-        </div>
-        
-        <MessageForm receiverId={otherUserId} />
-      </div>
+      {/* WhatsApp-Like Real-Time Chat Thread */}
+      <ChatThreadClient
+        initialMessages={initialMessages}
+        currentUserId={currentUserId}
+        otherUserId={otherUserId}
+        otherUser={{
+          id: otherUser.id,
+          name: otherUser.name,
+          role: otherUser.role,
+          email: otherUser.email,
+        }}
+        isAdmin={true}
+        backHref="/dashboard/admin/messages"
+        channelBadge="Official School Channel"
+      />
     </div>
   );
 }

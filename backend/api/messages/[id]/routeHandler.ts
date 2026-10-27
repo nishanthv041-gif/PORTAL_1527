@@ -80,24 +80,65 @@ export async function DELETE(
       return NextResponse.json({ error: "Message not found" }, { status: 404 });
     }
 
-    // Ensure the user is the sender
-    if (message.senderId !== session.user.id) {
+    // Determine deletion mode: 'for_everyone' vs 'for_me'
+    let mode = 'for_everyone';
+    try {
+      const url = new URL(request.url);
+      const queryMode = url.searchParams.get('mode');
+      if (queryMode) {
+        mode = queryMode;
+      } else {
+        const body = await request.json().catch(() => null);
+        if (body?.mode) mode = body.mode;
+      }
+    } catch {
+      // default to for_everyone if no body/param
+    }
+
+    const isSender = message.senderId === session.user.id;
+    const isReceiver = message.receiverId === session.user.id;
+    const isAdmin = session.user.role === 'ADMIN';
+
+    if (!isSender && !isReceiver && !isAdmin) {
       return NextResponse.json(
-        { error: "Forbidden: You can only delete your own messages" },
+        { error: "Forbidden: You are not a participant in this conversation" },
         { status: 403 }
       );
     }
 
-    const deletedMessage = await prisma.message.update({
-      where: { id },
-      data: {
-        isDeleted: true,
-      },
-    });
+    if (mode === 'for_everyone') {
+      if (!isSender && !isAdmin) {
+        return NextResponse.json(
+          { error: "Forbidden: Only the sender or an administrator can delete this message for everyone" },
+          { status: 403 }
+        );
+      }
 
-    return NextResponse.json(deletedMessage);
+      const deletedMessage = await prisma.message.update({
+        where: { id },
+        data: {
+          isDeleted: true,
+          content: "This message was deleted",
+        },
+      });
+
+      return NextResponse.json({ success: true, message: deletedMessage, mode: 'for_everyone' });
+    } else {
+      // mode === 'for_me'
+      const updateData: { deletedForSender?: boolean; deletedForReceiver?: boolean } = {};
+      if (isSender) updateData.deletedForSender = true;
+      if (isReceiver) updateData.deletedForReceiver = true;
+
+      const deletedMessage = await prisma.message.update({
+        where: { id },
+        data: updateData,
+      });
+
+      return NextResponse.json({ success: true, message: deletedMessage, mode: 'for_me' });
+    }
   } catch (error) {
     const e = error as Error;
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
+
