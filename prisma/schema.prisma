@@ -73,6 +73,7 @@ model Student {
   promotions    PromotionAudit[]
 
   @@index([classId])
+  @@index([classId, isActive])
   @@index([isActive])
   @@index([enrollmentStatus])
 }
@@ -285,6 +286,8 @@ model ReportCard {
   exam      Exam    @relation(fields: [examId], references: [id])
 
   @@unique([studentId, examId])
+  @@index([studentId, published])
+  @@index([examId, published])
 }
 
 model Timetable {
@@ -322,6 +325,7 @@ model Assignment {
   submissions Submission[]
 
   @@index([classId])
+  @@index([classId, deadline])
   @@index([teacherId])
 }
 
@@ -438,6 +442,7 @@ model Announcement {
   authorId   String
 
   @@index([targetType, createdAt])
+  @@index([createdAt])
 }
 
 model CalendarEvent {
@@ -528,6 +533,9 @@ model Message {
   @@index([senderId])
   @@index([receiverId, isDeleted, isRead])
   @@index([senderId, receiverId, createdAt])
+  @@index([receiverId, senderId, createdAt])
+  @@index([receiverId, senderId, isRead])
+  @@index([createdAt])
 }
 
 model ConversationMeta {
@@ -555,6 +563,7 @@ model Notification {
 
   @@index([userId, createdAt])
   @@index([userId, isRead, createdAt])
+  @@index([userId, isRead, type])
 }
 
 model AuditLog {

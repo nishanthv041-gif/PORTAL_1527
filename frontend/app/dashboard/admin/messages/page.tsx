@@ -11,10 +11,14 @@ export default async function AdminMessagesPage() {
   const [rawTeachers, rawParents, classes, unreadList] = await Promise.all([
     prisma.user.findMany({
       where: { role: 'TEACHER', status: 'ACTIVE' },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
         teacher: {
-          include: {
-            classes: true,
+          select: {
+            classes: { select: { id: true, name: true, section: true } },
             subjects: { select: { id: true, name: true } }
           }
         }
@@ -23,11 +27,15 @@ export default async function AdminMessagesPage() {
     }),
     prisma.user.findMany({
       where: { role: 'PARENT', status: 'ACTIVE' },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
         parent: {
-          include: {
+          select: {
             children: {
-              include: {
+              select: {
                 student: {
                   select: {
                     id: true,

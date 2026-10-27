@@ -78,9 +78,10 @@ export default async function AdminMessageThreadPage({ params }: { params: Promi
     conditions.push({ createdAt: { gt: meta.clearedAt } });
   }
 
-  const rawMessages = await prisma.message.findMany({
+  const rawMessagesDesc = await prisma.message.findMany({
     where: { AND: conditions },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
     select: {
       id: true,
       content: true,
@@ -99,30 +100,28 @@ export default async function AdminMessageThreadPage({ params }: { params: Promi
     }
   });
 
-  // Mark unread received messages as read
-  await prisma.message.updateMany({
-    where: {
-      senderId: otherUserId,
-      receiverId: currentUserId,
-      isRead: false
-    },
-    data: {
-      isRead: true
-    }
-  });
+  const rawMessages = rawMessagesDesc.reverse();
 
-  // Also mark corresponding message notifications as read
-  await prisma.notification.updateMany({
-    where: {
-      userId: currentUserId,
-      type: "MESSAGE",
-      link: { contains: otherUserId },
-      isRead: false
-    },
-    data: {
-      isRead: true
-    }
-  });
+  // Mark unread received messages and notifications as read in parallel
+  await Promise.all([
+    prisma.message.updateMany({
+      where: {
+        senderId: otherUserId,
+        receiverId: currentUserId,
+        isRead: false
+      },
+      data: { isRead: true }
+    }),
+    prisma.notification.updateMany({
+      where: {
+        userId: currentUserId,
+        type: "MESSAGE",
+        link: { contains: otherUserId },
+        isRead: false
+      },
+      data: { isRead: true }
+    })
+  ]);
 
   // Context descriptions
   const isTeacher = otherUser.role === 'TEACHER';

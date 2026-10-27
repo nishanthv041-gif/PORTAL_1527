@@ -48,6 +48,7 @@ export default function ChatThreadClient({
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const latestMessageDateRef = useRef<string | null>(null);
+  const isSyncingRef = useRef<boolean>(false);
 
   // Keep track of the latest message timestamp for incremental polling
   useEffect(() => {
@@ -86,8 +87,10 @@ export default function ChatThreadClient({
     setShowScrollBottom(!isNearBottom);
   };
 
-  // Real-Time Incremental Sync (Adaptive Polling)
+  // Real-Time Incremental Sync (Adaptive Polling with Concurrency Guard)
   const syncMessages = useCallback(async () => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
     try {
       const sinceParam = latestMessageDateRef.current
         ? `&since=${encodeURIComponent(latestMessageDateRef.current)}`
@@ -137,46 +140,61 @@ export default function ChatThreadClient({
       }
     } catch (err) {
       console.warn("Message sync warning:", err);
+    } finally {
+      isSyncingRef.current = false;
     }
   }, [otherUserId, scrollToBottom]);
 
-  // Set up adaptive sync polling
+  // Set up adaptive sync polling (active = 2s, idle > 25s = 5s, background = 8s)
   useEffect(() => {
-    let intervalTime = 1800; // 1.8s when tab is active
+    let currentDelay = 2000;
     let intervalId: NodeJS.Timeout;
+    let lastUserActivity = Date.now();
 
     const startPolling = (delay: number) => {
+      currentDelay = delay;
       clearInterval(intervalId);
       intervalId = setInterval(() => {
+        // If tab is visible but user has been idle for > 25s, back off to 5s
+        if (!document.hidden && Date.now() - lastUserActivity > 25000 && currentDelay < 5000) {
+          startPolling(5000);
+          return;
+        }
         syncMessages();
       }, delay);
     };
 
-    startPolling(intervalTime);
+    startPolling(2000);
 
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // Tab inactive: slow down to 6s
-        startPolling(6000);
-      } else {
-        // Tab active: immediately check and return to fast polling
+    const onUserActive = () => {
+      lastUserActivity = Date.now();
+      if (currentDelay !== 2000 && !document.hidden) {
         syncMessages();
-        startPolling(1800);
+        startPolling(2000);
       }
     };
 
-    const handleFocus = () => {
-      syncMessages();
-      startPolling(1800);
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        startPolling(8000);
+      } else {
+        onUserActive();
+      }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", handleFocus);
+    window.addEventListener("focus", onUserActive);
+    window.addEventListener("keydown", onUserActive, { passive: true });
+    window.addEventListener("mousemove", onUserActive, { passive: true });
+    window.addEventListener("touchstart", onUserActive, { passive: true });
 
     return () => {
       clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("focus", onUserActive);
+      window.removeEventListener("keydown", onUserActive);
+      window.removeEventListener("mousemove", onUserActive);
+      window.removeEventListener("touchstart", onUserActive);
     };
   }, [syncMessages]);
 

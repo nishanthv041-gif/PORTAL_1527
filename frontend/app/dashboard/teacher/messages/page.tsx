@@ -21,7 +21,9 @@ export default async function TeacherMessagesPage() {
                   include: {
                     parent: {
                       include: {
-                        user: true
+                        user: {
+                          select: { id: true, name: true, email: true }
+                        }
                       }
                     }
                   }

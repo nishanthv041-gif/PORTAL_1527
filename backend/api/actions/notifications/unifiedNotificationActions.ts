@@ -132,12 +132,14 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
       });
     }
 
-    // Track existing notifications for this user to check what has already been marked as read/seen
-    const userExistingNotifs = await prisma.notification.findMany({
-      where: { userId },
-      select: { id: true, title: true, isRead: true }
+    // Track existing read notifications for this user using index
+    const userReadNotifs = await prisma.notification.findMany({
+      where: { userId, isRead: true },
+      select: { title: true },
+      orderBy: { createdAt: "desc" },
+      take: 100
     });
-    const readTitles = new Set(userExistingNotifs.filter(n => n.isRead).map(n => n.title.trim().toLowerCase()));
+    const readTitles = new Set(userReadNotifs.map(n => n.title.trim().toLowerCase()));
 
     // 2. Scheduled Meetings for this user
     try {
@@ -315,7 +317,7 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
       console.error("Error fetching announcements for notifications:", annErr);
     }
 
-    // 5. Role-Specific Alerts: If Parent, check children's published report cards and assignments
+    // 5. Role-Specific Alerts: If Parent, check children's published report cards and assignments in batched queries
     if (userRole === "PARENT") {
       const parentRecord = await prisma.parent.findUnique({
         where: { userId },
@@ -333,61 +335,68 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
       });
 
       if (parentRecord && parentRecord.children.length > 0) {
-        for (const childRel of parentRecord.children) {
-          const student = childRel.student;
+        const studentMap = new Map(parentRecord.children.map(c => [c.student.id, c.student]));
+        const studentIds = Array.from(studentMap.keys());
+        const classIds = Array.from(new Set(
+          parentRecord.children
+            .map(c => c.student.classId)
+            .filter(Boolean) as string[]
+        ));
 
-          // Check published report cards for this child
-          const reportCards = await prisma.reportCard.findMany({
-            where: { studentId: student.id, published: true },
+        const [reportCards, assignments] = await Promise.all([
+          studentIds.length > 0 ? prisma.reportCard.findMany({
+            where: { studentId: { in: studentIds }, published: true },
             include: { exam: true },
             orderBy: { exam: { date: "desc" } },
-            take: 2
-          });
+            take: 6
+          }) : Promise.resolve([]),
+          classIds.length > 0 ? prisma.assignment.findMany({
+            where: { classId: { in: classIds } },
+            include: { teacher: { select: { user: { select: { name: true } } } } },
+            orderBy: { deadline: "desc" },
+            take: 6
+          }) : Promise.resolve([])
+        ]);
 
-          for (const rc of reportCards) {
-            const alreadyHasNotif = items.some(i => i.title.includes(rc.exam.name) && i.title.includes(student.firstName));
-            if (!alreadyHasNotif) {
-              items.push({
-                id: `rc-${rc.id}`,
-                category: "REPORT_CARD",
-                title: `Report Card: ${student.firstName} ${student.lastName}`,
-                description: `Academic results published for ${rc.exam.name}. Total Marks: ${rc.totalMarks} | Grade: ${rc.grade} (${rc.percentage}%). ${rc.remarks ? "Teacher Remarks: " + rc.remarks : ""}`,
-                targetName: `${student.firstName} ${student.lastName}`,
-                timestamp: rc.exam.date.toISOString(),
-                link: `/dashboard/parent/report-cards/${student.id}`,
-                isRead: rc.parentVerified,
-                badgeLabel: "Report Card",
-                badgeColors: { bg: "rgba(37, 99, 235, 0.12)", text: "#2563eb", border: "rgba(37, 99, 235, 0.25)" }
-              });
-            }
-          }
-
-          // Check assignments for child's class
-          if (student.classId) {
-            const assignments = await prisma.assignment.findMany({
-              where: { classId: student.classId },
-              include: { teacher: { include: { user: true } } },
-              orderBy: { deadline: "desc" },
-              take: 3
+        for (const rc of reportCards) {
+          const student = studentMap.get(rc.studentId);
+          if (!student) continue;
+          const alreadyHasNotif = items.some(i => i.title.includes(rc.exam.name) && i.title.includes(student.firstName));
+          if (!alreadyHasNotif) {
+            items.push({
+              id: `rc-${rc.id}`,
+              category: "REPORT_CARD",
+              title: `Report Card: ${student.firstName} ${student.lastName}`,
+              description: `Academic results published for ${rc.exam.name}. Total Marks: ${rc.totalMarks} | Grade: ${rc.grade} (${rc.percentage}%). ${rc.remarks ? "Teacher Remarks: " + rc.remarks : ""}`,
+              targetName: `${student.firstName} ${student.lastName}`,
+              timestamp: rc.exam.date.toISOString(),
+              link: `/dashboard/parent/report-cards/${student.id}`,
+              isRead: rc.parentVerified,
+              badgeLabel: "Report Card",
+              badgeColors: { bg: "rgba(37, 99, 235, 0.12)", text: "#2563eb", border: "rgba(37, 99, 235, 0.25)" }
             });
+          }
+        }
 
-            for (const asg of assignments) {
-              const alreadyHasAsg = items.some(i => i.id === `asg-${asg.id}`);
-              if (!alreadyHasAsg) {
-                items.push({
-                  id: `asg-${asg.id}`,
-                  category: "ASSIGNMENT",
-                  title: `Instruction/Task: ${asg.title}`,
-                  description: `${asg.description || "Academic assignment task."} Teacher: ${asg.teacher.user.name}. Due: ${new Date(asg.deadline).toLocaleDateString()}`,
-                  targetName: student.class?.name || "Class",
-                  timestamp: asg.deadline.toISOString(),
-                  link: `/dashboard/parent/assignments?childId=${student.id}`,
-                  isRead: false,
-                  badgeLabel: "Task / Instruction",
-                  badgeColors: { bg: "rgba(16, 185, 129, 0.12)", text: "#059669", border: "rgba(16, 185, 129, 0.25)" }
-                });
-              }
-            }
+        for (const asg of assignments) {
+          const alreadyHasAsg = items.some(i => i.id === `asg-${asg.id}`);
+          if (!alreadyHasAsg) {
+            const matchedChild = parentRecord.children.find(c => c.student.classId === asg.classId)?.student;
+            const childIdParam = matchedChild ? `?childId=${matchedChild.id}` : "";
+            const targetClassName = matchedChild?.class?.name || "Class";
+
+            items.push({
+              id: `asg-${asg.id}`,
+              category: "ASSIGNMENT",
+              title: `Instruction/Task: ${asg.title}`,
+              description: `${asg.description || "Academic assignment task."} Teacher: ${asg.teacher.user.name}. Due: ${new Date(asg.deadline).toLocaleDateString()}`,
+              targetName: targetClassName,
+              timestamp: asg.deadline.toISOString(),
+              link: `/dashboard/parent/assignments${childIdParam}`,
+              isRead: false,
+              badgeLabel: "Task / Instruction",
+              badgeColors: { bg: "rgba(16, 185, 129, 0.12)", text: "#059669", border: "rgba(16, 185, 129, 0.25)" }
+            });
           }
         }
       }

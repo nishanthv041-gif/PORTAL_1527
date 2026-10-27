@@ -86,7 +86,10 @@ export default async function AdminDashboardPage({
         }),
         prisma.attendance.findMany({
           where: {
-            student: { classId },
+            OR: [
+              { classId },
+              { student: { classId } }
+            ],
             date: { gte: today, lt: tomorrow }
           },
           select: { status: true }

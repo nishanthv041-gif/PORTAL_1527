@@ -6,20 +6,28 @@ import {
   Users, UserCheck, Search, MessageSquare, Mail, Phone, 
   GraduationCap, BookOpen, ArrowRight, Bell, Sparkles, Filter
 } from "lucide-react";
-import { User, Teacher, Parent, Class } from "@prisma/client";
+import { Class } from "@prisma/client";
 
-export type TeacherContact = User & {
-  teacher?: (Teacher & {
-    classes?: Class[];
+export type TeacherContact = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  teacher?: {
+    classes?: ClassItem[];
     subjects?: { id: string; name: string }[];
-  }) | null;
+  } | null;
   unreadCount?: number;
   lastMessageSnippet?: string;
   lastMessageAt?: string;
 };
 
-export type ParentContact = User & {
-  parent?: (Parent & {
+export type ParentContact = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  parent?: {
     children?: {
       student: {
         id: string;
@@ -28,7 +36,7 @@ export type ParentContact = User & {
         class?: { id: string; name: string; section: string } | null;
       };
     }[];
-  }) | null;
+  } | null;
   unreadCount?: number;
   lastMessageSnippet?: string;
   lastMessageAt?: string;

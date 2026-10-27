@@ -20,17 +20,7 @@ export async function GET(request: Request) {
 
     const currentUserId = session.user.id;
 
-    // Check user conversation meta (clear history boundary)
-    const meta = await prisma.conversationMeta.findUnique({
-      where: {
-        userId_otherUserId: {
-          userId: currentUserId,
-          otherUserId,
-        }
-      }
-    });
-
-    const clearedAt = meta?.clearedAt || null;
+    let clearedAt: Date | null = null;
 
     // Build query conditions
     const conditions: any[] = [
@@ -51,41 +41,78 @@ export async function GET(request: Request) {
       }
     ];
 
-    if (clearedAt) {
-      conditions.push({ createdAt: { gt: clearedAt } });
-    }
-
     if (since) {
+      // Incremental sync: only messages after client's latest message timestamp
       const sinceDate = new Date(since);
       if (!isNaN(sinceDate.getTime())) {
         conditions.push({ createdAt: { gt: sinceDate } });
       }
+    } else {
+      // Initial load: check user conversation meta (clear history boundary)
+      const meta = await prisma.conversationMeta.findUnique({
+        where: {
+          userId_otherUserId: {
+            userId: currentUserId,
+            otherUserId,
+          }
+        },
+        select: { clearedAt: true }
+      });
+      clearedAt = meta?.clearedAt || null;
+      if (clearedAt) {
+        conditions.push({ createdAt: { gt: clearedAt } });
+      }
     }
 
-    const messages = await prisma.message.findMany({
-      where: {
-        AND: conditions,
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-      select: {
-        id: true,
-        content: true,
-        senderId: true,
-        receiverId: true,
-        isRead: true,
-        isDeleted: true,
-        messageType: true,
-        fileUrl: true,
-        fileName: true,
-        fileSize: true,
-        fileType: true,
-        duration: true,
-        editedAt: true,
-        createdAt: true,
-      }
-    });
+    // On initial load without `since`, fetch the latest 100 messages in reverse chronological order
+    // then sort ascending for the UI. On incremental sync, fetch up to 100 new messages.
+    let messages: any[] = [];
+    if (!since) {
+      const recentDesc = await prisma.message.findMany({
+        where: { AND: conditions },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        select: {
+          id: true,
+          content: true,
+          senderId: true,
+          receiverId: true,
+          isRead: true,
+          isDeleted: true,
+          messageType: true,
+          fileUrl: true,
+          fileName: true,
+          fileSize: true,
+          fileType: true,
+          duration: true,
+          editedAt: true,
+          createdAt: true,
+        }
+      });
+      messages = recentDesc.reverse();
+    } else {
+      messages = await prisma.message.findMany({
+        where: { AND: conditions },
+        orderBy: { createdAt: "asc" },
+        take: 100,
+        select: {
+          id: true,
+          content: true,
+          senderId: true,
+          receiverId: true,
+          isRead: true,
+          isDeleted: true,
+          messageType: true,
+          fileUrl: true,
+          fileName: true,
+          fileSize: true,
+          fileType: true,
+          duration: true,
+          editedAt: true,
+          createdAt: true,
+        }
+      });
+    }
 
     // Mark unread received messages as read
     const unreadReceivedIds = messages
@@ -93,27 +120,21 @@ export async function GET(request: Request) {
       .map(m => m.id);
 
     if (unreadReceivedIds.length > 0) {
-      await prisma.message.updateMany({
-        where: {
-          id: { in: unreadReceivedIds }
-        },
-        data: {
-          isRead: true
-        }
-      });
-
-      // Also mark corresponding message notifications as read
-      await prisma.notification.updateMany({
-        where: {
-          userId: currentUserId,
-          type: "MESSAGE",
-          link: { contains: otherUserId },
-          isRead: false,
-        },
-        data: {
-          isRead: true,
-        }
-      });
+      await Promise.all([
+        prisma.message.updateMany({
+          where: { id: { in: unreadReceivedIds } },
+          data: { isRead: true }
+        }),
+        prisma.notification.updateMany({
+          where: {
+            userId: currentUserId,
+            type: "MESSAGE",
+            link: { contains: otherUserId },
+            isRead: false,
+          },
+          data: { isRead: true }
+        })
+      ]);
 
       try {
         const { invalidateUserNotifCache } = await import("@/backend/api/actions/notifications/unifiedNotificationActions");
@@ -130,6 +151,10 @@ export async function GET(request: Request) {
     return NextResponse.json({
       messages,
       clearedAt,
+    }, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      }
     });
   } catch (error) {
     const e = error as Error;
