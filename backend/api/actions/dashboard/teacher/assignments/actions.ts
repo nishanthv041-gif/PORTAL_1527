@@ -64,16 +64,44 @@ export async function createAssignment(formData: FormData) {
 
   try {
     const session = await getServerSession(getAuthOptions());
-
-    // Fetch subject details if provided
-    let subjectName = "";
-    if (subjectId) {
-      const subject = await prisma.subject.findUnique({
-        where: { id: subjectId },
-        select: { name: true }
-      });
-      if (subject) subjectName = subject.name;
+    if (!session?.user) {
+      return { success: false, error: "Unauthorized" };
     }
+
+    if (!subjectId) {
+      return { success: false, error: "Please select your assigned subject for this class." };
+    }
+
+    // Verify subject and strict staff assignment
+    const subject = await prisma.subject.findUnique({
+      where: { id: subjectId },
+      select: { id: true, name: true, teacherId: true, classId: true }
+    });
+
+    if (!subject) {
+      return { success: false, error: "Subject not found." };
+    }
+
+    if (subject.classId !== classId) {
+      return { success: false, error: "Selected subject does not belong to the selected class." };
+    }
+
+    // Strict Subject Teacher Check: Only the assigned subject staff (or ADMIN) can create homework
+    if (session.user.role !== "ADMIN") {
+      const currentTeacher = await prisma.teacher.findUnique({
+        where: { userId: session.user.id },
+        select: { id: true }
+      });
+
+      if (!currentTeacher || subject.teacherId !== currentTeacher.id) {
+        return {
+          success: false,
+          error: "Only the assigned subject staff can send home work for this subject. Class teachers cannot create homework for subjects taught by other teachers."
+        };
+      }
+    }
+
+    const subjectName = subject.name;
 
     // Set deadline to end of day (23:59:59) so students have the full day before auto-delete
     const deadlineDate = new Date(deadline.includes("T") ? deadline : `${deadline}T23:59:59`);
@@ -176,7 +204,8 @@ export async function deleteAssignment(assignmentId: string) {
     const assignment = await prisma.assignment.findUnique({
       where: { id: assignmentId },
       include: {
-        teacher: true
+        teacher: true,
+        subject: true
       }
     });
 
@@ -184,9 +213,23 @@ export async function deleteAssignment(assignmentId: string) {
       return { success: false, error: "Home work not found" };
     }
 
-    // Permission check: only admin or the assigning teacher can delete
-    if (session.user.role !== "ADMIN" && assignment.teacher.userId !== session.user.id) {
-      return { success: false, error: "You are not authorized to delete this home work." };
+    // Permission check: only admin or current assigned subject teacher (or original creator) can delete
+    const currentTeacher = await prisma.teacher.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true }
+    });
+
+    const isCurrentSubjectTeacher = Boolean(
+      assignment.subject?.teacherId && currentTeacher?.id === assignment.subject.teacherId
+    );
+    const isAssigningTeacher = assignment.teacher.userId === session.user.id;
+    const isAdmin = session.user.role === "ADMIN";
+
+    if (!isAdmin && !isCurrentSubjectTeacher && !isAssigningTeacher) {
+      return { 
+        success: false, 
+        error: "Only the assigned subject staff can delete this home work. Class teachers cannot delete homework for other subjects." 
+      };
     }
 
     // Delete associated submissions & comments first

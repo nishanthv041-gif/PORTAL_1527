@@ -48,6 +48,17 @@ export default function ParentHomeworkList({
   childName
 }: ParentHomeworkListProps) {
   const [selectedSubject, setSelectedSubject] = useState<string>("ALL");
+  const [timeFilter, setTimeFilter] = useState<"ALL" | "TODAY_GIVEN" | "TODAY_DUE">("ALL");
+
+  const isToday = (dateString: string) => {
+    const d = new Date(dateString);
+    const today = new Date();
+    return (
+      d.getDate() === today.getDate() &&
+      d.getMonth() === today.getMonth() &&
+      d.getFullYear() === today.getFullYear()
+    );
+  };
 
   // Unique subjects
   const subjectOptions = useMemo(() => {
@@ -60,13 +71,23 @@ export default function ParentHomeworkList({
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [assignments]);
 
+  const todayGivenCount = useMemo(() => {
+    return assignments.filter(a => isToday(a.createdAt)).length;
+  }, [assignments]);
+
+  const todayDueCount = useMemo(() => {
+    return assignments.filter(a => isToday(a.deadline)).length;
+  }, [assignments]);
+
   // Filtered items
   const filtered = useMemo(() => {
     return assignments.filter(item => {
       if (selectedSubject !== "ALL" && item.subject?.id !== selectedSubject) return false;
+      if (timeFilter === "TODAY_GIVEN" && !isToday(item.createdAt)) return false;
+      if (timeFilter === "TODAY_DUE" && !isToday(item.deadline)) return false;
       return true;
     });
-  }, [assignments, selectedSubject]);
+  }, [assignments, selectedSubject, timeFilter]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
@@ -106,6 +127,57 @@ export default function ParentHomeworkList({
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
+
+          <div style={{ display: "flex", gap: "4px", backgroundColor: "var(--card)", padding: "2px", borderRadius: "8px", border: "1px solid var(--border)" }}>
+            <button
+              type="button"
+              onClick={() => setTimeFilter("ALL")}
+              style={{
+                padding: "4px 10px",
+                borderRadius: "6px",
+                border: "none",
+                backgroundColor: timeFilter === "ALL" ? "var(--primary)" : "transparent",
+                color: timeFilter === "ALL" ? "var(--primary-fg)" : "var(--foreground)",
+                fontSize: "0.8rem",
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+            >
+              All Tasks
+            </button>
+            <button
+              type="button"
+              onClick={() => setTimeFilter("TODAY_GIVEN")}
+              style={{
+                padding: "4px 10px",
+                borderRadius: "6px",
+                border: "none",
+                backgroundColor: timeFilter === "TODAY_GIVEN" ? "var(--primary)" : "transparent",
+                color: timeFilter === "TODAY_GIVEN" ? "var(--primary-fg)" : "var(--foreground)",
+                fontSize: "0.8rem",
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+            >
+              Given Today ({todayGivenCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setTimeFilter("TODAY_DUE")}
+              style={{
+                padding: "4px 10px",
+                borderRadius: "6px",
+                border: "none",
+                backgroundColor: timeFilter === "TODAY_DUE" ? "var(--primary)" : "transparent",
+                color: timeFilter === "TODAY_DUE" ? "var(--primary-fg)" : "var(--foreground)",
+                fontSize: "0.8rem",
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+            >
+              Due Today ({todayDueCount})
+            </button>
+          </div>
         </div>
 
         <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "0.35rem" }}>
@@ -175,6 +247,16 @@ export default function ParentHomeworkList({
                       >
                         {item.class.name} - {item.class.section}
                       </span>
+                      {isToday(item.createdAt) && (
+                        <span style={{ fontSize: "0.75rem", padding: "2px 7px", borderRadius: "10px", backgroundColor: "rgba(16, 185, 129, 0.15)", color: "var(--success)", fontWeight: 700 }}>
+                          ✨ Given Today
+                        </span>
+                      )}
+                      {isToday(item.deadline) && (
+                        <span style={{ fontSize: "0.75rem", padding: "2px 7px", borderRadius: "10px", backgroundColor: "rgba(234, 179, 8, 0.15)", color: "#ca8a04", fontWeight: 700 }}>
+                          ⚠️ Due Today
+                        </span>
+                      )}
                     </div>
 
                     <h3 style={{ margin: 0, color: "var(--foreground)", fontSize: "1.1rem", fontWeight: 700 }}>

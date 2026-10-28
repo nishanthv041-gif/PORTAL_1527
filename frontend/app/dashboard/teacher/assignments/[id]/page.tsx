@@ -18,6 +18,11 @@ export default async function TeacherAssignmentDetailsPage({ params }: { params:
   // Automatically delete any expired homework before loading
   await autoDeleteExpiredHomework();
 
+  const teacher = await prisma.teacher.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true }
+  });
+
   const assignment = await prisma.assignment.findUnique({
     where: { id: id },
     include: {
@@ -25,7 +30,15 @@ export default async function TeacherAssignmentDetailsPage({ params }: { params:
         select: { id: true, name: true, section: true }
       },
       subject: {
-        select: { id: true, name: true, code: true }
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          teacherId: true,
+          teacher: {
+            include: { user: true }
+          }
+        }
       },
       teacher: {
         include: { user: true }
@@ -76,6 +89,15 @@ export default async function TeacherAssignmentDetailsPage({ params }: { params:
     userId: c.userId
   }));
 
+  const isCurrentSubjectTeacher = Boolean(
+    assignment.subject?.teacherId && teacher?.id === assignment.subject.teacherId
+  );
+  const isOriginalCreator = assignment.teacher.userId === session.user.id;
+  const isAdmin = session.user.role === "ADMIN";
+  const canManage = isAdmin || isCurrentSubjectTeacher || isOriginalCreator;
+
+  const assignedStaffName = assignment.subject?.teacher?.user?.name || assignment.teacher.user.name || "Subject Staff";
+
   return (
     <HomeworkConsoleClient
       assignment={{
@@ -100,6 +122,8 @@ export default async function TeacherAssignmentDetailsPage({ params }: { params:
         role: session.user.role || "TEACHER"
       }}
       initialComments={formattedComments}
+      canManage={canManage}
+      assignedStaffName={assignedStaffName}
     />
   );
 }

@@ -64,12 +64,16 @@ interface HomeworkConsoleClientProps {
     role: string;
   };
   initialComments: ConsoleComment[];
+  canManage?: boolean;
+  assignedStaffName?: string;
 }
 
 export default function HomeworkConsoleClient({
   assignment,
   currentUser,
-  initialComments
+  initialComments,
+  canManage = true,
+  assignedStaffName
 }: HomeworkConsoleClientProps) {
   const router = useRouter();
   const [comments, setComments] = useState<ConsoleComment[]>(initialComments);
@@ -162,27 +166,46 @@ export default function HomeworkConsoleClient({
           <ArrowLeft size={16} /> Back to Home Work
         </Link>
 
-        {/* Manual Delete Option Button */}
-        <button
-          type="button"
-          onClick={() => setShowDeleteModal(true)}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.4rem",
-            padding: "6px 14px",
-            borderRadius: "8px",
-            backgroundColor: "rgba(239, 68, 68, 0.1)",
-            border: "1px solid rgba(239, 68, 68, 0.25)",
-            color: "var(--danger)",
-            fontSize: "0.85rem",
-            fontWeight: 600,
-            cursor: "pointer"
-          }}
-        >
-          <Trash2 size={14} />
-          <span>Manual Delete Home Work</span>
-        </button>
+        {/* Action Button: Manual Delete if authorized, or Staff in Charge badge */}
+        {canManage ? (
+          <button
+            type="button"
+            onClick={() => setShowDeleteModal(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "6px 14px",
+              borderRadius: "8px",
+              backgroundColor: "rgba(239, 68, 68, 0.1)",
+              border: "1px solid rgba(239, 68, 68, 0.25)",
+              color: "var(--danger)",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >
+            <Trash2 size={14} />
+            <span>Manual Delete Home Work</span>
+          </button>
+        ) : (
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "6px 12px",
+              borderRadius: "8px",
+              backgroundColor: "rgba(99, 102, 241, 0.08)",
+              border: "1px solid rgba(99, 102, 241, 0.2)",
+              color: "var(--primary)",
+              fontSize: "0.825rem",
+              fontWeight: 600
+            }}
+          >
+            <span>Subject Staff: {assignedStaffName || assignment.teacher.user.name}</span>
+          </div>
+        )}
       </div>
 
       {/* ===================================================
@@ -224,6 +247,22 @@ export default function HomeworkConsoleClient({
               >
                 <GraduationCap size={14} />
                 {assignment.class.name} - {assignment.class.section}
+              </span>
+
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.3rem",
+                  padding: "4px 12px",
+                  borderRadius: "16px",
+                  backgroundColor: "rgba(99, 102, 241, 0.12)",
+                  color: "var(--primary)",
+                  fontSize: "0.8rem",
+                  fontWeight: 700
+                }}
+              >
+                👤 Staff: {assignedStaffName || assignment.teacher.user.name}
               </span>
 
               <span

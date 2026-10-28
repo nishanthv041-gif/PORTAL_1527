@@ -161,7 +161,7 @@ export async function updateSubjectGroupAction(formData: FormData) {
         const existing = existingRecords.find(r => r.classId === classId);
 
         if (existing) {
-          return prisma.subject.update({
+          const updatedSubject = await prisma.subject.update({
             where: { id: existing.id },
             data: {
               name: newName,
@@ -172,6 +172,16 @@ export async function updateSubjectGroupAction(formData: FormData) {
               isActive: true,
             }
           });
+
+          // If assigned staff changed, transfer active home work ownership for this subject to the new staff
+          if (teacherId) {
+            await prisma.assignment.updateMany({
+              where: { subjectId: existing.id },
+              data: { teacherId }
+            });
+          }
+
+          return updatedSubject;
         } else {
           return prisma.subject.create({
             data: {
@@ -344,8 +354,19 @@ export async function assignSubjectTeacher(subjectId: string, teacherId: string)
           }
         }
       });
+
+      // Transfer home work control for this subject to the newly assigned teacher immediately
+      await prisma.assignment.updateMany({
+        where: { subjectId: subjectId },
+        data: { teacherId: teacherId }
+      });
     }
     revalidatePath("/dashboard/admin/subjects");
+    revalidatePath("/dashboard/teacher/assignments");
+    revalidatePath("/dashboard/teacher/homework");
+    revalidatePath("/dashboard/teacher/classes");
+    revalidatePath("/dashboard/parent/assignments");
+    revalidatePath("/dashboard/parent/homework");
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {
