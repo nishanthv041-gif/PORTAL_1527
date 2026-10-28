@@ -20,7 +20,8 @@ const SUBJECT_ALIASES: Record<string, string[]> = {
   "physics": ["phy", "ps"],
   "chemistry": ["chem"],
   "biology": ["bio", "botany", "zoology"],
-  "social studies": ["social", "sst", "history", "civics", "geography", "evs"],
+  "social studies": ["social", "sst", "history", "civics", "geography", "evs", "social science"],
+  "social science": ["social science", "soc sci", "social", "sst", "history", "civics", "geography"],
   "computer science": ["computer", "comp", "cs", "it", "informatics", "coding"],
   "physical education": ["pe", "pet", "sports", "games", "pt"],
   "tamil": ["tam", "second language"],
@@ -311,34 +312,49 @@ function parseTextToReportCard(
   // Pass 2: Extract Subjects and Marks
   const processedSubjectNames = new Set<string>();
 
+  // Sort subjects longest-first so "Social Science" matches before "Science"
+  const sortedClassSubjects = [...classSubjects].sort((a, b) => b.name.length - a.name.length);
+
   for (let idx = 0; idx < lines.length; idx++) {
     const line = lines[idx];
 
+    // Skip summary / total rows
+    if (/^(?:total|grand\s*total|average|avg|result|percentage|note)\b/i.test(line.trim())) {
+      continue;
+    }
+
     // Check if line contains a subject
     let matchedSubInfo: ReturnType<typeof matchSubject> | null = null;
+    let matchedKeyword = "";
 
-    // Check class subjects
-    for (const sub of classSubjects) {
+    // 1. Check class subjects (longest first)
+    for (const sub of sortedClassSubjects) {
       const subName = sub.name.toLowerCase();
-      if (line.toLowerCase().includes(subName)) {
+      const regex = new RegExp(`\\b${subName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, "i");
+      if (regex.test(line) || line.toLowerCase().includes(subName)) {
         matchedSubInfo = {
           subjectId: sub.id,
           subjectName: sub.name,
           maxMarks: sub.maxMarks || 100,
           passMarks: sub.passMarks || 35
         };
+        matchedKeyword = subName;
         break;
       }
     }
 
-    // Check aliases
+    // 2. Check aliases (longest first)
     if (!matchedSubInfo) {
-      for (const [canonical, aliases] of Object.entries(SUBJECT_ALIASES)) {
-        const words = [canonical, ...aliases];
-        for (const w of words) {
-          const regex = new RegExp(`\\b${w}\\b`, "i");
+      const aliasEntries = Object.entries(SUBJECT_ALIASES).sort(
+        ([a], [b]) => b.length - a.length
+      );
+      for (const [canonical, aliases] of aliasEntries) {
+        const sortedAliases = [...aliases, canonical].sort((a, b) => b.length - a.length);
+        for (const w of sortedAliases) {
+          const regex = new RegExp(`\\b${w.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, "i");
           if (regex.test(line)) {
             matchedSubInfo = matchSubject(canonical, classSubjects);
+            matchedKeyword = w.toLowerCase();
             break;
           }
         }
@@ -349,9 +365,30 @@ function parseTextToReportCard(
     if (matchedSubInfo && !processedSubjectNames.has(matchedSubInfo.subjectName.toLowerCase())) {
       processedSubjectNames.add(matchedSubInfo.subjectName.toLowerCase());
 
-      // Extract numbers from the line
-      // E.g. "Maths: 85/100" or "English 92" or "Science | 78 | 100 | 35 | Pass"
-      const numberMatches = Array.from(line.matchAll(/\b\d+(?:\.\d+)?\b/g)).map(m => parseFloat(m[0]));
+      // Find position of the subject name in the line
+      let subPos = matchedKeyword ? line.toLowerCase().indexOf(matchedKeyword) : line.toLowerCase().indexOf(matchedSubInfo.subjectName.toLowerCase());
+
+      // Extract all numbers with their string indices
+      const allMatchesWithIndex = Array.from(line.matchAll(/\b\d+(?:\.\d+)?\b/g));
+
+      // Separate numbers appearing AFTER the subject name from numbers appearing before (e.g. S.No.)
+      let numberMatches: number[] = [];
+      if (subPos !== -1) {
+        const afterSubjectMatches = allMatchesWithIndex.filter(m => (m.index ?? 0) >= subPos);
+        if (afterSubjectMatches.length > 0) {
+          numberMatches = afterSubjectMatches.map(m => parseFloat(m[0]));
+        }
+      }
+
+      // If no numbers appeared after the subject, fall back to all numbers, dropping leading serial number (e.g. 1, 2, 3...)
+      if (numberMatches.length === 0) {
+        const allNums = allMatchesWithIndex.map(m => parseFloat(m[0]));
+        if (allNums.length >= 2 && allNums[0] <= 30 && Number.isInteger(allNums[0])) {
+          numberMatches = allNums.slice(1);
+        } else {
+          numberMatches = allNums;
+        }
+      }
 
       // Fallback: Check adjacent line if no number found on the subject line
       if (numberMatches.length === 0 && idx + 1 < lines.length) {
@@ -362,22 +399,50 @@ function parseTextToReportCard(
       }
 
       let score: number | "" = "";
-      let maxScore = matchedSubInfo.maxMarks;
-      let passMarks = matchedSubInfo.passMarks;
+      let maxScore = matchedSubInfo.maxMarks || 100;
+      let passMarks = matchedSubInfo.passMarks || 35; // Standard pass mark criteria
       let remarks = "";
       let isInvalid = false;
       let validationError = "";
 
+      const standardMaxBases = [100, 200, 75, 80, 50, 40, 30, 25, 20];
+
       if (numberMatches.length === 1) {
         score = numberMatches[0];
       } else if (numberMatches.length >= 2) {
-        // e.g. "85 100" -> score=85, max=100
-        score = numberMatches[0];
-        if (numberMatches[1] >= 20) {
-          maxScore = numberMatches[1];
+        const n1 = numberMatches[0];
+        const n2 = numberMatches[1];
+
+        // Intelligently identify Max Marks vs Marks Obtained:
+        // E.g. [100, 85] (Max then Obtained) or [85, 100] (Obtained then Max)
+        if (standardMaxBases.includes(n1) && !standardMaxBases.includes(n2)) {
+          maxScore = n1;
+          score = n2;
+        } else if (standardMaxBases.includes(n2) && !standardMaxBases.includes(n1)) {
+          maxScore = n2;
+          score = n1;
+        } else if (n1 > n2 && standardMaxBases.includes(n1)) {
+          maxScore = n1;
+          score = n2;
+        } else if (n2 > n1 && standardMaxBases.includes(n2)) {
+          maxScore = n2;
+          score = n1;
+        } else {
+          if (n1 <= n2) {
+            score = n1;
+            maxScore = n2;
+          } else {
+            maxScore = n1;
+            score = n2;
+          }
         }
-        if (numberMatches.length >= 3 && numberMatches[2] < maxScore) {
-          passMarks = numberMatches[2];
+
+        // Only override passMarks if there is an explicit 3rd number (e.g. 35, 40)
+        if (numberMatches.length >= 3) {
+          const n3 = numberMatches[2];
+          if (n3 <= 50 && n3 < maxScore && n3 !== score) {
+            passMarks = n3;
+          }
         }
       }
 

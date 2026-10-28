@@ -5,7 +5,7 @@ import {
   Upload, FileText, Image as ImageIcon, FileSpreadsheet,
   CheckCircle2, AlertCircle, Sparkles, RefreshCw, Trash2, Plus,
   Award, Calendar, Users, Eye, EyeOff, RotateCcw,
-  ShieldCheck, Check, X, ArrowRight, Layers, FileCheck
+  ShieldCheck, Check, X, ArrowRight, Layers, FileCheck, Send
 } from "lucide-react";
 import type { TeacherClass, ClassSubject, ClassStudent, HistoryItem } from "./TeacherReportCardsClient";
 import type { ScanReportCardResult, ScannedReportCardSubject, DetectedStudentEntry } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardTypes";
@@ -602,7 +602,7 @@ export default function ReportCardDocumentStudio({
               AI Document Scanning &amp; OCR Studio
             </h2>
             <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-              Upload Photos, PDFs, Excel Gradebooks, or Word Docs • Automated OCR &amp; Table Extraction • Editable Data Review
+              Review and verify student marks before dispatching report cards to parents.
             </p>
           </div>
         </div>
@@ -746,26 +746,11 @@ export default function ReportCardDocumentStudio({
           </div>
 
           <h3 style={{ margin: "0 0 0.4rem 0", fontSize: "1.05rem", fontWeight: 800 }}>
-            Drag &amp; drop files here, or click to browse
+            Drag &amp; drop document, or click to browse
           </h3>
-          <p style={{ margin: "0 0 1rem 0", fontSize: "0.825rem", color: "var(--text-secondary)" }}>
-            Upload <strong>Photos &amp; Scans (JPG, PNG)</strong>, <strong>PDFs</strong>, <strong>Excel (.xlsx, .csv)</strong>, or <strong>Word (.docx)</strong>
+          <p style={{ margin: 0, fontSize: "0.825rem", color: "var(--text-secondary)" }}>
+            Supports JPG, PNG, PDF, Excel, and Word files up to 25MB
           </p>
-
-          <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "0.75rem", padding: "4px 9px", borderRadius: "8px", background: "rgba(16, 185, 129, 0.12)", color: "#10b981", fontWeight: 700 }}>
-              📷 Photos &amp; Scans (OCR)
-            </span>
-            <span style={{ fontSize: "0.75rem", padding: "4px 9px", borderRadius: "8px", background: "rgba(239, 68, 68, 0.12)", color: "#ef4444", fontWeight: 700 }}>
-              📕 PDFs
-            </span>
-            <span style={{ fontSize: "0.75rem", padding: "4px 9px", borderRadius: "8px", background: "rgba(59, 130, 246, 0.12)", color: "#3b82f6", fontWeight: 700 }}>
-              📊 Excel / CSV
-            </span>
-            <span style={{ fontSize: "0.75rem", padding: "4px 9px", borderRadius: "8px", background: "rgba(168, 85, 247, 0.12)", color: "#a855f7", fontWeight: 700 }}>
-              📝 Word Docs
-            </span>
-          </div>
         </div>
 
         {/* Uploaded File Queue List */}
@@ -1498,18 +1483,18 @@ export default function ReportCardDocumentStudio({
                     padding: "0.75rem 1.85rem",
                     borderRadius: "12px",
                     border: "none",
-                    background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
+                    background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
                     color: "#ffffff",
                     fontWeight: 800,
-                    fontSize: "0.92rem",
+                    fontSize: "0.95rem",
                     cursor: (isSaving || totals.hasValidationErrors || !selectedStudentId) ? "not-allowed" : "pointer",
                     opacity: (isSaving || totals.hasValidationErrors || !selectedStudentId) ? 0.65 : 1,
-                    boxShadow: "0 4px 14px rgba(99, 102, 241, 0.35)",
+                    boxShadow: "0 4px 14px rgba(37, 99, 235, 0.35)",
                     transition: "all 0.2s ease"
                   }}
                 >
-                  <CheckCircle2 size={18} />
-                  <span>{isSaving ? "Connecting to Database..." : "Connect & Save to Database"}</span>
+                  <Send size={18} />
+                  <span>{isSaving ? "Sending to Parent..." : "Send Report Card to Parent"}</span>
                 </button>
               </div>
             </div>

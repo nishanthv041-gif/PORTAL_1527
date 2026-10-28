@@ -141,7 +141,8 @@
 }
 
 /* Performance Metrics Hero Banner */
-.metricsHero {
+.metricsHero,
+.metricsGrid {
   padding: clamp(1.25rem, 3vw, 1.75rem) clamp(1.25rem, 3vw, 2rem);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -560,5 +561,12 @@
   .pdfBtn {
     flex: 1;
     justify-content: center;
+  }
+
+  .metricsHero,
+  .metricsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.65rem;
+    padding: 0.85rem;
   }
 }

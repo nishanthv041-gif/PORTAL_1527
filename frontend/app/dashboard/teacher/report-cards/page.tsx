@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
+import { redirect } from "next/navigation";
 import TeacherReportCardsClient, {
   TeacherClass,
   HistoryItem
@@ -8,7 +9,12 @@ import TeacherReportCardsClient, {
 
 export default async function TeacherReportCardsPage() {
   const session = await getServerSession(getAuthOptions());
-  if (!session || session.user.role !== "TEACHER") return null;
+  if (!session) {
+    redirect("/login");
+  }
+  if (session.user.role !== "TEACHER") {
+    redirect("/dashboard");
+  }
 
   const teacher = await prisma.teacher.findUnique({
     where: { userId: session.user.id },

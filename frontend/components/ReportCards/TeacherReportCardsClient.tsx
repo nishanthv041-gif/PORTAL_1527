@@ -620,7 +620,7 @@ export default function TeacherReportCardsClient({
                   Scan &amp; Upload Report Card File (OCR)
                 </h3>
                 <p style={{ margin: 0, fontSize: "0.825rem", color: "var(--text-secondary)" }}>
-                  Upload photos (JPG, PNG), PDFs, Excel sheets, or Word docs. The scanner extracts student marks, flags invalid data for editing, and connects directly to the database.
+                  Scan any student mark sheet to extract marks automatically and send to parents.
                 </p>
               </div>
             </div>
