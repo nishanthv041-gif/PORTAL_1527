@@ -122,20 +122,20 @@ export default async function AdminDashboardPage({
 
       let passCount = 0;
       let failCount = 0;
-      
+
       const studentExams = new Map();
       marks.forEach(m => {
-         const key = `${m.studentId}-${m.examId}`;
-         if (!studentExams.has(key)) studentExams.set(key, { total: 0, max: 0 });
-         const curr = studentExams.get(key);
-         curr.total += m.score;
-         curr.max += m.maxScore;
+        const key = `${m.studentId}-${m.examId}`;
+        if (!studentExams.has(key)) studentExams.set(key, { total: 0, max: 0 });
+        const curr = studentExams.get(key);
+        curr.total += m.score;
+        curr.max += m.maxScore;
       });
 
       studentExams.forEach((val) => {
-         const percent = (val.total / val.max) * 100;
-         if (percent >= 40) passCount++;
-         else failCount++;
+        const percent = (val.total / val.max) * 100;
+        if (percent >= 40) passCount++;
+        else failCount++;
       });
 
       passFailStats = [
@@ -255,7 +255,7 @@ export default async function AdminDashboardPage({
             <div>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Today&apos;s Attendance</p>
               <p style={{ fontSize: '1.5rem', fontWeight: 600 }}>
-                {attendanceStats.present} <span style={{fontSize:'1rem', color: "var(--success)"}}>Present</span> / {attendanceStats.absent} <span style={{fontSize:'1rem', color: "var(--danger)"}}>Absent</span>
+                {attendanceStats.present} <span style={{ fontSize: '1rem', color: "var(--success)" }}>Present</span> / {attendanceStats.absent} <span style={{ fontSize: '1rem', color: "var(--danger)" }}>Absent</span>
               </p>
             </div>
           </div>

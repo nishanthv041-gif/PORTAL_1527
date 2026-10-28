@@ -1,9 +1,9 @@
 import { getParentAndSelectedChild } from "./parentChildHelper";
 import { prisma } from "@/backend/db/prisma";
 import styles from "./ParentDashboard.module.css";
-import { 
-  Percent, CheckCircle2, AlertCircle, CalendarCheck, 
-  GraduationCap, BookOpen, ArrowRight, CalendarDays, Clock 
+import {
+  Percent, CheckCircle2, AlertCircle, CalendarCheck,
+  GraduationCap, BookOpen, ArrowRight, CalendarDays, Clock
 } from "lucide-react";
 import ParentChildBanner from "./ParentChildBanner";
 import Link from "next/link";
@@ -128,8 +128,8 @@ export default async function ParentDashboard({
       // Total class score vs max score
       const classTotalScore = lastExamWithMarks.marks.reduce((acc, m) => acc + m.score, 0);
       const classTotalMax = lastExamWithMarks.marks.reduce((acc, m) => acc + m.maxScore, 0);
-      classOverallPercentage = classTotalMax > 0 
-        ? Number(((classTotalScore / classTotalMax) * 100).toFixed(1)) 
+      classOverallPercentage = classTotalMax > 0
+        ? Number(((classTotalScore / classTotalMax) * 100).toFixed(1))
         : 0;
 
       // Group by student for pass/fail calculation
@@ -151,8 +151,8 @@ export default async function ParentDashboard({
         }
       });
 
-      passRatePercentage = totalStudentsAppeared > 0 
-        ? Number(((passedStudents / totalStudentsAppeared) * 100).toFixed(1)) 
+      passRatePercentage = totalStudentsAppeared > 0
+        ? Number(((passedStudents / totalStudentsAppeared) * 100).toFixed(1))
         : 0;
 
       // Child's specific score on this test
@@ -160,8 +160,8 @@ export default async function ParentDashboard({
       if (childMarks.length > 0) {
         childScore = childMarks.reduce((acc, m) => acc + m.score, 0);
         childMaxScore = childMarks.reduce((acc, m) => acc + m.maxScore, 0);
-        childPercentage = childMaxScore > 0 
-          ? Number(((childScore / childMaxScore) * 100).toFixed(1)) 
+        childPercentage = childMaxScore > 0
+          ? Number(((childScore / childMaxScore) * 100).toFixed(1))
           : 0;
       }
 
@@ -194,18 +194,18 @@ export default async function ParentDashboard({
       </div>
 
       {/* Child Profile Banner with Multi-Child Switcher (viewable only for parents with 2+ children) */}
-      <ParentChildBanner 
-        selectedChild={selectedChild} 
-        studentList={children} 
-        activePage="dashboard" 
+      <ParentChildBanner
+        selectedChild={selectedChild}
+        studentList={children}
+        activePage="dashboard"
       />
 
       {/* 5 Stats Cards Grid: Percentage, Presented Days, Absented Days, Class Details, Total Subjects */}
       <div className={styles.statsGrid}>
         {/* 1. Student Attendance Percentage */}
-        <Link 
-          href={`/dashboard/parent/attendance?childId=${selectedChild.id}`} 
-          prefetch={true} 
+        <Link
+          href={`/dashboard/parent/attendance?childId=${selectedChild.id}`}
+          prefetch={true}
           className={`${styles.statCard} ${styles.statPercentage}`}
         >
           <div className={styles.statIcon}>
@@ -218,9 +218,9 @@ export default async function ParentDashboard({
         </Link>
 
         {/* 2. Total Presented Days */}
-        <Link 
-          href={`/dashboard/parent/attendance?childId=${selectedChild.id}`} 
-          prefetch={true} 
+        <Link
+          href={`/dashboard/parent/attendance?childId=${selectedChild.id}`}
+          prefetch={true}
           className={`${styles.statCard} ${styles.statPresent}`}
         >
           <div className={styles.statIcon}>
@@ -233,9 +233,9 @@ export default async function ParentDashboard({
         </Link>
 
         {/* 3. Absented Days */}
-        <Link 
-          href={`/dashboard/parent/attendance?childId=${selectedChild.id}`} 
-          prefetch={true} 
+        <Link
+          href={`/dashboard/parent/attendance?childId=${selectedChild.id}`}
+          prefetch={true}
           className={`${styles.statCard} ${styles.statAbsent}`}
         >
           <div className={styles.statIcon}>
@@ -248,9 +248,9 @@ export default async function ParentDashboard({
         </Link>
 
         {/* 4. Enrolled Class (Class Details) */}
-        <Link 
-          href={`/dashboard/parent/classes?childId=${selectedChild.id}`} 
-          prefetch={true} 
+        <Link
+          href={`/dashboard/parent/classes?childId=${selectedChild.id}`}
+          prefetch={true}
           className={`${styles.statCard} ${styles.statClass}`}
         >
           <div className={styles.statIcon}>
@@ -265,9 +265,9 @@ export default async function ParentDashboard({
         </Link>
 
         {/* 5. Total Subjects */}
-        <Link 
-          href={`/dashboard/parent/classes?childId=${selectedChild.id}`} 
-          prefetch={true} 
+        <Link
+          href={`/dashboard/parent/classes?childId=${selectedChild.id}`}
+          prefetch={true}
           className={`${styles.statCard} ${styles.statSubjects}`}
         >
           <div className={styles.statIcon}>
@@ -314,7 +314,7 @@ export default async function ParentDashboard({
             </p>
           </div>
 
-          <Link 
+          <Link
             href={`/dashboard/parent/attendance?childId=${selectedChild.id}`}
             prefetch={true}
             className={styles.viewAttendanceBtn}
@@ -404,8 +404,8 @@ export default async function ParentDashboard({
             <p style={{ margin: "0.25rem 0 1rem 0", fontSize: "0.85rem", opacity: 0.7 }}>
               Attendance will be updated as the Class Teacher registers daily attendance.
             </p>
-            <Link 
-              href={`/dashboard/parent/attendance?childId=${selectedChild.id}`} 
+            <Link
+              href={`/dashboard/parent/attendance?childId=${selectedChild.id}`}
               prefetch={true}
               className={styles.viewAttendanceBtn}
               style={{ display: "inline-flex" }}

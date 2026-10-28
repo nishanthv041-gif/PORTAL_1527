@@ -19,9 +19,9 @@ export default function ClassSelector({ classes }: ClassSelectorProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentClassId = searchParams.get("classId");
-  
+
   const [searchTerm, setSearchTerm] = useState("");
-  
+
   // Group classes by name
   const groupedClasses = classes.reduce((acc, curr) => {
     if (!acc[curr.name]) acc[curr.name] = [];
@@ -41,7 +41,7 @@ export default function ClassSelector({ classes }: ClassSelectorProps) {
     router.push(`?${params.toString()}`);
   };
 
-  const filteredNames = Object.keys(groupedClasses).filter(name => 
+  const filteredNames = Object.keys(groupedClasses).filter(name =>
     name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -49,7 +49,7 @@ export default function ClassSelector({ classes }: ClassSelectorProps) {
     <div className={styles.selectorContainer}>
       <div className={styles.searchBar}>
         <Search size={20} className={styles.searchIcon} />
-        <input 
+        <input
           type="text"
           placeholder="Search classes..."
           value={searchTerm}
@@ -62,7 +62,7 @@ export default function ClassSelector({ classes }: ClassSelectorProps) {
           </button>
         )}
       </div>
-      
+
       <div className={styles.dropdownGrid}>
         {filteredNames.map(name => (
           <div key={name} className={styles.classGroup}>

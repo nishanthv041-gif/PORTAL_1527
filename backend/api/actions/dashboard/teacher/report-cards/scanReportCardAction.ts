@@ -808,13 +808,18 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
     if (["jpg", "jpeg", "png", "webp", "bmp"].includes(ext) || fileType.startsWith("image/")) {
       let extractedText = "";
       try {
+        const os = await import("os");
         const { createWorker } = await import("tesseract.js");
-        const worker = await createWorker("eng");
-        const ret = await worker.recognize(Buffer.from(buffer));
+        const worker = await createWorker("eng", 1, { cachePath: os.tmpdir() });
+        const ocrPromise = worker.recognize(Buffer.from(buffer));
+        const timeoutPromise = new Promise<{ data: { text: string } }>((_, reject) =>
+          setTimeout(() => reject(new Error("OCR timeout")), 15000)
+        );
+        const ret = await Promise.race([ocrPromise, timeoutPromise]);
         await worker.terminate();
         extractedText = ret.data?.text || "";
       } catch (ocrErr) {
-        console.warn("Server image OCR warning:", ocrErr);
+        console.warn("Server image OCR notice:", ocrErr);
       }
 
       const parsed = parseTextToReportCard(extractedText, classStudents, classSubjects);

@@ -48,34 +48,34 @@ export async function GET(
           doc.fontSize(14).text(title, { underline: true });
           doc.moveDown(0.5);
           doc.fontSize(10);
-          
+
           const startX = 50;
           let currentY = doc.y;
           const rowHeight = 20;
           const col1Width = 150;
           const col2Width = 350;
-          
+
           doc.lineWidth(0.5);
           doc.rect(startX, currentY, col1Width + col2Width, data.length * rowHeight).stroke();
-          
+
           data.forEach((row, i) => {
             // Draw row separator
             if (i > 0) {
               doc.moveTo(startX, currentY).lineTo(startX + col1Width + col2Width, currentY).stroke();
             }
-            
+
             // Draw column separator
             if (i === 0) {
               doc.moveTo(startX + col1Width, currentY).lineTo(startX + col1Width, currentY + data.length * rowHeight).stroke();
             }
-            
+
             // Draw text
             doc.font('Helvetica-Bold').text(row.label, startX + 5, currentY + 5, { width: col1Width - 10 });
             doc.font('Helvetica').text(row.value, startX + col1Width + 5, currentY + 5, { width: col2Width - 10 });
-            
+
             currentY += rowHeight;
           });
-          
+
           doc.y = currentY + 20;
         };
 
@@ -100,13 +100,13 @@ export async function GET(
         ];
         drawTable('Academic Information', academicData);
 
-        const parentData = student.parents.length > 0 
+        const parentData = student.parents.length > 0
           ? student.parents.map((p, i) => ({
-              label: `Parent ${i + 1}`, 
-              value: `${p.parent.user.name} | ${p.parent.user.email} | ${p.parent.phone || 'No phone'}` 
-            }))
+            label: `Parent ${i + 1}`,
+            value: `${p.parent.user.name} | ${p.parent.user.email} | ${p.parent.phone || 'No phone'}`
+          }))
           : [{ label: 'Parents', value: 'No parent records found.' }];
-        
+
         drawTable('Parent/Guardian Details', parentData);
 
         // Finish the document

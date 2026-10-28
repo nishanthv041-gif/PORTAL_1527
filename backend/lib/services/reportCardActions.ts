@@ -144,7 +144,7 @@ export async function sendReportCardToParentAction(studentId: string) {
       sentCount: sentRecipients.length,
       recipients: sentRecipients,
       totalParents: student.parents.length,
-      message: sentRecipients.length > 0 
+      message: sentRecipients.length > 0
         ? `Report card emailed to all ${sentRecipients.length} parent recipient(s): ${sentRecipients.join(", ")}`
         : `Report card notification generated for ${student.parents.length} parent(s).`
     };

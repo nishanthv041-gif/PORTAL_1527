@@ -110,37 +110,7 @@ export default function ReportCardDocumentScanModal({
     setIsScanning(true);
 
     try {
-      // 1. If Image file (.png, .jpg, .jpeg, .webp): Try client-side OCR, but fail-fast to server action if anything fails
-      if (["png", "jpg", "jpeg", "webp", "bmp"].includes(ext) || file.type.startsWith("image/")) {
-        setScanProgress("Scanning image with OCR engine...");
-        try {
-          const { createWorker } = await import("tesseract.js");
-          const worker = await createWorker("eng");
-          setScanProgress("Scanning image letters and numeric marks...");
-          const ret = await worker.recognize(file);
-          await worker.terminate();
-
-          const ocrText = ret.data?.text || "";
-          if (ocrText && ocrText.trim().length > 0) {
-            setScanProgress("Matching student name, subjects, and score criteria...");
-            const formData = new FormData();
-            formData.set("classId", activeClassId);
-            formData.set("file", file);
-            formData.set("ocrText", ocrText);
-
-            const result = await scanReportCardAction(formData);
-            applyScanResult(result);
-            setIsScanning(false);
-            return;
-          }
-        } catch (ocrErr) {
-          console.warn("Client OCR fallback to server:", ocrErr);
-          setScanProgress("Processing image via server scanner...");
-        }
-      }
-
-      // 2. Spreadsheets, PDFs, Word docs & Images via Server Action
-      setScanProgress(`Parsing ${ext ? ext.toUpperCase() : "document"} content and tables...`);
+      setScanProgress(`Analyzing ${ext ? ext.toUpperCase() : "document"} and extracting marks...`);
       const formData = new FormData();
       formData.set("classId", activeClassId);
       formData.set("file", file);
@@ -523,529 +493,529 @@ export default function ReportCardDocumentScanModal({
                 <select
                   value={activeClassId}
                   onChange={e => handleClassChange(e.target.value)}
-              style={{
-                flex: 1,
-                padding: "0.5rem 0.85rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color)",
-                background: "var(--input-bg, #ffffff)",
-                fontWeight: 700,
-                fontSize: "0.9rem"
-              }}
-            >
-              {(classes || []).map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.name} - Section {c.section} ({(c.students || []).length} Students, {(c.subjects || []).length} Subjects)
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Upload Zone */}
-          <div
-            onDragOver={e => e.preventDefault()}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            style={{
-              border: "2px dashed var(--primary, #6366f1)",
-              borderRadius: "16px",
-              padding: "2rem 1.5rem",
-              textAlign: "center",
-              background: "rgba(99, 102, 241, 0.02)",
-              cursor: "pointer",
-              transition: "all 0.2s ease"
-            }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".jpg,.jpeg,.png,.webp,.bmp,.pdf,.xlsx,.xls,.csv,.docx,.doc"
-              onChange={handleFileChange}
-              style={{ display: "none" }}
-            />
-
-            <Upload size={38} color="var(--primary)" style={{ margin: "0 auto 0.75rem" }} />
-
-            <h3 style={{ margin: "0 0 0.35rem 0", fontSize: "1.05rem", fontWeight: 800 }}>
-              {selectedFile ? selectedFile.name : "Choose or drag & drop documentation file here"}
-            </h3>
-            <p style={{ margin: "0 0 0.85rem 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-              Accepts <strong>JPG, PNG photos</strong> (OCR text scan), <strong>PDFs</strong>, <strong>Excel (.xlsx, .csv)</strong>, and <strong>Word (.docx)</strong>
-            </p>
-
-            <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "0.75rem", padding: "3px 8px", borderRadius: "6px", background: "rgba(16, 185, 129, 0.12)", color: "#10b981", fontWeight: 700 }}>
-                📷 Photos (OCR)
-              </span>
-              <span style={{ fontSize: "0.75rem", padding: "3px 8px", borderRadius: "6px", background: "rgba(239, 68, 68, 0.12)", color: "#ef4444", fontWeight: 700 }}>
-                📕 PDF
-              </span>
-              <span style={{ fontSize: "0.75rem", padding: "3px 8px", borderRadius: "6px", background: "rgba(59, 130, 246, 0.12)", color: "#3b82f6", fontWeight: 700 }}>
-                📊 Excel / CSV
-              </span>
-              <span style={{ fontSize: "0.75rem", padding: "3px 8px", borderRadius: "6px", background: "rgba(168, 85, 247, 0.12)", color: "#a855f7", fontWeight: 700 }}>
-                📝 Word Doc
-              </span>
-            </div>
-          </div>
-
-          {/* Scanning Progress */}
-          {isScanning && (
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.75rem",
-              padding: "1rem",
-              borderRadius: "12px",
-              background: "rgba(99, 102, 241, 0.08)",
-              border: "1px solid rgba(99, 102, 241, 0.2)"
-            }}>
-              <RefreshCw size={20} className="animate-spin" color="var(--primary)" />
-              <div style={{ flex: 1 }}>
-                <span style={{ fontWeight: 700, fontSize: "0.88rem", display: "block" }}>
-                  {scanProgress || "Scanning document..."}
-                </span>
-                <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
-                  Extracting student marks, subject criteria, and exam data with OCR engine
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Error Message */}
-          {scanError && (
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.6rem",
-              padding: "0.85rem 1rem",
-              borderRadius: "10px",
-              background: "rgba(239, 68, 68, 0.1)",
-              border: "1px solid rgba(239, 68, 68, 0.25)",
-              color: "#ef4444",
-              fontSize: "0.875rem",
-              fontWeight: 600
-            }}>
-              <AlertCircle size={18} />
-              <span>{scanError}</span>
-            </div>
-          )}
-
-          {/* Success Banner */}
-          {saveSuccess && (
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.6rem",
-              padding: "0.85rem 1rem",
-              borderRadius: "10px",
-              background: "rgba(16, 185, 129, 0.1)",
-              border: "1px solid rgba(16, 185, 129, 0.25)",
-              color: "#10b981",
-              fontSize: "0.875rem",
-              fontWeight: 700
-            }}>
-              <CheckCircle2 size={18} />
-              <span>{saveSuccess}</span>
-            </div>
-          )}
-
-          {/* ========================================================
-              SCANNED DATA INTERACTIVE EDITOR & INVALID DATA CORRECTION
-             ======================================================== */}
-          {scanResult && (
-            <div style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "1.25rem",
-              border: "1px solid var(--border-color)",
-              borderRadius: "16px",
-              padding: "1.25rem",
-              background: "rgba(0,0,0,0.01)"
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <ShieldCheck size={20} color="var(--primary)" />
-                  <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800 }}>
-                    Scanned Report Card Data Review &amp; Edit
-                  </h3>
-                </div>
-                <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
-                  Source: <strong>{scanResult.fileDetails.name}</strong> ({scanResult.fileDetails.type})
-                </span>
+                  style={{
+                    flex: 1,
+                    padding: "0.5rem 0.85rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color)",
+                    background: "var(--input-bg, #ffffff)",
+                    fontWeight: 700,
+                    fontSize: "0.9rem"
+                  }}
+                >
+                  {(classes || []).map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} - Section {c.section} ({(c.students || []).length} Students, {(c.subjects || []).length} Subjects)
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {/* Multi-Student Switcher if Gradebook Matrix */}
-              {scanResult.allDetectedStudents && scanResult.allDetectedStudents.length > 1 && (
-                <div style={{
-                  padding: "0.75rem",
-                  borderRadius: "10px",
-                  background: "rgba(99, 102, 241, 0.05)",
-                  border: "1px solid rgba(99, 102, 241, 0.15)"
-                }}>
-                  <span style={{ fontSize: "0.82rem", fontWeight: 700, display: "block", marginBottom: "0.4rem" }}>
-                    Detected {scanResult.allDetectedStudents.length} Students in Gradebook:
+              {/* Upload Zone */}
+              <div
+                onDragOver={e => e.preventDefault()}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  border: "2px dashed var(--primary, #6366f1)",
+                  borderRadius: "16px",
+                  padding: "2rem 1.5rem",
+                  textAlign: "center",
+                  background: "rgba(99, 102, 241, 0.02)",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease"
+                }}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,.bmp,.pdf,.xlsx,.xls,.csv,.docx,.doc"
+                  onChange={handleFileChange}
+                  style={{ display: "none" }}
+                />
+
+                <Upload size={38} color="var(--primary)" style={{ margin: "0 auto 0.75rem" }} />
+
+                <h3 style={{ margin: "0 0 0.35rem 0", fontSize: "1.05rem", fontWeight: 800 }}>
+                  {selectedFile ? selectedFile.name : "Choose or drag & drop documentation file here"}
+                </h3>
+                <p style={{ margin: "0 0 0.85rem 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                  Accepts <strong>JPG, PNG photos</strong> (OCR text scan), <strong>PDFs</strong>, <strong>Excel (.xlsx, .csv)</strong>, and <strong>Word (.docx)</strong>
+                </p>
+
+                <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "0.75rem", padding: "3px 8px", borderRadius: "6px", background: "rgba(16, 185, 129, 0.12)", color: "#10b981", fontWeight: 700 }}>
+                    📷 Photos (OCR)
                   </span>
-                  <div style={{ display: "flex", gap: "0.4rem", overflowX: "auto", paddingBottom: "0.25rem" }}>
-                    {scanResult.allDetectedStudents.map((entry, idx) => {
-                      const isCurr = entry.studentId === selectedStudentId;
-                      return (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => handleSelectMultiStudent(entry)}
-                          style={{
-                            padding: "0.35rem 0.75rem",
-                            borderRadius: "6px",
-                            border: isCurr ? "1.5px solid var(--primary)" : "1px solid var(--border-color)",
-                            background: isCurr ? "var(--primary)" : "var(--card-bg)",
-                            color: isCurr ? "#ffffff" : "var(--foreground)",
-                            fontSize: "0.8rem",
-                            fontWeight: 700,
-                            whiteSpace: "nowrap",
-                            cursor: "pointer"
-                          }}
-                        >
-                          {entry.studentName} ({entry.rollNumber})
-                        </button>
-                      );
-                    })}
+                  <span style={{ fontSize: "0.75rem", padding: "3px 8px", borderRadius: "6px", background: "rgba(239, 68, 68, 0.12)", color: "#ef4444", fontWeight: 700 }}>
+                    📕 PDF
+                  </span>
+                  <span style={{ fontSize: "0.75rem", padding: "3px 8px", borderRadius: "6px", background: "rgba(59, 130, 246, 0.12)", color: "#3b82f6", fontWeight: 700 }}>
+                    📊 Excel / CSV
+                  </span>
+                  <span style={{ fontSize: "0.75rem", padding: "3px 8px", borderRadius: "6px", background: "rgba(168, 85, 247, 0.12)", color: "#a855f7", fontWeight: 700 }}>
+                    📝 Word Doc
+                  </span>
+                </div>
+              </div>
+
+              {/* Scanning Progress */}
+              {isScanning && (
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  padding: "1rem",
+                  borderRadius: "12px",
+                  background: "rgba(99, 102, 241, 0.08)",
+                  border: "1px solid rgba(99, 102, 241, 0.2)"
+                }}>
+                  <RefreshCw size={20} className="animate-spin" color="var(--primary)" />
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.88rem", display: "block" }}>
+                      {scanProgress || "Scanning document..."}
+                    </span>
+                    <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                      Extracting student marks, subject criteria, and exam data with OCR engine
+                    </span>
                   </div>
                 </div>
               )}
 
-              {/* Identification Row: Student Match & Exam Details */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1rem" }}>
-                {/* Student Selector */}
-                <div>
-                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem", color: "var(--text-secondary)" }}>
-                    Assigned Student ({scanResult.studentConfidence === "HIGH" ? "✓ Matched" : "⚠️ Verify Student"}):
-                  </label>
-                  <select
-                    value={selectedStudentId}
-                    onChange={e => setSelectedStudentId(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "0.6rem 0.85rem",
-                      borderRadius: "8px",
-                      border: selectedStudentId ? "1.5px solid var(--border-color)" : "1.5px solid #ef4444",
-                      background: "var(--input-bg, #ffffff)",
-                      fontWeight: 700,
-                      fontSize: "0.88rem"
-                    }}
-                  >
-                    <option value="">-- Select Enrolled Student --</option>
-                    {classStudents.map(st => (
-                      <option key={st.id} value={st.id}>
-                        {st.name} ({st.rollNumber})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Exam Name */}
-                <div>
-                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem", color: "var(--text-secondary)" }}>
-                    Examination / Term:
-                  </label>
-                  <input
-                    type="text"
-                    value={examName}
-                    onChange={e => setExamName(e.target.value)}
-                    placeholder="e.g. Midterm Examination"
-                    style={{
-                      width: "100%",
-                      padding: "0.6rem 0.85rem",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border-color)",
-                      background: "var(--input-bg, #ffffff)",
-                      fontWeight: 700,
-                      fontSize: "0.88rem",
-                      boxSizing: "border-box"
-                    }}
-                  />
-                </div>
-
-                {/* Exam Date */}
-                <div>
-                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem", color: "var(--text-secondary)" }}>
-                    Examination Date:
-                  </label>
-                  <input
-                    type="date"
-                    value={examDate}
-                    onChange={e => setExamDate(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "0.6rem 0.85rem",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border-color)",
-                      background: "var(--input-bg, #ffffff)",
-                      fontWeight: 700,
-                      fontSize: "0.88rem",
-                      boxSizing: "border-box"
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Editable Subjects Table ("Invalided data edit option") */}
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
-                  <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>
-                    Scanned Subject Marks &amp; Criteria:
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleAddSubject}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.3rem",
-                      padding: "4px 10px",
-                      borderRadius: "6px",
-                      background: "rgba(99, 102, 241, 0.1)",
-                      color: "var(--primary)",
-                      border: "1px solid rgba(99, 102, 241, 0.25)",
-                      fontSize: "0.8rem",
-                      fontWeight: 700,
-                      cursor: "pointer"
-                    }}
-                  >
-                    <Plus size={14} /> Add Subject
-                  </button>
-                </div>
-
+              {/* Error Message */}
+              {scanError && (
                 <div style={{
-                  border: "1px solid var(--border-color)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.6rem",
+                  padding: "0.85rem 1rem",
                   borderRadius: "10px",
-                  overflowX: "auto",
-                  background: "var(--card-bg)"
+                  background: "rgba(239, 68, 68, 0.1)",
+                  border: "1px solid rgba(239, 68, 68, 0.25)",
+                  color: "#ef4444",
+                  fontSize: "0.875rem",
+                  fontWeight: 600
                 }}>
-                  <table style={{ width: "100%", minWidth: "580px", borderCollapse: "collapse", fontSize: "0.85rem" }}>
-                    <thead>
-                      <tr style={{ background: "rgba(0,0,0,0.03)", borderBottom: "1px solid var(--border-color)", textAlign: "left" }}>
-                        <th style={{ padding: "0.6rem 0.8rem", width: "32%" }}>Subject Name</th>
-                        <th style={{ padding: "0.6rem 0.8rem", width: "18%", textAlign: "center" }}>Marks Scored</th>
-                        <th style={{ padding: "0.6rem 0.8rem", width: "15%", textAlign: "center" }}>Max Mark</th>
-                        <th style={{ padding: "0.6rem 0.8rem", width: "15%", textAlign: "center" }}>Pass Mark</th>
-                        <th style={{ padding: "0.6rem 0.8rem", width: "15%" }}>Remarks</th>
-                        <th style={{ padding: "0.6rem 0.5rem", width: "5%", textAlign: "center" }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {subjects.map(sub => {
-                        const scoreNum = sub.score !== "" ? Number(sub.score) : NaN;
-                        const isFail = !isNaN(scoreNum) && scoreNum < sub.passMarks;
+                  <AlertCircle size={18} />
+                  <span>{scanError}</span>
+                </div>
+              )}
 
-                        return (
-                          <tr key={sub.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
-                            {/* Subject Dropdown / Mapping */}
-                            <td style={{ padding: "0.5rem 0.8rem" }}>
-                              <select
-                                value={sub.subjectId}
-                                onChange={e => handleSubjectMappingChange(sub.id, e.target.value)}
-                                style={{
-                                  width: "100%",
-                                  padding: "0.4rem 0.6rem",
-                                  borderRadius: "6px",
-                                  border: "1px solid var(--border-color)",
-                                  fontWeight: 700,
-                                  fontSize: "0.825rem",
-                                  background: "var(--input-bg, #ffffff)"
-                                }}
-                              >
-                                {classSubjects.map(cs => (
-                                  <option key={cs.id} value={cs.id}>
-                                    {cs.name}
-                                  </option>
-                                ))}
-                                {!classSubjects.some(cs => cs.id === sub.subjectId) && (
-                                  <option value={sub.subjectId || ""}>{sub.subjectName}</option>
-                                )}
-                              </select>
-                            </td>
+              {/* Success Banner */}
+              {saveSuccess && (
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.6rem",
+                  padding: "0.85rem 1rem",
+                  borderRadius: "10px",
+                  background: "rgba(16, 185, 129, 0.1)",
+                  border: "1px solid rgba(16, 185, 129, 0.25)",
+                  color: "#10b981",
+                  fontSize: "0.875rem",
+                  fontWeight: 700
+                }}>
+                  <CheckCircle2 size={18} />
+                  <span>{saveSuccess}</span>
+                </div>
+              )}
 
-                            {/* Score Input with Invalidation Alert */}
-                            <td style={{ padding: "0.5rem 0.8rem", textAlign: "center" }}>
-                              <input
-                                type="number"
-                                min={0}
-                                max={sub.maxScore}
-                                value={sub.score}
-                                onChange={e => handleSubjectScoreChange(sub.id, e.target.value)}
-                                style={{
-                                  width: "75px",
-                                  padding: "0.4rem 0.5rem",
-                                  borderRadius: "6px",
-                                  border: sub.isInvalid ? "1.5px solid #ef4444" : "1px solid var(--border-color)",
-                                  textAlign: "center",
-                                  fontWeight: 800,
-                                  fontSize: "0.95rem",
-                                  background: sub.isInvalid ? "rgba(239, 68, 68, 0.05)" : "var(--input-bg, #ffffff)"
-                                }}
-                              />
-                              {sub.isInvalid && (
-                                <span style={{ display: "block", fontSize: "0.7rem", color: "#ef4444", fontWeight: 700, marginTop: "2px" }}>
-                                  {sub.validationError || "Invalid"}
-                                </span>
-                              )}
-                            </td>
+              {/* ========================================================
+              SCANNED DATA INTERACTIVE EDITOR & INVALID DATA CORRECTION
+             ======================================================== */}
+              {scanResult && (
+                <div style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1.25rem",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "16px",
+                  padding: "1.25rem",
+                  background: "rgba(0,0,0,0.01)"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <ShieldCheck size={20} color="var(--primary)" />
+                      <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800 }}>
+                        Scanned Report Card Data Review &amp; Edit
+                      </h3>
+                    </div>
+                    <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                      Source: <strong>{scanResult.fileDetails?.name || "Uploaded Document"}</strong> ({scanResult.fileDetails?.type || "File"})
+                    </span>
+                  </div>
 
-                            {/* Max Score */}
-                            <td style={{ padding: "0.5rem 0.8rem", textAlign: "center" }}>
-                              <input
-                                type="number"
-                                min={1}
-                                value={sub.maxScore}
-                                onChange={e => handleSubjectMaxChange(sub.id, e.target.value)}
-                                style={{
-                                  width: "60px",
-                                  padding: "0.4rem 0.5rem",
-                                  borderRadius: "6px",
-                                  border: "1px solid var(--border-color)",
-                                  textAlign: "center",
-                                  fontSize: "0.825rem",
-                                  background: "var(--input-bg, #ffffff)"
-                                }}
-                              />
-                            </td>
+                  {/* Multi-Student Switcher if Gradebook Matrix */}
+                  {scanResult.allDetectedStudents && scanResult.allDetectedStudents.length > 1 && (
+                    <div style={{
+                      padding: "0.75rem",
+                      borderRadius: "10px",
+                      background: "rgba(99, 102, 241, 0.05)",
+                      border: "1px solid rgba(99, 102, 241, 0.15)"
+                    }}>
+                      <span style={{ fontSize: "0.82rem", fontWeight: 700, display: "block", marginBottom: "0.4rem" }}>
+                        Detected {scanResult.allDetectedStudents.length} Students in Gradebook:
+                      </span>
+                      <div style={{ display: "flex", gap: "0.4rem", overflowX: "auto", paddingBottom: "0.25rem" }}>
+                        {scanResult.allDetectedStudents.map((entry, idx) => {
+                          const isCurr = entry.studentId === selectedStudentId;
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => handleSelectMultiStudent(entry)}
+                              style={{
+                                padding: "0.35rem 0.75rem",
+                                borderRadius: "6px",
+                                border: isCurr ? "1.5px solid var(--primary)" : "1px solid var(--border-color)",
+                                background: isCurr ? "var(--primary)" : "var(--card-bg)",
+                                color: isCurr ? "#ffffff" : "var(--foreground)",
+                                fontSize: "0.8rem",
+                                fontWeight: 700,
+                                whiteSpace: "nowrap",
+                                cursor: "pointer"
+                              }}
+                            >
+                              {entry.studentName} ({entry.rollNumber})
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
-                            {/* Pass Marks */}
-                            <td style={{ padding: "0.5rem 0.8rem", textAlign: "center" }}>
-                              <input
-                                type="number"
-                                min={0}
-                                value={sub.passMarks}
-                                onChange={e => handleSubjectPassChange(sub.id, e.target.value)}
-                                style={{
-                                  width: "60px",
-                                  padding: "0.4rem 0.5rem",
-                                  borderRadius: "6px",
-                                  border: "1px solid var(--border-color)",
-                                  textAlign: "center",
-                                  fontSize: "0.825rem",
-                                  background: "var(--input-bg, #ffffff)"
-                                }}
-                              />
-                            </td>
+                  {/* Identification Row: Student Match & Exam Details */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1rem" }}>
+                    {/* Student Selector */}
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem", color: "var(--text-secondary)" }}>
+                        Assigned Student ({scanResult.studentConfidence === "HIGH" ? "✓ Matched" : "⚠️ Verify Student"}):
+                      </label>
+                      <select
+                        value={selectedStudentId}
+                        onChange={e => setSelectedStudentId(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "0.6rem 0.85rem",
+                          borderRadius: "8px",
+                          border: selectedStudentId ? "1.5px solid var(--border-color)" : "1.5px solid #ef4444",
+                          background: "var(--input-bg, #ffffff)",
+                          fontWeight: 700,
+                          fontSize: "0.88rem"
+                        }}
+                      >
+                        <option value="">-- Select Enrolled Student --</option>
+                        {classStudents.map(st => (
+                          <option key={st.id} value={st.id}>
+                            {st.name} ({st.rollNumber})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                            {/* Remarks */}
-                            <td style={{ padding: "0.5rem 0.8rem" }}>
-                              <input
-                                type="text"
-                                value={sub.remarks || ""}
-                                placeholder={isFail ? "Needs revision" : "Good"}
-                                onChange={e => handleSubjectRemarksChange(sub.id, e.target.value)}
-                                style={{
-                                  width: "100%",
-                                  padding: "0.4rem 0.6rem",
-                                  borderRadius: "6px",
-                                  border: "1px solid var(--border-color)",
-                                  fontSize: "0.8rem",
-                                  background: "var(--input-bg, #ffffff)",
-                                  boxSizing: "border-box"
-                                }}
-                              />
-                            </td>
+                    {/* Exam Name */}
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem", color: "var(--text-secondary)" }}>
+                        Examination / Term:
+                      </label>
+                      <input
+                        type="text"
+                        value={examName}
+                        onChange={e => setExamName(e.target.value)}
+                        placeholder="e.g. Midterm Examination"
+                        style={{
+                          width: "100%",
+                          padding: "0.6rem 0.85rem",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          background: "var(--input-bg, #ffffff)",
+                          fontWeight: 700,
+                          fontSize: "0.88rem",
+                          boxSizing: "border-box"
+                        }}
+                      />
+                    </div>
 
-                            {/* Delete Row */}
-                            <td style={{ padding: "0.5rem 0.5rem", textAlign: "center" }}>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteSubject(sub.id)}
-                                title="Remove this subject row"
-                                style={{
-                                  background: "transparent",
-                                  border: "none",
-                                  color: "var(--danger, #ef4444)",
-                                  cursor: "pointer",
-                                  padding: "0.3rem"
-                                }}
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </td>
+                    {/* Exam Date */}
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem", color: "var(--text-secondary)" }}>
+                        Examination Date:
+                      </label>
+                      <input
+                        type="date"
+                        value={examDate}
+                        onChange={e => setExamDate(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "0.6rem 0.85rem",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-color)",
+                          background: "var(--input-bg, #ffffff)",
+                          fontWeight: 700,
+                          fontSize: "0.88rem",
+                          boxSizing: "border-box"
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Editable Subjects Table ("Invalided data edit option") */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
+                      <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+                        Scanned Subject Marks &amp; Criteria:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleAddSubject}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3rem",
+                          padding: "4px 10px",
+                          borderRadius: "6px",
+                          background: "rgba(99, 102, 241, 0.1)",
+                          color: "var(--primary)",
+                          border: "1px solid rgba(99, 102, 241, 0.25)",
+                          fontSize: "0.8rem",
+                          fontWeight: 700,
+                          cursor: "pointer"
+                        }}
+                      >
+                        <Plus size={14} /> Add Subject
+                      </button>
+                    </div>
+
+                    <div style={{
+                      border: "1px solid var(--border-color)",
+                      borderRadius: "10px",
+                      overflowX: "auto",
+                      background: "var(--card-bg)"
+                    }}>
+                      <table style={{ width: "100%", minWidth: "580px", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+                        <thead>
+                          <tr style={{ background: "rgba(0,0,0,0.03)", borderBottom: "1px solid var(--border-color)", textAlign: "left" }}>
+                            <th style={{ padding: "0.6rem 0.8rem", width: "32%" }}>Subject Name</th>
+                            <th style={{ padding: "0.6rem 0.8rem", width: "18%", textAlign: "center" }}>Marks Scored</th>
+                            <th style={{ padding: "0.6rem 0.8rem", width: "15%", textAlign: "center" }}>Max Mark</th>
+                            <th style={{ padding: "0.6rem 0.8rem", width: "15%", textAlign: "center" }}>Pass Mark</th>
+                            <th style={{ padding: "0.6rem 0.8rem", width: "15%" }}>Remarks</th>
+                            <th style={{ padding: "0.6rem 0.5rem", width: "5%", textAlign: "center" }}></th>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                        </thead>
+                        <tbody>
+                          {subjects.map(sub => {
+                            const scoreNum = sub.score !== "" ? Number(sub.score) : NaN;
+                            const isFail = !isNaN(scoreNum) && scoreNum < sub.passMarks;
 
-              {/* Live Totals & Feedback */}
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
-                gap: "0.75rem",
-                padding: "0.85rem 1rem",
-                borderRadius: "10px",
-                background: "rgba(99, 102, 241, 0.05)",
-                border: "1px solid rgba(99, 102, 241, 0.15)",
-                textAlign: "center"
-              }}>
-                <div>
-                  <span style={{ fontSize: "0.72rem", textTransform: "uppercase", fontWeight: 700, color: "var(--text-secondary)" }}>
-                    Total Marks
-                  </span>
-                  <div style={{ fontSize: "1.2rem", fontWeight: 900 }}>
-                    {totals.obtained} / {totals.maximum}
+                            return (
+                              <tr key={sub.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
+                                {/* Subject Dropdown / Mapping */}
+                                <td style={{ padding: "0.5rem 0.8rem" }}>
+                                  <select
+                                    value={sub.subjectId}
+                                    onChange={e => handleSubjectMappingChange(sub.id, e.target.value)}
+                                    style={{
+                                      width: "100%",
+                                      padding: "0.4rem 0.6rem",
+                                      borderRadius: "6px",
+                                      border: "1px solid var(--border-color)",
+                                      fontWeight: 700,
+                                      fontSize: "0.825rem",
+                                      background: "var(--input-bg, #ffffff)"
+                                    }}
+                                  >
+                                    {classSubjects.map(cs => (
+                                      <option key={cs.id} value={cs.id}>
+                                        {cs.name}
+                                      </option>
+                                    ))}
+                                    {!classSubjects.some(cs => cs.id === sub.subjectId) && (
+                                      <option value={sub.subjectId || ""}>{sub.subjectName}</option>
+                                    )}
+                                  </select>
+                                </td>
+
+                                {/* Score Input with Invalidation Alert */}
+                                <td style={{ padding: "0.5rem 0.8rem", textAlign: "center" }}>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={sub.maxScore}
+                                    value={sub.score}
+                                    onChange={e => handleSubjectScoreChange(sub.id, e.target.value)}
+                                    style={{
+                                      width: "75px",
+                                      padding: "0.4rem 0.5rem",
+                                      borderRadius: "6px",
+                                      border: sub.isInvalid ? "1.5px solid #ef4444" : "1px solid var(--border-color)",
+                                      textAlign: "center",
+                                      fontWeight: 800,
+                                      fontSize: "0.95rem",
+                                      background: sub.isInvalid ? "rgba(239, 68, 68, 0.05)" : "var(--input-bg, #ffffff)"
+                                    }}
+                                  />
+                                  {sub.isInvalid && (
+                                    <span style={{ display: "block", fontSize: "0.7rem", color: "#ef4444", fontWeight: 700, marginTop: "2px" }}>
+                                      {sub.validationError || "Invalid"}
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Max Score */}
+                                <td style={{ padding: "0.5rem 0.8rem", textAlign: "center" }}>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={sub.maxScore}
+                                    onChange={e => handleSubjectMaxChange(sub.id, e.target.value)}
+                                    style={{
+                                      width: "60px",
+                                      padding: "0.4rem 0.5rem",
+                                      borderRadius: "6px",
+                                      border: "1px solid var(--border-color)",
+                                      textAlign: "center",
+                                      fontSize: "0.825rem",
+                                      background: "var(--input-bg, #ffffff)"
+                                    }}
+                                  />
+                                </td>
+
+                                {/* Pass Marks */}
+                                <td style={{ padding: "0.5rem 0.8rem", textAlign: "center" }}>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={sub.passMarks}
+                                    onChange={e => handleSubjectPassChange(sub.id, e.target.value)}
+                                    style={{
+                                      width: "60px",
+                                      padding: "0.4rem 0.5rem",
+                                      borderRadius: "6px",
+                                      border: "1px solid var(--border-color)",
+                                      textAlign: "center",
+                                      fontSize: "0.825rem",
+                                      background: "var(--input-bg, #ffffff)"
+                                    }}
+                                  />
+                                </td>
+
+                                {/* Remarks */}
+                                <td style={{ padding: "0.5rem 0.8rem" }}>
+                                  <input
+                                    type="text"
+                                    value={sub.remarks || ""}
+                                    placeholder={isFail ? "Needs revision" : "Good"}
+                                    onChange={e => handleSubjectRemarksChange(sub.id, e.target.value)}
+                                    style={{
+                                      width: "100%",
+                                      padding: "0.4rem 0.6rem",
+                                      borderRadius: "6px",
+                                      border: "1px solid var(--border-color)",
+                                      fontSize: "0.8rem",
+                                      background: "var(--input-bg, #ffffff)",
+                                      boxSizing: "border-box"
+                                    }}
+                                  />
+                                </td>
+
+                                {/* Delete Row */}
+                                <td style={{ padding: "0.5rem 0.5rem", textAlign: "center" }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSubject(sub.id)}
+                                    title="Remove this subject row"
+                                    style={{
+                                      background: "transparent",
+                                      border: "none",
+                                      color: "var(--danger, #ef4444)",
+                                      cursor: "pointer",
+                                      padding: "0.3rem"
+                                    }}
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Live Totals & Feedback */}
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                    gap: "0.75rem",
+                    padding: "0.85rem 1rem",
+                    borderRadius: "10px",
+                    background: "rgba(99, 102, 241, 0.05)",
+                    border: "1px solid rgba(99, 102, 241, 0.15)",
+                    textAlign: "center"
+                  }}>
+                    <div>
+                      <span style={{ fontSize: "0.72rem", textTransform: "uppercase", fontWeight: 700, color: "var(--text-secondary)" }}>
+                        Total Marks
+                      </span>
+                      <div style={{ fontSize: "1.2rem", fontWeight: 900 }}>
+                        {totals.obtained} / {totals.maximum}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: "0.72rem", textTransform: "uppercase", fontWeight: 700, color: "var(--text-secondary)" }}>
+                        Percentage
+                      </span>
+                      <div style={{ fontSize: "1.2rem", fontWeight: 900, color: "var(--primary)" }}>
+                        {totals.percentage}%
+                      </div>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: "0.72rem", textTransform: "uppercase", fontWeight: 700, color: "var(--text-secondary)" }}>
+                        Overall Grade
+                      </span>
+                      <div style={{ fontSize: "1.2rem", fontWeight: 900, color: totals.grade === "F" ? "#ef4444" : "#10b981" }}>
+                        {totals.grade}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: "0.72rem", textTransform: "uppercase", fontWeight: 700, color: "var(--text-secondary)" }}>
+                        Result
+                      </span>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 800, textTransform: "uppercase", color: totals.hasFail ? "#ef4444" : "#10b981" }}>
+                        {totals.hasFail ? "Needs Support" : "Passed"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* General Remarks */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem", color: "var(--text-secondary)" }}>
+                      Teacher Feedback &amp; Evaluation Remarks:
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={generalRemarks}
+                      onChange={e => setGeneralRemarks(e.target.value)}
+                      placeholder="Enter teacher remarks for this student's report card..."
+                      style={{
+                        width: "100%",
+                        padding: "0.6rem 0.85rem",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border-color)",
+                        background: "var(--input-bg, #ffffff)",
+                        fontSize: "0.88rem",
+                        boxSizing: "border-box"
+                      }}
+                    />
                   </div>
                 </div>
-
-                <div>
-                  <span style={{ fontSize: "0.72rem", textTransform: "uppercase", fontWeight: 700, color: "var(--text-secondary)" }}>
-                    Percentage
-                  </span>
-                  <div style={{ fontSize: "1.2rem", fontWeight: 900, color: "var(--primary)" }}>
-                    {totals.percentage}%
-                  </div>
-                </div>
-
-                <div>
-                  <span style={{ fontSize: "0.72rem", textTransform: "uppercase", fontWeight: 700, color: "var(--text-secondary)" }}>
-                    Overall Grade
-                  </span>
-                  <div style={{ fontSize: "1.2rem", fontWeight: 900, color: totals.grade === "F" ? "#ef4444" : "#10b981" }}>
-                    {totals.grade}
-                  </div>
-                </div>
-
-                <div>
-                  <span style={{ fontSize: "0.72rem", textTransform: "uppercase", fontWeight: 700, color: "var(--text-secondary)" }}>
-                    Result
-                  </span>
-                  <div style={{ fontSize: "0.85rem", fontWeight: 800, textTransform: "uppercase", color: totals.hasFail ? "#ef4444" : "#10b981" }}>
-                    {totals.hasFail ? "Needs Support" : "Passed"}
-                  </div>
-                </div>
-              </div>
-
-              {/* General Remarks */}
-              <div>
-                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem", color: "var(--text-secondary)" }}>
-                  Teacher Feedback &amp; Evaluation Remarks:
-                </label>
-                <textarea
-                  rows={2}
-                  value={generalRemarks}
-                  onChange={e => setGeneralRemarks(e.target.value)}
-                  placeholder="Enter teacher remarks for this student's report card..."
-                  style={{
-                    width: "100%",
-                    padding: "0.6rem 0.85rem",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border-color)",
-                    background: "var(--input-bg, #ffffff)",
-                    fontSize: "0.88rem",
-                    boxSizing: "border-box"
-                  }}
-                />
-              </div>
-            </div>
-          )}
-          </>
+              )}
+            </>
           )}
         </div>
 

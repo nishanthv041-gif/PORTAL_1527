@@ -59,15 +59,15 @@ export default function StudentListClient({ students, classes }: { students: Stu
   const filteredStudents = students.filter((student) => {
     const fullName = `${student.firstName} ${student.lastName}`.toLowerCase();
     const parentName = student.parents[0]?.parent.user.name.toLowerCase() || "";
-    
-    const matchesSearch = fullName.includes(searchTerm.toLowerCase()) || 
-                          student.rollNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          parentName.includes(searchTerm.toLowerCase());
+
+    const matchesSearch = fullName.includes(searchTerm.toLowerCase()) ||
+      student.rollNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      parentName.includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter ? (statusFilter === "ACTIVE" ? student.isActive : !student.isActive) : true;
     const matchesClass = classFilter ? student.classId === classFilter : true;
     const matchesBatch = batchFilter ? student.batch === batchFilter : true;
     const matchesResidence = residenceFilter ? (student.residenceType || "DAYSCHOLAR") === residenceFilter : true;
-    
+
     return matchesSearch && matchesStatus && matchesClass && matchesBatch && matchesResidence;
   }).sort((a, b) => {
     const nameA = `${a.firstName} ${a.lastName}`.trim().toLowerCase();
@@ -86,16 +86,16 @@ export default function StudentListClient({ students, classes }: { students: Stu
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
           <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
-          <input 
-            type="text" 
-            placeholder="Search name, roll number, parent..." 
+          <input
+            type="text"
+            placeholder="Search name, roll number, parent..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
           />
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <select 
+          <select
             value={classFilter}
             onChange={(e) => setClassFilter(e.target.value)}
             style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
@@ -105,7 +105,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
               <option key={c.id} value={c.id}>{c.name} - {c.section}</option>
             ))}
           </select>
-          <select 
+          <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
@@ -114,7 +114,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
           </select>
-          <select 
+          <select
             value={residenceFilter}
             onChange={(e) => setResidenceFilter(e.target.value)}
             style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
@@ -123,7 +123,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
             <option value="DAYSCHOLAR">Dayscholar</option>
             <option value="HOSTEL">Hostel</option>
           </select>
-          <select 
+          <select
             value={batchFilter}
             onChange={(e) => setBatchFilter(e.target.value)}
             style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
@@ -214,7 +214,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
                     )}
                   </td>
                   <td data-action-menu-container={student.id} style={{ padding: "1rem", textAlign: 'right', position: 'relative' }}>
-                    <button 
+                    <button
                       onClick={() => setOpenMenuId(openMenuId === student.id ? null : student.id)}
                       aria-label="Actions"
                       title="Actions"
@@ -223,30 +223,30 @@ export default function StudentListClient({ students, classes }: { students: Stu
                       <MoreVertical size={20} color="var(--text-secondary)" />
                     </button>
                     {openMenuId === student.id && (
-                      <div style={{ 
-                        position: 'absolute', right: '100%', top: '50%', transform: 'translateY(-50%)', 
-                        background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '8px', 
+                      <div style={{
+                        position: 'absolute', right: '100%', top: '50%', transform: 'translateY(-50%)',
+                        background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '8px',
                         boxShadow: '0 4px 6px rgba(0,0,0,0.1)', zIndex: 10, minWidth: '150px',
                         display: 'flex', flexDirection: 'column', padding: '0.5rem', textAlign: 'left'
                       }}>
-                        <Link 
-                          href={`/dashboard/admin/students/${student.id}`} 
+                        <Link
+                          href={`/dashboard/admin/students/${student.id}`}
                           onClick={() => setOpenMenuId(null)}
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}
                         >
                           <Eye size={16} /> View Details
                         </Link>
-                        <a 
-                          href={`/api/pdf/student/${student.id}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
+                        <a
+                          href={`/api/pdf/student/${student.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           onClick={() => setOpenMenuId(null)}
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}
                         >
                           <Download size={16} /> Download PDF
                         </a>
                         {student.isActive ? (
-                          <button 
+                          <button
                             onClick={async () => {
                               if (confirm("Are you sure you want to deactivate this student?")) {
                                 const res = await deactivateStudent(student.id);
@@ -260,7 +260,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
                             <XCircle size={16} /> Deactivate
                           </button>
                         ) : (
-                          <button 
+                          <button
                             onClick={async () => {
                               if (confirm("Are you sure you want to activate this student?")) {
                                 const res = await activateStudent(student.id);
@@ -274,7 +274,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
                             <CheckCircle2 size={16} /> Activate
                           </button>
                         )}
-                        <button 
+                        <button
                           onClick={async () => {
                             if (confirm("WARNING: This will permanently delete this student and cannot be undone. Are you sure?")) {
                               const res = await deleteStudent(student.id);
@@ -295,7 +295,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
             })}
           </tbody>
         </table>
-        
+
         {filteredStudents.length === 0 && (
           <p style={{ textAlign: 'center', opacity: 0.7, padding: '2rem' }}>No students found.</p>
         )}

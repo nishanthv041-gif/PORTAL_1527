@@ -13,6 +13,31 @@ export default async function TeacherReportCardsPage() {
   const teacher = await prisma.teacher.findUnique({
     where: { userId: session.user.id },
     include: {
+      classTeacherOf: {
+        where: { isActive: true },
+        include: {
+          students: {
+            where: { isActive: true },
+            orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+            include: {
+              parents: {
+                include: {
+                  parent: {
+                    include: {
+                      user: {
+                        select: { id: true, name: true, email: true }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          subjects: {
+            orderBy: { name: 'asc' }
+          }
+        }
+      },
       classes: {
         where: { isActive: true },
         include: {
@@ -51,84 +76,103 @@ export default async function TeacherReportCardsPage() {
     );
   }
 
-  const classIds = teacher.classes.map(c => c.id);
-
-  // Fetch all report cards for students belonging to the teacher's classes
-  const reportCards = await prisma.reportCard.findMany({
-    where: {
-      student: {
-        classId: { in: classIds }
-      }
-    },
-    include: {
-      student: {
-        include: {
-          class: true
-        }
-      },
-      exam: {
-        include: {
-          marks: {
-            include: {
-              subject: true
-            }
-          }
-        }
-      }
-    },
-    orderBy: {
-      exam: { date: 'desc' }
+  // Combine both classes where teacher is subject teacher and class teacher
+  const rawClasses = [
+    ...(teacher.classes || []),
+    ...(teacher.classTeacherOf ? [teacher.classTeacherOf] : [])
+  ];
+  const uniqueClassMap = new Map<string, typeof rawClasses[0]>();
+  rawClasses.forEach(c => {
+    if (c && !uniqueClassMap.has(c.id)) {
+      uniqueClassMap.set(c.id, c);
     }
   });
+  const assignedClasses = Array.from(uniqueClassMap.values());
+  const classIds = assignedClasses.map(c => c.id);
 
-  const formattedClasses: TeacherClass[] = teacher.classes.map(c => ({
+  // Fetch all report cards for students belonging to the teacher's classes
+  const reportCards = classIds.length > 0
+    ? await prisma.reportCard.findMany({
+        where: {
+          student: {
+            classId: { in: classIds }
+          }
+        },
+        include: {
+          student: {
+            include: {
+              class: true
+            }
+          },
+          exam: {
+            include: {
+              marks: {
+                include: {
+                  subject: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: {
+          exam: { date: 'desc' }
+        }
+      })
+    : [];
+
+  const formattedClasses: TeacherClass[] = assignedClasses.map(c => ({
     id: c.id,
     name: c.name,
     section: c.section,
-    subjects: c.subjects.map(s => ({
+    subjects: (c.subjects || []).map(s => ({
       id: s.id,
       name: s.name,
       maxMarks: s.maxMarks || 100,
       passMarks: s.passMarks || 35
     })),
-    students: c.students.map(st => ({
+    students: (c.students || []).map(st => ({
       id: st.id,
       rollNumber: st.rollNumber,
-      name: `${st.firstName} ${st.lastName}`.trim(),
-      parents: st.parents.map(p => ({
+      name: `${st.firstName || ""} ${st.lastName || ""}`.trim() || "Student",
+      parents: (st.parents || []).map(p => ({
         name: p.parent?.user?.name || null,
         email: p.parent?.user?.email || null
       }))
     }))
   }));
 
-  const formattedHistory: HistoryItem[] = reportCards.map(rc => {
-    const studentMarks = rc.exam.marks
+  const formattedHistory: HistoryItem[] = (reportCards || []).map(rc => {
+    const marksList = rc.exam?.marks || [];
+    const studentMarks = marksList
       .filter(m => m.studentId === rc.studentId)
       .map(m => ({
         id: m.id,
         subjectId: m.subjectId,
-        subjectName: m.subject.name,
+        subjectName: m.subject?.name || "Subject",
         score: m.score,
         maxScore: m.maxScore,
-        passMarks: m.subject.passMarks,
-        remarks: m.remarks
+        passMarks: m.subject?.passMarks || 35,
+        remarks: m.remarks || null
       }));
+
+    const studentFullName = rc.student
+      ? `${rc.student.firstName || ""} ${rc.student.lastName || ""}`.trim() || "Student"
+      : "Student";
 
     return {
       id: rc.id,
       studentId: rc.studentId,
-      studentName: `${rc.student.firstName} ${rc.student.lastName}`.trim(),
-      rollNumber: rc.student.rollNumber,
-      className: rc.student.class ? `${rc.student.class.name} - ${rc.student.class.section}` : "Class",
-      classId: rc.student.classId,
+      studentName: studentFullName,
+      rollNumber: rc.student?.rollNumber || "",
+      className: rc.student?.class ? `${rc.student.class.name} - ${rc.student.class.section}` : "Class",
+      classId: rc.student?.classId || null,
       examId: rc.examId,
-      examName: rc.exam.name,
-      examDate: rc.exam.date.toISOString(),
+      examName: rc.exam?.name || "Examination",
+      examDate: rc.exam?.date ? new Date(rc.exam.date).toISOString() : new Date().toISOString(),
       totalMarks: rc.totalMarks,
       percentage: rc.percentage,
       grade: rc.grade,
-      remarks: rc.remarks,
+      remarks: rc.remarks || null,
       published: rc.published,
       parentVerified: rc.parentVerified,
       marks: studentMarks

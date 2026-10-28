@@ -143,13 +143,13 @@ export default function TeacherReportCardsClient({
 
   // Selected Class Object
   const currentClass = useMemo(() => {
-    return classes.find(c => c.id === selectedClassId) || classes[0];
+    return (classes || []).find(c => c.id === selectedClassId) || classes?.[0] || null;
   }, [classes, selectedClassId]);
 
   // Selected Student Object
   const currentStudent = useMemo(() => {
     if (!currentClass) return null;
-    return currentClass.students.find(s => s.id === selectedStudentId) || null;
+    return (currentClass.students || []).find(s => s.id === selectedStudentId) || null;
   }, [currentClass, selectedStudentId]);
 
   // Available subjects for the class
@@ -359,7 +359,7 @@ export default function TeacherReportCardsClient({
           studentId: selectedStudentId,
           studentName: currentStudent?.name || "Student",
           rollNumber: currentStudent?.rollNumber || "",
-          className: `${currentClass.name} - ${currentClass.section}`,
+          className: currentClass ? `${currentClass.name} - ${currentClass.section}` : "Class",
           classId: selectedClassId,
           examId: `exam-${Date.now()}`,
           examName: examName.trim(),
@@ -697,7 +697,7 @@ export default function TeacherReportCardsClient({
                       {currentStudent.name}
                     </h3>
                     <p style={{ margin: "0.15rem 0 0 0", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
-                      Roll No: <strong>{currentStudent.rollNumber}</strong> • Class: <strong>{currentClass.name} - {currentClass.section}</strong>
+                      Roll No: <strong>{currentStudent.rollNumber}</strong> • Class: <strong>{currentClass ? `${currentClass.name} - ${currentClass.section}` : "Class"}</strong>
                     </p>
                   </div>
                 </div>
