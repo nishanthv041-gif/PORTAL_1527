@@ -7,7 +7,6 @@ import {
   Award, Calendar, User, ChevronRight, X, ArrowRight, ShieldCheck, Check
 } from "lucide-react";
 import type { TeacherClass, ClassSubject, ClassStudent, HistoryItem } from "./TeacherReportCardsClient";
-import { scanReportCardAction } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardAction";
 import type { ScanReportCardResult, ScannedReportCardSubject } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardTypes";
 import { createAndSendReportCardAction } from "@/backend/lib/services/reportCardActions";
 
@@ -115,7 +114,17 @@ export default function ReportCardDocumentScanModal({
       formData.set("classId", activeClassId);
       formData.set("file", file);
 
-      const result = await scanReportCardAction(formData);
+      const res = await fetch("/api/teacher/report-cards/scan", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Server error (${res.status}) while processing document.`);
+      }
+
+      const result: ScanReportCardResult = await res.json();
       applyScanResult(result);
     } catch (err) {
       console.error("Scan error:", err);

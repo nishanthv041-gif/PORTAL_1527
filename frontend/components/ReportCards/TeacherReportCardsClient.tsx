@@ -13,7 +13,11 @@ import {
   createAndSendReportCardAction,
   deleteReportCardAction
 } from "@/backend/lib/services/reportCardActions";
-import ReportCardDocumentScanModal from "./ReportCardDocumentScanModal";
+import dynamic from "next/dynamic";
+const ReportCardDocumentScanModal = dynamic(
+  () => import("./ReportCardDocumentScanModal"),
+  { ssr: false }
+);
 
 export type ClassSubject = {
   id: string;
