@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import styles from "./PortalBreadcrumb.module.css";
 
@@ -365,6 +365,7 @@ function formatSlug(slug: string): string {
 
 export default function PortalBreadcrumb() {
   const pathname = usePathname();
+  const router = useRouter();
 
   if (!pathname) return null;
 
@@ -386,14 +387,29 @@ export default function PortalBreadcrumb() {
     return null;
   }
 
+  const handleBack = (e: React.MouseEvent, fallbackHref: string) => {
+    e.preventDefault();
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push(fallbackHref);
+    }
+  };
+
   // 1. Direct match in ROUTE_MAP
   if (ROUTE_MAP[cleanPath]) {
     const info = ROUTE_MAP[cleanPath];
     return (
       <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-        <Link href={info.parentHref} className={styles.backLink}>
-          <ArrowLeft size={16} /> {info.parentLabel}
-        </Link>
+        <button
+          type="button"
+          onClick={(e) => handleBack(e, info.parentHref)}
+          className={styles.backLink}
+          style={{ background: "transparent", border: "none", cursor: "pointer", font: "inherit" }}
+          title="Back to previous page"
+        >
+          <ArrowLeft size={16} /> Back
+        </button>
         <span className={styles.separator}>/</span>
         <span className={styles.currentPage}>{info.currentLabel}</span>
       </nav>
@@ -412,9 +428,14 @@ export default function PortalBreadcrumb() {
     if (section === "messages" && segments.length >= 4) {
       return (
         <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-          <Link href={`/dashboard/${role}/messages`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Messages
-          </Link>
+          <button
+            type="button"
+            onClick={(e) => handleBack(e, `/dashboard/${role}/messages`)}
+            className={styles.backLink}
+            style={{ background: "transparent", border: "none", cursor: "pointer", font: "inherit" }}
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
           <span className={styles.separator}>/</span>
           <span className={styles.currentPage}>Direct Conversation</span>
         </nav>
@@ -425,9 +446,14 @@ export default function PortalBreadcrumb() {
     if (section === "exams" && segments.length >= 4) {
       return (
         <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-          <Link href={`/dashboard/${role}/exams`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Examinations
-          </Link>
+          <button
+            type="button"
+            onClick={(e) => handleBack(e, `/dashboard/${role}/exams`)}
+            className={styles.backLink}
+            style={{ background: "transparent", border: "none", cursor: "pointer", font: "inherit" }}
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
           <span className={styles.separator}>/</span>
           <span className={styles.currentPage}>Exam Details</span>
         </nav>
@@ -438,9 +464,14 @@ export default function PortalBreadcrumb() {
     if (section === "classes" && segments.length >= 4) {
       return (
         <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-          <Link href={`/dashboard/${role}/classes`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Classes
-          </Link>
+          <button
+            type="button"
+            onClick={(e) => handleBack(e, `/dashboard/${role}/classes`)}
+            className={styles.backLink}
+            style={{ background: "transparent", border: "none", cursor: "pointer", font: "inherit" }}
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
           <span className={styles.separator}>/</span>
           <span className={styles.currentPage}>Class Roster</span>
         </nav>
@@ -451,9 +482,14 @@ export default function PortalBreadcrumb() {
     if ((section === "assignments" || section === "homework") && segments.length >= 4) {
       return (
         <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-          <Link href={`/dashboard/${role}/assignments`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Home Work
-          </Link>
+          <button
+            type="button"
+            onClick={(e) => handleBack(e, `/dashboard/${role}/assignments`)}
+            className={styles.backLink}
+            style={{ background: "transparent", border: "none", cursor: "pointer", font: "inherit" }}
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
           <span className={styles.separator}>/</span>
           <span className={styles.currentPage}>Home Work Console</span>
         </nav>
@@ -464,9 +500,14 @@ export default function PortalBreadcrumb() {
     if (section === "report-cards" && segments.length >= 4) {
       return (
         <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-          <Link href={`/dashboard/${role}/report-cards`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Report Cards
-          </Link>
+          <button
+            type="button"
+            onClick={(e) => handleBack(e, `/dashboard/${role}/report-cards`)}
+            className={styles.backLink}
+            style={{ background: "transparent", border: "none", cursor: "pointer", font: "inherit" }}
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
           <span className={styles.separator}>/</span>
           <span className={styles.currentPage}>Student Report Card</span>
         </nav>
@@ -477,9 +518,14 @@ export default function PortalBreadcrumb() {
     if (section === "subjects" && segments.length >= 4) {
       return (
         <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-          <Link href={`/dashboard/${role}/subjects`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Subjects
-          </Link>
+          <button
+            type="button"
+            onClick={(e) => handleBack(e, `/dashboard/${role}/subjects`)}
+            className={styles.backLink}
+            style={{ background: "transparent", border: "none", cursor: "pointer", font: "inherit" }}
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
           <span className={styles.separator}>/</span>
           <span className={styles.currentPage}>{decodeURIComponent(segments[3])}</span>
         </nav>
@@ -490,9 +536,14 @@ export default function PortalBreadcrumb() {
     if (section === "parents" && segments.length >= 4) {
       return (
         <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-          <Link href={`/dashboard/${role}/parents`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Parents
-          </Link>
+          <button
+            type="button"
+            onClick={(e) => handleBack(e, `/dashboard/${role}/parents`)}
+            className={styles.backLink}
+            style={{ background: "transparent", border: "none", cursor: "pointer", font: "inherit" }}
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
           <span className={styles.separator}>/</span>
           <span className={styles.currentPage}>Parent Details</span>
         </nav>
@@ -502,14 +553,18 @@ export default function PortalBreadcrumb() {
     // General fallback for sub-items
     const parentSegments = segments.slice(0, -1);
     const parentHref = "/" + parentSegments.join("/");
-    const parentLabel = formatSlug(parentSegments[parentSegments.length - 1]);
     const currentLabel = formatSlug(segments[segments.length - 1]);
 
     return (
       <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-        <Link href={parentHref} className={styles.backLink}>
-          <ArrowLeft size={16} /> {parentLabel}
-        </Link>
+        <button
+          type="button"
+          onClick={(e) => handleBack(e, parentHref)}
+          className={styles.backLink}
+          style={{ background: "transparent", border: "none", cursor: "pointer", font: "inherit" }}
+        >
+          <ArrowLeft size={16} /> Back
+        </button>
         <span className={styles.separator}>/</span>
         <span className={styles.currentPage}>{currentLabel}</span>
       </nav>
@@ -519,9 +574,14 @@ export default function PortalBreadcrumb() {
   // Fallback for any other dashboard path
   return (
     <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-      <Link href="/dashboard" className={styles.backLink}>
-        <ArrowLeft size={16} /> Dashboard
-      </Link>
+      <button
+        type="button"
+        onClick={(e) => handleBack(e, "/dashboard")}
+        className={styles.backLink}
+        style={{ background: "transparent", border: "none", cursor: "pointer", font: "inherit" }}
+      >
+        <ArrowLeft size={16} /> Back
+      </button>
       <span className={styles.separator}>/</span>
       <span className={styles.currentPage}>{formatSlug(segments[segments.length - 1])}</span>
     </nav>

@@ -6,6 +6,36 @@
   max-width: 100vw;
   min-width: 0;
   box-sizing: border-box;
+  position: relative;
+}
+
+.portalBackground {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background-image: 
+    linear-gradient(rgba(15, 23, 42, 0.88), rgba(15, 23, 42, 0.94)),
+    url('/images/school_3d_moss_campus.jpg');
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+[data-theme="light"] .portalBackground {
+  background-image: 
+    linear-gradient(rgba(248, 250, 252, 0.92), rgba(241, 245, 249, 0.96)),
+    url('/images/school_3d_moss_campus.jpg');
+}
+
+@media (max-width: 768px) {
+  .portalBackground {
+    background-attachment: scroll;
+  }
 }
 
 .mobileMenuToggle {

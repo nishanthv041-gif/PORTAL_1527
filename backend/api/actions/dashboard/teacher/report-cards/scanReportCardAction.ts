@@ -432,10 +432,25 @@ function parseTextToReportCard(
         }
       }
 
-      let numValues = allNumsWithIndex.map(m => parseFloat(m[0]));
-      // Strip leading serial number (e.g. 1, 2...)
-      if (numValues.length > matrixSubjectCols.length && numValues[0] <= 50 && Number.isInteger(numValues[0])) {
-        numValues = numValues.slice(1);
+      // Prepare line for extracting pure subject marks by removing roll number, name, and leading serial number
+      let lineForMarks = rowLine;
+      if (rollNumber) {
+        lineForMarks = lineForMarks.replace(rollNumber, " ");
+      }
+      if (studentName) {
+        lineForMarks = lineForMarks.replace(studentName, " ");
+      }
+      // Remove leading serial number (e.g. "1 " or "2 ")
+      lineForMarks = lineForMarks.replace(/^\s*\d+\s+/, " ");
+
+      // Extract all numeric candidates from the sanitized marks line
+      const matchedNums = Array.from(lineForMarks.matchAll(/\b\d+(?:\.\d+)?\b/g)).map(m => parseFloat(m[0]));
+      // Exclude numbers that are clearly student roll numbers/IDs or grand totals (>= 250)
+      let numValues = matchedNums.filter(n => n <= 200 || n <= (customDefaults?.defaultMaxMarks || 100) * 1.5);
+
+      // If the row has extra trailing columns (like Total or Percentage), take only the first N for subjects
+      if (numValues.length > matrixSubjectCols.length) {
+        numValues = numValues.slice(0, matrixSubjectCols.length);
       }
 
       const studentSubs: ScannedReportCardSubject[] = [];
@@ -1232,7 +1247,7 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
           const worker = await createWorker("eng", 1, { cachePath: os.tmpdir() });
           const ocrPromise = worker.recognize(Buffer.from(buffer));
           const timeoutPromise = new Promise<{ data: { text: string } }>((_, reject) =>
-            setTimeout(() => reject(new Error("OCR timeout")), 8000)
+            setTimeout(() => reject(new Error("OCR timeout")), 18000)
           );
           const ret = await Promise.race([ocrPromise, timeoutPromise]);
           await worker.terminate();

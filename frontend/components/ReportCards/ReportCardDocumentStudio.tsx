@@ -265,6 +265,23 @@ export default function ReportCardDocumentStudio({
     );
 
     try {
+      // 1. For images and photos, run browser-side OCR for high accuracy and instant responsiveness
+      let browserOcrText = "";
+      if (["png", "jpg", "jpeg", "webp", "bmp"].includes(entry.ext) || entry.file.type.startsWith("image/")) {
+        setFileQueue(prev =>
+          prev.map(f => (f.id === entry.id ? { ...f, status: "PROCESSING", progressText: "Running optical character recognition (OCR)..." } : f))
+        );
+        try {
+          const { createWorker } = await import("tesseract.js");
+          const worker = await createWorker("eng");
+          const ocrResult = await worker.recognize(entry.file);
+          await worker.terminate();
+          browserOcrText = ocrResult?.data?.text || "";
+        } catch (ocrErr) {
+          console.warn("Browser OCR notice:", ocrErr);
+        }
+      }
+
       const formData = new FormData();
       formData.set("classId", activeClassId);
       formData.set("file", entry.file);
@@ -272,6 +289,9 @@ export default function ReportCardDocumentStudio({
       formData.set("defaultPassMarks", String(examPassMarks));
       formData.set("examDate", examDate);
       formData.set("examName", examName);
+      if (browserOcrText) {
+        formData.set("ocrText", browserOcrText);
+      }
 
       const res = await fetch("/api/teacher/report-cards/scan", {
         method: "POST",
@@ -365,16 +385,26 @@ export default function ReportCardDocumentStudio({
     setGeneralRemarks(result.generalRemarks || "");
 
     // Clean subjects to ensure maxScore and passMarks use the configured criteria
-    const cleanSubs = (result.subjects || []).map(s => {
+    const cleanSubs: ScannedReportCardSubject[] = (result.subjects || []).map(s => {
       let maxScore = s.maxScore || examMaxMarks || 100;
       let passMarks = s.passMarks || examPassMarks || 35;
       if (passMarks === s.score || passMarks > maxScore) {
         passMarks = examPassMarks || 35;
       }
+      const scoreNum: number | "" = s.score !== "" && s.score !== undefined && !isNaN(Number(s.score)) ? Number(s.score) : "";
+      const isInvalid = scoreNum === "" ? true : (scoreNum < 0 || scoreNum > maxScore);
+      const grade = scoreNum !== "" ? calculateGrade(scoreNum, maxScore) : "-";
+      const status: "PASS" | "FAIL" | "NEEDS_REVIEW" = scoreNum === "" ? "NEEDS_REVIEW" : scoreNum >= passMarks ? "PASS" : "FAIL";
+
       return {
         ...s,
+        score: scoreNum,
         maxScore,
-        passMarks
+        passMarks,
+        grade,
+        status,
+        isInvalid,
+        validationError: isInvalid ? (scoreNum === "" ? "Score required" : `Between 0 and ${maxScore}`) : ""
       };
     });
     setSubjects(cleanSubs);
@@ -1397,11 +1427,25 @@ export default function ReportCardDocumentStudio({
                 {/* Student Selector */}
                 <div>
                   <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem", color: "var(--text-secondary)" }}>
-                    Student Name &amp; ID ({activeQueuedFile.result?.studentConfidence === "HIGH" ? "✓ Matched" : "⚠️ Needs Review"}):
+                    Student Name &amp; ID ({selectedStudentId ? "✓ Selected" : "⚠️ Needs Review"}):
                   </label>
                   <select
                     value={selectedStudentId}
-                    onChange={e => setSelectedStudentId(e.target.value)}
+                    onChange={e => {
+                      const newStudId = e.target.value;
+                      setSelectedStudentId(newStudId);
+                      // If this is a detected student from the multi-student matrix, load their subjects automatically!
+                      if (activeQueuedFile?.result?.allDetectedStudents) {
+                        const matchedEntry = activeQueuedFile.result.allDetectedStudents.find(
+                          es => es.studentId === newStudId
+                        );
+                        if (matchedEntry) {
+                          setSubjects(matchedEntry.subjects || []);
+                          if (matchedEntry.attendance) setAttendance(String(matchedEntry.attendance));
+                          if (matchedEntry.remarks) setGeneralRemarks(matchedEntry.remarks);
+                        }
+                      }
+                    }}
                     style={{
                       width: "100%",
                       padding: "0.6rem 0.85rem",
@@ -1504,7 +1548,7 @@ export default function ReportCardDocumentStudio({
                     <span style={{ fontWeight: 800, fontSize: "0.92rem" }}>
                       Extracted Subject Marks &amp; Academic Criteria:
                     </span>
-                    {totals.hasValidationErrors && (
+                    {totals.hasValidationErrors ? (
                       <span style={{
                         padding: "2px 8px",
                         borderRadius: "6px",
@@ -1515,7 +1559,18 @@ export default function ReportCardDocumentStudio({
                       }}>
                         ⚠️ {totals.invalidCount} {totals.invalidCount === 1 ? "mark requires" : "marks require"} correction
                       </span>
-                    )}
+                    ) : subjects.length > 0 ? (
+                      <span style={{
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                        background: "rgba(16, 185, 129, 0.12)",
+                        color: "#10b981",
+                        fontSize: "0.75rem",
+                        fontWeight: 700
+                      }}>
+                        ✓ All {subjects.length} marks verified
+                      </span>
+                    ) : null}
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>

@@ -9,6 +9,7 @@ import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/setting
 
 import { SettingsProvider } from "@/frontend/contexts/SettingsContext";
 import NavigationProgressBar from "@/frontend/components/NavigationProgressBar";
+import SchoolPortalLoadingAnimation from "@/frontend/components/SchoolPortalLoadingAnimation";
 import NotificationPopupModal from "@/frontend/components/notifications/NotificationPopupModal";
 import PortalBreadcrumb from "@/frontend/components/PortalBreadcrumb";
 
@@ -47,26 +48,14 @@ export default async function DashboardLayout({
   return (
     <SettingsProvider settings={settings}>
       <NavigationProgressBar />
+      <SchoolPortalLoadingAnimation
+        schoolName={settings.SCHOOL_NAME || "SRT School Management Portal"}
+        schoolLogo={settings.SCHOOL_LOGO || null}
+      />
       <NotificationPopupModal initialNotifications={[]} notificationsEnabled={notificationsEnabled} />
       <div className={styles.container}>
-        {settings.SCHOOL_LOGO && (
-          /* High-performance static watermark (0% GPU/CPU rasterization overhead) */
-          <div style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: 'min(50vw, 480px)',
-            height: 'min(50vw, 480px)',
-            backgroundImage: `url(${settings.SCHOOL_LOGO})`,
-            backgroundSize: 'contain',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
-            opacity: 0.025,
-            pointerEvents: 'none',
-            zIndex: 0
-          }} />
-        )}
+        {/* Subtle, beautiful, fixed school campus backdrop */}
+        <div className={styles.portalBackground} aria-hidden="true" />
         <input type="checkbox" id="mobile-menu-toggle" className={styles.mobileMenuToggle} />
         
         <div className={styles.sidebarWrapper}>

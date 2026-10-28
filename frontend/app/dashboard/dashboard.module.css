@@ -18,6 +18,17 @@
   overflow-wrap: anywhere;
 }
 
+@keyframes dashboardCardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .statsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
@@ -40,6 +51,19 @@
   max-width: 100%;
   width: 100%;
   box-sizing: border-box;
+  animation: dashboardCardFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.statCard:nth-child(1) { animation-delay: 0.04s; }
+.statCard:nth-child(2) { animation-delay: 0.08s; }
+.statCard:nth-child(3) { animation-delay: 0.12s; }
+.statCard:nth-child(4) { animation-delay: 0.16s; }
+
+.statCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  border-color: rgba(99, 102, 241, 0.35);
 }
 
 .navCard {
@@ -51,17 +75,19 @@
   align-items: center;
   gap: 1.25rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
   cursor: pointer;
   min-width: 0;
   max-width: 100%;
   width: 100%;
   box-sizing: border-box;
+  animation: dashboardCardFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .navCard:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  border-color: rgba(99, 102, 241, 0.35);
 }
 
 .statIcon {
@@ -124,6 +150,21 @@
   max-width: 100%;
   width: 100%;
   box-sizing: border-box;
+  animation: dashboardCardFadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.chartCard:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statCard,
+  .navCard,
+  .chartCard {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 .chartHeader {
