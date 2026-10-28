@@ -226,6 +226,14 @@
 }
 
 @media (max-width: 480px) {
+  .dashboard {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    gap: 1rem;
+  }
+
   .title {
     font-size: 1.35rem;
     padding-bottom: 0.35rem;

@@ -5,7 +5,7 @@ import {
   Upload, FileText, Image as ImageIcon, FileSpreadsheet,
   CheckCircle2, AlertCircle, Sparkles, RefreshCw, Trash2, Plus,
   Award, Calendar, Users, Eye, EyeOff, RotateCcw,
-  ShieldCheck, Check, X, ArrowRight, Layers, FileCheck, Send
+  ShieldCheck, Check, X, ArrowRight, Layers, FileCheck, Send, Sliders
 } from "lucide-react";
 import type { TeacherClass, ClassSubject, ClassStudent, HistoryItem } from "./TeacherReportCardsClient";
 import type { ScanReportCardResult, ScannedReportCardSubject, DetectedStudentEntry } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardTypes";
@@ -80,10 +80,39 @@ export default function ReportCardDocumentStudio({
   const [selectedStudentId, setSelectedStudentId] = useState<string>("");
   const [examName, setExamName] = useState<string>("Midterm Examination");
   const [examDate, setExamDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [examMaxMarks, setExamMaxMarks] = useState<number>(100);
+  const [examPassMarks, setExamPassMarks] = useState<number>(35);
   const [attendance, setAttendance] = useState<string>("");
   const [academicYear, setAcademicYear] = useState<string>("2026-2027");
   const [subjects, setSubjects] = useState<ScannedReportCardSubject[]>([]);
   const [generalRemarks, setGeneralRemarks] = useState<string>("");
+
+  const handleApplyCriteriaToAll = (newMax?: number, newPass?: number) => {
+    const targetMax = newMax !== undefined ? Math.max(1, newMax) : examMaxMarks;
+    const targetPass = newPass !== undefined ? Math.max(0, Math.min(targetMax, newPass)) : examPassMarks;
+
+    setExamMaxMarks(targetMax);
+    setExamPassMarks(targetPass);
+
+    setSubjects(prev =>
+      prev.map(sub => {
+        const scoreNum = sub.score !== "" ? Number(sub.score) : NaN;
+        const isInvalid = !isNaN(scoreNum) && (scoreNum < 0 || scoreNum > targetMax);
+        const grade = calculateGrade(Number(sub.score) || 0, targetMax);
+        const isPass = !isNaN(scoreNum) && scoreNum >= targetPass;
+
+        return {
+          ...sub,
+          maxScore: targetMax,
+          passMarks: targetPass,
+          grade,
+          status: isInvalid ? "NEEDS_REVIEW" : isPass ? "PASS" : "FAIL",
+          isInvalid,
+          validationError: isInvalid ? `Score must be between 0 and ${targetMax}` : undefined
+        };
+      })
+    );
+  };
 
   // Review & Split Comparison State
   const [showOriginalDocPreview, setShowOriginalDocPreview] = useState<boolean>(true);
@@ -239,6 +268,10 @@ export default function ReportCardDocumentStudio({
       const formData = new FormData();
       formData.set("classId", activeClassId);
       formData.set("file", entry.file);
+      formData.set("defaultMaxMarks", String(examMaxMarks));
+      formData.set("defaultPassMarks", String(examPassMarks));
+      formData.set("examDate", examDate);
+      formData.set("examName", examName);
 
       const res = await fetch("/api/teacher/report-cards/scan", {
         method: "POST",
@@ -285,12 +318,26 @@ export default function ReportCardDocumentStudio({
   // Populate Editor State from Result
   const applyScanResultToEditor = (result: ScanReportCardResult) => {
     setSelectedStudentId(result.studentId || "");
-    setExamName(result.examName || "Midterm Examination");
-    setExamDate(result.examDate || new Date().toISOString().split("T")[0]);
+    if (result.examName && !examName) setExamName(result.examName);
+    if (result.examDate && !examDate) setExamDate(result.examDate);
     setAttendance(result.attendance ? String(result.attendance) : "");
     setAcademicYear(result.academicYear || "2026-2027");
     setGeneralRemarks(result.generalRemarks || "");
-    setSubjects(result.subjects || []);
+
+    // Clean subjects to ensure maxScore and passMarks use the configured criteria
+    const cleanSubs = (result.subjects || []).map(s => {
+      let maxScore = s.maxScore || examMaxMarks || 100;
+      let passMarks = s.passMarks || examPassMarks || 35;
+      if (passMarks === s.score || passMarks > maxScore) {
+        passMarks = examPassMarks || 35;
+      }
+      return {
+        ...s,
+        maxScore,
+        passMarks
+      };
+    });
+    setSubjects(cleanSubs);
     setSaveSuccess(null);
   };
 
@@ -577,13 +624,15 @@ export default function ReportCardDocumentStudio({
         alignItems: "center",
         justifyContent: "space-between",
         flexWrap: "wrap",
-        gap: "1rem",
-        padding: "1rem 1.25rem",
+        gap: "0.85rem",
+        padding: "clamp(0.75rem, 2vw, 1.25rem)",
         background: "var(--card-bg, #1e293b)",
         borderRadius: "16px",
-        border: "1.5px solid var(--border-color, #334155)"
+        border: "1.5px solid var(--border-color, #334155)",
+        width: "100%",
+        boxSizing: "border-box"
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0, flex: "1 1 260px" }}>
           <div style={{
             width: "42px",
             height: "42px",
@@ -593,37 +642,52 @@ export default function ReportCardDocumentStudio({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)"
+            boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)",
+            flexShrink: 0
           }}>
             <Sparkles size={22} />
           </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 800 }}>
+          <div style={{ minWidth: 0 }}>
+            <h2 style={{ margin: 0, fontSize: "clamp(1rem, 2.8vw, 1.15rem)", fontWeight: 800, wordBreak: "break-word" }}>
               AI Document Scanning &amp; OCR Studio
             </h2>
-            <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+            <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)", wordBreak: "break-word" }}>
               Review and verify student marks before dispatching report cards to parents.
             </p>
           </div>
         </div>
 
         {/* Target Class Dropdown */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-          <label style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          flex: "1 1 240px",
+          width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
+          boxSizing: "border-box"
+        }}>
+          <label style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-secondary)", whiteSpace: "nowrap", flexShrink: 0 }}>
             Target Class:
           </label>
           <select
             value={activeClassId}
             onChange={e => handleClassChange(e.target.value)}
             style={{
-              padding: "0.55rem 0.95rem",
+              flex: 1,
+              width: "100%",
+              minWidth: 0,
+              maxWidth: "100%",
+              padding: "0.55rem 0.85rem",
               borderRadius: "10px",
               border: "1.5px solid var(--border-color)",
               background: "var(--input-bg, #0f172a)",
               color: "var(--foreground)",
               fontWeight: 700,
               fontSize: "0.88rem",
-              cursor: "pointer"
+              cursor: "pointer",
+              boxSizing: "border-box"
             }}
           >
             {(classes || []).map(c => (
@@ -643,10 +707,208 @@ export default function ReportCardDocumentStudio({
                 color: "var(--text-secondary)",
                 cursor: "pointer",
                 padding: "0.4rem",
-                borderRadius: "8px"
+                borderRadius: "8px",
+                flexShrink: 0
               }}
             >
               <X size={20} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ========================================================
+          EVALUATION CRITERIA & EXAM SETUP PRE-FILL BAR
+          (Set Exam Name, Date, Max Mark, Pass Mark before or during upload)
+         ======================================================== */}
+      <div style={{
+        background: "var(--card-bg, #1e293b)",
+        border: "1.5px solid var(--border-color, #334155)",
+        borderRadius: "16px",
+        padding: "clamp(0.85rem, 2vw, 1.25rem)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.85rem",
+        width: "100%",
+        boxSizing: "border-box"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <Sliders size={18} color="var(--primary)" />
+            <span style={{ fontWeight: 800, fontSize: "0.95rem" }}>
+              Exam &amp; Mark Criteria Setup
+            </span>
+          </div>
+          <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+            Applied automatically when documents are scanned &amp; extracted
+          </span>
+        </div>
+
+        {/* Inputs Grid: Exam Name, Date, Max Mark, Pass Mark */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          gap: "0.75rem",
+          alignItems: "end"
+        }}>
+          <div>
+            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--text-secondary)", marginBottom: "0.3rem" }}>
+              Exam / Term:
+            </label>
+            <input
+              type="text"
+              value={examName}
+              onChange={e => setExamName(e.target.value)}
+              placeholder="e.g. Midterm Examination"
+              style={{
+                width: "100%",
+                padding: "0.55rem 0.75rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color)",
+                background: "var(--input-bg, #0f172a)",
+                color: "var(--foreground)",
+                fontWeight: 700,
+                fontSize: "0.85rem",
+                boxSizing: "border-box"
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--text-secondary)", marginBottom: "0.3rem" }}>
+              Exam Date:
+            </label>
+            <input
+              type="date"
+              value={examDate}
+              onChange={e => setExamDate(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.55rem 0.75rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color)",
+                background: "var(--input-bg, #0f172a)",
+                color: "var(--foreground)",
+                fontWeight: 700,
+                fontSize: "0.85rem",
+                boxSizing: "border-box"
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--text-secondary)", marginBottom: "0.3rem" }}>
+              Max Mark (Base):
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={examMaxMarks}
+              onChange={e => handleApplyCriteriaToAll(Number(e.target.value) || 100, examPassMarks)}
+              style={{
+                width: "100%",
+                padding: "0.55rem 0.75rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color)",
+                background: "var(--input-bg, #0f172a)",
+                color: "var(--foreground)",
+                fontWeight: 800,
+                fontSize: "0.85rem",
+                textAlign: "center",
+                boxSizing: "border-box"
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--text-secondary)", marginBottom: "0.3rem" }}>
+              Pass Mark:
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={examMaxMarks}
+              value={examPassMarks}
+              onChange={e => handleApplyCriteriaToAll(examMaxMarks, Number(e.target.value) || 35)}
+              style={{
+                width: "100%",
+                padding: "0.55rem 0.75rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color)",
+                background: "var(--input-bg, #0f172a)",
+                color: "var(--foreground)",
+                fontWeight: 800,
+                fontSize: "0.85rem",
+                textAlign: "center",
+                boxSizing: "border-box"
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Presets and Quick Apply */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "0.6rem",
+          paddingTop: "0.4rem",
+          borderTop: "1px solid rgba(255, 255, 255, 0.05)"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-secondary)" }}>
+              Presets:
+            </span>
+            {[
+              { label: "100 / 35 (Standard)", max: 100, pass: 35 },
+              { label: "50 / 20 (Midterm)", max: 50, pass: 20 },
+              { label: "75 / 30 (Quarterly)", max: 75, pass: 30 },
+              { label: "25 / 10 (Unit Test)", max: 25, pass: 10 }
+            ].map(preset => {
+              const isActive = examMaxMarks === preset.max && examPassMarks === preset.pass;
+              return (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => handleApplyCriteriaToAll(preset.max, preset.pass)}
+                  style={{
+                    padding: "0.3rem 0.65rem",
+                    borderRadius: "6px",
+                    border: isActive ? "1.5px solid var(--primary)" : "1px solid var(--border-color)",
+                    background: isActive ? "rgba(99, 102, 241, 0.2)" : "rgba(0, 0, 0, 0.2)",
+                    color: isActive ? "var(--primary)" : "var(--foreground)",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    cursor: "pointer"
+                  }}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {subjects.length > 0 && (
+            <button
+              type="button"
+              onClick={() => handleApplyCriteriaToAll(examMaxMarks, examPassMarks)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                padding: "0.45rem 0.85rem",
+                borderRadius: "8px",
+                border: "none",
+                background: "var(--primary)",
+                color: "#ffffff",
+                fontWeight: 800,
+                fontSize: "0.8rem",
+                cursor: "pointer",
+                boxShadow: "0 2px 8px rgba(99, 102, 241, 0.25)"
+              }}
+            >
+              <Check size={14} /> Apply Criteria to All ({subjects.length}) Subjects
             </button>
           )}
         </div>
@@ -1136,8 +1398,8 @@ export default function ReportCardDocumentStudio({
                   Student ID | Student Name | Class | Subject | Marks Obtained | Max Marks | Pass Marks | Grade | Attendance | Status | Actions
                  ======================================================== */}
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                     <span style={{ fontWeight: 800, fontSize: "0.92rem" }}>
                       Extracted Subject Marks &amp; Academic Criteria:
                     </span>
@@ -1155,25 +1417,45 @@ export default function ReportCardDocumentStudio({
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleAddSubject}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.35rem",
-                      padding: "5px 12px",
-                      borderRadius: "8px",
-                      background: "rgba(99, 102, 241, 0.12)",
-                      color: "var(--primary)",
-                      border: "1px solid rgba(99, 102, 241, 0.3)",
-                      fontSize: "0.825rem",
-                      fontWeight: 700,
-                      cursor: "pointer"
-                    }}
-                  >
-                    <Plus size={15} /> Add Subject
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyCriteriaToAll(100, 35)}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid var(--border-color)",
+                        background: "rgba(99, 102, 241, 0.08)",
+                        color: "var(--foreground)",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        cursor: "pointer"
+                      }}
+                      title="Set all subjects to 100 Max and 35 Pass mark"
+                    >
+                      ⚡ Standard (100/35)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleAddSubject}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                        padding: "5px 12px",
+                        borderRadius: "8px",
+                        background: "rgba(99, 102, 241, 0.12)",
+                        color: "var(--primary)",
+                        border: "1px solid rgba(99, 102, 241, 0.3)",
+                        fontSize: "0.825rem",
+                        fontWeight: 700,
+                        cursor: "pointer"
+                      }}
+                    >
+                      <Plus size={15} /> Add Subject
+                    </button>
+                  </div>
                 </div>
 
                 <div style={{

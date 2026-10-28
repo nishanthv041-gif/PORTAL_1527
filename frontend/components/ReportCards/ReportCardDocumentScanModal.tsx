@@ -21,28 +21,38 @@ export default function ReportCardDocumentScanModal({
   if (!isOpen) return null;
 
   return (
-    <div style={{
-      position: "fixed",
-      inset: 0,
-      backgroundColor: "rgba(15, 23, 42, 0.8)",
-      backdropFilter: "blur(8px)",
-      zIndex: 9999,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "1rem",
-      overflowY: "auto"
-    }}>
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        backgroundColor: "rgba(15, 23, 42, 0.85)",
+        backdropFilter: "blur(8px)",
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "clamp(0.25rem, 1.5vw, 1rem)",
+        overflowY: "auto",
+        width: "100vw",
+        maxWidth: "100%",
+        boxSizing: "border-box"
+      }}
+    >
       <div style={{
         background: "var(--card-bg, #1e293b)",
         border: "1.5px solid var(--border-color, #334155)",
-        borderRadius: "20px",
+        borderRadius: "clamp(12px, 2vw, 20px)",
         width: "100%",
         maxWidth: "1150px",
-        maxHeight: "92vh",
+        maxHeight: "96vh",
         overflowY: "auto",
+        overflowX: "hidden",
         boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
-        padding: "1.5rem"
+        padding: "clamp(0.75rem, 2vw, 1.5rem)",
+        boxSizing: "border-box"
       }}>
         <ReportCardDocumentStudio
           classes={classes}

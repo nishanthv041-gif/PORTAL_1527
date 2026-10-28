@@ -173,7 +173,13 @@ function matchStudent(
 function parseTextToReportCard(
   text: string,
   classStudents: Array<{ id: string; rollNumber: string; firstName: string; lastName: string }>,
-  classSubjects: Array<{ id: string; name: string; maxMarks?: number; passMarks?: number }>
+  classSubjects: Array<{ id: string; name: string; maxMarks?: number; passMarks?: number }>,
+  customDefaults?: {
+    defaultMaxMarks?: number;
+    defaultPassMarks?: number;
+    examDate?: string;
+    examName?: string;
+  }
 ): {
   student: { studentId: string; studentName: string; rollNumber: string; confidence: "HIGH" | "MEDIUM" | "LOW" | "NONE" };
   className?: string | null;
@@ -202,13 +208,13 @@ function parseTextToReportCard(
     rollNumber: string;
     confidence: "HIGH" | "MEDIUM" | "LOW" | "NONE";
   } = { studentId: "", studentName: "", rollNumber: "", confidence: "NONE" };
-  let detectedExamName = "Midterm Examination";
-  let detectedExamDate = new Date().toISOString().split("T")[0];
+  let detectedExamName = customDefaults?.examName?.trim() || "Midterm Examination";
+  let detectedExamDate = customDefaults?.examDate?.trim() || new Date().toISOString().split("T")[0];
   let detectedClassName: string | null = null;
   let detectedAcademicYear: string | null = null;
   let detectedAttendance: string | null = null;
-  let defaultMaxMarks = 100;
-  let defaultPassMarks = 35;
+  let defaultMaxMarks = customDefaults?.defaultMaxMarks || 100;
+  let defaultPassMarks = customDefaults?.defaultPassMarks || 35;
   let generalRemarks = "";
   const scannedSubjects: ScannedReportCardSubject[] = [];
   const originalMarksMap: Record<string, string> = {};
@@ -399,8 +405,8 @@ function parseTextToReportCard(
       }
 
       let score: number | "" = "";
-      let maxScore = matchedSubInfo.maxMarks || 100;
-      let passMarks = matchedSubInfo.passMarks || 35; // Standard pass mark criteria
+      let maxScore = customDefaults?.defaultMaxMarks || matchedSubInfo.maxMarks || 100;
+      let passMarks = customDefaults?.defaultPassMarks || matchedSubInfo.passMarks || 35; // Standard pass mark criteria
       let remarks = "";
       let isInvalid = false;
       let validationError = "";
@@ -444,6 +450,11 @@ function parseTextToReportCard(
             passMarks = n3;
           }
         }
+      }
+
+      // Guarantee passMarks is never mistakenly equal to the student's obtained score!
+      if (passMarks === score || passMarks > maxScore) {
+        passMarks = customDefaults?.defaultPassMarks || matchedSubInfo.passMarks || 35;
       }
 
       // Check remarks on the line
@@ -553,7 +564,13 @@ function parseTextToReportCard(
 function parseExcelToReportCard(
   buffer: ArrayBuffer,
   classStudents: Array<{ id: string; rollNumber: string; firstName: string; lastName: string }>,
-  classSubjects: Array<{ id: string; name: string; maxMarks?: number; passMarks?: number }>
+  classSubjects: Array<{ id: string; name: string; maxMarks?: number; passMarks?: number }>,
+  customDefaults?: {
+    defaultMaxMarks?: number;
+    defaultPassMarks?: number;
+    examDate?: string;
+    examName?: string;
+  }
 ): {
   student: { studentId: string; studentName: string; rollNumber: string; confidence: "HIGH" | "MEDIUM" | "LOW" | "NONE" };
   examName: string;
@@ -614,8 +631,8 @@ function parseExcelToReportCard(
               colIndex: colIdx,
               subjectId: match.subjectId,
               subjectName: match.subjectName,
-              maxMarks: match.maxMarks,
-              passMarks: match.passMarks
+              maxMarks: customDefaults?.defaultMaxMarks || match.maxMarks || 100,
+              passMarks: customDefaults?.defaultPassMarks || match.passMarks || 35
             });
           }
         }
@@ -810,6 +827,17 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
 
     const ocrText = (formData.get("ocrText") as string) || "";
     const file = formData.get("file") as File | null;
+    const defaultMaxMarksParam = Number(formData.get("defaultMaxMarks")) || 100;
+    const defaultPassMarksParam = Number(formData.get("defaultPassMarks")) || 35;
+    const examDateParam = (formData.get("examDate") as string) || "";
+    const examNameParam = (formData.get("examName") as string) || "";
+
+    const customDefaults = {
+      defaultMaxMarks: defaultMaxMarksParam,
+      defaultPassMarks: defaultPassMarksParam,
+      examDate: examDateParam,
+      examName: examNameParam
+    };
 
     let fileName = file?.name || "Uploaded Document";
     let fileSize = file?.size || 0;
@@ -818,7 +846,7 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
 
     // If client already ran Tesseract OCR on photo/image
     if (ocrText && ocrText.trim().length > 0) {
-      const parsed = parseTextToReportCard(ocrText, classStudents, classSubjects);
+      const parsed = parseTextToReportCard(ocrText, classStudents, classSubjects, customDefaults);
       return {
         success: true,
         fileDetails: {
@@ -862,7 +890,7 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
 
     // 1. Excel / Spreadsheets (.xlsx, .xls, .csv)
     if (["xlsx", "xls", "csv"].includes(ext)) {
-      const parsed = parseExcelToReportCard(buffer, classStudents, classSubjects);
+      const parsed = parseExcelToReportCard(buffer, classStudents, classSubjects, customDefaults);
       return {
         success: true,
         fileDetails: {
@@ -908,7 +936,7 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
         };
       }
 
-      const parsed = parseTextToReportCard(text, classStudents, classSubjects);
+      const parsed = parseTextToReportCard(text, classStudents, classSubjects, customDefaults);
       return {
         success: true,
         fileDetails: {
@@ -957,7 +985,7 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
         };
       }
 
-      const parsed = parseTextToReportCard(text, classStudents, classSubjects);
+      const parsed = parseTextToReportCard(text, classStudents, classSubjects, customDefaults);
       return {
         success: true,
         fileDetails: {
@@ -1001,7 +1029,7 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
         console.warn("Server image OCR notice:", ocrErr);
       }
 
-      const parsed = parseTextToReportCard(extractedText, classStudents, classSubjects);
+      const parsed = parseTextToReportCard(extractedText, classStudents, classSubjects, customDefaults);
       return {
         success: true,
         fileDetails: {

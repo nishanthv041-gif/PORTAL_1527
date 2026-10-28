@@ -626,7 +626,7 @@ export default function TeacherReportCardsClient({
             </div>
             <button
               type="button"
-              onClick={() => setShowScanModal(true)}
+              onClick={() => setActiveTab("STUDIO")}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -643,7 +643,7 @@ export default function TeacherReportCardsClient({
               }}
             >
               <Upload size={16} />
-              <span>Scan &amp; Upload Document</span>
+              <span>Scan &amp; Upload Document (Studio)</span>
             </button>
           </div>
 
