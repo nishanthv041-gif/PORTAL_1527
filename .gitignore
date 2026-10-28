@@ -47,3 +47,5 @@ next-env.d.ts
 .vercel
 .env*
 .agent/
+*.traineddata
+*.traineddata.gz

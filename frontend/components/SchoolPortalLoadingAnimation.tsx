@@ -69,7 +69,7 @@ function LoaderInner({ schoolName = "SRT School Management Portal", schoolLogo }
         if (url.pathname === window.location.pathname && url.search === window.location.search) return;
 
         startLoader();
-      } catch {}
+      } catch { }
     };
 
     const handlePopState = () => {
@@ -217,41 +217,6 @@ function LoaderInner({ schoolName = "SRT School Management Portal", schoolLogo }
           />
         </div>
       </div>
-
-      <style jsx global>{`
-        @keyframes spinSlow {
-          0% {
-            transform: rotate(0deg);
-          }
-          100% {
-            transform: rotate(360deg);
-          }
-        }
-        @keyframes indeterminateProgress {
-          0% {
-            left: -50%;
-            width: 30%;
-          }
-          50% {
-            left: 25%;
-            width: 60%;
-          }
-          100% {
-            left: 100%;
-            width: 30%;
-          }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          @keyframes spinSlow {
-            0% { transform: none; }
-            100% { transform: none; }
-          }
-          @keyframes indeterminateProgress {
-            0% { left: 0%; width: 100%; }
-            100% { left: 0%; width: 100%; }
-          }
-        }
-      `}</style>
     </div>
   );
 }

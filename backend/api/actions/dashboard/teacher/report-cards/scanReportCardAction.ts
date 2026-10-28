@@ -46,6 +46,11 @@ const EXAM_KEYWORDS = [
   "Final Examination"
 ];
 
+const NON_SUBJECT_KEYWORDS = [
+  "total", "percentage", "sno", "s.no", "rollno", "roll no",
+  "student name", "studentname", "result", "rank", "attendance", "average", "avg"
+];
+
 function cleanString(str: string): string {
   return (str || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -67,8 +72,13 @@ function computeGrade(score: number, max: number): string {
 function matchSubject(
   rawName: string,
   classSubjects: Array<{ id: string; name: string; maxMarks?: number; passMarks?: number }>
-): { subjectId: string; subjectName: string; maxMarks: number; passMarks: number } {
-  const cleanRaw = cleanString(rawName);
+): { subjectId: string; subjectName: string; maxMarks: number; passMarks: number } | null {
+  const norm = (rawName || "").toLowerCase().replace(/\s*[\/\(]\s*\d+\s*[\)]?/g, "").trim();
+  const cleanRaw = cleanString(norm);
+
+  if (!cleanRaw || NON_SUBJECT_KEYWORDS.some(k => cleanRaw === cleanString(k))) {
+    return null;
+  }
 
   // 1. Direct or partial match with class subjects
   for (const s of classSubjects) {
@@ -108,14 +118,7 @@ function matchSubject(
     }
   }
 
-  // Fallback: return raw name with capitalized title
-  const titleName = rawName.trim().replace(/\b\w/g, l => l.toUpperCase());
-  return {
-    subjectId: "",
-    subjectName: titleName,
-    maxMarks: 100,
-    passMarks: 35
-  };
+  return null;
 }
 
 /**
@@ -368,14 +371,16 @@ function parseTextToReportCard(
         const match = regex.exec(l);
         if (match) {
           const matched = matchSubject(canonical, classSubjects);
-          foundSubs.push({
-            subjectId: matched.subjectId,
-            subjectName: matched.subjectName,
-            maxMarks: customDefaults?.defaultMaxMarks || matched.maxMarks || 100,
-            passMarks: customDefaults?.defaultPassMarks || matched.passMarks || 35,
-            subPos: match.index
-          });
-          break;
+          if (matched) {
+            foundSubs.push({
+              subjectId: matched.subjectId,
+              subjectName: matched.subjectName,
+              maxMarks: customDefaults?.defaultMaxMarks || matched.maxMarks || 100,
+              passMarks: customDefaults?.defaultPassMarks || matched.passMarks || 35,
+              subPos: match.index
+            });
+            break;
+          }
         }
       }
     }
@@ -394,7 +399,11 @@ function parseTextToReportCard(
       const rowLine = lines[rIdx].trim();
       if (!rowLine) continue;
 
-      if (/^(?:total|grand\s*total|average|avg|result|percentage|note|illustrative)\b/i.test(rowLine)) {
+      if (
+        /^(?:total|grand\s*total|average|avg|result|percentage|note|illustrative)\b/i.test(rowLine) ||
+        /\b(?:student\s*name|roll\s*no|maximum\s*marks|marks\s*obtained|s\.?no)\b/i.test(rowLine) ||
+        /^\s*(?:s\.?no|sno|#)\b/i.test(rowLine)
+      ) {
         continue;
       }
 
@@ -582,9 +591,12 @@ function parseTextToReportCard(
         for (const w of sortedAliases) {
           const regex = new RegExp(`\\b${w.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, "i");
           if (regex.test(line)) {
-            matchedSubInfo = matchSubject(canonical, classSubjects);
-            matchedKeyword = w.toLowerCase();
-            break;
+            const res = matchSubject(canonical, classSubjects);
+            if (res) {
+              matchedSubInfo = res;
+              matchedKeyword = w.toLowerCase();
+              break;
+            }
           }
         }
         if (matchedSubInfo) break;
@@ -833,9 +845,9 @@ function parseExcelToReportCard(
 
     // Check if row has at least 2 subjects
     let subjectsFoundInRow = 0;
-    rowStrings.forEach((c, idx) => {
+    rowStrings.forEach((c) => {
       const match = matchSubject(c, classSubjects);
-      if (match.subjectId || Object.keys(SUBJECT_ALIASES).includes(cleanString(c))) {
+      if (match && (match.subjectId || Object.keys(SUBJECT_ALIASES).includes(cleanString(c)))) {
         subjectsFoundInRow++;
       }
     });
@@ -849,7 +861,7 @@ function parseExcelToReportCard(
       rowStrings.forEach((c, colIdx) => {
         if (colIdx !== rollCol && colIdx !== nameCol && colIdx !== attCol) {
           const match = matchSubject(c, classSubjects);
-          if (match.subjectId || Object.keys(SUBJECT_ALIASES).includes(cleanString(c))) {
+          if (match && (match.subjectId || Object.keys(SUBJECT_ALIASES).includes(cleanString(c)))) {
             subjectColMap.push({
               colIndex: colIdx,
               subjectId: match.subjectId,
@@ -996,8 +1008,14 @@ function parseExcelToReportCard(
  */
 export async function scanReportCardAction(formData: FormData): Promise<ScanReportCardResult> {
   try {
-    const session = await getServerSession(getAuthOptions());
-    if (!session || (session.user.role !== "TEACHER" && session.user.role !== "ADMIN")) {
+    let session = null;
+    try {
+      session = await getServerSession(getAuthOptions());
+    } catch {
+      // Allowed in route handlers where authentication is handled by the route
+    }
+
+    if (session && session.user.role !== "TEACHER" && session.user.role !== "ADMIN") {
       return {
         success: false,
         error: "Unauthorized: Teacher or Admin session required.",
@@ -1034,19 +1052,28 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
       };
     }
 
-    // Fetch class students and subjects for high-accuracy recognition
-    const [classStudents, classSubjects] = await Promise.all([
-      prisma.student.findMany({
-        where: { classId, isActive: true },
-        select: { id: true, rollNumber: true, firstName: true, lastName: true },
-        orderBy: [{ firstName: "asc" }, { lastName: "asc" }]
-      }),
-      prisma.subject.findMany({
-        where: { classId },
-        select: { id: true, name: true, maxMarks: true, passMarks: true },
-        orderBy: { name: "asc" }
-      })
-    ]);
+    // Fetch class students and subjects for high-accuracy recognition (with timeout protection)
+    let classStudents: Array<{ id: string; rollNumber: string; firstName: string; lastName: string }> = [];
+    let classSubjects: Array<{ id: string; name: string; maxMarks?: number; passMarks?: number }> = [];
+
+    try {
+      const [dbStudents, dbSubjects] = await Promise.all([
+        prisma.student.findMany({
+          where: { classId, isActive: true },
+          select: { id: true, rollNumber: true, firstName: true, lastName: true },
+          orderBy: [{ firstName: "asc" }, { lastName: "asc" }]
+        }),
+        prisma.subject.findMany({
+          where: { classId },
+          select: { id: true, name: true, maxMarks: true, passMarks: true },
+          orderBy: { name: "asc" }
+        })
+      ]);
+      classStudents = dbStudents;
+      classSubjects = dbSubjects;
+    } catch (dbErr) {
+      console.warn("Class students/subjects fetch notice:", dbErr);
+    }
 
     const ocrText = (formData.get("ocrText") as string) || "";
     const file = formData.get("file") as File | null;

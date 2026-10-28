@@ -57,14 +57,14 @@ export default async function DashboardLayout({
         {/* Subtle, beautiful, fixed school campus backdrop */}
         <div className={styles.portalBackground} aria-hidden="true" />
         <input type="checkbox" id="mobile-menu-toggle" className={styles.mobileMenuToggle} />
-        
+
         <div className={styles.sidebarWrapper}>
           <Sidebar role={session.user.role} settings={settings} />
         </div>
 
         {/* Global touch backdrop overlay for mobile menu drawer */}
         <label htmlFor="mobile-menu-toggle" className={styles.menuOverlay} aria-label="Close Navigation Drawer"></label>
-        
+
         <div className={styles.mainContent}>
           <div className={styles.topbarContainer}>
             <label htmlFor="mobile-menu-toggle" className={styles.hamburger} aria-label="Toggle Navigation Menu">

@@ -1,0 +1,298 @@
+/* ReportCardDocumentStudio.module.css */
+
+.studioContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  color: var(--foreground);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Header bar */
+.headerBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  padding: clamp(0.75rem, 2vw, 1.25rem);
+  background: var(--card-bg, #1e293b);
+  border-radius: 16px;
+  border: 1.5px solid var(--border-color, #334155);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Criteria Setup Bar */
+.criteriaCard {
+  background: var(--card-bg, #1e293b);
+  border: 1.5px solid var(--border-color, #334155);
+  border-radius: 16px;
+  padding: clamp(0.85rem, 2vw, 1.25rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.criteriaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 520px) {
+  .criteriaGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+}
+
+/* Review Editor Container */
+.reviewEditorCard {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  background: var(--card-bg, #1e293b);
+  border: 1.5px solid var(--border-color, #334155);
+  border-radius: 16px;
+  padding: clamp(0.85rem, 2.5vw, 1.5rem);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Split view: Original Document + Form */
+.splitView {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) 1fr;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.splitViewSingle {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 900px) {
+  .splitView {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Header Identification Grid */
+.identGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 480px) {
+  .identGrid {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+}
+
+/* Desktop Table View */
+.desktopTableView {
+  display: block;
+  border: 1px solid var(--border-color, #334155);
+  border-radius: 12px;
+  overflow-x: auto;
+  background: var(--input-bg, #0f172a);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Mobile Cards View */
+.mobileCardsView {
+  display: none;
+  flex-direction: column;
+  gap: 0.85rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  .desktopTableView {
+    display: none !important;
+  }
+  .mobileCardsView {
+    display: flex !important;
+  }
+}
+
+/* Single Mobile Subject Card */
+.subjectCard {
+  background: var(--input-bg, #0f172a);
+  border: 1.5px solid var(--border-color, #334155);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+
+.subjectCardInvalid {
+  border-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.05) !important;
+}
+
+.cardHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.subjectSelectMobile {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #334155);
+  background: var(--card-bg, #1e293b);
+  color: var(--foreground);
+  font-weight: 700;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+
+.cardMarksRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.markInputContainer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.mobileMarksInput {
+  width: 84px;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  border: 1.5px solid var(--border-color, #334155);
+  background: var(--card-bg, #1e293b);
+  color: var(--foreground);
+  font-weight: 800;
+  font-size: 1.15rem;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.mobileMarksInput:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.mobileMarksInputInvalid {
+  border-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.12) !important;
+}
+
+.maxPassInfo {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.badgeGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* Totals Summary Bar */
+.totalsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  text-align: center;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 540px) {
+  .totalsGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
+    padding: 0.75rem;
+  }
+}
+
+.sendBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.85rem;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.95rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+  transition: all 0.2s ease;
+  min-height: 48px;
+}
+
+@media (max-width: 600px) {
+  .sendBtn {
+    width: 100%;
+  }
+}

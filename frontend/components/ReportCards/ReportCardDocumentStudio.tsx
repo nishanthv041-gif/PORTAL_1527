@@ -10,6 +10,7 @@ import {
 import type { TeacherClass, ClassSubject, ClassStudent, HistoryItem } from "./TeacherReportCardsClient";
 import type { ScanReportCardResult, ScannedReportCardSubject, DetectedStudentEntry } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardTypes";
 import { createAndSendReportCardAction } from "@/backend/lib/services/reportCardActions";
+import styles from "./ReportCardDocumentStudio.module.css";
 
 export interface QueuedFile {
   id: string;
@@ -274,6 +275,7 @@ export default function ReportCardDocumentStudio({
         try {
           const { createWorker } = await import("tesseract.js");
           const worker = await createWorker("eng");
+          await worker.setParameters({ tessedit_pageseg_mode: "3" as any });
           const ocrResult = await worker.recognize(entry.file);
           await worker.terminate();
           browserOcrText = ocrResult?.data?.text || "";
@@ -1620,12 +1622,8 @@ export default function ReportCardDocumentStudio({
                   </div>
                 </div>
 
-                <div style={{
-                  border: "1px solid var(--border-color)",
-                  borderRadius: "12px",
-                  overflowX: "auto",
-                  background: "var(--input-bg, #0f172a)"
-                }}>
+                {/* Desktop Table View (> 640px) */}
+                <div className={styles.desktopTableView}>
                   <table style={{ width: "100%", minWidth: "820px", borderCollapse: "collapse", fontSize: "0.85rem" }}>
                     <thead>
                       <tr style={{ background: "rgba(255,255,255,0.03)", borderBottom: "1px solid var(--border-color)", textAlign: "left" }}>
@@ -1834,6 +1832,144 @@ export default function ReportCardDocumentStudio({
                       })}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile Cards View (<= 640px) */}
+                <div className={styles.mobileCardsView}>
+                  {subjects.map(sub => {
+                    const scoreNum = sub.score !== "" ? Number(sub.score) : NaN;
+                    const isFail = !isNaN(scoreNum) && scoreNum < sub.passMarks;
+
+                    return (
+                      <div
+                        key={sub.id}
+                        className={`${styles.subjectCard} ${sub.isInvalid ? styles.subjectCardInvalid : ""}`}
+                      >
+                        {/* Header: Subject Dropdown + Reset / Delete Actions */}
+                        <div className={styles.cardHeaderRow}>
+                          <select
+                            value={sub.subjectId}
+                            onChange={e => handleSubjectMappingChange(sub.id, e.target.value)}
+                            className={styles.subjectSelectMobile}
+                          >
+                            {classSubjects.map(cs => (
+                              <option key={cs.id} value={cs.id}>
+                                {cs.name}
+                              </option>
+                            ))}
+                            {!classSubjects.some(cs => cs.id === sub.subjectId) && (
+                              <option value={sub.subjectId || ""}>{sub.subjectName} (Unmapped)</option>
+                            )}
+                          </select>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexShrink: 0 }}>
+                            {sub.originalExtractedValue && (
+                              <button
+                                type="button"
+                                onClick={() => handleResetToExtracted(sub.id)}
+                                title="Reset to extracted"
+                                style={{
+                                  background: "transparent",
+                                  border: "none",
+                                  color: "var(--text-secondary)",
+                                  cursor: "pointer",
+                                  padding: "0.25rem"
+                                }}
+                              >
+                                <RotateCcw size={14} />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSubject(sub.id)}
+                              title="Delete subject"
+                              style={{
+                                background: "rgba(239, 68, 68, 0.15)",
+                                border: "none",
+                                color: "#ef4444",
+                                borderRadius: "6px",
+                                padding: "0.35rem 0.5rem",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center"
+                              }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Marks Scored [ 86 ] / 100 + Pass / Status Badges */}
+                        <div className={styles.cardMarksRow}>
+                          <div className={styles.markInputContainer}>
+                            <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-secondary)" }}>
+                              Marks:
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={sub.maxScore}
+                              value={sub.score}
+                              placeholder="0"
+                              onChange={e => handleSubjectScoreChange(sub.id, e.target.value)}
+                              className={`${styles.mobileMarksInput} ${sub.isInvalid ? styles.mobileMarksInputInvalid : ""}`}
+                            />
+                            <span className={styles.maxPassInfo}>
+                              / {sub.maxScore} (Pass: {sub.passMarks})
+                            </span>
+                          </div>
+
+                          <div className={styles.badgeGroup}>
+                            <span style={{
+                              padding: "3px 9px",
+                              borderRadius: "6px",
+                              fontWeight: 800,
+                              fontSize: "0.85rem",
+                              background: sub.grade === "F" ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)",
+                              color: sub.grade === "F" ? "#ef4444" : "#10b981"
+                            }}>
+                              {sub.grade || "-"}
+                            </span>
+                            <span style={{
+                              padding: "3px 9px",
+                              borderRadius: "6px",
+                              fontWeight: 800,
+                              fontSize: "0.78rem",
+                              textTransform: "uppercase",
+                              background: sub.status === "PASS" ? "rgba(16, 185, 129, 0.15)" : sub.status === "FAIL" ? "rgba(239, 68, 68, 0.15)" : "rgba(245, 158, 11, 0.15)",
+                              color: sub.status === "PASS" ? "#10b981" : sub.status === "FAIL" ? "#ef4444" : "#f59e0b"
+                            }}>
+                              {sub.status || "REVIEW"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {sub.isInvalid && (
+                          <span style={{ fontSize: "0.75rem", color: "#ef4444", fontWeight: 700 }}>
+                            {sub.validationError || "Invalid score"}
+                          </span>
+                        )}
+
+                        {/* Card Remarks */}
+                        <input
+                          type="text"
+                          value={sub.remarks || ""}
+                          placeholder={isFail ? "Needs revision" : "Teacher remarks"}
+                          onChange={e => handleSubjectRemarksChange(sub.id, e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "0.45rem 0.65rem",
+                            borderRadius: "6px",
+                            border: "1px solid var(--border-color)",
+                            fontSize: "0.82rem",
+                            background: "var(--card-bg, #1e293b)",
+                            color: "var(--foreground)",
+                            boxSizing: "border-box"
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
