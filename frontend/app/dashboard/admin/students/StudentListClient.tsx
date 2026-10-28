@@ -157,7 +157,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
               const parent = student.parents[0]?.parent;
               const totalDays = student.attendances.length;
               const presentDays = student.attendances.filter((a) => a.status === 'PRESENT').length;
-              const attPercent = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
+              const attPercent = totalDays > 0 ? Math.min(100, Math.max(0, Math.round((presentDays / Math.max(totalDays, presentDays, 1)) * 100))) : 0;
               const isHostel = (student.residenceType || "DAYSCHOLAR").toUpperCase().includes("HOSTEL");
 
               return (

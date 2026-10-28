@@ -47,10 +47,8 @@ export async function autoDeleteExpiredHomework() {
 }
 
 export async function createAssignment(formData: FormData) {
-  // Trigger cleanup in background without blocking current homework creation
-  autoDeleteExpiredHomework().catch(err => {
-    console.error("Background auto delete expired homework error:", err);
-  });
+  // First clean up any expired homework
+  await autoDeleteExpiredHomework();
 
   const title = (formData.get("title") as string)?.trim();
   const description = (formData.get("description") as string)?.trim();
@@ -74,19 +72,11 @@ export async function createAssignment(formData: FormData) {
       return { success: false, error: "Please select your assigned subject for this class." };
     }
 
-    // Verify subject and strict staff assignment concurrently in parallel
-    const [subject, currentTeacher] = await Promise.all([
-      prisma.subject.findUnique({
-        where: { id: subjectId },
-        select: { id: true, name: true, teacherId: true, classId: true }
-      }),
-      session.user.role !== "ADMIN"
-        ? prisma.teacher.findUnique({
-          where: { userId: session.user.id },
-          select: { id: true }
-        })
-        : null
-    ]);
+    // Verify subject and strict staff assignment
+    const subject = await prisma.subject.findUnique({
+      where: { id: subjectId },
+      select: { id: true, name: true, teacherId: true, classId: true }
+    });
 
     if (!subject) {
       return { success: false, error: "Subject not found." };
@@ -98,6 +88,11 @@ export async function createAssignment(formData: FormData) {
 
     // Strict Subject Teacher Check: Only the assigned subject staff (or ADMIN) can create homework
     if (session.user.role !== "ADMIN") {
+      const currentTeacher = await prisma.teacher.findUnique({
+        where: { userId: session.user.id },
+        select: { id: true }
+      });
+
       if (!currentTeacher || subject.teacherId !== currentTeacher.id) {
         return {
           success: false,
@@ -111,11 +106,7 @@ export async function createAssignment(formData: FormData) {
     // Set deadline to end of day (23:59:59) so students have the full day before auto-delete
     const deadlineDate = new Date(deadline.includes("T") ? deadline : `${deadline}T23:59:59`);
 
-    const introMessage = startConversation && session?.user?.id
-      ? `📢 **Home Work Notice for Parents & Students**\n\n**Subject:** ${subjectName || "General"}\n**Due Date:** ${deadlineDate.toLocaleDateString()}\n\n${description ? `**Instructions:**\n${description}\n\n` : ""}Parents and students, please feel free to post any questions or updates regarding this homework here!`
-      : null;
-
-    // Create the homework with nested initial conversation comment atomically in 1 round trip
+    // Create the homework / assignment
     const assignment = await prisma.assignment.create({
       data: {
         title,
@@ -123,15 +114,7 @@ export async function createAssignment(formData: FormData) {
         deadline: deadlineDate,
         classId,
         subjectId: subjectId && subjectId.trim() !== "" ? subjectId : null,
-        teacherId,
-        comments: introMessage ? {
-          create: {
-            userId: session.user.id,
-            authorName: session.user.name || "Teacher",
-            authorRole: "TEACHER",
-            content: introMessage
-          }
-        } : undefined
+        teacherId
       },
       include: {
         class: true,
@@ -142,21 +125,38 @@ export async function createAssignment(formData: FormData) {
       }
     });
 
+    // Start work conversation if requested
+    if (startConversation && session?.user?.id) {
+      const introMessage = `📢 **Home Work Notice for Parents & Students**\n\n**Subject:** ${subjectName || assignment.subject?.name || "General"}\n**Class:** ${assignment.class.name} - ${assignment.class.section}\n**Due Date:** ${deadlineDate.toLocaleDateString()}\n\n${description ? `**Instructions:**\n${description}\n\n` : ""}Parents and students, please feel free to post any questions or updates regarding this homework here!`;
+
+      await prisma.homeworkComment.create({
+        data: {
+          assignmentId: assignment.id,
+          userId: session.user.id,
+          authorName: session.user.name || assignment.teacher.user.name || "Teacher",
+          authorRole: "TEACHER",
+          content: introMessage
+        }
+      });
+    }
+
     // Notify parents of students in this class
     try {
-      const parentStudents = await prisma.parentStudent.findMany({
-        where: {
-          student: { classId, isActive: true }
-        },
+      const students = await prisma.student.findMany({
+        where: { classId, isActive: true },
         select: {
-          parent: {
-            select: { userId: true }
+          parents: {
+            select: {
+              parent: {
+                select: { userId: true }
+              }
+            }
           }
         }
       });
 
       const parentUserIds = Array.from(new Set(
-        parentStudents.map(ps => ps.parent.userId).filter(Boolean)
+        students.flatMap(s => s.parents.map(p => p.parent.userId)).filter(Boolean)
       ));
 
       if (parentUserIds.length > 0) {

@@ -22,8 +22,7 @@ import {
   LayoutDashboard,
   ShieldCheck,
   Check,
-  UserCheck,
-  Loader2
+  UserCheck
 } from "lucide-react";
 import { createAssignment, deleteAssignment } from "@/backend/api/actions/dashboard/teacher/assignments/actions";
 import WorkConversationModal from "@/frontend/components/homework/WorkConversationModal";
@@ -173,8 +172,6 @@ export default function HomeworkClientPage({
   // Form submission handler
   const handleCreateHomework = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (creating) return;
-
     if (!selectedClassId || !selectedSubjectId || !title.trim() || !deadline) {
       setCreateFeedback({
         type: "error",
@@ -1170,21 +1167,11 @@ export default function HomeworkClientPage({
                     justifyContent: "center",
                     gap: "0.5rem",
                     marginTop: "0.5rem",
-                    boxShadow: "0 4px 12px rgba(99, 102, 241, 0.25)",
-                    opacity: creating ? 0.75 : 1
+                    boxShadow: "0 4px 12px rgba(99, 102, 241, 0.25)"
                   }}
                 >
-                  {creating ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      <span>Sending Home Work...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send size={18} />
-                      <span>Send Home Work to Class & Parents</span>
-                    </>
-                  )}
+                  <Send size={18} />
+                  <span>{creating ? "Sending Home Work..." : "Send Home Work to Class & Parents"}</span>
                 </button>
               </form>
             )}

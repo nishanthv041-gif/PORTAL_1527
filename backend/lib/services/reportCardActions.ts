@@ -91,32 +91,31 @@ export async function sendReportCardToParentAction(studentId: string) {
     const className = student.class ? `${student.class.name} - ${student.class.section}` : "Class";
     const studentFullName = `${student.firstName} ${student.lastName}`.trim();
     const sentRecipients: string[] = [];
-    const notificationList: Array<{
-      userId: string;
-      title: string;
-      content: string;
-      type: "REPORT_CARD";
-      link: string;
-    }> = [];
-    const emailPromises: Promise<unknown>[] = [];
 
     // Deliver to EVERY linked parent evenly without missing anyone
     for (const parentStudent of student.parents) {
       const parentUser = parentStudent.parent.user;
       if (!parentUser) continue;
 
-      notificationList.push({
-        userId: parentUser.id,
-        title: "Report Card Available",
-        content: `The official report card for ${studentFullName} has been generated and is now available for viewing.`,
-        type: "REPORT_CARD",
-        link: `/dashboard/parent/report-cards/${student.id}`
-      });
+      // 1. In-app notification for the parent (unconditional, no skipping)
+      try {
+        await prisma.notification.create({
+          data: {
+            userId: parentUser.id,
+            title: "Report Card Available",
+            content: `The official report card for ${studentFullName} has been generated and is now available for viewing.`,
+            type: "REPORT_CARD",
+            link: `/dashboard/parent/report-cards/${student.id}`
+          }
+        });
+      } catch (notifErr) {
+        console.error("Failed to create in-app notification for parent:", parentUser.id, notifErr);
+      }
 
+      // 2. Email dispatch to parent's email address
       if (parentUser.email && parentUser.email.includes("@")) {
-        sentRecipients.push(parentUser.email);
-        emailPromises.push(
-          sendStudentReportCardEmail({
+        try {
+          const emailRes = await sendStudentReportCardEmail({
             parentEmail: parentUser.email,
             parentName: parentUser.name,
             studentName: studentFullName,
@@ -130,28 +129,14 @@ export async function sendReportCardToParentAction(studentId: string) {
             subjectMarks,
             reportCardUrl: `https://nipoportal.vercel.app/dashboard/parent/report-cards/${student.id}`,
             ccAdmin: false,
-          }).catch(emailErr => {
-            console.error("Failed to send report card email to parent:", parentUser.email, emailErr);
-          })
-        );
+          });
+          if (emailRes.success) {
+            sentRecipients.push(parentUser.email);
+          }
+        } catch (emailErr) {
+          console.error("Failed to send report card email to parent:", parentUser.email, emailErr);
+        }
       }
-    }
-
-    if (notificationList.length > 0) {
-      try {
-        await prisma.notification.createMany({
-          data: notificationList
-        });
-      } catch (notifErr) {
-        console.error("Failed to batch create in-app notifications for parents:", notifErr);
-      }
-    }
-
-    // Fire off email dispatch in background so client gets instant response
-    if (emailPromises.length > 0) {
-      Promise.allSettled(emailPromises).catch(err => {
-        console.error("Background email dispatch error:", err);
-      });
     }
 
     return {
@@ -159,7 +144,7 @@ export async function sendReportCardToParentAction(studentId: string) {
       sentCount: sentRecipients.length,
       recipients: sentRecipients,
       totalParents: student.parents.length,
-      message: sentRecipients.length > 0
+      message: sentRecipients.length > 0 
         ? `Report card emailed to all ${sentRecipients.length} parent recipient(s): ${sentRecipients.join(", ")}`
         : `Report card notification generated for ${student.parents.length} parent(s).`
     };
@@ -216,14 +201,6 @@ export async function sendClassReportCardsToAllParentsAction(classId: string) {
     let totalEmailsSent = 0;
     const allRecipients: string[] = [];
     const studentsSent: string[] = [];
-    const allNotifications: Array<{
-      userId: string;
-      title: string;
-      content: string;
-      type: "REPORT_CARD";
-      link: string;
-    }> = [];
-    const classEmailTasks: Promise<unknown>[] = [];
 
     for (const student of classData.students) {
       if (student.parents.length === 0) continue;
@@ -279,21 +256,25 @@ export async function sendClassReportCardsToAllParentsAction(classId: string) {
         const parentUser = parentStudent.parent.user;
         if (!parentUser) continue;
 
-        allNotifications.push({
-          userId: parentUser.id,
-          title: "Report Card Available",
-          content: `The official report card for ${studentFullName} has been generated and is now available for viewing.`,
-          type: "REPORT_CARD",
-          link: `/dashboard/parent/report-cards/${student.id}`
-        });
+        // In-app notification
+        try {
+          await prisma.notification.create({
+            data: {
+              userId: parentUser.id,
+              title: "Report Card Available",
+              content: `The official report card for ${studentFullName} has been generated and is now available for viewing.`,
+              type: "REPORT_CARD",
+              link: `/dashboard/parent/report-cards/${student.id}`
+            }
+          });
+        } catch (err) {
+          console.error("Failed to create in-app notification:", parentUser.id, err);
+        }
 
-        // Email sending non-blocking
+        // Email sending
         if (parentUser.email && parentUser.email.includes("@")) {
-          if (!allRecipients.includes(parentUser.email)) {
-            allRecipients.push(parentUser.email);
-          }
-          classEmailTasks.push(
-            sendStudentReportCardEmail({
+          try {
+            const emailRes = await sendStudentReportCardEmail({
               parentEmail: parentUser.email,
               parentName: parentUser.name,
               studentName: studentFullName,
@@ -307,35 +288,25 @@ export async function sendClassReportCardsToAllParentsAction(classId: string) {
               subjectMarks,
               reportCardUrl: `https://nipoportal.vercel.app/dashboard/parent/report-cards/${student.id}`,
               ccAdmin: false,
-            }).catch(err => {
-              console.error("Failed to email parent:", parentUser.email, err);
-            })
-          );
+            });
+            if (emailRes.success) {
+              totalEmailsSent++;
+              if (!allRecipients.includes(parentUser.email)) {
+                allRecipients.push(parentUser.email);
+              }
+            }
+          } catch (err) {
+            console.error("Failed to email parent:", parentUser.email, err);
+          }
         }
       }
 
       studentsSent.push(studentFullName);
     }
 
-    if (allNotifications.length > 0) {
-      try {
-        await prisma.notification.createMany({
-          data: allNotifications
-        });
-      } catch (err) {
-        console.error("Failed to batch insert class notifications:", err);
-      }
-    }
-
-    if (classEmailTasks.length > 0) {
-      Promise.allSettled(classEmailTasks).catch(err => {
-        console.error("Background class emails error:", err);
-      });
-    }
-
     return {
       success: true,
-      totalEmailsSent: allRecipients.length,
+      totalEmailsSent,
       studentsCount: studentsSent.length,
       recipients: allRecipients,
       message: `Report cards evenly dispatched to ${allRecipients.length} parent recipient(s) across ${studentsSent.length} student(s): ${allRecipients.join(", ")}`
@@ -451,8 +422,6 @@ export async function createAndSendReportCardAction(payload: CreateReportCardPay
     let totalScore = 0;
     let maxTotal = 0;
     const emailSubjectMarks: ReportCardEmailSubjectMark[] = [];
-    const markUpsertPromises = [];
-    const subjectUpdates = [];
 
     for (const m of marks) {
       const sub = subjectMap.get(m.subjectId);
@@ -466,41 +435,41 @@ export async function createAndSendReportCardAction(payload: CreateReportCardPay
 
       // Keep Subject defaults updated if teacher customized pass or max marks
       if (sub && (sub.maxMarks !== Math.round(maxScore) || sub.passMarks !== Math.round(passMarks))) {
-        subjectUpdates.push(
-          prisma.subject.update({
+        try {
+          await prisma.subject.update({
             where: { id: m.subjectId },
             data: {
               maxMarks: Math.round(maxScore),
               passMarks: Math.round(passMarks)
             }
-          }).catch(() => { })
-        );
+          });
+        } catch {
+          // ignore concurrent update errors
+        }
       }
 
-      markUpsertPromises.push(
-        prisma.mark.upsert({
-          where: {
-            studentId_examId_subjectId: {
-              studentId,
-              examId: exam.id,
-              subjectId: m.subjectId
-            }
-          },
-          update: {
-            score,
-            maxScore,
-            remarks: m.remarks || null
-          },
-          create: {
+      await prisma.mark.upsert({
+        where: {
+          studentId_examId_subjectId: {
             studentId,
             examId: exam.id,
-            subjectId: m.subjectId,
-            score,
-            maxScore,
-            remarks: m.remarks || null
+            subjectId: m.subjectId
           }
-        })
-      );
+        },
+        update: {
+          score,
+          maxScore,
+          remarks: m.remarks || null
+        },
+        create: {
+          studentId,
+          examId: exam.id,
+          subjectId: m.subjectId,
+          score,
+          maxScore,
+          remarks: m.remarks || null
+        }
+      });
 
       emailSubjectMarks.push({
         subjectName: sub?.name || "Subject",
@@ -509,14 +478,6 @@ export async function createAndSendReportCardAction(payload: CreateReportCardPay
         isFail,
         remarks: m.remarks
       });
-    }
-
-    // Batch execute subject updates and mark upserts concurrently in 1 transaction roundtrip
-    if (subjectUpdates.length > 0) {
-      await Promise.all(subjectUpdates);
-    }
-    if (markUpsertPromises.length > 0) {
-      await prisma.$transaction(markUpsertPromises);
     }
 
     const percentage = maxTotal > 0 ? parseFloat(((totalScore / maxTotal) * 100).toFixed(1)) : 0;
@@ -559,30 +520,33 @@ export async function createAndSendReportCardAction(payload: CreateReportCardPay
     const studentFullName = `${student.firstName} ${student.lastName}`.trim();
     const className = student.class ? `${student.class.name} - ${student.class.section}` : "Class";
     const sentRecipients: string[] = [];
-    const notificationsToCreate = [];
-    const parentUserIds: string[] = [];
-    const emailPromises: Promise<unknown>[] = [];
 
     const { invalidateUserNotifCache } = await import("@/backend/api/actions/notifications/unifiedNotificationActions");
 
     for (const parentStudent of student.parents) {
       const parentUser = parentStudent.parent?.user;
       if (!parentUser) continue;
-      parentUserIds.push(parentUser.id);
 
-      notificationsToCreate.push({
-        userId: parentUser.id,
-        title: `Report Card: ${studentFullName}`,
-        content: `The official academic report card for ${examName.trim()} has been published. Total: ${totalScore}/${maxTotal} (${percentage}% - Grade ${grade}).`,
-        type: "REPORT_CARD" as const,
-        link: `/dashboard/parent/report-cards`
-      });
+      // In-app Notification
+      try {
+        await prisma.notification.create({
+          data: {
+            userId: parentUser.id,
+            title: `Report Card: ${studentFullName}`,
+            content: `The official academic report card for ${examName.trim()} has been published. Total: ${totalScore}/${maxTotal} (${percentage}% - Grade ${grade}).`,
+            type: "REPORT_CARD",
+            link: `/dashboard/parent/report-cards`
+          }
+        });
+        await invalidateUserNotifCache(parentUser.id);
+      } catch (notifErr) {
+        console.error("Failed to create in-app notification:", parentUser.id, notifErr);
+      }
 
-      // Email dispatch non-blocking
+      // Email dispatch
       if (parentUser.email && parentUser.email.includes("@")) {
-        sentRecipients.push(parentUser.email);
-        emailPromises.push(
-          sendStudentReportCardEmail({
+        try {
+          const emailRes = await sendStudentReportCardEmail({
             parentEmail: parentUser.email,
             parentName: parentUser.name,
             studentName: studentFullName,
@@ -597,29 +561,14 @@ export async function createAndSendReportCardAction(payload: CreateReportCardPay
             remarks: remarks?.trim() || null,
             reportCardUrl: `https://nipoportal.vercel.app/dashboard/parent/report-cards`,
             ccAdmin: false
-          }).catch(emailErr => {
-            console.error("Failed to email report card to parent:", parentUser.email, emailErr);
-          })
-        );
+          });
+          if (emailRes.success) {
+            sentRecipients.push(parentUser.email);
+          }
+        } catch (emailErr) {
+          console.error("Failed to email report card to parent:", parentUser.email, emailErr);
+        }
       }
-    }
-
-    if (notificationsToCreate.length > 0) {
-      try {
-        await prisma.notification.createMany({
-          data: notificationsToCreate
-        });
-        await Promise.all(parentUserIds.map(uid => invalidateUserNotifCache(uid).catch(() => { })));
-      } catch (notifErr) {
-        console.error("Failed to create in-app notifications:", notifErr);
-      }
-    }
-
-    // Fire off background emails asynchronously
-    if (emailPromises.length > 0) {
-      Promise.allSettled(emailPromises).catch(err => {
-        console.error("Background email dispatch error:", err);
-      });
     }
 
     revalidatePath("/dashboard/teacher/report-cards");

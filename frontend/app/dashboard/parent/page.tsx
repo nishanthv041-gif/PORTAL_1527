@@ -9,7 +9,7 @@ import ParentChildBanner from "./ParentChildBanner";
 import Link from "next/link";
 import ExamClassPerformancePieChart from "./ExamClassPerformancePieChart";
 import { getSchoolCalendarStats } from "@/backend/api/actions/dashboard/attendance/calendarStats";
-import { isForenoonRecord } from "@/backend/lib/services/attendanceCalculation";
+import { isForenoonRecord, calculateAttendancePercentage } from "@/backend/lib/services/attendanceCalculation";
 
 export default async function ParentDashboard({
   searchParams
@@ -76,8 +76,9 @@ export default async function ParentDashboard({
   const recordedTotal = attendanceRecords.length;
 
   // Each calendar worked day consists of 2 sessions: Forenoon and Afternoon
-  const totalSessions = Math.max(calendarStats.totalActiveDays * 2, recordedTotal, 1);
-  const attendancePercentage = (((presentedDays + lateDays) / totalSessions) * 100).toFixed(1);
+  const attendedSessions = presentedDays + lateDays;
+  const totalSessions = Math.max(calendarStats.totalActiveDays * 2, recordedTotal, attendedSessions, 1);
+  const attendancePercentage = calculateAttendancePercentage(attendedSessions, totalSessions);
 
   // Recent attendance entries (last 5 recorded days)
   const recentAttendance = attendanceRecords.slice(0, 5);

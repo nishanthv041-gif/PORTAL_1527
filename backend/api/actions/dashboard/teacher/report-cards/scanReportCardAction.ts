@@ -804,6 +804,41 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
       };
     }
 
+    // 4. Photos and Scanned Images (.jpg, .jpeg, .png, .webp, .bmp)
+    if (["jpg", "jpeg", "png", "webp", "bmp"].includes(ext) || fileType.startsWith("image/")) {
+      let extractedText = "";
+      try {
+        const { createWorker } = await import("tesseract.js");
+        const worker = await createWorker("eng");
+        const ret = await worker.recognize(Buffer.from(buffer));
+        await worker.terminate();
+        extractedText = ret.data?.text || "";
+      } catch (ocrErr) {
+        console.warn("Server image OCR warning:", ocrErr);
+      }
+
+      const parsed = parseTextToReportCard(extractedText, classStudents, classSubjects);
+      return {
+        success: true,
+        fileDetails: {
+          name: fileName,
+          type: "Scanned Document / Photo (OCR)",
+          size: fileSize
+        },
+        studentId: parsed.student.studentId,
+        studentName: parsed.student.studentName,
+        rollNumber: parsed.student.rollNumber,
+        studentConfidence: parsed.student.confidence,
+        examName: parsed.examName || "Midterm Examination",
+        examDate: parsed.examDate || new Date().toISOString().split("T")[0],
+        defaultMaxMarks: parsed.defaultMaxMarks,
+        defaultPassMarks: parsed.defaultPassMarks,
+        generalRemarks: parsed.generalRemarks,
+        subjects: parsed.subjects,
+        rawTextPreview: extractedText ? extractedText.substring(0, 500) : "Image uploaded. You can verify and edit subject marks below."
+      };
+    }
+
     return {
       success: false,
       error: `Unsupported file format (.${ext}). Supported formats: .jpg, .jpeg, .png, .pdf, .xlsx, .xls, .csv, .docx, .doc`,

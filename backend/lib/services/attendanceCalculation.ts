@@ -339,17 +339,22 @@ export function isAfternoonRecord(record: { date: Date | string; remarks?: strin
 
 /**
  * Standard module of percentage calculation.
- * Ensures consistent precision and capping between 0.0% and 100.0%.
+ * Ensures consistent precision and strict capping between 0.0% and 100.0%.
+ * Guarantees that attendance will NEVER exceed 100%.
  */
 export function calculateAttendancePercentage(
   presentUnits: number,
   totalWorkingUnits: number
 ): string {
-  if (totalWorkingUnits <= 0) {
+  const safePresent = Math.max(0, Number(presentUnits) || 0);
+  const safeTotal = Math.max(safePresent, Number(totalWorkingUnits) || 0);
+
+  if (safeTotal <= 0) {
     return "100.0";
   }
-  const pct = (presentUnits / totalWorkingUnits) * 100;
-  const clamped = Math.min(100, Math.max(0, pct));
+
+  const pct = (safePresent / safeTotal) * 100;
+  const clamped = Math.min(100.0, Math.max(0.0, pct));
   return clamped.toFixed(1);
 }
 
@@ -388,10 +393,8 @@ export async function getStudentStandardAttendanceStats(
   const officialWorkingSessions = officialWorkingDays * 2;
 
   const totalRecordedSessions = presentCount + absentCount + lateCount + leaveCount;
-  const totalSessionsOrDays = Math.max(officialWorkingSessions, totalRecordedSessions, 1);
-
-  // Present and Late are counted in attendance percentage; Late tracks tardiness
   const attendedSessions = presentCount + lateCount;
+  const totalSessionsOrDays = Math.max(officialWorkingSessions, totalRecordedSessions, attendedSessions, 1);
   const percentage = calculateAttendancePercentage(attendedSessions, totalSessionsOrDays);
 
   return {
@@ -437,9 +440,9 @@ export async function getTeacherStandardAttendanceStats(
   const officialWorkingDays = await countSchoolWorkingDays(academicStart, referenceDate);
   const officialWorkingSessions = officialWorkingDays * 2;
   const totalRecordedSessions = presentCount + absentCount + lateCount + leaveCount;
-  const totalDays = Math.max(officialWorkingSessions, totalRecordedSessions, 1);
-
   const attendedSessions = presentCount + lateCount;
+  const totalDays = Math.max(officialWorkingSessions, totalRecordedSessions, attendedSessions, 1);
+
   const percentage = calculateAttendancePercentage(attendedSessions, totalDays);
 
   return {

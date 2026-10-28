@@ -207,55 +207,13 @@ export default function ComplaintsClient({
     const res = await createAdminComplaintAction(formData);
 
     if (res.success) {
-      const studentObj = studentsList.find(s => s.id === selectedStudentId);
-      const newComplaint: AdminComplaintItem = {
-        id: res.complaintId || `comp-${Date.now()}`,
-        title: createTitle.trim(),
-        description: createDescription.trim(),
-        category: createCategory,
-        severity: createSeverity,
-        status: "OPEN",
-        date: new Date().toISOString(),
-        remarks: null,
-        authorRole: "ADMIN",
-        authorId: currentUser.id,
-        teacher: null,
-        parent: null,
-        student: studentObj ? {
-          id: studentObj.id,
-          firstName: studentObj.firstName,
-          lastName: studentObj.lastName,
-          rollNumber: studentObj.rollNumber,
-          class: studentObj.class,
-          parents: []
-        } : {
-          id: selectedStudentId,
-          firstName: "Student",
-          lastName: "",
-          rollNumber: "",
-          class: null,
-          parents: []
-        },
-        messages: [{
-          id: `msg-${Date.now()}`,
-          content: createDescription.trim(),
-          createdAt: new Date().toISOString(),
-          authorName: currentUser.name,
-          authorRole: currentUser.role,
-          userId: currentUser.id
-        }],
-        _count: {
-          messages: 1
-        }
-      };
-
-      setComplaints(prev => [newComplaint, ...prev]);
       setShowCreateModal(false);
       setSelectedStudentId("");
       setCreateTitle("");
       setCreateDescription("");
       setCreateStudentSearch("");
       router.refresh();
+      window.location.reload();
     } else {
       setCreateError(res.error || "Failed to create complaint.");
     }

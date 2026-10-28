@@ -57,7 +57,6 @@ export default function TeacherComplaintsClient({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (isSubmitting) return;
     setIsSubmitting(true);
     setMessage(null);
 
@@ -103,7 +102,7 @@ export default function TeacherComplaintsClient({
     <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "2rem" }} className="chartsContainer">
       <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", background: "var(--card-bg)", padding: "1.5rem", borderRadius: "12px", border: "1px solid var(--border)" }}>
         <h3 style={{ fontSize: "1.25rem", fontWeight: 600, margin: 0 }}>My Raised Complaints</h3>
-        
+
         {complaints.map((complaint) => (
           <div key={complaint.id} style={{ display: "flex", flexDirection: "column", padding: "1.25rem", border: "1px solid var(--border)", borderRadius: "8px", backgroundColor: "var(--background)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem" }}>

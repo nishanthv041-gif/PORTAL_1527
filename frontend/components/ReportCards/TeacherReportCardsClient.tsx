@@ -301,7 +301,6 @@ export default function TeacherReportCardsClient({
   // SUBMIT & SEND REPORT CARD
   const handleSendReportCard = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSending) return;
     setErrorMessage(null);
     setSuccessBanner(null);
 

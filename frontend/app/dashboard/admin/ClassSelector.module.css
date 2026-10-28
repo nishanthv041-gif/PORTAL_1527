@@ -120,25 +120,6 @@
   border-color: var(--primary) !important;
 }
 
-.loadingBtn {
-  opacity: 0.75;
-  cursor: wait;
-  box-shadow: 0 0 0 2px var(--primary);
-  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes pulse {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.5;
-  }
-}
-
 @media (max-width: 480px) {
   .selectorContainer {
     padding: 1rem 0.85rem;

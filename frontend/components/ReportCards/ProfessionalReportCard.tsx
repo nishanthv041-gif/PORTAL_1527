@@ -172,19 +172,17 @@ export default function ProfessionalReportCard({
       <div className={styles.subjectsSection}>
         <h3 className={styles.sectionHeading}>
           <BookOpen size={18} color="var(--primary)" />
-          <span>Subject-Wise Performance Breakdown</span>
+          <span>Subject-Wise Breakdown</span>
         </h3>
 
-        {/* Desktop & Tablet Table (with responsive scroll & minimum width) */}
+        {/* Clean, High-Contrast 3-Column Table matching standard Report Card Summary */}
         <div className={styles.tableContainer}>
           <table className={styles.subjectsTable}>
             <thead className={styles.tableHead}>
               <tr>
-                <th style={{ width: "38%" }}>Subject Name</th>
-                <th style={{ textAlign: "center", width: "16%" }}>Marks Scored</th>
-                <th style={{ textAlign: "center", width: "15%" }}>Max Marks</th>
-                <th style={{ textAlign: "center", width: "15%" }}>Pass Marks</th>
-                <th style={{ textAlign: "center", width: "16%" }}>Status</th>
+                <th style={{ textAlign: "left", width: "45%" }}>Subject</th>
+                <th style={{ textAlign: "center", width: "30%" }}>Marks</th>
+                <th style={{ textAlign: "center", width: "25%" }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -193,19 +191,17 @@ export default function ProfessionalReportCard({
                 const isSubjectPass = m.score >= pass;
                 return (
                   <tr key={idx} className={styles.tableRow}>
-                    <td>
+                    <td style={{ textAlign: "left" }}>
                       <div className={styles.subjectTitleCell}>
-                        <span>{m.subjectName}</span>
+                        <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.02em" }}>
+                          {m.subjectName}
+                        </span>
                       </div>
                     </td>
-                    <td style={{ textAlign: "center", fontWeight: 800, fontSize: "1rem" }}>
-                      {m.score}
-                    </td>
-                    <td style={{ textAlign: "center", color: "var(--text-secondary)" }}>
-                      {m.maxScore}
-                    </td>
-                    <td style={{ textAlign: "center", color: "var(--text-secondary)" }}>
-                      {pass}
+                    <td style={{ textAlign: "center", fontWeight: 800, fontSize: "0.98rem" }}>
+                      <span>{m.score}</span>
+                      <span style={{ color: "var(--text-secondary)", fontWeight: 500, marginInline: "0.25rem" }}>/</span>
+                      <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>{m.maxScore}</span>
                     </td>
                     <td style={{ textAlign: "center" }}>
                       <span className={isSubjectPass ? styles.statusPass : styles.statusFail}>
@@ -219,36 +215,20 @@ export default function ProfessionalReportCard({
           </table>
         </div>
 
-        {/* Mobile-Optimized Subject Cards View (Ultra-responsive for Parent phones) */}
-        <div className={styles.mobileSubjectsList}>
-          {reportCard.marks.map((m, idx) => {
-            const pass = m.passMarks ?? 35;
-            const isSubjectPass = m.score >= pass;
-            return (
-              <div key={idx} className={styles.mobileSubjectCard}>
-                <div className={styles.mobileSubjectHeader}>
-                  <span className={styles.mobileSubjectName}>{m.subjectName}</span>
-                  <span className={isSubjectPass ? styles.statusPass : styles.statusFail}>
-                    {isSubjectPass ? "PASS" : "FAIL"}
-                  </span>
-                </div>
-                <div className={styles.mobileSubjectGrid}>
-                  <div className={styles.mobileGridItem}>
-                    <span className={styles.mobileGridLabel}>Scored</span>
-                    <span className={styles.mobileGridValueHighlight}>{m.score}</span>
-                  </div>
-                  <div className={styles.mobileGridItem}>
-                    <span className={styles.mobileGridLabel}>Max</span>
-                    <span className={styles.mobileGridValue}>{m.maxScore}</span>
-                  </div>
-                  <div className={styles.mobileGridItem}>
-                    <span className={styles.mobileGridLabel}>Pass</span>
-                    <span className={styles.mobileGridValue}>{pass}</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+        {/* Bottom Dual Summary Bar: TOTAL SCORE & GRADE */}
+        <div className={styles.summaryBar}>
+          <div className={styles.summaryItem}>
+            <span className={styles.summaryLabel}>TOTAL SCORE</span>
+            <div className={styles.summaryValue}>
+              {reportCard.totalMarks} <span className={styles.summaryPercentage}>({reportCard.percentage.toFixed(1)}%)</span>
+            </div>
+          </div>
+          <div className={`${styles.summaryItem} ${styles.summaryItemRight}`}>
+            <span className={styles.summaryLabel}>GRADE</span>
+            <div className={`${styles.gradeValue} ${reportCard.grade === 'F' ? styles.gradeRed : reportCard.grade === 'D' ? styles.gradeAmber : styles.gradeGreen}`}>
+              {reportCard.grade}
+            </div>
+          </div>
         </div>
       </div>
 

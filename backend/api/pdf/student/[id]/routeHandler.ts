@@ -92,7 +92,7 @@ export async function GET(
 
         const totalDays = student.attendances.length;
         const presentDays = student.attendances.filter(a => a.status === 'PRESENT').length;
-        const attPercent = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
+        const attPercent = totalDays > 0 ? Math.min(100, Math.max(0, Math.round((presentDays / Math.max(totalDays, presentDays, 1)) * 100))) : 0;
 
         const academicData = [
           { label: 'Class', value: student.class ? `${student.class.name} - ${student.class.section}` : 'Unassigned' },

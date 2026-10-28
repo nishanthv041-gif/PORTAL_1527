@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./ClassSelector.module.css";
-import { Search, X, Loader2 } from "lucide-react";
+import { Search, X } from "lucide-react";
 
 interface ClassItem {
   id: string;
@@ -19,52 +19,37 @@ export default function ClassSelector({ classes }: ClassSelectorProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentClassId = searchParams.get("classId");
-
+  
   const [searchTerm, setSearchTerm] = useState("");
-  const [isPending, startTransition] = useTransition();
-  const [pendingClassId, setPendingClassId] = useState<string | null>(null);
-
-  // Memoize grouped classes to eliminate unnecessary recalculations
-  const groupedClasses = useMemo(() => {
-    return classes.reduce((acc, curr) => {
-      if (!acc[curr.name]) acc[curr.name] = [];
-      acc[curr.name].push(curr);
-      return acc;
-    }, {} as Record<string, ClassItem[]>);
-  }, [classes]);
+  
+  // Group classes by name
+  const groupedClasses = classes.reduce((acc, curr) => {
+    if (!acc[curr.name]) acc[curr.name] = [];
+    acc[curr.name].push(curr);
+    return acc;
+  }, {} as Record<string, ClassItem[]>);
 
   const handleSelect = (id: string) => {
-    if (id === currentClassId) return;
-    setPendingClassId(id);
     const params = new URLSearchParams(searchParams.toString());
     params.set("classId", id);
-    startTransition(() => {
-      router.push(`?${params.toString()}`, { scroll: false });
-    });
+    router.push(`?${params.toString()}`);
   };
 
   const handleClear = () => {
-    setPendingClassId(null);
     const params = new URLSearchParams(searchParams.toString());
     params.delete("classId");
-    startTransition(() => {
-      router.push(`?${params.toString()}`, { scroll: false });
-    });
+    router.push(`?${params.toString()}`);
   };
 
-  const filteredNames = useMemo(() => {
-    if (!searchTerm.trim()) return Object.keys(groupedClasses);
-    const q = searchTerm.toLowerCase();
-    return Object.keys(groupedClasses).filter(name =>
-      name.toLowerCase().includes(q)
-    );
-  }, [groupedClasses, searchTerm]);
+  const filteredNames = Object.keys(groupedClasses).filter(name => 
+    name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className={styles.selectorContainer}>
       <div className={styles.searchBar}>
         <Search size={20} className={styles.searchIcon} />
-        <input
+        <input 
           type="text"
           placeholder="Search classes..."
           value={searchTerm}
@@ -72,38 +57,26 @@ export default function ClassSelector({ classes }: ClassSelectorProps) {
           className={styles.searchInput}
         />
         {(searchTerm || currentClassId) && (
-          <button
-            onClick={() => { setSearchTerm(""); handleClear(); }}
-            className={styles.clearBtn}
-            title="Clear class filter"
-          >
+          <button onClick={() => { setSearchTerm(""); handleClear(); }} className={styles.clearBtn}>
             <X size={20} />
           </button>
         )}
       </div>
-
+      
       <div className={styles.dropdownGrid}>
         {filteredNames.map(name => (
           <div key={name} className={styles.classGroup}>
             <h4 className={styles.groupTitle}>{name}</h4>
             <div className={styles.sectionButtons}>
-              {groupedClasses[name].sort((a, b) => a.section.localeCompare(b.section)).map(cls => {
-                const isActive = currentClassId === cls.id;
-                const isLoading = isPending && pendingClassId === cls.id;
-
-                return (
-                  <button
-                    key={cls.id}
-                    onClick={() => handleSelect(cls.id)}
-                    disabled={isPending && pendingClassId === cls.id}
-                    className={`${styles.sectionBtn} ${isActive ? styles.activeBtn : ""} ${isLoading ? styles.loadingBtn : ""}`}
-                    style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
-                  >
-                    {isLoading && <Loader2 size={12} className="animate-spin" />}
-                    <span>Section {cls.section}</span>
-                  </button>
-                );
-              })}
+              {groupedClasses[name].sort((a, b) => a.section.localeCompare(b.section)).map(cls => (
+                <button
+                  key={cls.id}
+                  onClick={() => handleSelect(cls.id)}
+                  className={`${styles.sectionBtn} ${currentClassId === cls.id ? styles.activeBtn : ""}`}
+                >
+                  Section {cls.section}
+                </button>
+              ))}
             </div>
           </div>
         ))}

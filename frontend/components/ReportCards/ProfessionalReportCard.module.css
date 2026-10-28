@@ -247,22 +247,21 @@
 
 .subjectsTable {
   width: 100%;
-  min-width: 540px;
   border-collapse: collapse;
-  font-size: clamp(0.82rem, 1.8vw, 0.92rem);
+  font-size: clamp(0.84rem, 2.2vw, 0.95rem);
   text-align: left;
 }
 
 .tableHead {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(0, 0, 0, 0.04);
   border-bottom: 1px solid var(--border-color);
 }
 
 .tableHead th {
-  padding: clamp(0.7rem, 1.6vw, 0.9rem) clamp(0.75rem, 1.8vw, 1.15rem);
-  font-size: clamp(0.72rem, 1.4vw, 0.78rem);
+  padding: clamp(0.65rem, 1.8vw, 0.85rem) clamp(0.65rem, 2vw, 1.15rem);
+  font-size: clamp(0.72rem, 1.5vw, 0.78rem);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   font-weight: 700;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -282,7 +281,7 @@
 }
 
 .tableRow td {
-  padding: clamp(0.75rem, 1.6vw, 0.95rem) clamp(0.75rem, 1.8vw, 1.15rem);
+  padding: clamp(0.7rem, 1.8vw, 0.95rem) clamp(0.65rem, 2vw, 1.15rem);
   color: var(--foreground);
 }
 
@@ -295,69 +294,71 @@
   word-break: break-word;
 }
 
-/* Mobile Cards View for Small Screens */
-.mobileSubjectsList {
-  display: none;
-}
-
-.mobileSubjectCard {
-  background: rgba(0, 0, 0, 0.02);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 0.85rem 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.mobileSubjectHeader {
+/* Bottom Dual Summary Bar matching Report Card Summary */
+.summaryBar {
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+  color: #ffffff;
+  padding: clamp(0.9rem, 2.5vw, 1.25rem) clamp(1rem, 3vw, 1.5rem);
+  border-radius: 14px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
+  margin-top: 1rem;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.mobileSubjectName {
-  font-weight: 800;
-  font-size: 0.95rem;
-  color: var(--foreground);
-  line-height: 1.3;
-}
-
-.mobileSubjectGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 0.5rem;
-  text-align: center;
-}
-
-.mobileGridItem {
+.summaryItem {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.2rem;
 }
 
-.mobileGridLabel {
-  font-size: 0.7rem;
+.summaryItemRight {
+  text-align: right;
+  align-items: flex-end;
+}
+
+.summaryLabel {
+  font-size: 0.72rem;
   text-transform: uppercase;
+  letter-spacing: 0.08em;
   font-weight: 700;
-  color: var(--text-secondary);
+  opacity: 0.75;
+  color: #cbd5e1;
 }
 
-.mobileGridValue {
-  font-size: 0.92rem;
-  font-weight: 700;
-  color: var(--foreground);
-}
-
-.mobileGridValueHighlight {
-  font-size: 1.05rem;
+.summaryValue {
+  font-size: clamp(1.15rem, 3.5vw, 1.45rem);
   font-weight: 900;
-  color: var(--primary);
+  color: #ffffff;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.summaryPercentage {
+  font-size: clamp(0.9rem, 2.8vw, 1.15rem);
+  font-weight: 700;
+  color: #93c5fd;
+}
+
+.gradeValue {
+  font-size: clamp(1.4rem, 4.5vw, 1.85rem);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.gradeGreen {
+  color: #34d399;
+}
+
+.gradeAmber {
+  color: #fbbf24;
+}
+
+.gradeRed {
+  color: #f87171;
 }
 
 .statusPass {
@@ -559,17 +560,5 @@
   .pdfBtn {
     flex: 1;
     justify-content: center;
-  }
-}
-
-@media (max-width: 580px) {
-  .tableContainer {
-    display: none;
-  }
-
-  .mobileSubjectsList {
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
   }
 }

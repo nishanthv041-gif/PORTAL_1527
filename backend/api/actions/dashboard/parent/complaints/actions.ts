@@ -95,15 +95,18 @@ export async function submitParentComplaintAction(formData: FormData) {
           parentId: parent.id,
           teacherId: teacherId || student.class?.classTeacherId || student.class?.teacherId || null,
           authorRole: "PARENT",
-          authorId: session.user.id,
-          messages: {
-            create: {
-              userId: session.user.id,
-              authorName: session.user.name || parent.user.name || "Parent",
-              authorRole: "PARENT",
-              content: description
-            }
-          }
+          authorId: session.user.id
+        }
+      });
+
+      // Create the initial conversation message
+      await prisma.complaintMessage.create({
+        data: {
+          complaintId: complaint.id,
+          userId: session.user.id,
+          authorName: session.user.name || parent.user.name || "Parent",
+          authorRole: "PARENT",
+          content: description
         }
       });
 
@@ -125,8 +128,10 @@ export async function submitParentComplaintAction(formData: FormData) {
         data: notifData
       });
 
-      // Invalidate notification cache for admins concurrently
-      await Promise.all(admins.map(admin => invalidateUserNotifCache(admin.id).catch(() => { })));
+      // Invalidate notification cache for admins
+      for (const admin of admins) {
+        invalidateUserNotifCache(admin.id);
+      }
     }
 
     revalidatePath("/dashboard/parent/complaints");

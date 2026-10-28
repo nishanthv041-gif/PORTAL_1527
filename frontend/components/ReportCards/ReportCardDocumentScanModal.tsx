@@ -4,8 +4,7 @@ import { useState, useRef, useMemo } from "react";
 import {
   Upload, FileText, Image as ImageIcon, FileSpreadsheet, FileCode,
   CheckCircle2, AlertCircle, Sparkles, RefreshCw, Trash2, Plus,
-  Award, Calendar, User, ChevronRight, X, ArrowRight, ShieldCheck, Check,
-  Loader2
+  Award, Calendar, User, ChevronRight, X, ArrowRight, ShieldCheck, Check
 } from "lucide-react";
 import type { TeacherClass, ClassSubject, ClassStudent, HistoryItem } from "./TeacherReportCardsClient";
 import { scanReportCardAction } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardAction";
@@ -34,8 +33,11 @@ export default function ReportCardDocumentScanModal({
   // Class Selection
   const [activeClassId, setActiveClassId] = useState<string>(initialClassId || classes[0]?.id || "");
   const currentClass = useMemo(() => {
-    return classes.find(c => c.id === activeClassId) || classes[0];
+    return classes.find(c => c.id === activeClassId) || classes[0] || null;
   }, [classes, activeClassId]);
+
+  const classStudents = useMemo(() => currentClass?.students || [], [currentClass]);
+  const classSubjects = useMemo(() => currentClass?.subjects || [], [currentClass]);
 
   // File Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -64,9 +66,10 @@ export default function ReportCardDocumentScanModal({
     // Re-map subjects if we have scanned data
     const newClass = classes.find(c => c.id === newClassId);
     if (newClass && subjects.length > 0) {
+      const newSubs = newClass.subjects || [];
       setSubjects(prev =>
         prev.map(sub => {
-          const matched = newClass.subjects.find(
+          const matched = newSubs.find(
             s => s.name.toLowerCase() === sub.subjectName.toLowerCase()
           );
           return {
@@ -107,9 +110,9 @@ export default function ReportCardDocumentScanModal({
     setIsScanning(true);
 
     try {
-      // 1. If Image file (.png, .jpg, .jpeg, .webp): Run browser OCR via Tesseract.js
+      // 1. If Image file (.png, .jpg, .jpeg, .webp): Try client-side OCR, but fail-fast to server action if anything fails
       if (["png", "jpg", "jpeg", "webp", "bmp"].includes(ext) || file.type.startsWith("image/")) {
-        setScanProgress("Initializing Browser OCR Engine (Tesseract.js)...");
+        setScanProgress("Scanning image with OCR engine...");
         try {
           const { createWorker } = await import("tesseract.js");
           const worker = await createWorker("eng");
@@ -118,25 +121,26 @@ export default function ReportCardDocumentScanModal({
           await worker.terminate();
 
           const ocrText = ret.data?.text || "";
-          setScanProgress("Matching student name, subjects, and score criteria...");
+          if (ocrText && ocrText.trim().length > 0) {
+            setScanProgress("Matching student name, subjects, and score criteria...");
+            const formData = new FormData();
+            formData.set("classId", activeClassId);
+            formData.set("file", file);
+            formData.set("ocrText", ocrText);
 
-          const formData = new FormData();
-          formData.set("classId", activeClassId);
-          formData.set("file", file);
-          formData.set("ocrText", ocrText);
-
-          const result = await scanReportCardAction(formData);
-          applyScanResult(result);
-          setIsScanning(false);
-          return;
+            const result = await scanReportCardAction(formData);
+            applyScanResult(result);
+            setIsScanning(false);
+            return;
+          }
         } catch (ocrErr) {
           console.warn("Client OCR fallback to server:", ocrErr);
           setScanProgress("Processing image via server scanner...");
         }
       }
 
-      // 2. Spreadsheets, PDFs, Word docs & Fallbacks via Server Action
-      setScanProgress(`Parsing ${ext.toUpperCase()} document content and tables...`);
+      // 2. Spreadsheets, PDFs, Word docs & Images via Server Action
+      setScanProgress(`Parsing ${ext ? ext.toUpperCase() : "document"} content and tables...`);
       const formData = new FormData();
       formData.set("classId", activeClassId);
       formData.set("file", file);
@@ -229,7 +233,7 @@ export default function ReportCardDocumentScanModal({
   };
 
   const handleSubjectMappingChange = (id: string, newSubjectId: string) => {
-    const matched = currentClass?.subjects.find(s => s.id === newSubjectId);
+    const matched = classSubjects.find(s => s.id === newSubjectId);
     setSubjects(prev =>
       prev.map(sub => {
         if (sub.id !== id) return sub;
@@ -253,9 +257,9 @@ export default function ReportCardDocumentScanModal({
   };
 
   const handleAddSubject = () => {
-    const unselected = currentClass?.subjects.find(
+    const unselected = classSubjects.find(
       cs => !subjects.some(s => s.subjectId === cs.id)
-    ) || currentClass?.subjects[0];
+    ) || classSubjects[0];
 
     const newSub: ScannedReportCardSubject = {
       id: `manual-add-${Date.now()}`,
@@ -317,8 +321,6 @@ export default function ReportCardDocumentScanModal({
 
   // Connect to Database & Create Report Card
   const handleConnectAndSaveToDatabase = async () => {
-    if (isSaving) return;
-
     if (!activeClassId) {
       setScanError("Please select a class.");
       return;
@@ -354,10 +356,10 @@ export default function ReportCardDocumentScanModal({
       const formattedMarks = subjects.map(s => {
         let finalSubjectId = s.subjectId;
         if (!finalSubjectId) {
-          const match = currentClass?.subjects.find(
+          const match = classSubjects.find(
             cs => cs.name.toLowerCase() === s.subjectName.toLowerCase()
           );
-          finalSubjectId = match?.id || currentClass?.subjects[0]?.id || "";
+          finalSubjectId = match?.id || classSubjects[0]?.id || "";
         }
         return {
           subjectId: finalSubjectId,
@@ -378,7 +380,7 @@ export default function ReportCardDocumentScanModal({
       });
 
       if (res.success && res.reportCardId) {
-        const studentObj = currentClass?.students.find(s => s.id === selectedStudentId);
+        const studentObj = classStudents.find(s => s.id === selectedStudentId);
         const newHistoryItem: HistoryItem = {
           id: res.reportCardId,
           studentId: selectedStudentId,
@@ -497,20 +499,30 @@ export default function ReportCardDocumentScanModal({
 
         {/* Modal Body */}
         <div style={{ padding: "1.5rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          {/* Target Class Selector */}
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "1rem",
-            background: "rgba(99, 102, 241, 0.04)",
-            padding: "0.85rem 1.25rem",
-            borderRadius: "12px",
-            border: "1px solid var(--border-color)"
-          }}>
-            <span style={{ fontWeight: 700, fontSize: "0.88rem", whiteSpace: "nowrap" }}>Target Class:</span>
-            <select
-              value={activeClassId}
-              onChange={e => handleClassChange(e.target.value)}
+          {(!classes || classes.length === 0) ? (
+            <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--text-secondary)" }}>
+              <AlertCircle size={40} style={{ margin: "0 auto 0.75rem", opacity: 0.6, color: "#f59e0b" }} />
+              <h3 style={{ margin: "0 0 0.5rem 0", color: "var(--foreground)" }}>No Active Classes Assigned</h3>
+              <p style={{ margin: 0, fontSize: "0.88rem" }}>
+                You do not have any active classes assigned to your teacher account yet. Please contact the administrator to assign classes before scanning report cards.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Target Class Selector */}
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "1rem",
+                background: "rgba(99, 102, 241, 0.04)",
+                padding: "0.85rem 1.25rem",
+                borderRadius: "12px",
+                border: "1px solid var(--border-color)"
+              }}>
+                <span style={{ fontWeight: 700, fontSize: "0.88rem", whiteSpace: "nowrap" }}>Target Class:</span>
+                <select
+                  value={activeClassId}
+                  onChange={e => handleClassChange(e.target.value)}
               style={{
                 flex: 1,
                 padding: "0.5rem 0.85rem",
@@ -521,9 +533,9 @@ export default function ReportCardDocumentScanModal({
                 fontSize: "0.9rem"
               }}
             >
-              {classes.map(c => (
+              {(classes || []).map(c => (
                 <option key={c.id} value={c.id}>
-                  {c.name} - Section {c.section} ({c.students.length} Students, {c.subjects.length} Subjects)
+                  {c.name} - Section {c.section} ({(c.students || []).length} Students, {(c.subjects || []).length} Subjects)
                 </option>
               ))}
             </select>
@@ -723,7 +735,7 @@ export default function ReportCardDocumentScanModal({
                     }}
                   >
                     <option value="">-- Select Enrolled Student --</option>
-                    {currentClass?.students.map(st => (
+                    {classStudents.map(st => (
                       <option key={st.id} value={st.id}>
                         {st.name} ({st.rollNumber})
                       </option>
@@ -843,12 +855,12 @@ export default function ReportCardDocumentScanModal({
                                   background: "var(--input-bg, #ffffff)"
                                 }}
                               >
-                                {currentClass?.subjects.map(cs => (
+                                {classSubjects.map(cs => (
                                   <option key={cs.id} value={cs.id}>
                                     {cs.name}
                                   </option>
                                 ))}
-                                {!currentClass?.subjects.some(cs => cs.id === sub.subjectId) && (
+                                {!classSubjects.some(cs => cs.id === sub.subjectId) && (
                                   <option value={sub.subjectId || ""}>{sub.subjectName}</option>
                                 )}
                               </select>
@@ -1033,6 +1045,8 @@ export default function ReportCardDocumentScanModal({
               </div>
             </div>
           )}
+          </>
+          )}
         </div>
 
         {/* Modal Footer / Actions */}
@@ -1085,17 +1099,8 @@ export default function ReportCardDocumentScanModal({
                 transition: "all 0.2s ease"
               }}
             >
-              {isSaving ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  <span>Connecting to Database...</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 size={18} />
-                  <span>Connect &amp; Save to Database</span>
-                </>
-              )}
+              <CheckCircle2 size={18} />
+              <span>{isSaving ? "Connecting to Database..." : "Connect & Save to Database"}</span>
             </button>
           )}
         </div>

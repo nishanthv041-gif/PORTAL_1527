@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   PlusCircle,
@@ -94,7 +93,6 @@ export default function ParentComplaintsClient({
   initialComplaints,
   currentUser
 }: ParentComplaintsClientProps) {
-  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"CREATE" | "HISTORY">(
     initialComplaints.length > 0 ? "HISTORY" : "CREATE"
   );
@@ -133,8 +131,6 @@ export default function ParentComplaintsClient({
 
   const handleCreateComplaint = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return;
-
     if (selectedStudentIds.length === 0) {
       setFeedback({ type: "error", text: "Please select at least one student for this complaint." });
       return;
@@ -161,62 +157,13 @@ export default function ParentComplaintsClient({
         type: "success",
         text: `✨ Complaint submitted successfully! Administration has been notified.`
       });
-
-      const selectedChildren = childrenList.filter(c => selectedStudentIds.includes(c.id));
-      const primaryChild = selectedChildren[0];
-
-      // Optimistically add complaints to history list immediately
-      const ids: string[] = res.complaintIds && res.complaintIds.length > 0
-        ? res.complaintIds
-        : [`comp-${Date.now()}`];
-
-      const newItems: ParentComplaintItem[] = ids.map(id => ({
-        id,
-        title: title.trim(),
-        description: description.trim(),
-        category,
-        severity,
-        status: "OPEN",
-        date: new Date().toISOString(),
-        remarks: null,
-        student: primaryChild ? {
-          id: primaryChild.id,
-          firstName: primaryChild.firstName,
-          lastName: primaryChild.lastName,
-          rollNumber: primaryChild.rollNumber,
-          class: primaryChild.class ? {
-            name: primaryChild.class.name,
-            section: primaryChild.class.section
-          } : null
-        } : {
-          id: selectedStudentIds[0] || "",
-          firstName: "Student",
-          lastName: "",
-          rollNumber: "",
-          class: null
-        },
-        messages: [{
-          id: `msg-${Date.now()}`,
-          content: description.trim(),
-          createdAt: new Date().toISOString(),
-          authorName: currentUser.name,
-          authorRole: "PARENT",
-          userId: currentUser.id
-        }],
-        _count: {
-          messages: 1
-        }
-      }));
-
-      setComplaints(prev => [...newItems, ...prev]);
       setTitle("");
       setDescription("");
 
-      router.refresh();
-      // Seamlessly switch to history tab without full page destruction
+      // Refresh / redirect to history tab after 1 second
       setTimeout(() => {
-        setActiveTab("HISTORY");
-      }, 500);
+        window.location.reload();
+      }, 1000);
     } else {
       setFeedback({ type: "error", text: res.error || "Failed to submit complaint" });
     }
