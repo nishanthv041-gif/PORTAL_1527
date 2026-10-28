@@ -6,10 +6,10 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import * as XLSX from "xlsx";
 import mammoth from "mammoth";
 import { extractText } from "unpdf";
-import type { 
-  ScanReportCardResult, 
-  ScannedReportCardSubject, 
-  DetectedStudentEntry 
+import type {
+  ScanReportCardResult,
+  ScannedReportCardSubject,
+  DetectedStudentEntry
 } from "./scanReportCardTypes";
 
 // Common subject aliases for smart matching
@@ -445,7 +445,7 @@ function parseExcelToReportCard(
 
     const rowStrings = row.map(c => String(c || "").trim().toLowerCase());
     const hasStudentOrRoll = rowStrings.some(c => c.includes("roll") || c.includes("student") || c.includes("name"));
-    
+
     // Check if row has at least 2 subjects
     let subjectsFoundInRow = 0;
     rowStrings.forEach((c, idx) => {
@@ -459,7 +459,7 @@ function parseExcelToReportCard(
       headerRowIndex = r;
       rollCol = rowStrings.findIndex(c => c.includes("roll") || c.includes("reg") || c.includes("id"));
       nameCol = rowStrings.findIndex(c => c.includes("name") || c.includes("student"));
-      
+
       rowStrings.forEach((c, colIdx) => {
         if (colIdx !== rollCol && colIdx !== nameCol) {
           const match = matchSubject(c, classSubjects);
@@ -498,8 +498,8 @@ function parseExcelToReportCard(
 
       subjectColMap.forEach((subInfo, subIdx) => {
         const rawScore = row[subInfo.colIndex];
-        const numScore = rawScore !== undefined && rawScore !== null && !isNaN(Number(rawScore)) 
-          ? Number(rawScore) 
+        const numScore = rawScore !== undefined && rawScore !== null && !isNaN(Number(rawScore))
+          ? Number(rawScore)
           : "";
 
         let isInvalid = false;
@@ -718,7 +718,7 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
     if (ext === "pdf" || fileType === "application/pdf") {
       const pdfTextResult = await extractText(new Uint8Array(buffer));
       const text = Array.isArray(pdfTextResult?.text) ? pdfTextResult.text.join("\n") : String(pdfTextResult?.text || "");
-      
+
       if (!text.trim()) {
         return {
           success: false,

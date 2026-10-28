@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { Award, Clock, FileText, CheckCircle2, ChevronRight, Sparkles } from "lucide-react";
-import ProfessionalReportCard, { 
-  ProfessionalReportCardData 
+import ProfessionalReportCard, {
+  ProfessionalReportCardData
 } from "@/frontend/components/ReportCards/ProfessionalReportCard";
 
 interface ParentReportCardsClientProps {
@@ -11,7 +11,7 @@ interface ParentReportCardsClientProps {
   studentName: string;
 }
 
-export default function ParentReportCardsClient({ 
+export default function ParentReportCardsClient({
   reportCards,
   studentName
 }: ParentReportCardsClientProps) {
@@ -95,9 +95,9 @@ export default function ParentReportCardsClient({
       )}
 
       {/* Main Professional Report Card (Zero delete options, verify at bottom) */}
-      <ProfessionalReportCard 
-        reportCard={activeCard} 
-        isParentView={true} 
+      <ProfessionalReportCard
+        reportCard={activeCard}
+        isParentView={true}
       />
 
       {/* Academic Record History Summary (Saved in Parent History) */}
@@ -116,7 +116,7 @@ export default function ParentReportCardsClient({
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))", gap: "0.85rem" }}>
             {reportCards.map((rc, idx) => (
-              <div 
+              <div
                 key={rc.id}
                 onClick={() => setSelectedIndex(idx)}
                 style={{

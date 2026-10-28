@@ -57,6 +57,7 @@ export default function TeacherComplaintsClient({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setIsSubmitting(true);
     setMessage(null);
 

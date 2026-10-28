@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Loader2 } from "lucide-react";
 import { raiseComplaintAction } from "@/backend/api/actions/dashboard/teacher/complaints/actions";
 
 export default function CreateComplaintForm({ teacherId, students }: { teacherId: string, students: { id: string, name: string, rollNo: string, className: string }[] }) {
@@ -9,6 +10,7 @@ export default function CreateComplaintForm({ teacherId, students }: { teacherId
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setIsSubmitting(true);
     setMessage(null);
 
@@ -78,9 +80,29 @@ export default function CreateComplaintForm({ teacherId, students }: { teacherId
       <button 
         type="submit" 
         disabled={isSubmitting}
-        style={{ padding: '0.75rem', backgroundColor: "var(--primary)", color: "var(--primary-fg)", border: 'none', borderRadius: '8px', fontWeight: 500, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}
+        style={{
+          padding: '0.75rem',
+          backgroundColor: "var(--primary)",
+          color: "var(--primary-fg)",
+          border: 'none',
+          borderRadius: '8px',
+          fontWeight: 600,
+          cursor: isSubmitting ? 'not-allowed' : 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.5rem',
+          opacity: isSubmitting ? 0.75 : 1
+        }}
       >
-        {isSubmitting ? "Submitting..." : "Raise Complaint"}
+        {isSubmitting ? (
+          <>
+            <Loader2 size={16} className="animate-spin" />
+            <span>Submitting...</span>
+          </>
+        ) : (
+          <span>Raise Complaint</span>
+        )}
       </button>
     </form>
   );

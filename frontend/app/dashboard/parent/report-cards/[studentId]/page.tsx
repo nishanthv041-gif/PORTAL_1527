@@ -7,10 +7,10 @@ import { ProfessionalReportCardData } from "@/frontend/components/ReportCards/Pr
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
-export default async function ParentIndividualReportCardPage({ 
-  params 
-}: { 
-  params: Promise<{ studentId: string }> 
+export default async function ParentIndividualReportCardPage({
+  params
+}: {
+  params: Promise<{ studentId: string }>
 }) {
   const session = await getServerSession(getAuthOptions());
   if (!session || session.user.role !== "PARENT") return null;
@@ -38,9 +38,9 @@ export default async function ParentIndividualReportCardPage({
       include: { class: true }
     }),
     prisma.reportCard.findMany({
-      where: { 
+      where: {
         studentId: studentId,
-        published: true 
+        published: true
       },
       include: {
         exam: {
@@ -97,7 +97,7 @@ export default async function ParentIndividualReportCardPage({
   return (
     <div style={{ padding: 'clamp(0.5rem, 2vw, 1.5rem)', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
       <div style={{ marginBottom: '1rem' }}>
-        <Link 
+        <Link
           href="/dashboard/parent/report-cards"
           style={{
             display: 'inline-flex',
@@ -113,8 +113,8 @@ export default async function ParentIndividualReportCardPage({
         </Link>
       </div>
 
-      <ParentReportCardsClient 
-        reportCards={formattedCards} 
+      <ParentReportCardsClient
+        reportCards={formattedCards}
         studentName={fullName}
       />
     </div>

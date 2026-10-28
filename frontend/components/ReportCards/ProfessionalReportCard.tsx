@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { 
-  Award, CheckCircle2, ShieldCheck, Download, Eye, 
+import {
+  Award, CheckCircle2, ShieldCheck, Download, Eye,
   Calendar, BookOpen, User, Sparkles, MessageSquareQuote, Check
 } from "lucide-react";
 import styles from "./ProfessionalReportCard.module.css";
@@ -82,9 +82,9 @@ export default function ProfessionalReportCard({
     <article className={styles.cardWrapper} aria-label={`Academic Report Card for ${reportCard.studentName}`}>
       {/* Watermark Logo if available */}
       {reportCard.schoolLogo && (
-        <div 
-          className={styles.cardWatermark} 
-          style={{ backgroundImage: `url(${reportCard.schoolLogo})` }} 
+        <div
+          className={styles.cardWatermark}
+          style={{ backgroundImage: `url(${reportCard.schoolLogo})` }}
         />
       )}
 

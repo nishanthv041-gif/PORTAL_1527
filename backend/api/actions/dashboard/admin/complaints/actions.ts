@@ -61,7 +61,7 @@ export async function createAdminComplaintAction(formData: FormData) {
       return { success: false, error: "Student not found." };
     }
 
-    // Create the complaint record
+    // Create the complaint record and initial message atomically
     const complaint = await prisma.complaint.create({
       data: {
         title,
@@ -73,18 +73,15 @@ export async function createAdminComplaintAction(formData: FormData) {
         studentId,
         teacherId: teacherId || student.class?.classTeacherId || student.class?.teacherId || null,
         authorRole: "ADMIN",
-        authorId: session.user.id
-      }
-    });
-
-    // Create initial message in ComplaintMessage table
-    await prisma.complaintMessage.create({
-      data: {
-        complaintId: complaint.id,
-        userId: session.user.id,
-        authorName: session.user.name || "School Administration",
-        authorRole: "ADMIN",
-        content: description
+        authorId: session.user.id,
+        messages: {
+          create: {
+            userId: session.user.id,
+            authorName: session.user.name || "School Administration",
+            authorRole: "ADMIN",
+            content: description
+          }
+        }
       }
     });
 
@@ -104,9 +101,7 @@ export async function createAdminComplaintAction(formData: FormData) {
         }))
       });
 
-      for (const uid of parentUserIds) {
-        invalidateUserNotifCache(uid);
-      }
+      await Promise.all(parentUserIds.map(uid => invalidateUserNotifCache(uid).catch(() => { })));
     }
 
     revalidatePath("/dashboard/admin/complaints");

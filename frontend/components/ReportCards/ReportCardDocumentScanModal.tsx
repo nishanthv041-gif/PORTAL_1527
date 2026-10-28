@@ -4,7 +4,8 @@ import { useState, useRef, useMemo } from "react";
 import {
   Upload, FileText, Image as ImageIcon, FileSpreadsheet, FileCode,
   CheckCircle2, AlertCircle, Sparkles, RefreshCw, Trash2, Plus,
-  Award, Calendar, User, ChevronRight, X, ArrowRight, ShieldCheck, Check
+  Award, Calendar, User, ChevronRight, X, ArrowRight, ShieldCheck, Check,
+  Loader2
 } from "lucide-react";
 import type { TeacherClass, ClassSubject, ClassStudent, HistoryItem } from "./TeacherReportCardsClient";
 import { scanReportCardAction } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardAction";
@@ -316,6 +317,8 @@ export default function ReportCardDocumentScanModal({
 
   // Connect to Database & Create Report Card
   const handleConnectAndSaveToDatabase = async () => {
+    if (isSaving) return;
+
     if (!activeClassId) {
       setScanError("Please select a class.");
       return;
@@ -1082,8 +1085,17 @@ export default function ReportCardDocumentScanModal({
                 transition: "all 0.2s ease"
               }}
             >
-              <CheckCircle2 size={18} />
-              <span>{isSaving ? "Connecting to Database..." : "Connect & Save to Database"}</span>
+              {isSaving ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  <span>Connecting to Database...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={18} />
+                  <span>Connect &amp; Save to Database</span>
+                </>
+              )}
             </button>
           )}
         </div>

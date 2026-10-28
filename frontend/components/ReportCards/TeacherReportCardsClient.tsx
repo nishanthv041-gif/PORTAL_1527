@@ -2,16 +2,16 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  Send, Trash2, Eye, CheckCircle2, Clock, Sparkles, 
+import {
+  Send, Trash2, Eye, CheckCircle2, Clock, Sparkles,
   BookOpen, Users, Award, AlertCircle, Calendar,
   Search, Check, X, ShieldAlert, FileText, ChevronRight,
   Sliders, Settings2, Target, Upload
 } from "lucide-react";
 import styles from "./TeacherReportCardsClient.module.css";
-import { 
-  createAndSendReportCardAction, 
-  deleteReportCardAction 
+import {
+  createAndSendReportCardAction,
+  deleteReportCardAction
 } from "@/backend/lib/services/reportCardActions";
 import ReportCardDocumentScanModal from "./ReportCardDocumentScanModal";
 
@@ -198,8 +198,8 @@ export default function TeacherReportCardsClient({
       currentSubjects.forEach(sub => {
         const existing = prev[sub.id];
         const existingScore = existing?.score;
-        const clampedScore = existingScore !== undefined && existingScore !== "" 
-          ? Math.min(validMax, Number(existingScore)) 
+        const clampedScore = existingScore !== undefined && existingScore !== ""
+          ? Math.min(validMax, Number(existingScore))
           : (existingScore ?? "");
 
         updated[sub.id] = {
@@ -301,6 +301,7 @@ export default function TeacherReportCardsClient({
   // SUBMIT & SEND REPORT CARD
   const handleSendReportCard = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSending) return;
     setErrorMessage(null);
     setSuccessBanner(null);
 
@@ -426,7 +427,7 @@ export default function TeacherReportCardsClient({
   const filteredHistory = useMemo(() => {
     if (!historySearch.trim()) return history;
     const q = historySearch.toLowerCase();
-    return history.filter(item => 
+    return history.filter(item =>
       item.studentName.toLowerCase().includes(q) ||
       item.rollNumber.toLowerCase().includes(q) ||
       item.examName.toLowerCase().includes(q) ||
@@ -705,8 +706,8 @@ export default function TeacherReportCardsClient({
                 <div className={styles.parentBadge}>
                   <Users size={14} />
                   <span>
-                    {currentStudent.parents.length > 0 
-                      ? `${currentStudent.parents.length} Linked Parent(s)` 
+                    {currentStudent.parents.length > 0
+                      ? `${currentStudent.parents.length} Linked Parent(s)`
                       : "No parents linked yet"}
                   </span>
                 </div>
@@ -1027,12 +1028,11 @@ export default function TeacherReportCardsClient({
               <div className={styles.calcItem}>
                 <span className={styles.calcLabel}>Overall Grade</span>
                 <div className={styles.gradeBadgeWrapper}>
-                  <span className={`${styles.gradeBadgeLarge} ${
-                    totals.grade === 'A+' ? styles.gradeBadgeGreen :
+                  <span className={`${styles.gradeBadgeLarge} ${totals.grade === 'A+' ? styles.gradeBadgeGreen :
                     totals.grade === 'A' || totals.grade === 'B' ? styles.gradeBadgeIndigo :
-                    totals.grade === 'C' || totals.grade === 'D' ? styles.gradeBadgeAmber :
-                    totals.grade === 'F' ? styles.gradeBadgeRed : ''
-                  }`}>
+                      totals.grade === 'C' || totals.grade === 'D' ? styles.gradeBadgeAmber :
+                        totals.grade === 'F' ? styles.gradeBadgeRed : ''
+                    }`}>
                     {totals.hasAnyMarks ? totals.grade : "-"}
                   </span>
                 </div>
@@ -1268,7 +1268,7 @@ export default function TeacherReportCardsClient({
 
       {/* QUICK VIEW REPORT CARD MODAL */}
       {previewItem && (
-        <div 
+        <div
           style={{
             position: "fixed",
             inset: 0,

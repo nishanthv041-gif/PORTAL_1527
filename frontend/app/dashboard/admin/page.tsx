@@ -8,7 +8,11 @@ import PassFailChart from "./PassFailChart";
 import EditClassModal from "./EditClassModal";
 import Link from "next/link";
 
-import { Student, Attendance, Parent, User, Teacher } from "@prisma/client";
+import { Student, Attendance, Parent, User, Teacher, Class, Subject } from "@prisma/client";
+
+type SelectedClassType = (Class & {
+  teacher: (Teacher & { user: User; subjects: Subject[] }) | null;
+}) | null;
 
 type StudentWithRelations = Student & {
   parents: { parent: Parent & { user: User } }[];
@@ -43,7 +47,7 @@ export default async function AdminDashboardPage({
 
   const totalSubjects = uniqueSubjects.length;
 
-  let selectedClassData = null;
+  let selectedClassData: SelectedClassType = null;
   let studentsData: StudentWithRelations[] = [];
   let teachersData: (Teacher & { user: User })[] = [];
   let passFailStats = null;
@@ -54,53 +58,56 @@ export default async function AdminDashboardPage({
   if (resolvedSearchParams.classId) {
     const classId = resolvedSearchParams.classId;
 
-    selectedClassData = await prisma.class.findUnique({
-      where: { id: classId },
-      include: {
-        teacher: {
-          include: { user: true, subjects: true }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Fetch class details and related stats simultaneously in parallel
+    const [selectedClassDataRes, studentsDataRes, teachersDataRes, todaysAttendancesRes, marksRes] = await Promise.all([
+      prisma.class.findUnique({
+        where: { id: classId },
+        include: {
+          teacher: {
+            include: { user: true, subjects: true }
+          }
         }
-      }
-    });
+      }),
+      prisma.student.findMany({
+        where: { classId, isActive: true },
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+        include: {
+          parents: { include: { parent: { include: { user: true } } } },
+          attendances: { select: { status: true } }
+        }
+      }),
+      prisma.teacher.findMany({
+        where: { isActive: true },
+        include: { user: true },
+        orderBy: { user: { name: 'asc' } }
+      }),
+      prisma.attendance.findMany({
+        where: {
+          OR: [
+            { classId },
+            { student: { classId } }
+          ],
+          date: { gte: today, lt: tomorrow }
+        },
+        select: { status: true }
+      }),
+      prisma.mark.findMany({
+        where: { student: { classId } },
+        select: { studentId: true, examId: true, score: true, maxScore: true }
+      })
+    ]);
+
+    selectedClassData = selectedClassDataRes;
 
     if (selectedClassData) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      const [sectionCountRes, studentsDataRes, teachersDataRes, todaysAttendancesRes, marksRes] = await Promise.all([
-        prisma.class.count({ where: { name: selectedClassData.name, isActive: true } }),
-        prisma.student.findMany({
-          where: { classId, isActive: true },
-          orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-          include: {
-            parents: { include: { parent: { include: { user: true } } } },
-            attendances: { select: { status: true } }
-          }
-        }),
-        prisma.teacher.findMany({
-          where: { isActive: true },
-          include: { user: true },
-          orderBy: { user: { name: 'asc' } }
-        }),
-        prisma.attendance.findMany({
-          where: {
-            OR: [
-              { classId },
-              { student: { classId } }
-            ],
-            date: { gte: today, lt: tomorrow }
-          },
-          select: { status: true }
-        }),
-        prisma.mark.findMany({
-          where: { student: { classId } },
-          select: { studentId: true, examId: true, score: true, maxScore: true }
-        })
-      ]);
-
-      sectionCount = sectionCountRes;
+      const targetClassName = selectedClassData.name;
+      // Calculate section count from already fetched in-memory classes list (0ms DB cost)
+      sectionCount = classes.filter(c => c.name === targetClassName).length;
       studentsData = studentsDataRes;
       teachersData = teachersDataRes;
       const todaysAttendances = todaysAttendancesRes;
@@ -122,20 +129,20 @@ export default async function AdminDashboardPage({
 
       let passCount = 0;
       let failCount = 0;
-      
+
       const studentExams = new Map();
       marks.forEach(m => {
-         const key = `${m.studentId}-${m.examId}`;
-         if (!studentExams.has(key)) studentExams.set(key, { total: 0, max: 0 });
-         const curr = studentExams.get(key);
-         curr.total += m.score;
-         curr.max += m.maxScore;
+        const key = `${m.studentId}-${m.examId}`;
+        if (!studentExams.has(key)) studentExams.set(key, { total: 0, max: 0 });
+        const curr = studentExams.get(key);
+        curr.total += m.score;
+        curr.max += m.maxScore;
       });
 
       studentExams.forEach((val) => {
-         const percent = (val.total / val.max) * 100;
-         if (percent >= 40) passCount++;
-         else failCount++;
+        const percent = (val.total / val.max) * 100;
+        if (percent >= 40) passCount++;
+        else failCount++;
       });
 
       passFailStats = [
@@ -255,7 +262,7 @@ export default async function AdminDashboardPage({
             <div>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Today&apos;s Attendance</p>
               <p style={{ fontSize: '1.5rem', fontWeight: 600 }}>
-                {attendanceStats.present} <span style={{fontSize:'1rem', color: "var(--success)"}}>Present</span> / {attendanceStats.absent} <span style={{fontSize:'1rem', color: "var(--danger)"}}>Absent</span>
+                {attendanceStats.present} <span style={{ fontSize: '1rem', color: "var(--success)" }}>Present</span> / {attendanceStats.absent} <span style={{ fontSize: '1rem', color: "var(--danger)" }}>Absent</span>
               </p>
             </div>
           </div>
