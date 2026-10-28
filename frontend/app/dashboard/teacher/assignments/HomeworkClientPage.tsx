@@ -14,9 +14,11 @@ import {
   CheckCircle2, 
   AlertCircle,
   FileText,
-  Users,
   Send,
-  HeartHandshake
+  HeartHandshake,
+  ExternalLink,
+  History,
+  Layers
 } from "lucide-react";
 import { createAssignment, deleteAssignment } from "@/backend/api/actions/dashboard/teacher/assignments/actions";
 import WorkConversationModal from "@/frontend/components/homework/WorkConversationModal";
@@ -52,7 +54,6 @@ export type AssignmentItem = {
     code: string;
   } | null;
   _count: {
-    submissions: number;
     comments: number;
   };
 };
@@ -72,6 +73,7 @@ export default function HomeworkClientPage({
   classes,
   initialAssignments
 }: HomeworkClientPageProps) {
+  const [activeTab, setActiveTab] = useState<"CREATE" | "HISTORY">("CREATE");
   const [assignments, setAssignments] = useState<AssignmentItem[]>(initialAssignments);
   
   // Creator form state
@@ -93,7 +95,6 @@ export default function HomeworkClientPage({
   const [activeConversationItem, setActiveConversationItem] = useState<AssignmentItem | null>(null);
 
   // Filter state for history
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "PAST_DUE">("ALL");
   const [classFilter, setClassFilter] = useState<string>("ALL");
   const [subjectFilter, setSubjectFilter] = useState<string>("ALL");
 
@@ -122,9 +123,7 @@ export default function HomeworkClientPage({
     const cls = classes.find(c => c.id === classId);
     if (cls) {
       const teacherSubjects = cls.subjects.filter(s => s.teacherId === teacher.id);
-      if (teacherSubjects.length === 1) {
-        setSelectedSubjectId(teacherSubjects[0].id);
-      } else if (teacherSubjects.length > 0) {
+      if (teacherSubjects.length > 0) {
         setSelectedSubjectId(teacherSubjects[0].id);
       } else if (cls.subjects.length > 0) {
         setSelectedSubjectId(cls.subjects[0].id);
@@ -175,7 +174,7 @@ export default function HomeworkClientPage({
         id: res.assignmentId,
         title: title.trim(),
         description: description.trim() || null,
-        deadline: new Date(deadline).toISOString(),
+        deadline: new Date(deadline.includes("T") ? deadline : `${deadline}T23:59:59`).toISOString(),
         createdAt: new Date().toISOString(),
         fileUrl: null,
         class: {
@@ -189,18 +188,22 @@ export default function HomeworkClientPage({
           code: currentSubject.code
         } : null,
         _count: {
-          submissions: 0,
           comments: startConversation ? 1 : 0
         }
       };
 
       setAssignments([newItem, ...assignments]);
-      setCreateFeedback({ type: "success", text: "✨ Home Work successfully assigned and sent to students & parents!" });
+      setCreateFeedback({ type: "success", text: "✨ Home Work successfully assigned and sent to parents!" });
       
       // Reset form fields
       setTitle("");
       setDescription("");
       setDeadline("");
+
+      // Switch to history tab after brief pause so teacher can see the record
+      setTimeout(() => {
+        setActiveTab("HISTORY");
+      }, 1000);
     } else {
       setCreateFeedback({ type: "error", text: res.error || "Failed to create home work." });
     }
@@ -208,7 +211,7 @@ export default function HomeworkClientPage({
     setCreating(false);
   };
 
-  // Individual Delete Handler
+  // Individual Manual Delete Handler
   const confirmDelete = async () => {
     if (!itemToDelete) return;
     setDeletingId(itemToDelete.id);
@@ -226,17 +229,11 @@ export default function HomeworkClientPage({
   // Filtered list of assignments for history
   const filteredAssignments = useMemo(() => {
     return assignments.filter(item => {
-      const now = new Date();
-      const isPastDue = new Date(item.deadline) < now;
-
-      if (statusFilter === "ACTIVE" && isPastDue) return false;
-      if (statusFilter === "PAST_DUE" && !isPastDue) return false;
       if (classFilter !== "ALL" && item.class.id !== classFilter) return false;
       if (subjectFilter !== "ALL" && item.subject?.id !== subjectFilter) return false;
-
       return true;
     });
-  }, [assignments, statusFilter, classFilter, subjectFilter]);
+  }, [assignments, classFilter, subjectFilter]);
 
   // Unique subjects for filter
   const allSubjects = useMemo(() => {
@@ -276,7 +273,7 @@ export default function HomeworkClientPage({
             {greeting.icon} {greeting.text}, {teacher.name}!
           </h1>
           <p style={{ margin: 0, fontSize: "0.95rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
-            {greeting.quote} Select your assigned class & subject below to send homework and connect with parents.
+            {greeting.quote} Assign homework to your classes to keep parents informed. Each homework automatically deletes after its deadline.
           </p>
         </div>
 
@@ -292,40 +289,108 @@ export default function HomeworkClientPage({
           </div>
           <div style={{ padding: "0.75rem 1.25rem", borderRadius: "12px", backgroundColor: "var(--card)", border: "1px solid var(--border)", textAlign: "center", minWidth: "105px" }}>
             <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#ec4899" }}>{assignments.length}</div>
-            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>Home Works</div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>Active Works</div>
           </div>
         </div>
       </div>
 
-      {/* Main Grid: Home Creater (Left) + Home Work History (Right) */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 460px), 1fr))", gap: "1.75rem", alignItems: "start" }}>
-        
-        {/* =========================================
-            SECTION 1: THE HOME WORK CREATOR
-           ========================================= */}
-        <div className={styles.chartCard} style={{ padding: "1.75rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.5rem" }}>
-            <div style={{ width: 36, height: 36, borderRadius: "10px", backgroundColor: "rgba(99, 102, 241, 0.15)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <PlusCircle size={20} />
+      {/* =========================================================
+          TOP TAB SWITCHER: CREATE PAGE vs HISTORY PAGE
+         ========================================================= */}
+      <div
+        style={{
+          display: "flex",
+          gap: "0.5rem",
+          padding: "6px",
+          borderRadius: "12px",
+          backgroundColor: "var(--card)",
+          border: "1px solid var(--border)",
+          width: "fit-content"
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setActiveTab("CREATE")}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            padding: "8px 18px",
+            borderRadius: "8px",
+            border: "none",
+            backgroundColor: activeTab === "CREATE" ? "var(--primary)" : "transparent",
+            color: activeTab === "CREATE" ? "var(--primary-fg)" : "var(--text-secondary)",
+            fontSize: "0.9rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            transition: "all 0.15s ease"
+          }}
+        >
+          <PlusCircle size={16} />
+          <span>Home Work Create Page</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("HISTORY")}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            padding: "8px 18px",
+            borderRadius: "8px",
+            border: "none",
+            backgroundColor: activeTab === "HISTORY" ? "var(--primary)" : "transparent",
+            color: activeTab === "HISTORY" ? "var(--primary-fg)" : "var(--text-secondary)",
+            fontSize: "0.9rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            transition: "all 0.15s ease"
+          }}
+        >
+          <History size={16} />
+          <span>Home Work History Page</span>
+          <span
+            style={{
+              padding: "1px 7px",
+              borderRadius: "10px",
+              fontSize: "0.75rem",
+              backgroundColor: activeTab === "HISTORY" ? "rgba(255,255,255,0.25)" : "rgba(99, 102, 241, 0.15)",
+              color: activeTab === "HISTORY" ? "#fff" : "var(--primary)"
+            }}
+          >
+            {assignments.length}
+          </span>
+        </button>
+      </div>
+
+      {/* =========================================================
+          TAB 1: HOME WORK CREATE PAGE
+         ========================================================= */}
+      {activeTab === "CREATE" && (
+        <div className={styles.chartCard} style={{ padding: "2rem", maxWidth: "800px", margin: "0 auto", width: "100%" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
+            <div style={{ width: 42, height: 42, borderRadius: "12px", backgroundColor: "rgba(99, 102, 241, 0.15)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <PlusCircle size={22} />
             </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: "1.3rem", fontWeight: 700, color: "var(--foreground)" }}>
+              <h2 style={{ margin: 0, fontSize: "1.4rem", fontWeight: 700, color: "var(--foreground)" }}>
                 Home Work Creator
               </h2>
-              <p style={{ margin: 0, fontSize: "0.825rem", color: "var(--text-secondary)" }}>
-                Assign homework to your class and link it to subject discussions
+              <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                Select your assigned class and subject to post homework directly to parents.
               </p>
             </div>
           </div>
 
-          <form onSubmit={handleCreateHomework} style={{ display: "flex", flexDirection: "column", gap: "1.25rem", marginTop: "1rem" }}>
+          <form onSubmit={handleCreateHomework} style={{ display: "flex", flexDirection: "column", gap: "1.25rem", marginTop: "1.5rem" }}>
             
             {/* Class & Subject Selector Row */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem" }}>
               {/* Class Dropdown */}
               <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
                 <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--foreground)" }}>
-                  1. Select Class <span style={{ color: "var(--danger)" }}>*</span>
+                  1. Select Assigned Class <span style={{ color: "var(--danger)" }}>*</span>
                 </label>
                 <select
                   value={selectedClassId}
@@ -386,14 +451,6 @@ export default function HomeworkClientPage({
               </div>
             </div>
 
-            {/* Helper note */}
-            {selectedClassId && availableSubjectsForSelectedClass.length > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", color: "var(--primary)" }}>
-                <CheckCircle2 size={13} />
-                <span>Selected subject will connect this homework to the class work conversation.</span>
-              </div>
-            )}
-
             {/* Title */}
             <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
               <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--foreground)" }}>
@@ -404,7 +461,7 @@ export default function HomeworkClientPage({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
-                placeholder="e.g. Chapter 4 Exercises: Questions 1 to 10"
+                placeholder="e.g. Maths: Workout the example sums on page 42"
                 style={{
                   padding: "0.75rem",
                   borderRadius: "8px",
@@ -419,9 +476,9 @@ export default function HomeworkClientPage({
 
             {/* Due Date & Quick Presets */}
             <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
                 <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--foreground)" }}>
-                  Submission Deadline <span style={{ color: "var(--danger)" }}>*</span>
+                  Deadline Date (Auto-deletes after this date) <span style={{ color: "var(--danger)" }}>*</span>
                 </label>
                 <div style={{ display: "flex", gap: "0.3rem" }}>
                   <button
@@ -464,16 +521,16 @@ export default function HomeworkClientPage({
               />
             </div>
 
-            {/* Description / Instructions */}
+            {/* Instructions / Description for Parents */}
             <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
               <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--foreground)" }}>
-                Instructions & Homework Details
+                Home Work Instructions & Details for Parents
               </label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                placeholder="Mention textbook pages, special guidelines, or questions for students and parents..."
+                rows={4}
+                placeholder="Write specific exercise numbers, book pages, or guidelines for parents to guide their child..."
                 style={{
                   padding: "0.75rem",
                   borderRadius: "8px",
@@ -485,6 +542,29 @@ export default function HomeworkClientPage({
                   resize: "vertical"
                 }}
               />
+            </div>
+
+            {/* Auto Delete & Parent Notice Box */}
+            <div
+              style={{
+                padding: "0.85rem 1rem",
+                borderRadius: "10px",
+                backgroundColor: "rgba(234, 179, 8, 0.08)",
+                border: "1px solid rgba(234, 179, 8, 0.25)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.4rem",
+                fontSize: "0.825rem",
+                color: "var(--foreground)"
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: 700, color: "#ca8a04" }}>
+                <Clock size={15} />
+                <span>Automatic Deletion Notice</span>
+              </div>
+              <p style={{ margin: 0, opacity: 0.85, lineHeight: 1.4 }}>
+                Each homework is automatically deleted from both teacher history and parent portals once its deadline expires. You can also manually delete it at any time from the history page.
+              </p>
             </div>
 
             {/* Connected Work Conversation & Parents toggles */}
@@ -516,7 +596,7 @@ export default function HomeworkClientPage({
                   onChange={(e) => setShareWithParents(e.target.checked)}
                   style={{ accentColor: "var(--primary)", width: 16, height: 16 }}
                 />
-                <span>👨‍👩‍👧‍👦 Visible to Parents on their Home Work page + Notification</span>
+                <span>👨‍👩‍👧‍👦 Immediately inform parents on their Home Work page + Send Notification</span>
               </label>
             </div>
 
@@ -545,13 +625,13 @@ export default function HomeworkClientPage({
               type="submit"
               disabled={creating}
               style={{
-                padding: "0.9rem",
+                padding: "0.95rem",
                 borderRadius: "8px",
                 backgroundColor: "var(--primary)",
                 color: "var(--primary-fg)",
                 border: "none",
                 fontWeight: 700,
-                fontSize: "0.95rem",
+                fontSize: "1rem",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -562,79 +642,52 @@ export default function HomeworkClientPage({
               }}
             >
               <Send size={16} />
-              {creating ? "Assigning Home Work..." : "Assign & Send Home Work"}
+              {creating ? "Publishing Home Work..." : "Publish & Send Home Work to Parents"}
             </button>
           </form>
         </div>
+      )}
 
-        {/* =========================================
-            SECTION 2: HOME WORK HISTORY & DELETE
-           ========================================= */}
+      {/* =========================================================
+          TAB 2: HOME WORK HISTORY PAGE
+         ========================================================= */}
+      {activeTab === "HISTORY" && (
         <div className={styles.chartCard} style={{ padding: "1.75rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem" }}>
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Clock size={20} style={{ color: "var(--primary)" }} />
-                <h2 style={{ margin: 0, fontSize: "1.3rem", fontWeight: 700, color: "var(--foreground)" }}>
-                  Home Work History
+                <History size={22} style={{ color: "var(--primary)" }} />
+                <h2 style={{ margin: 0, fontSize: "1.35rem", fontWeight: 700, color: "var(--foreground)" }}>
+                  Home Work History Page
                 </h2>
               </div>
-              <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.825rem", color: "var(--text-secondary)" }}>
-                Saved records with individual delete and conversation access ({filteredAssignments.length} shown)
+              <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                Active homework records. Each homework automatically deletes after its deadline ({filteredAssignments.length} active shown).
               </p>
             </div>
 
-            {/* Status Pills */}
-            <div style={{ display: "flex", gap: "0.3rem", backgroundColor: "var(--background)", padding: "3px", borderRadius: "8px", border: "1px solid var(--border)" }}>
-              <button
-                type="button"
-                onClick={() => setStatusFilter("ALL")}
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: "6px",
-                  border: "none",
-                  backgroundColor: statusFilter === "ALL" ? "var(--primary)" : "transparent",
-                  color: statusFilter === "ALL" ? "var(--primary-fg)" : "var(--text-secondary)",
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  cursor: "pointer"
-                }}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter("ACTIVE")}
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: "6px",
-                  border: "none",
-                  backgroundColor: statusFilter === "ACTIVE" ? "var(--primary)" : "transparent",
-                  color: statusFilter === "ACTIVE" ? "var(--primary-fg)" : "var(--text-secondary)",
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  cursor: "pointer"
-                }}
-              >
-                Active
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter("PAST_DUE")}
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: "6px",
-                  border: "none",
-                  backgroundColor: statusFilter === "PAST_DUE" ? "var(--primary)" : "transparent",
-                  color: statusFilter === "PAST_DUE" ? "var(--primary-fg)" : "var(--text-secondary)",
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  cursor: "pointer"
-                }}
-              >
-                Past Due
-              </button>
-            </div>
+            {/* Quick Action: Create New Button */}
+            <button
+              type="button"
+              onClick={() => setActiveTab("CREATE")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                padding: "6px 14px",
+                borderRadius: "8px",
+                backgroundColor: "var(--primary)",
+                color: "var(--primary-fg)",
+                border: "none",
+                fontSize: "0.85rem",
+                fontWeight: 700,
+                cursor: "pointer"
+              }}
+            >
+              <PlusCircle size={15} />
+              <span>Create New Home Work</span>
+            </button>
           </div>
 
           {/* Filter Bar */}
@@ -643,13 +696,13 @@ export default function HomeworkClientPage({
               value={classFilter}
               onChange={(e) => setClassFilter(e.target.value)}
               style={{
-                flex: "1 1 140px",
-                padding: "0.45rem 0.65rem",
-                borderRadius: "6px",
+                flex: "1 1 180px",
+                padding: "0.55rem 0.75rem",
+                borderRadius: "8px",
                 border: "1px solid var(--border)",
                 backgroundColor: "var(--background)",
                 color: "var(--foreground)",
-                fontSize: "0.8rem",
+                fontSize: "0.85rem",
                 outline: "none"
               }}
             >
@@ -663,13 +716,13 @@ export default function HomeworkClientPage({
               value={subjectFilter}
               onChange={(e) => setSubjectFilter(e.target.value)}
               style={{
-                flex: "1 1 140px",
-                padding: "0.45rem 0.65rem",
-                borderRadius: "6px",
+                flex: "1 1 180px",
+                padding: "0.55rem 0.75rem",
+                borderRadius: "8px",
                 border: "1px solid var(--border)",
                 backgroundColor: "var(--background)",
                 color: "var(--foreground)",
-                fontSize: "0.8rem",
+                fontSize: "0.85rem",
                 outline: "none"
               }}
             >
@@ -681,215 +734,232 @@ export default function HomeworkClientPage({
           </div>
 
           {/* History Cards List */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxHeight: "650px", overflowY: "auto", paddingRight: "4px" }}>
-            {filteredAssignments.map((item) => {
-              const isPastDue = new Date(item.deadline) < new Date();
-
-              return (
-                <div
-                  key={item.id}
-                  style={{
-                    padding: "1.2rem",
-                    borderRadius: "12px",
-                    border: "1px solid var(--border)",
-                    backgroundColor: "var(--background)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.8rem",
-                    transition: "all 0.2s ease"
-                  }}
-                >
-                  {/* Card Header */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem", flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-                      <span
-                        style={{
-                          padding: "3px 9px",
-                          borderRadius: "12px",
-                          backgroundColor: "rgba(99, 102, 241, 0.14)",
-                          color: "var(--primary)",
-                          fontSize: "0.75rem",
-                          fontWeight: 700,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.25rem"
-                        }}
-                      >
-                        <BookOpen size={12} />
-                        {item.subject?.name || "General"}
-                      </span>
-
-                      <span
-                        style={{
-                          padding: "3px 9px",
-                          borderRadius: "12px",
-                          backgroundColor: "rgba(16, 185, 129, 0.14)",
-                          color: "var(--success)",
-                          fontSize: "0.75rem",
-                          fontWeight: 700,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.25rem"
-                        }}
-                      >
-                        <GraduationCap size={12} />
-                        {item.class.name} - {item.class.section}
-                      </span>
-
-                      <span
-                        style={{
-                          padding: "3px 8px",
-                          borderRadius: "12px",
-                          fontSize: "0.72rem",
-                          fontWeight: 600,
-                          backgroundColor: isPastDue ? "rgba(156, 163, 175, 0.15)" : "rgba(34, 197, 94, 0.15)",
-                          color: isPastDue ? "var(--text-secondary)" : "var(--success)"
-                        }}
-                      >
-                        {isPastDue ? "Past Due" : "Active"}
-                      </span>
-                    </div>
-
-                    {/* Individual Delete Option */}
-                    <button
-                      type="button"
-                      onClick={() => setItemToDelete(item)}
-                      title="Delete this Home Work"
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {filteredAssignments.map((item) => (
+              <div
+                key={item.id}
+                style={{
+                  padding: "1.25rem 1.5rem",
+                  borderRadius: "12px",
+                  border: "1px solid var(--border)",
+                  backgroundColor: "var(--background)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.9rem",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.02)"
+                }}
+              >
+                {/* Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <span
                       style={{
-                        background: "rgba(239, 68, 68, 0.08)",
-                        border: "1px solid rgba(239, 68, 68, 0.2)",
-                        color: "var(--danger)",
-                        padding: "5px 8px",
-                        borderRadius: "8px",
-                        cursor: "pointer",
+                        padding: "3px 10px",
+                        borderRadius: "12px",
+                        backgroundColor: "rgba(99, 102, 241, 0.14)",
+                        color: "var(--primary)",
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
                         display: "inline-flex",
                         alignItems: "center",
-                        gap: "0.3rem",
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                        transition: "background 0.15s ease"
+                        gap: "0.3rem"
                       }}
                     >
-                      <Trash2 size={13} />
-                      <span>Delete</span>
-                    </button>
+                      <BookOpen size={13} />
+                      {item.subject?.name || "General"}
+                    </span>
+
+                    <span
+                      style={{
+                        padding: "3px 10px",
+                        borderRadius: "12px",
+                        backgroundColor: "rgba(16, 185, 129, 0.14)",
+                        color: "var(--success)",
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.3rem"
+                      }}
+                    >
+                      <GraduationCap size={13} />
+                      {item.class.name} - {item.class.section}
+                    </span>
+
+                    <span
+                      style={{
+                        padding: "3px 10px",
+                        borderRadius: "12px",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        backgroundColor: "rgba(234, 179, 8, 0.12)",
+                        color: "#ca8a04",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.3rem"
+                      }}
+                    >
+                      <Clock size={12} />
+                      ⏱️ Auto-deletes on {new Date(item.deadline).toLocaleDateString()}
+                    </span>
                   </div>
 
-                  {/* Title & Description */}
-                  <div>
-                    <h3 style={{ margin: "0 0 0.3rem 0", fontSize: "1.05rem", fontWeight: 700, color: "var(--foreground)" }}>
-                      {item.title}
-                    </h3>
-                    {item.description && (
-                      <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.45 }}>
-                        {item.description}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Meta: Due date & Assigned date */}
-                  <div style={{ display: "flex", gap: "1.25rem", fontSize: "0.8rem", color: "var(--text-secondary)", flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                      <CalendarIcon size={14} style={{ color: "var(--primary)" }} />
-                      <span>Due: <strong>{new Date(item.deadline).toLocaleDateString()}</strong></span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                      <Clock size={14} />
-                      <span>Assigned: {new Date(item.createdAt).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-
-                  {/* Action Bar: Submissions + Work Conversation */}
-                  <div
+                  {/* Manual Delete Option Button */}
+                  <button
+                    type="button"
+                    onClick={() => setItemToDelete(item)}
+                    title="Manually delete this Home Work"
                     style={{
-                      display: "flex",
+                      background: "rgba(239, 68, 68, 0.08)",
+                      border: "1px solid rgba(239, 68, 68, 0.25)",
+                      color: "var(--danger)",
+                      padding: "5px 10px",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      display: "inline-flex",
                       alignItems: "center",
-                      justifyContent: "space-between",
-                      paddingTop: "0.75rem",
-                      borderTop: "1px solid var(--border)",
-                      flexWrap: "wrap",
-                      gap: "0.75rem"
+                      gap: "0.35rem",
+                      fontSize: "0.78rem",
+                      fontWeight: 600,
+                      transition: "background 0.15s ease"
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.75rem", color: "var(--success)", fontWeight: 600 }}>
-                      <HeartHandshake size={14} />
-                      <span>Visible to Parents</span>
-                    </div>
+                    <Trash2 size={13} />
+                    <span>Delete</span>
+                  </button>
+                </div>
 
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                      {/* Work Conversation Button */}
-                      <button
-                        type="button"
-                        onClick={() => setActiveConversationItem(item)}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.35rem",
-                          padding: "5px 12px",
-                          borderRadius: "8px",
-                          backgroundColor: "rgba(99, 102, 241, 0.12)",
-                          color: "var(--primary)",
-                          border: "1px solid rgba(99, 102, 241, 0.25)",
-                          fontSize: "0.8rem",
-                          fontWeight: 600,
-                          cursor: "pointer"
-                        }}
-                      >
-                        <MessageSquare size={14} />
-                        <span>Work Conversation</span>
-                        {item._count.comments > 0 && (
-                          <span style={{ padding: "1px 6px", borderRadius: "10px", backgroundColor: "var(--primary)", color: "var(--primary-fg)", fontSize: "0.7rem" }}>
-                            {item._count.comments}
-                          </span>
-                        )}
-                      </button>
+                {/* Title & Description */}
+                <div>
+                  <h3 style={{ margin: "0 0 0.35rem 0", fontSize: "1.15rem", fontWeight: 700, color: "var(--foreground)" }}>
+                    {item.title}
+                  </h3>
+                  {item.description && (
+                    <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                      {item.description}
+                    </p>
+                  )}
+                </div>
 
-                      {/* Submissions link */}
-                      <Link
-                        href={`/dashboard/teacher/assignments/${item.id}`}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.35rem",
-                          padding: "5px 12px",
-                          borderRadius: "8px",
-                          backgroundColor: "var(--card)",
-                          color: "var(--foreground)",
-                          border: "1px solid var(--border)",
-                          fontSize: "0.8rem",
-                          fontWeight: 600,
-                          textDecoration: "none"
-                        }}
-                      >
-                        <Users size={14} />
-                        <span>Submissions ({item._count.submissions})</span>
-                      </Link>
-                    </div>
+                {/* Meta details */}
+                <div style={{ display: "flex", gap: "1.25rem", fontSize: "0.825rem", color: "var(--text-secondary)", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                    <CalendarIcon size={14} style={{ color: "var(--primary)" }} />
+                    <span>Deadline: <strong>{new Date(item.deadline).toLocaleDateString()}</strong></span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                    <Clock size={14} />
+                    <span>Assigned: {new Date(item.createdAt).toLocaleDateString()}</span>
                   </div>
                 </div>
-              );
-            })}
+
+                {/* Action Bar: Immediate Console & Conversation */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingTop: "0.85rem",
+                    borderTop: "1px solid var(--border)",
+                    flexWrap: "wrap",
+                    gap: "0.75rem"
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8rem", color: "var(--success)", fontWeight: 600 }}>
+                    <HeartHandshake size={15} />
+                    <span>Information Sent to Parents</span>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                    {/* Work Conversation Button */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveConversationItem(item)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        padding: "6px 14px",
+                        borderRadius: "8px",
+                        backgroundColor: "rgba(99, 102, 241, 0.12)",
+                        color: "var(--primary)",
+                        border: "1px solid rgba(99, 102, 241, 0.25)",
+                        fontSize: "0.85rem",
+                        fontWeight: 600,
+                        cursor: "pointer"
+                      }}
+                    >
+                      <MessageSquare size={14} />
+                      <span>Work Conversation</span>
+                      {item._count.comments > 0 && (
+                        <span style={{ padding: "1px 6px", borderRadius: "10px", backgroundColor: "var(--primary)", color: "var(--primary-fg)", fontSize: "0.72rem" }}>
+                          {item._count.comments}
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Open Console Link */}
+                    <Link
+                      href={`/dashboard/teacher/assignments/${item.id}`}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        padding: "6px 14px",
+                        borderRadius: "8px",
+                        backgroundColor: "var(--card)",
+                        color: "var(--foreground)",
+                        border: "1px solid var(--border)",
+                        fontSize: "0.85rem",
+                        fontWeight: 600,
+                        textDecoration: "none"
+                      }}
+                    >
+                      <ExternalLink size={14} />
+                      <span>Open Console</span>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ))}
 
             {filteredAssignments.length === 0 && (
               <div style={{ textAlign: "center", padding: "3rem 1rem", color: "var(--text-secondary)" }}>
-                <FileText size={44} style={{ opacity: 0.3, margin: "0 auto 0.75rem" }} />
-                <h4 style={{ margin: "0 0 0.4rem 0", color: "var(--foreground)", fontSize: "1rem" }}>
-                  No home work records found
+                <FileText size={48} style={{ opacity: 0.3, margin: "0 auto 0.75rem" }} />
+                <h4 style={{ margin: "0 0 0.4rem 0", color: "var(--foreground)", fontSize: "1.1rem" }}>
+                  No active home work found
                 </h4>
                 <p style={{ margin: 0, fontSize: "0.85rem" }}>
                   {assignments.length === 0 
-                    ? "Create your first home work above to start assigning and communicating with parents!" 
-                    : "No home works match the selected filters."}
+                    ? "Any homework created will appear here until its deadline passes, after which it automatically deletes." 
+                    : "No active homework matches the selected filters."}
                 </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("CREATE")}
+                  style={{
+                    marginTop: "1rem",
+                    padding: "0.6rem 1.25rem",
+                    borderRadius: "8px",
+                    backgroundColor: "var(--primary)",
+                    color: "var(--primary-fg)",
+                    border: "none",
+                    fontWeight: 600,
+                    fontSize: "0.85rem",
+                    cursor: "pointer"
+                  }}
+                >
+                  Create Home Work Now
+                </button>
               </div>
             )}
           </div>
         </div>
-      </div>
+      )}
 
-      {/* =========================================
-          INDIVIDUAL DELETE CONFIRMATION MODAL
-         ========================================= */}
+      {/* =========================================================
+          INDIVIDUAL MANUAL DELETE CONFIRMATION MODAL
+         ========================================================= */}
       {itemToDelete && (
         <div
           style={{
@@ -930,10 +1000,10 @@ export default function HomeworkClientPage({
               </div>
               <div>
                 <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700, color: "var(--foreground)" }}>
-                  Delete Home Work?
+                  Manually Delete Home Work?
                 </h3>
                 <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.825rem", color: "var(--text-secondary)" }}>
-                  This action is permanent and cannot be undone.
+                  This action is permanent and removes this homework for parents immediately.
                 </p>
               </div>
             </div>
@@ -946,7 +1016,7 @@ export default function HomeworkClientPage({
             </div>
 
             <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
-              Deleting this home work will remove all associated student submissions and the work conversation thread from both your dashboard and parents&apos; portals.
+              Deleting this home work will remove it from both your dashboard and parents&apos; portals immediately.
             </p>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
@@ -993,9 +1063,9 @@ export default function HomeworkClientPage({
         </div>
       )}
 
-      {/* =========================================
+      {/* =========================================================
           WORK CONVERSATION MODAL
-         ========================================= */}
+         ========================================================= */}
       {activeConversationItem && (
         <WorkConversationModal
           isOpen={true}
@@ -1013,7 +1083,7 @@ export default function HomeworkClientPage({
           onCommentsUpdated={(newCount: number) => {
             setAssignments(prev => prev.map(a => a.id === activeConversationItem.id ? {
               ...a,
-              _count: { ...a._count, comments: newCount }
+              _count: { comments: newCount }
             } : a));
           }}
         />

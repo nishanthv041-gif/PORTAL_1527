@@ -48,7 +48,6 @@ export default function ParentHomeworkList({
   childName
 }: ParentHomeworkListProps) {
   const [selectedSubject, setSelectedSubject] = useState<string>("ALL");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "PAST_DUE">("ALL");
 
   // Unique subjects
   const subjectOptions = useMemo(() => {
@@ -64,13 +63,10 @@ export default function ParentHomeworkList({
   // Filtered items
   const filtered = useMemo(() => {
     return assignments.filter(item => {
-      const isPastDue = new Date(item.deadline) < new Date();
-      if (statusFilter === "ACTIVE" && isPastDue) return false;
-      if (statusFilter === "PAST_DUE" && !isPastDue) return false;
       if (selectedSubject !== "ALL" && item.subject?.id !== selectedSubject) return false;
       return true;
     });
-  }, [assignments, statusFilter, selectedSubject]);
+  }, [assignments, selectedSubject]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
@@ -89,14 +85,14 @@ export default function ParentHomeworkList({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-          <span style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+          <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-secondary)" }}>
             Filter by Subject:
           </span>
           <select
             value={selectedSubject}
             onChange={(e) => setSelectedSubject(e.target.value)}
             style={{
-              padding: "0.4rem 0.75rem",
+              padding: "0.45rem 0.85rem",
               borderRadius: "6px",
               border: "1px solid var(--border)",
               backgroundColor: "var(--card)",
@@ -112,63 +108,15 @@ export default function ParentHomeworkList({
           </select>
         </div>
 
-        <div style={{ display: "flex", gap: "0.3rem" }}>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("ALL")}
-            style={{
-              padding: "4px 10px",
-              borderRadius: "6px",
-              border: "none",
-              backgroundColor: statusFilter === "ALL" ? "var(--primary)" : "transparent",
-              color: statusFilter === "ALL" ? "var(--primary-fg)" : "var(--text-secondary)",
-              fontSize: "0.78rem",
-              fontWeight: 600,
-              cursor: "pointer"
-            }}
-          >
-            All
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("ACTIVE")}
-            style={{
-              padding: "4px 10px",
-              borderRadius: "6px",
-              border: "none",
-              backgroundColor: statusFilter === "ACTIVE" ? "var(--primary)" : "transparent",
-              color: statusFilter === "ACTIVE" ? "var(--primary-fg)" : "var(--text-secondary)",
-              fontSize: "0.78rem",
-              fontWeight: 600,
-              cursor: "pointer"
-            }}
-          >
-            Active
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("PAST_DUE")}
-            style={{
-              padding: "4px 10px",
-              borderRadius: "6px",
-              border: "none",
-              backgroundColor: statusFilter === "PAST_DUE" ? "var(--primary)" : "transparent",
-              color: statusFilter === "PAST_DUE" ? "var(--primary-fg)" : "var(--text-secondary)",
-              fontSize: "0.78rem",
-              fontWeight: 600,
-              cursor: "pointer"
-            }}
-          >
-            Past Due
-          </button>
+        <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+          <Clock size={14} style={{ color: "#ca8a04" }} />
+          <span>Each homework automatically deletes once its deadline expires</span>
         </div>
       </div>
 
       {/* Homework Cards List */}
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         {filtered.map((item) => {
-          const isPastDue = new Date(item.deadline) < new Date();
-
           return (
             <div
               key={item.id}
@@ -176,7 +124,7 @@ export default function ParentHomeworkList({
                 display: "flex",
                 flexDirection: "column",
                 gap: "1rem",
-                padding: "1.25rem",
+                padding: "1.25rem 1.5rem",
                 border: "1px solid var(--border)",
                 borderRadius: "12px",
                 backgroundColor: "var(--background)",
@@ -229,7 +177,7 @@ export default function ParentHomeworkList({
                       </span>
                     </div>
 
-                    <h3 style={{ margin: 0, color: "var(--foreground)", fontSize: "1.05rem", fontWeight: 700 }}>
+                    <h3 style={{ margin: 0, color: "var(--foreground)", fontSize: "1.1rem", fontWeight: 700 }}>
                       {item.title}
                     </h3>
                     <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
@@ -245,16 +193,16 @@ export default function ParentHomeworkList({
                       fontSize: "0.75rem",
                       padding: "4px 10px",
                       borderRadius: "12px",
-                      backgroundColor: isPastDue ? "rgba(156, 163, 175, 0.15)" : "rgba(16, 185, 129, 0.15)",
-                      color: isPastDue ? "var(--text-secondary)" : "var(--success)",
+                      backgroundColor: "rgba(234, 179, 8, 0.12)",
+                      color: "#ca8a04",
                       display: "inline-flex",
                       alignItems: "center",
-                      gap: "0.25rem",
+                      gap: "0.3rem",
                       fontWeight: 700
                     }}
                   >
-                    <CheckCircle2 size={12} />
-                    {isPastDue ? "Completed / Past Due" : "Active Home Work"}
+                    <Clock size={12} />
+                    ⏱️ Auto-deletes on {new Date(item.deadline).toLocaleDateString()}
                   </span>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.825rem", color: "var(--text-secondary)" }}>
                     <CalendarIcon size={14} style={{ color: "var(--primary)" }} />
@@ -267,16 +215,18 @@ export default function ParentHomeworkList({
               {item.description && (
                 <div
                   style={{
-                    padding: "0.75rem 1rem",
+                    padding: "0.85rem 1.1rem",
                     borderRadius: "8px",
                     backgroundColor: "var(--card)",
                     border: "1px solid var(--border)",
-                    fontSize: "0.875rem",
+                    fontSize: "0.9rem",
                     color: "var(--foreground)",
-                    lineHeight: 1.45
+                    lineHeight: 1.5
                   }}
                 >
-                  <strong>Instructions: </strong>
+                  <strong style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.8rem", textTransform: "uppercase", color: "var(--text-secondary)" }}>
+                    Instructions for Parents & Student:
+                  </strong>
                   <span>{item.description}</span>
                 </div>
               )}
@@ -317,12 +267,12 @@ export default function ParentHomeworkList({
           <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-secondary)" }}>
             <FileText size={44} style={{ opacity: 0.3, margin: "0 auto 0.75rem" }} />
             <h4 style={{ margin: "0 0 0.35rem 0", color: "var(--foreground)", fontSize: "1.05rem" }}>
-              No home work tasks found
+              No active home work
             </h4>
             <p style={{ margin: 0, fontSize: "0.85rem" }}>
               {assignments.length === 0 
-                ? `No home work has been assigned for ${childName}'s class yet.`
-                : "No home works match the selected subject or status filter."}
+                ? `No active home work for ${childName}'s class. Homework automatically deletes after the deadline.`
+                : "No home works match the selected subject filter."}
             </p>
           </div>
         )}

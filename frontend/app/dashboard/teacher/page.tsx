@@ -31,16 +31,16 @@ export default async function TeacherDashboard() {
   const todayDayName = DAYS[new Date().getDay()];
 
   const [
-    pendingSubmissions,
+    activeHomeworks,
     unreadMessages,
     todaysSchedule,
     upcomingEvents,
     upcomingMeetings
   ] = await Promise.all([
-    prisma.submission.count({
+    prisma.assignment.count({
       where: {
-        status: "PENDING",
-        assignment: { teacherId: teacher.id }
+        teacherId: teacher.id,
+        deadline: { gte: new Date() }
       }
     }),
     prisma.message.count({
@@ -137,8 +137,8 @@ export default async function TeacherDashboard() {
         <div className={styles.statCard}>
           <div className={styles.statIcon}><Clock size={24} /></div>
           <div className={styles.statInfo}>
-            <span className={styles.statLabel}>Pending Tasks</span>
-            <span className={styles.statValue}>{pendingSubmissions}</span>
+            <span className={styles.statLabel}>Active Home Works</span>
+            <span className={styles.statValue}>{activeHomeworks}</span>
           </div>
         </div>
         <div className={styles.statCard}>

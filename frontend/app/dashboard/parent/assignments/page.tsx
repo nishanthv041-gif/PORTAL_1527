@@ -1,4 +1,5 @@
 import { prisma } from "@/backend/db/prisma";
+import { autoDeleteExpiredHomework } from "@/backend/api/actions/dashboard/teacher/assignments/actions";
 import styles from "../../dashboard.module.css";
 import { getParentAndSelectedChild } from "../parentChildHelper";
 import ParentChildBanner from "../ParentChildBanner";
@@ -27,7 +28,10 @@ export default async function ParentAssignmentsPage({
     );
   }
 
-  // School Portal Home Work (Tasks assigned to the child's class)
+  // Automatically delete all expired homework records past deadline
+  await autoDeleteExpiredHomework();
+
+  // School Portal Home Work (Active tasks assigned to the child's class)
   const rawAssignments = selectedChild.classId ? await prisma.assignment.findMany({
     where: { classId: selectedChild.classId },
     include: {
@@ -75,7 +79,7 @@ export default async function ParentAssignmentsPage({
         <div>
           <h1 className={styles.title} style={{ margin: 0 }}>Home Work</h1>
           <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
-            Daily tasks, worksheets, and subject discussions for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong>
+            Daily tasks, worksheets, and subject guidelines for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong>. Automatically deletes after deadline.
           </p>
         </div>
       </div>

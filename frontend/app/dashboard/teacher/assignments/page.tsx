@@ -1,88 +1,135 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
-import Link from "next/link";
-import styles from "../../dashboard.module.css";
-import { Calendar as CalendarIcon, Edit3 } from "lucide-react";
-import CreateAssignmentForm from "./CreateAssignmentForm";
+import { autoDeleteExpiredHomework } from "@/backend/api/actions/dashboard/teacher/assignments/actions";
+import HomeworkClientPage, { ClassWithSubjects, AssignmentItem } from "./HomeworkClientPage";
+
+export const metadata = {
+  title: "Home Work | Teacher Portal",
+  description: "Manage classes, assign subject homework, connect with parents, and view history."
+};
 
 export default async function TeacherAssignmentsPage() {
   const session = await getServerSession(getAuthOptions());
-  if (!session) return null;
+  if (!session?.user) return null;
 
+  // Automatically delete all expired homework records past deadline
+  await autoDeleteExpiredHomework();
+
+  // Fetch teacher profile including directly assigned classes and subjects
   const teacher = await prisma.teacher.findUnique({
     where: { userId: session.user.id },
     include: {
-      classes: true
+      user: true,
+      classes: {
+        include: {
+          subjects: true
+        }
+      },
+      subjects: {
+        include: {
+          class: {
+            include: {
+              subjects: true
+            }
+          }
+        }
+      }
     }
   });
 
-  if (!teacher) return null;
+  if (!teacher) {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center" }}>
+        <h2>Teacher Profile Not Found</h2>
+        <p style={{ opacity: 0.7 }}>Please contact the administrator to configure your teacher profile.</p>
+      </div>
+    );
+  }
 
-  const assignments = await prisma.assignment.findMany({
+  // Build unique consolidated list of classes assigned to this teacher
+  const classMap = new Map<string, ClassWithSubjects>();
+
+  // 1. Classes where this teacher is primary or class teacher
+  teacher.classes.forEach((c) => {
+    if (!classMap.has(c.id)) {
+      classMap.set(c.id, {
+        id: c.id,
+        name: c.name,
+        section: c.section,
+        subjects: c.subjects.map(s => ({
+          id: s.id,
+          name: s.name,
+          code: s.code,
+          teacherId: s.teacherId
+        }))
+      });
+    }
+  });
+
+  // 2. Classes where this teacher teaches a subject
+  teacher.subjects.forEach((s) => {
+    if (s.class && !classMap.has(s.class.id)) {
+      classMap.set(s.class.id, {
+        id: s.class.id,
+        name: s.class.name,
+        section: s.class.section,
+        subjects: s.class.subjects.map(sub => ({
+          id: sub.id,
+          name: sub.name,
+          code: sub.code,
+          teacherId: sub.teacherId
+        }))
+      });
+    }
+  });
+
+  const classesList: ClassWithSubjects[] = Array.from(classMap.values());
+
+  // Fetch all active assignments created by this teacher
+  const rawAssignments = await prisma.assignment.findMany({
     where: {
       teacherId: teacher.id
     },
     include: {
-      class: true,
+      class: {
+        select: { id: true, name: true, section: true }
+      },
+      subject: {
+        select: { id: true, name: true, code: true }
+      },
       _count: {
-        select: { submissions: true }
+        select: {
+          comments: true
+        }
       }
     },
     orderBy: {
-      deadline: 'desc'
+      createdAt: 'desc'
     }
   });
 
+  const formattedAssignments: AssignmentItem[] = rawAssignments.map(a => ({
+    id: a.id,
+    title: a.title,
+    description: a.description,
+    deadline: a.deadline.toISOString(),
+    createdAt: a.createdAt.toISOString(),
+    fileUrl: a.fileUrl,
+    class: a.class,
+    subject: a.subject,
+    _count: a._count
+  }));
+
   return (
-    <div className={styles.dashboard}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 className={styles.title}>Assignments</h1>
-      </div>
-
-      <div className={styles.chartsContainer}>
-        <div className={styles.chartCard}>
-          <h3 className={styles.chartHeader}>My Assignments</h3>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {assignments.map((assignment) => (
-              <Link href={`/dashboard/teacher/assignments/${assignment.id}`} key={assignment.id} style={{ textDecoration: 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', border: '1px solid var(--border)', borderRadius: '8px', backgroundColor: 'var(--background)', transition: 'border-color 0.2s' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ width: 40, height: 40, borderRadius: '8px', backgroundColor: 'var(--primary-bg)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Edit3 size={20} />
-                    </div>
-                    <div>
-                      <h4 style={{ margin: 0, color: 'var(--foreground)' }}>{assignment.title}</h4>
-                      <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.7, color: 'var(--foreground)' }}>
-                        {assignment.class.name} - {assignment.class.section}
-                      </p>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', opacity: 0.8, color: 'var(--foreground)' }}>
-                      <CalendarIcon size={14} />
-                      Due: {new Date(assignment.deadline).toLocaleDateString()}
-                    </div>
-                    <span style={{ fontSize: '0.75rem', padding: '3px 9px', borderRadius: '12px', backgroundColor: 'rgba(99, 102, 241, 0.12)', color: 'var(--primary)', fontWeight: 600 }}>
-                      Class Assignment
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-
-            {assignments.length === 0 && (
-              <p style={{ textAlign: 'center', padding: '2rem', opacity: 0.7 }}>No assignments created yet.</p>
-            )}
-          </div>
-        </div>
-
-        <div className={styles.chartCard}>
-          <h3 className={styles.chartHeader}>Create New Assignment</h3>
-          <CreateAssignmentForm classes={teacher.classes} teacherId={teacher.id} />
-        </div>
-      </div>
-    </div>
+    <HomeworkClientPage
+      teacher={{
+        id: teacher.id,
+        userId: session.user.id,
+        name: teacher.user?.name || "Teacher"
+      }}
+      classes={classesList}
+      initialAssignments={formattedAssignments}
+    />
   );
 }

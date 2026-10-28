@@ -5,7 +5,51 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 
+/**
+ * Automatically deletes all homework records whose deadline has passed.
+ * Deletes associated comments and submissions, then the homework itself.
+ */
+export async function autoDeleteExpiredHomework() {
+  try {
+    const now = new Date();
+    const expired = await prisma.assignment.findMany({
+      where: {
+        deadline: {
+          lt: now
+        }
+      },
+      select: { id: true, title: true }
+    });
+
+    if (expired.length > 0) {
+      const expiredIds = expired.map(a => a.id);
+
+      await prisma.homeworkComment.deleteMany({
+        where: { assignmentId: { in: expiredIds } }
+      });
+
+      await prisma.submission.deleteMany({
+        where: { assignmentId: { in: expiredIds } }
+      });
+
+      await prisma.assignment.deleteMany({
+        where: { id: { in: expiredIds } }
+      });
+
+      console.log(`[AutoDelete] Successfully cleaned up ${expired.length} expired homework assignments.`);
+    }
+
+    return { success: true, count: expired.length };
+  } catch (err) {
+    console.error("Auto delete expired homework error:", err);
+    return { success: false, error: "Failed to auto-delete expired homework" };
+  }
+}
+
 export async function createAssignment(formData: FormData) {
+  // First clean up any expired homework
+  await autoDeleteExpiredHomework();
+
   const title = (formData.get("title") as string)?.trim();
   const description = (formData.get("description") as string)?.trim();
   const deadline = formData.get("deadline") as string;
@@ -31,12 +75,15 @@ export async function createAssignment(formData: FormData) {
       if (subject) subjectName = subject.name;
     }
 
+    // Set deadline to end of day (23:59:59) so students have the full day before auto-delete
+    const deadlineDate = new Date(deadline.includes("T") ? deadline : `${deadline}T23:59:59`);
+
     // Create the homework / assignment
     const assignment = await prisma.assignment.create({
       data: {
         title,
         description: description || null,
-        deadline: new Date(deadline),
+        deadline: deadlineDate,
         classId,
         subjectId: subjectId && subjectId.trim() !== "" ? subjectId : null,
         teacherId
@@ -52,7 +99,7 @@ export async function createAssignment(formData: FormData) {
 
     // Start work conversation if requested
     if (startConversation && session?.user?.id) {
-      const introMessage = `👋 **Home Work Discussion Started**\n\n**Subject:** ${subjectName || assignment.subject?.name || "General"}\n**Class:** ${assignment.class.name} - ${assignment.class.section}\n**Due Date:** ${new Date(deadline).toLocaleDateString()}\n\n${description ? `**Instructions:**\n${description}\n\n` : ""}Welcome students & parents! Please feel free to ask questions or discuss homework queries here with the teacher.`;
+      const introMessage = `📢 **Home Work Notice for Parents & Students**\n\n**Subject:** ${subjectName || assignment.subject?.name || "General"}\n**Class:** ${assignment.class.name} - ${assignment.class.section}\n**Due Date:** ${deadlineDate.toLocaleDateString()}\n\n${description ? `**Instructions:**\n${description}\n\n` : ""}Parents and students, please feel free to post any questions or updates regarding this homework here!`;
 
       await prisma.homeworkComment.create({
         data: {
@@ -89,7 +136,7 @@ export async function createAssignment(formData: FormData) {
           data: parentUserIds.map(userId => ({
             userId,
             title: `New Home Work: ${title}`,
-            content: `${subjectName ? `[${subjectName}] ` : ""}${title} assigned for ${assignment.class.name} - ${assignment.class.section}. Due on ${new Date(deadline).toLocaleDateString()}.`,
+            content: `${subjectName ? `[${subjectName}] ` : ""}${title} assigned for ${assignment.class.name} - ${assignment.class.section}. Due on ${deadlineDate.toLocaleDateString()}.`,
             type: "HOMEWORK",
             link: "/dashboard/parent/assignments"
           }))
@@ -142,7 +189,7 @@ export async function deleteAssignment(assignmentId: string) {
       return { success: false, error: "You are not authorized to delete this home work." };
     }
 
-    // Delete associated submissions & comments first if not cascading
+    // Delete associated submissions & comments first
     await prisma.homeworkComment.deleteMany({
       where: { assignmentId }
     });
@@ -221,6 +268,8 @@ export async function addHomeworkComment(assignmentId: string, content: string) 
       }
     });
 
+    revalidatePath(`/dashboard/teacher/assignments/${assignmentId}`);
+    revalidatePath(`/dashboard/teacher/homework/${assignmentId}`);
     revalidatePath("/dashboard/teacher/assignments");
     revalidatePath("/dashboard/teacher/homework");
     revalidatePath("/dashboard/parent/assignments");

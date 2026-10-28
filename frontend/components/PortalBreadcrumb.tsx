@@ -447,7 +447,7 @@ export default function PortalBreadcrumb() {
       );
     }
 
-    // If it's assignment or homework submissions
+    // If it's assignment or homework console
     if ((section === "assignments" || section === "homework") && segments.length >= 4) {
       return (
         <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
@@ -455,7 +455,7 @@ export default function PortalBreadcrumb() {
             <ArrowLeft size={16} /> Home Work
           </Link>
           <span className={styles.separator}>/</span>
-          <span className={styles.currentPage}>Home Work Submissions</span>
+          <span className={styles.currentPage}>Home Work Console</span>
         </nav>
       );
     }
