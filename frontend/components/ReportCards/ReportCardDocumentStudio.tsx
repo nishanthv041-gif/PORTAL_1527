@@ -1435,9 +1435,15 @@ export default function ReportCardDocumentStudio({
                       const newStudId = e.target.value;
                       setSelectedStudentId(newStudId);
                       // If this is a detected student from the multi-student matrix, load their subjects automatically!
-                      if (activeQueuedFile?.result?.allDetectedStudents) {
+                      if (activeQueuedFile?.result?.allDetectedStudents && newStudId) {
+                        const selectedStudentObj = classStudents.find(cs => cs.id === newStudId);
                         const matchedEntry = activeQueuedFile.result.allDetectedStudents.find(
-                          es => es.studentId === newStudId
+                          es => es.studentId === newStudId ||
+                            (selectedStudentObj && (
+                              (es.rollNumber && selectedStudentObj.rollNumber && es.rollNumber.toLowerCase() === selectedStudentObj.rollNumber.toLowerCase()) ||
+                              (es.studentName && selectedStudentObj.name && es.studentName.toLowerCase().replace(/[^a-z]/g, "").includes(selectedStudentObj.name.toLowerCase().replace(/[^a-z]/g, ""))) ||
+                              (es.studentName && selectedStudentObj.name && selectedStudentObj.name.toLowerCase().replace(/[^a-z]/g, "").includes(es.studentName.toLowerCase().replace(/[^a-z]/g, "")))
+                            ))
                         );
                         if (matchedEntry) {
                           setSubjects(matchedEntry.subjects || []);
