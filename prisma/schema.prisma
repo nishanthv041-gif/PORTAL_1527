@@ -36,6 +36,7 @@ model User {
   receivedMessages Message[]      @relation("ReceivedMessages")
   notifications    Notification[]
   homeworkComments HomeworkComment[]
+  complaintMessages ComplaintMessage[]
 
   @@index([role, status])
   @@index([googleEmail])
@@ -124,6 +125,7 @@ model Parent {
   // Relationships
   children ParentStudent[]
   meetings Meeting[]
+  complaints Complaint[]
 }
 
 model ParentStudent {
@@ -375,18 +377,44 @@ model Complaint {
   description String
   category    String
   severity    String
-  status      String // OPEN, UNDER_REVIEW, RESOLVED
+  status      String   @default("OPEN") // OPEN, UNDER_REVIEW, RESOLVED
   date        DateTime @default(now())
   remarks     String?
 
   // Relationships
-  teacherId String
-  teacher   Teacher @relation(fields: [teacherId], references: [id])
-  studentId String
-  student   Student @relation(fields: [studentId], references: [id])
+  teacherId  String?
+  teacher    Teacher? @relation(fields: [teacherId], references: [id])
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id])
+  parentId   String?
+  parent     Parent?  @relation(fields: [parentId], references: [id])
+  authorRole String   @default("TEACHER") // PARENT, TEACHER, ADMIN
+  authorId   String?  // User ID
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  messages   ComplaintMessage[]
 
   @@index([studentId])
   @@index([teacherId])
+  @@index([parentId])
+  @@index([authorId])
+  @@index([status])
+}
+
+model ComplaintMessage {
+  id          String    @id @default(cuid())
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  authorName  String
+  authorRole  String    // "ADMIN", "PARENT", "TEACHER"
+  content     String
+  createdAt   DateTime  @default(now())
+
+  @@index([complaintId, createdAt])
+  @@index([userId])
 }
 
 model DisciplineRecord {

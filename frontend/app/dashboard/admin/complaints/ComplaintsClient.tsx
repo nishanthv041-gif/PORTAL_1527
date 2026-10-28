@@ -1,301 +1,1112 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Calendar, MessageSquare, CheckCircle, Clock, User as UserIcon, Edit2, Trash2 } from "lucide-react";
-import { updateComplaintStatusAction } from "@/backend/api/actions/dashboard/admin/complaints/actions";
+import { 
+  AlertCircle, 
+  Calendar, 
+  MessageSquare, 
+  CheckCircle, 
+  Clock, 
+  User as UserIcon, 
+  Trash2, 
+  PlusCircle, 
+  Search, 
+  Filter, 
+  X, 
+  Send, 
+  GraduationCap, 
+  ShieldAlert, 
+  CheckCircle2, 
+  Edit3 
+} from "lucide-react";
+import { 
+  createAdminComplaintAction, 
+  updateComplaintStatusAction, 
+  deleteComplaintAction 
+} from "@/backend/api/actions/dashboard/admin/complaints/actions";
+import ComplaintConversationModal, { ComplaintMessageItem } from "@/frontend/components/complaints/ComplaintConversationModal";
+import styles from "../../dashboard.module.css";
 
-import { Complaint, Teacher, User, Student, Class, ParentStudent, Parent } from "@prisma/client";
-
-type ComplaintWithRelations = Complaint & {
-  teacher: (Teacher & { user: User }) | null;
-  student: (Student & { class: Class | null, parents: (ParentStudent & { parent: Parent })[] }) | null;
+export type StudentLookupOption = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  rollNumber: string;
+  class: {
+    id: string;
+    name: string;
+    section: string;
+  } | null;
 };
 
-export default function ComplaintsClient({ complaints }: { complaints: ComplaintWithRelations[] }) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editStatus, setEditStatus] = useState("");
-  const [editRemarks, setEditRemarks] = useState("");
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editCategory, setEditCategory] = useState("");
-  const [editSeverity, setEditSeverity] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
+export type AdminComplaintItem = {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  severity: string;
+  status: string;
+  date: string;
+  remarks: string | null;
+  authorRole: string;
+  authorId: string | null;
+  teacher: {
+    id: string;
+    user: { name: string };
+  } | null;
+  parent: {
+    id: string;
+    user: { name: string };
+  } | null;
+  student: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    rollNumber: string;
+    class: {
+      id: string;
+      name: string;
+      section: string;
+    } | null;
+    parents: {
+      parent: {
+        id: string;
+        user: { name: string };
+      };
+    }[];
+  };
+  messages: ComplaintMessageItem[];
+  _count: {
+    messages: number;
+  };
+};
+
+interface ComplaintsClientProps {
+  complaints: AdminComplaintItem[];
+  studentsList: StudentLookupOption[];
+  currentUser: {
+    id: string;
+    name: string;
+    role: string;
+  };
+}
+
+const CATEGORIES = [
+  "ACADEMIC",
+  "BEHAVIOR",
+  "BULLYING",
+  "FACILITIES",
+  "TRANSPORT",
+  "FEES",
+  "STAFF",
+  "OTHER"
+];
+
+const SEVERITIES = [
+  { value: "LOW", label: "Low", color: "#10b981", bg: "rgba(16, 185, 129, 0.12)" },
+  { value: "MEDIUM", label: "Medium", color: "#ca8a04", bg: "rgba(234, 179, 8, 0.12)" },
+  { value: "HIGH", label: "High", color: "#ea580c", bg: "rgba(249, 115, 22, 0.12)" },
+  { value: "CRITICAL", label: "Critical", color: "#ef4444", bg: "rgba(239, 68, 68, 0.12)" }
+];
+
+export default function ComplaintsClient({
+  complaints: initialComplaints,
+  studentsList,
+  currentUser
+}: ComplaintsClientProps) {
   const router = useRouter();
+  const [complaints, setComplaints] = useState<AdminComplaintItem[]>(initialComplaints);
 
-  const startEdit = (complaint: ComplaintWithRelations) => {
-    setEditingId(complaint.id);
-    setEditStatus(complaint.status);
-    setEditRemarks(complaint.remarks || "");
-    setEditTitle(complaint.title);
-    setEditDescription(complaint.description);
-    setEditCategory(complaint.category);
-    setEditSeverity(complaint.severity);
-  };
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "UNDER_REVIEW" | "RESOLVED">("ALL");
+  const [severityFilter, setSeverityFilter] = useState<string>("ALL");
+  const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this complaint?")) {
-      const res = await fetch(`/api/complaints/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const errorData = await res.json();
-        alert(errorData.error || "Failed to delete complaint");
-      } else {
-        router.refresh();
+  // Modal 1: Log Complaint for Any Student
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createStudentSearch, setCreateStudentSearch] = useState("");
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [createTitle, setCreateTitle] = useState("");
+  const [createCategory, setCreateCategory] = useState("BEHAVIOR");
+  const [createSeverity, setCreateSeverity] = useState("MEDIUM");
+  const [createDescription, setCreateDescription] = useState("");
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [createError, setCreateError] = useState("");
+
+  // Modal 2: Update Status & Remarks
+  const [statusModalComplaint, setStatusModalComplaint] = useState<AdminComplaintItem | null>(null);
+  const [editStatus, setEditStatus] = useState("OPEN");
+  const [editRemarks, setEditRemarks] = useState("");
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+
+  // Modal 3: Complaint Conversation Thread
+  const [conversationComplaint, setConversationComplaint] = useState<AdminComplaintItem | null>(null);
+
+  // Overall Stats
+  const openCount = useMemo(() => complaints.filter(c => c.status === "OPEN").length, [complaints]);
+  const reviewCount = useMemo(() => complaints.filter(c => c.status === "UNDER_REVIEW").length, [complaints]);
+  const resolvedCount = useMemo(() => complaints.filter(c => c.status === "RESOLVED").length, [complaints]);
+
+  // Filtered Students for the Searchable Selector in Create Modal
+  const filteredStudents = useMemo(() => {
+    if (!createStudentSearch.trim()) return studentsList.slice(0, 50);
+    const q = createStudentSearch.toLowerCase();
+    return studentsList.filter(s =>
+      `${s.firstName} ${s.lastName}`.toLowerCase().includes(q) ||
+      s.rollNumber.toLowerCase().includes(q) ||
+      (s.class && `${s.class.name} ${s.class.section}`.toLowerCase().includes(q))
+    ).slice(0, 50);
+  }, [studentsList, createStudentSearch]);
+
+  // Filtered complaints for table/grid
+  const filteredComplaints = useMemo(() => {
+    return complaints.filter(c => {
+      if (statusFilter !== "ALL" && c.status !== statusFilter) return false;
+      if (severityFilter !== "ALL" && c.severity !== severityFilter) return false;
+      if (categoryFilter !== "ALL" && c.category !== categoryFilter) return false;
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const studentName = `${c.student.firstName} ${c.student.lastName}`.toLowerCase();
+        const title = c.title.toLowerCase();
+        const desc = c.description.toLowerCase();
+        const parentName = c.parent?.user.name.toLowerCase() || "";
+        if (!studentName.includes(q) && !title.includes(q) && !desc.includes(q) && !parentName.includes(q)) {
+          return false;
+        }
       }
-    }
-  };
-
-  const handleUpdate = async (id: string) => {
-    setIsSubmitting(true);
-    // Send PATCH request with all fields
-    const res = await fetch(`/api/complaints/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: editTitle,
-        description: editDescription,
-        category: editCategory,
-        severity: editSeverity,
-      }),
+      return true;
     });
-    
-    if (!res.ok) {
-      const errorData = await res.json();
-      alert(errorData.error || "Failed to update complaint details");
-      setIsSubmitting(false);
+  }, [complaints, statusFilter, severityFilter, categoryFilter, searchQuery]);
+
+  // Handle Admin Complaint Creation
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudentId) {
+      setCreateError("Please select a student.");
       return;
     }
-    
-    // Also update status and remarks via the existing server action
-    const actionRes = await updateComplaintStatusAction(id, editStatus, editRemarks);
-    setIsSubmitting(false);
-    if (actionRes.error) {
-      alert(actionRes.error);
-    } else {
-      setEditingId(null);
+    if (!createTitle.trim() || !createDescription.trim()) {
+      setCreateError("Please provide both a title and description.");
+      return;
+    }
+
+    setCreateSubmitting(true);
+    setCreateError("");
+
+    const formData = new FormData();
+    formData.append("studentId", selectedStudentId);
+    formData.append("title", createTitle.trim());
+    formData.append("category", createCategory);
+    formData.append("severity", createSeverity);
+    formData.append("description", createDescription.trim());
+    formData.append("status", "OPEN");
+
+    const res = await createAdminComplaintAction(formData);
+
+    if (res.success) {
+      setShowCreateModal(false);
+      setSelectedStudentId("");
+      setCreateTitle("");
+      setCreateDescription("");
+      setCreateStudentSearch("");
       router.refresh();
+      window.location.reload();
+    } else {
+      setCreateError(res.error || "Failed to create complaint.");
+    }
+
+    setCreateSubmitting(false);
+  };
+
+  // Handle Status Update
+  const handleStatusSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!statusModalComplaint) return;
+
+    setStatusSubmitting(true);
+    const res = await updateComplaintStatusAction(statusModalComplaint.id, editStatus, editRemarks);
+
+    if (res.success) {
+      setComplaints(prev => prev.map(c => c.id === statusModalComplaint.id ? {
+        ...c,
+        status: editStatus,
+        remarks: editRemarks || null
+      } : c));
+      setStatusModalComplaint(null);
+    } else {
+      alert(res.error || "Failed to update status.");
+    }
+
+    setStatusSubmitting(false);
+  };
+
+  // Handle Delete
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this complaint? This cannot be undone.")) return;
+
+    const res = await deleteComplaintAction(id);
+    if (res.success) {
+      setComplaints(prev => prev.filter(c => c.id !== id));
+    } else {
+      alert(res.error || "Failed to delete complaint");
     }
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'OPEN': return "var(--danger)";
-      case 'UNDER_REVIEW': return "var(--warning)";
-      case 'RESOLVED': return "var(--success)";
-      default: return "var(--text-secondary)";
+    switch (status.toUpperCase()) {
+      case "OPEN": return { text: "var(--danger)", bg: "rgba(239, 68, 68, 0.12)" };
+      case "UNDER_REVIEW": return { text: "#ca8a04", bg: "rgba(234, 179, 8, 0.12)" };
+      case "RESOLVED": return { text: "var(--success)", bg: "rgba(16, 185, 129, 0.12)" };
+      default: return { text: "var(--text-secondary)", bg: "rgba(100, 116, 139, 0.12)" };
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'OPEN': return <AlertCircle size={16} />;
-      case 'UNDER_REVIEW': return <Clock size={16} />;
-      case 'RESOLVED': return <CheckCircle size={16} />;
-      default: return <MessageSquare size={16} />;
-    }
+  const getSeverityInfo = (sev: string) => {
+    return SEVERITIES.find(s => s.value === sev.toUpperCase()) || SEVERITIES[1];
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', gap: '1.25rem', width: '100%', minWidth: 0 }}>
-      {complaints.map(complaint => (
-        <div key={complaint.id} style={{ background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
-          
-          {/* Header */}
-          <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {complaint.category} • {complaint.severity}
-              </span>
-              <h3 style={{ margin: '0.5rem 0 0 0', fontSize: '1.25rem', fontWeight: 600 }}>{complaint.title}</h3>
-            </div>
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '0.5rem', 
-              padding: '0.25rem 0.75rem', 
-              borderRadius: '12px', 
-              background: `color-mix(in srgb, ${getStatusColor(complaint.status)} 10%, transparent)`,
-              color: getStatusColor(complaint.status),
-              fontSize: '0.75rem',
-              fontWeight: 600
-            }}>
-              {getStatusIcon(complaint.status)} {complaint.status.replace('_', ' ')}
-            </div>
-            
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginLeft: 'auto', paddingLeft: '1rem' }}>
-              <button onClick={() => startEdit(complaint)} style={{ background: 'transparent', border: 'none', color: "inherit", opacity: 0.7, cursor: 'pointer', padding: 0 }}>
-                <Edit2 size={16} />
-              </button>
-              <button onClick={() => handleDelete(complaint.id)} style={{ background: 'transparent', border: 'none', color: "var(--danger)", cursor: 'pointer', padding: 0 }}>
-                <Trash2 size={16} />
-              </button>
-            </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      {/* =========================================================
+          PAGE HEADER & SUMMARY CARDS
+         ========================================================= */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+        <div>
+          <h1 className={styles.title} style={{ margin: 0 }}>Complaints & Feedback</h1>
+          <p style={{ color: "var(--text-secondary)", margin: "0.25rem 0 0 0", fontSize: "0.9rem" }}>
+            Review complaints, converse with parents and teachers in real-time, and log complaints for any student.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowCreateModal(true)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.45rem",
+            padding: "0.65rem 1.25rem",
+            borderRadius: "10px",
+            border: "none",
+            backgroundColor: "var(--primary)",
+            color: "var(--primary-fg)",
+            fontWeight: 700,
+            fontSize: "0.9rem",
+            cursor: "pointer",
+            boxShadow: "0 4px 12px rgba(99, 102, 241, 0.25)"
+          }}
+        >
+          <PlusCircle size={17} />
+          <span>Log Complaint for a Student</span>
+        </button>
+      </div>
+
+      {/* Stats Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
+        <div className={styles.chartCard} style={{ padding: "1.25rem", border: "1px solid var(--border)", borderRadius: "12px" }}>
+          <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontWeight: 600 }}>Total Complaints</div>
+          <div style={{ fontSize: "1.8rem", fontWeight: 800, color: "var(--foreground)", marginTop: "0.2rem" }}>
+            {complaints.length}
+          </div>
+        </div>
+
+        <div className={styles.chartCard} style={{ padding: "1.25rem", border: "1px solid var(--border)", borderRadius: "12px" }}>
+          <div style={{ fontSize: "0.8rem", color: "var(--danger)", fontWeight: 600 }}>Open Issues</div>
+          <div style={{ fontSize: "1.8rem", fontWeight: 800, color: "var(--danger)", marginTop: "0.2rem" }}>
+            {openCount}
+          </div>
+        </div>
+
+        <div className={styles.chartCard} style={{ padding: "1.25rem", border: "1px solid var(--border)", borderRadius: "12px" }}>
+          <div style={{ fontSize: "0.8rem", color: "#ca8a04", fontWeight: 600 }}>Under Review</div>
+          <div style={{ fontSize: "1.8rem", fontWeight: 800, color: "#ca8a04", marginTop: "0.2rem" }}>
+            {reviewCount}
+          </div>
+        </div>
+
+        <div className={styles.chartCard} style={{ padding: "1.25rem", border: "1px solid var(--border)", borderRadius: "12px" }}>
+          <div style={{ fontSize: "0.8rem", color: "var(--success)", fontWeight: 600 }}>Resolved</div>
+          <div style={{ fontSize: "1.8rem", fontWeight: 800, color: "var(--success)", marginTop: "0.2rem" }}>
+            {resolvedCount}
+          </div>
+        </div>
+      </div>
+
+      {/* =========================================================
+          SEARCH & FILTERS BAR
+         ========================================================= */}
+      <div
+        className={styles.chartCard}
+        style={{
+          padding: "1rem 1.25rem",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1rem"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", flex: "1 1 300px" }}>
+          {/* Search Box */}
+          <div style={{ position: "relative", flex: "1 1 220px", maxWidth: "340px" }}>
+            <Search size={15} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)" }} />
+            <input
+              type="text"
+              placeholder="Search student, title, description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.45rem 0.75rem 0.45rem 2rem",
+                borderRadius: "6px",
+                border: "1px solid var(--border)",
+                backgroundColor: "var(--background)",
+                color: "var(--foreground)",
+                fontSize: "0.85rem",
+                outline: "none"
+              }}
+            />
           </div>
 
-          {/* Details */}
-          <div style={{ padding: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <p style={{ margin: 0, fontSize: '0.875rem', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
-              {complaint.description}
-            </p>
+          {/* Status Filter */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+            style={{
+              padding: "0.45rem 0.75rem",
+              borderRadius: "6px",
+              border: "1px solid var(--border)",
+              backgroundColor: "var(--background)",
+              color: "var(--foreground)",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              outline: "none"
+            }}
+          >
+            <option value="ALL">All Statuses</option>
+            <option value="OPEN">Open ({openCount})</option>
+            <option value="UNDER_REVIEW">Under Review ({reviewCount})</option>
+            <option value="RESOLVED">Resolved ({resolvedCount})</option>
+          </select>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))', gap: '1rem', marginTop: '1rem', padding: '1rem', background: 'rgba(0,0,0,0.02)', borderRadius: '8px' }}>
-              <div>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0 0 0.25rem 0' }}>Reported Student</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>
-                  <UserIcon size={14} color="var(--primary)" /> {complaint.student?.firstName} {complaint.student?.lastName}
-                </div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{complaint.student?.class?.name}-{complaint.student?.class?.section}</span>
-              </div>
-              <div>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0 0 0.25rem 0' }}>Linked Staff/Teacher</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>
-                  <UserIcon size={14} color="var(--success)" /> {complaint.teacher?.user.name}
-                </div>
-              </div>
-            </div>
+          {/* Severity Filter */}
+          <select
+            value={severityFilter}
+            onChange={(e) => setSeverityFilter(e.target.value)}
+            style={{
+              padding: "0.45rem 0.75rem",
+              borderRadius: "6px",
+              border: "1px solid var(--border)",
+              backgroundColor: "var(--background)",
+              color: "var(--foreground)",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              outline: "none"
+            }}
+          >
+            <option value="ALL">All Priorities</option>
+            {SEVERITIES.map(s => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 'auto' }}>
-              <Calendar size={14} /> Reported on {new Date(complaint.date).toLocaleDateString()}
-            </div>
-          </div>
+          {/* Category Filter */}
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            style={{
+              padding: "0.45rem 0.75rem",
+              borderRadius: "6px",
+              border: "1px solid var(--border)",
+              backgroundColor: "var(--background)",
+              color: "var(--foreground)",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              outline: "none"
+            }}
+          >
+            <option value="ALL">All Categories</option>
+            {CATEGORIES.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+        </div>
 
-          {/* Action / Edit Area */}
-          <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border-color)', background: editingId === complaint.id ? 'rgba(79, 70, 229, 0.02)' : 'transparent' }}>
-            {editingId === complaint.id ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)", fontWeight: 600 }}>
+          Showing {filteredComplaints.length} of {complaints.length}
+        </span>
+      </div>
+
+      {/* =========================================================
+          COMPLAINTS GRID / CARDS
+         ========================================================= */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 360px), 1fr))", gap: "1.25rem" }}>
+        {filteredComplaints.map((item) => {
+          const stColors = getStatusColor(item.status);
+          const sevInfo = getSeverityInfo(item.severity);
+
+          // Determine reporter description
+          let reporterLabel = "Logged by Administration";
+          if (item.authorRole === "PARENT") {
+            const parentName = item.parent?.user.name || item.student.parents?.[0]?.parent?.user.name || "Parent";
+            reporterLabel = `Reported by Parent (${parentName})`;
+          } else if (item.authorRole === "TEACHER") {
+            reporterLabel = `Reported by Teacher (${item.teacher?.user.name || "Staff"})`;
+          }
+
+          return (
+            <div
+              key={item.id}
+              className={styles.chartCard}
+              style={{
+                borderRadius: "14px",
+                border: "1px solid var(--border)",
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.03)"
+              }}
+            >
+              {/* Header */}
+              <div
+                style={{
+                  padding: "1.25rem 1.5rem",
+                  borderBottom: "1px solid var(--border)",
+                  backgroundColor: "var(--background)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  gap: "0.75rem"
+                }}
+              >
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.25rem' }}>Title</label>
-                  <input 
-                    value={editTitle} 
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.875rem', background: 'transparent' }}
-                  />
-                </div>
-                
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))', gap: '1rem' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.25rem' }}>Category</label>
-                    <select 
-                      value={editCategory} 
-                      onChange={(e) => setEditCategory(e.target.value)}
-                      style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.875rem', background: 'transparent' }}
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.4rem" }}>
+                    {/* Status */}
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        padding: "2px 8px",
+                        borderRadius: "10px",
+                        backgroundColor: stColors.bg,
+                        color: stColors.text,
+                        fontWeight: 700
+                      }}
                     >
-                      <option value="BEHAVIOR">Behavior</option>
-                      <option value="ACADEMIC">Academic</option>
-                      <option value="ATTENDANCE">Attendance</option>
-                      <option value="OTHER">Other</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.25rem' }}>Severity</label>
-                    <select 
-                      value={editSeverity} 
-                      onChange={(e) => setEditSeverity(e.target.value)}
-                      style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.875rem', background: 'transparent' }}
+                      {item.status.replace("_", " ")}
+                    </span>
+
+                    {/* Severity */}
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        padding: "2px 8px",
+                        borderRadius: "10px",
+                        backgroundColor: sevInfo.bg,
+                        color: sevInfo.color,
+                        fontWeight: 700
+                      }}
                     >
-                      <option value="LOW">Low</option>
-                      <option value="MEDIUM">Medium</option>
-                      <option value="HIGH">High</option>
-                    </select>
+                      {sevInfo.label} Priority
+                    </span>
+
+                    {/* Category */}
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        padding: "2px 8px",
+                        borderRadius: "10px",
+                        backgroundColor: "rgba(99, 102, 241, 0.12)",
+                        color: "var(--primary)",
+                        fontWeight: 700
+                      }}
+                    >
+                      {item.category}
+                    </span>
+                  </div>
+
+                  <h3 style={{ margin: "0.25rem 0 0 0", fontSize: "1.15rem", fontWeight: 700, color: "var(--foreground)" }}>
+                    {item.title}
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleDelete(item.id)}
+                  title="Delete complaint"
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--danger)",
+                    cursor: "pointer",
+                    padding: "4px",
+                    opacity: 0.7
+                  }}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div style={{ padding: "1.25rem 1.5rem", flex: 1, display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                  {item.description}
+                </p>
+
+                {/* Student Box */}
+                <div
+                  style={{
+                    padding: "0.75rem 1rem",
+                    borderRadius: "8px",
+                    backgroundColor: "rgba(0,0,0,0.02)",
+                    border: "1px solid var(--border)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "0.5rem"
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Reported Student</div>
+                    <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--foreground)" }}>
+                      {item.student.firstName} {item.student.lastName}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                    <div>{item.student.class ? `${item.student.class.name} - ${item.student.class.section}` : "No Class"}</div>
+                    <div>Roll: {item.student.rollNumber}</div>
                   </div>
                 </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.25rem' }}>Description</label>
-                  <textarea 
-                    value={editDescription} 
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    rows={3}
-                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.875rem', background: 'transparent', resize: 'vertical' }}
-                  />
+                {/* Reporter / Date meta */}
+                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+                  <span>{reporterLabel}</span>
+                  <span>Reported on: {new Date(item.date).toLocaleDateString()}</span>
                 </div>
 
-                <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0.5rem 0' }} />
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.25rem' }}>Update Status</label>
-                  <select 
-                    value={editStatus} 
-                    onChange={(e) => setEditStatus(e.target.value)}
-                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.875rem', background: 'transparent' }}
+                {/* Admin Remarks if set */}
+                {item.remarks && (
+                  <div
+                    style={{
+                      padding: "0.6rem 0.85rem",
+                      borderRadius: "8px",
+                      backgroundColor: "rgba(99, 102, 241, 0.08)",
+                      borderLeft: "3px solid var(--primary)",
+                      fontSize: "0.825rem",
+                      marginTop: "auto"
+                    }}
                   >
-                    <option value="OPEN">Open</option>
-                    <option value="UNDER_REVIEW">Under Review</option>
-                    <option value="RESOLVED">Resolved</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.25rem' }}>Admin Remarks</label>
-                  <textarea 
-                    value={editRemarks} 
-                    onChange={(e) => setEditRemarks(e.target.value)}
-                    rows={2}
-                    placeholder="Add resolution notes or remarks..."
-                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.875rem', background: 'transparent', resize: 'vertical' }}
-                  />
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                  <button onClick={() => setEditingId(null)} style={{ padding: '0.5rem 1rem', background: 'transparent', color: 'var(--text-secondary)', border: 'none', cursor: 'pointer', fontSize: '0.875rem' }}>
-                    Cancel
-                  </button>
-                  <button onClick={() => handleUpdate(complaint.id)} disabled={isSubmitting} style={{ padding: '0.5rem 1rem', background: "var(--success)", color: "var(--success-fg)", border: 'none', borderRadius: '6px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontSize: '0.875rem', fontWeight: 500 }}>
-                    {isSubmitting ? "Saving..." : "Save Update"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {complaint.remarks && (
-                  <div style={{ marginBottom: '1rem', padding: '0.75rem', background: 'rgba(79, 70, 229, 0.05)', borderRadius: '6px', borderLeft: '2px solid var(--primary)' }}>
-                    <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary)', marginBottom: '0.25rem' }}>Admin Remarks</p>
-                    <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{complaint.remarks}</p>
+                    <span style={{ fontWeight: 700, color: "var(--primary)" }}>Resolution Remarks: </span>
+                    <span>{item.remarks}</span>
                   </div>
                 )}
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button onClick={() => startEdit(complaint)} style={{ flex: 1, padding: '0.75rem', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: '8px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500 }}>
-                    Update Status
-                  </button>
-                  <button 
-                    onClick={async () => {
-                      const replyMessage = prompt("Enter your reply message. This will be sent as a notification to the reporter.");
-                      if (replyMessage && complaint.student?.parents?.[0]?.parent?.userId) {
-                        // Assuming we notify the parent of the student who made the complaint. 
-                        // Wait, who is the author? The Complaint model has teacherId and studentId. 
-                        // In this app, teachers report students. Let's send the reply to the teacher.
-                        const res = await fetch(`/api/complaints/${complaint.id}/reply`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ message: replyMessage, recipientUserId: complaint.teacher?.userId })
-                        });
-                        if (!res.ok) alert("Failed to send reply");
-                        else alert("Reply sent successfully.");
-                      } else {
-                        // If we are calling the server action directly
-                        if (replyMessage && complaint.teacher?.userId) {
-                          const { replyToComplaintAction } = await import('@/backend/api/actions/dashboard/admin/complaints/actions');
-                          const res = await replyToComplaintAction(complaint.id, replyMessage, complaint.teacher.userId);
-                          if (res.error) alert(res.error);
-                          else alert("Reply sent successfully.");
-                        }
-                      }
-                    }}
-                    style={{ flex: 1, padding: '0.75rem', background: 'var(--primary)', border: 'none', color: "var(--primary-fg)", borderRadius: '8px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500 }}
-                  >
-                    Reply
-                  </button>
-                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div
+                style={{
+                  padding: "1rem 1.5rem",
+                  borderTop: "1px solid var(--border)",
+                  backgroundColor: "var(--background)",
+                  display: "flex",
+                  gap: "0.6rem"
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setConversationComplaint(item)}
+                  style={{
+                    flex: 1,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.4rem",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "8px",
+                    backgroundColor: "var(--primary)",
+                    color: "var(--primary-fg)",
+                    border: "none",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    cursor: "pointer"
+                  }}
+                >
+                  <MessageSquare size={15} />
+                  <span>Conversation ({item.messages.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatusModalComplaint(item);
+                    setEditStatus(item.status);
+                    setEditRemarks(item.remarks || "");
+                  }}
+                  style={{
+                    flex: 1,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.4rem",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "8px",
+                    backgroundColor: "transparent",
+                    color: "var(--foreground)",
+                    border: "1px solid var(--border)",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    cursor: "pointer"
+                  }}
+                >
+                  <Edit3 size={15} />
+                  <span>Update Status</span>
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        {filteredComplaints.length === 0 && (
+          <div
+            style={{
+              gridColumn: "1 / -1",
+              textAlign: "center",
+              padding: "4rem 1.5rem",
+              color: "var(--text-secondary)",
+              backgroundColor: "var(--card)",
+              borderRadius: "14px",
+              border: "1px solid var(--border)"
+            }}
+          >
+            <MessageSquare size={44} style={{ opacity: 0.3, margin: "0 auto 0.75rem" }} />
+            <h4 style={{ margin: "0 0 0.4rem 0", color: "var(--foreground)", fontSize: "1.1rem" }}>
+              No Complaints Found
+            </h4>
+            <p style={{ margin: 0, fontSize: "0.85rem" }}>
+              {complaints.length === 0
+                ? "No complaints have been recorded yet."
+                : "No complaints match your search or filter criteria."}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* =========================================================
+          MODAL 1: LOG / DESCRIBE COMPLAINT FOR ANY STUDENT
+         ========================================================= */}
+      {showCreateModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.65)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 99999,
+            padding: "1rem"
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowCreateModal(false);
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "600px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              backgroundColor: "var(--card)",
+              borderRadius: "16px",
+              border: "1px solid var(--border)",
+              boxShadow: "0 24px 48px rgba(0,0,0,0.3)",
+              padding: "2rem"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "var(--foreground)" }}>
+                  Log / Describe Complaint for a Student
+                </h3>
+                <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.825rem", color: "var(--text-secondary)" }}>
+                  Select any student in the school to describe a complaint. The student&apos;s parents will be notified.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                style={{ background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {createError && (
+              <div style={{ padding: "0.75rem", borderRadius: "8px", backgroundColor: "rgba(239, 68, 68, 0.12)", color: "var(--danger)", fontSize: "0.85rem", marginBottom: "1rem" }}>
+                {createError}
               </div>
             )}
+
+            <form onSubmit={handleCreateSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              {/* Student Search & Select */}
+              <div>
+                <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 700, marginBottom: "0.4rem" }}>
+                  1. Choose Student *
+                </label>
+                <input
+                  type="text"
+                  placeholder="Type to filter students by name, roll no, or class..."
+                  value={createStudentSearch}
+                  onChange={(e) => setCreateStudentSearch(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.6rem 0.85rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                    fontSize: "0.85rem",
+                    marginBottom: "0.5rem",
+                    outline: "none"
+                  }}
+                />
+
+                <select
+                  required
+                  value={selectedStudentId}
+                  onChange={(e) => setSelectedStudentId(e.target.value)}
+                  size={5}
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                    fontSize: "0.85rem",
+                    outline: "none"
+                  }}
+                >
+                  <option value="" disabled>-- Click a student below to select --</option>
+                  {filteredStudents.map(s => (
+                    <option key={s.id} value={s.id} style={{ padding: "6px" }}>
+                      {s.firstName} {s.lastName} — {s.class ? `${s.class.name}-${s.class.section}` : "No Class"} (Roll: {s.rollNumber})
+                    </option>
+                  ))}
+                </select>
+                {selectedStudentId && (
+                  <span style={{ fontSize: "0.75rem", color: "var(--success)", display: "block", marginTop: "0.25rem", fontWeight: 600 }}>
+                    ✓ Selected: {studentsList.find(s => s.id === selectedStudentId)?.firstName} {studentsList.find(s => s.id === selectedStudentId)?.lastName}
+                  </span>
+                )}
+              </div>
+
+              {/* Category & Severity */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 700, marginBottom: "0.4rem" }}>
+                    Category *
+                  </label>
+                  <select
+                    value={createCategory}
+                    onChange={(e) => setCreateCategory(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border)",
+                      backgroundColor: "var(--background)",
+                      color: "var(--foreground)",
+                      fontSize: "0.85rem",
+                      outline: "none"
+                    }}
+                  >
+                    {CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 700, marginBottom: "0.4rem" }}>
+                    Priority / Severity *
+                  </label>
+                  <select
+                    value={createSeverity}
+                    onChange={(e) => setCreateSeverity(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border)",
+                      backgroundColor: "var(--background)",
+                      color: "var(--foreground)",
+                      fontSize: "0.85rem",
+                      outline: "none"
+                    }}
+                  >
+                    {SEVERITIES.map(sev => (
+                      <option key={sev.value} value={sev.value}>{sev.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Title */}
+              <div>
+                <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 700, marginBottom: "0.4rem" }}>
+                  Subject / Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., Repeated classroom disturbance / Incomplete homework"
+                  value={createTitle}
+                  onChange={(e) => setCreateTitle(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                    fontSize: "0.85rem",
+                    outline: "none"
+                  }}
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 700, marginBottom: "0.4rem" }}>
+                  Detailed Description *
+                </label>
+                <textarea
+                  required
+                  rows={4}
+                  placeholder="Provide incident details, observations, or directives..."
+                  value={createDescription}
+                  onChange={(e) => setCreateDescription(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                    fontSize: "0.85rem",
+                    outline: "none",
+                    resize: "vertical"
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  style={{
+                    padding: "0.65rem 1.25rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "transparent",
+                    color: "var(--foreground)",
+                    cursor: "pointer",
+                    fontSize: "0.85rem"
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createSubmitting}
+                  style={{
+                    padding: "0.65rem 1.5rem",
+                    borderRadius: "8px",
+                    border: "none",
+                    backgroundColor: "var(--primary)",
+                    color: "var(--primary-fg)",
+                    fontWeight: 700,
+                    fontSize: "0.85rem",
+                    cursor: createSubmitting ? "not-allowed" : "pointer"
+                  }}
+                >
+                  {createSubmitting ? "Logging Complaint..." : "Submit Complaint"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      ))}
+      )}
 
-      {complaints.length === 0 && (
-        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)', background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-          <MessageSquare size={48} style={{ opacity: 0.2, margin: '0 auto 1rem' }} />
-          <p>No complaints or feedback found.</p>
+      {/* =========================================================
+          MODAL 2: UPDATE STATUS & REMARKS
+         ========================================================= */}
+      {statusModalComplaint && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.65)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 99999,
+            padding: "1rem"
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setStatusModalComplaint(null);
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "480px",
+              backgroundColor: "var(--card)",
+              borderRadius: "16px",
+              border: "1px solid var(--border)",
+              boxShadow: "0 24px 48px rgba(0,0,0,0.3)",
+              padding: "1.75rem"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700 }}>Update Complaint Status</h3>
+              <button
+                type="button"
+                onClick={() => setStatusModalComplaint(null)}
+                style={{ background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: "0.75rem", borderRadius: "8px", backgroundColor: "var(--background)", marginBottom: "1rem", fontSize: "0.85rem" }}>
+              <strong>{statusModalComplaint.title}</strong>
+              <div style={{ color: "var(--text-secondary)", marginTop: "0.2rem" }}>
+                Student: {statusModalComplaint.student.firstName} {statusModalComplaint.student.lastName}
+              </div>
+            </div>
+
+            <form onSubmit={handleStatusSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                  Status *
+                </label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                    fontSize: "0.9rem",
+                    outline: "none"
+                  }}
+                >
+                  <option value="OPEN">Open</option>
+                  <option value="UNDER_REVIEW">Under Review</option>
+                  <option value="RESOLVED">Resolved</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                  Resolution Remarks / Notes
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Add resolution details or directives for parents..."
+                  value={editRemarks}
+                  onChange={(e) => setEditRemarks(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                    fontSize: "0.85rem",
+                    outline: "none",
+                    resize: "vertical"
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setStatusModalComplaint(null)}
+                  style={{
+                    padding: "0.65rem 1.25rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "transparent",
+                    color: "var(--foreground)",
+                    cursor: "pointer",
+                    fontSize: "0.85rem"
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={statusSubmitting}
+                  style={{
+                    padding: "0.65rem 1.5rem",
+                    borderRadius: "8px",
+                    border: "none",
+                    backgroundColor: "var(--success)",
+                    color: "var(--success-fg)",
+                    fontWeight: 700,
+                    fontSize: "0.85rem",
+                    cursor: statusSubmitting ? "not-allowed" : "pointer"
+                  }}
+                >
+                  {statusSubmitting ? "Updating..." : "Save Status"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
+      )}
+
+      {/* =========================================================
+          MODAL 3: COMPLAINT CONVERSATION MODAL
+         ========================================================= */}
+      {conversationComplaint && (
+        <ComplaintConversationModal
+          isOpen={true}
+          onClose={() => setConversationComplaint(null)}
+          complaintId={conversationComplaint.id}
+          complaintTitle={conversationComplaint.title}
+          studentName={`${conversationComplaint.student.firstName} ${conversationComplaint.student.lastName}`}
+          studentClass={conversationComplaint.student.class ? `${conversationComplaint.student.class.name} - ${conversationComplaint.student.class.section}` : null}
+          category={conversationComplaint.category}
+          severity={conversationComplaint.severity}
+          status={conversationComplaint.status}
+          currentUser={currentUser}
+          initialMessages={conversationComplaint.messages}
+          onMessageAdded={(newMsg) => {
+            setComplaints(prev => prev.map(c => c.id === conversationComplaint.id ? {
+              ...c,
+              messages: [...c.messages, newMsg],
+              _count: { messages: c._count.messages + 1 }
+            } : c));
+          }}
+        />
       )}
     </div>
   );

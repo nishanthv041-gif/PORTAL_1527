@@ -3,25 +3,25 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { 
-  ArrowLeft, 
-  BookOpen, 
-  GraduationCap, 
-  Calendar as CalendarIcon, 
-  Clock, 
-  Trash2, 
-  MessageSquare, 
-  Send, 
-  RefreshCw, 
-  HeartHandshake, 
+import {
+  ArrowLeft,
+  BookOpen,
+  GraduationCap,
+  Calendar as CalendarIcon,
+  Clock,
+  Trash2,
+  MessageSquare,
+  Send,
+  RefreshCw,
+  HeartHandshake,
   AlertCircle,
   Sparkles
 } from "lucide-react";
-import { 
-  deleteAssignment, 
-  addHomeworkComment, 
-  getHomeworkComments, 
-  deleteHomeworkComment 
+import {
+  deleteAssignment,
+  addHomeworkComment,
+  getHomeworkComments,
+  deleteHomeworkComment
 } from "@/backend/api/actions/dashboard/teacher/assignments/actions";
 import styles from "@/frontend/app/dashboard/dashboard.module.css";
 
@@ -437,13 +437,13 @@ export default function HomeworkConsoleClient({
                         backgroundColor: isTeacher
                           ? "rgba(99, 102, 241, 0.15)"
                           : isParent
-                          ? "rgba(16, 185, 129, 0.15)"
-                          : "rgba(168, 85, 247, 0.15)",
+                            ? "rgba(16, 185, 129, 0.15)"
+                            : "rgba(168, 85, 247, 0.15)",
                         color: isTeacher
                           ? "var(--primary)"
                           : isParent
-                          ? "var(--success)"
-                          : "purple"
+                            ? "var(--success)"
+                            : "purple"
                       }}
                     >
                       {isTeacher ? "Teacher 🎓" : isParent ? "Parent 👨‍👩‍👧‍👦" : "Staff"}

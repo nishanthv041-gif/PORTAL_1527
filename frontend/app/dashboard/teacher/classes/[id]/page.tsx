@@ -4,16 +4,16 @@ import { prisma } from "@/backend/db/prisma";
 import { autoDeleteExpiredHomework } from "@/backend/api/actions/dashboard/teacher/assignments/actions";
 import Link from "next/link";
 import styles from "../../../dashboard.module.css";
-import { 
-  ArrowLeft, 
-  User, 
-  BookOpen, 
-  Calendar as CalendarIcon, 
-  Clock, 
-  MessageSquare, 
-  PlusCircle, 
-  UserCheck, 
-  ExternalLink 
+import {
+  ArrowLeft,
+  User,
+  BookOpen,
+  Calendar as CalendarIcon,
+  Clock,
+  MessageSquare,
+  PlusCircle,
+  UserCheck,
+  ExternalLink
 } from "lucide-react";
 
 export default async function TeacherClassRosterPage({ params }: { params: Promise<{ id: string }> }) {

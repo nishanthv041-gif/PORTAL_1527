@@ -226,9 +226,9 @@ export async function deleteAssignment(assignmentId: string) {
     const isAdmin = session.user.role === "ADMIN";
 
     if (!isAdmin && !isCurrentSubjectTeacher && !isAssigningTeacher) {
-      return { 
-        success: false, 
-        error: "Only the assigned subject staff can delete this home work. Class teachers cannot delete homework for other subjects." 
+      return {
+        success: false,
+        error: "Only the assigned subject staff can delete this home work. Class teachers cannot delete homework for other subjects."
       };
     }
 

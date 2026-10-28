@@ -13,23 +13,28 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role === "PARENT") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { id } = await params;
     const body = await request.json();
     const { title, description, category, severity } = body;
 
     const complaint = await prisma.complaint.findUnique({
       where: { id },
+      include: { parent: true }
     });
 
     if (!complaint) {
       return NextResponse.json({ error: "Complaint not found" }, { status: 404 });
     }
 
-    if (session.user.role === "TEACHER") {
+    if (session.user.role === "PARENT") {
+      const isOwner = complaint.authorId === session.user.id || complaint.parent?.userId === session.user.id;
+      if (!isOwner) {
+        return NextResponse.json({ error: "Forbidden: You can only edit complaints you submitted" }, { status: 403 });
+      }
+      if (complaint.status !== "OPEN") {
+        return NextResponse.json({ error: "Forbidden: You cannot edit a complaint that is already under review or resolved" }, { status: 403 });
+      }
+    } else if (session.user.role === "TEACHER") {
       const teacher = await prisma.teacher.findUnique({
         where: { userId: session.user.id }
       });
@@ -76,21 +81,32 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role === "PARENT") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const { id } = await params;
 
     const complaint = await prisma.complaint.findUnique({
       where: { id },
+      include: { parent: true }
     });
 
     if (!complaint) {
       return NextResponse.json({ error: "Complaint not found" }, { status: 404 });
     }
 
-    if (session.user.role === "TEACHER") {
+    if (session.user.role === "PARENT") {
+      const isOwner = complaint.authorId === session.user.id || complaint.parent?.userId === session.user.id;
+      if (!isOwner) {
+        return NextResponse.json(
+          { error: "Forbidden: You can only withdraw complaints you submitted" },
+          { status: 403 }
+        );
+      }
+      if (complaint.status !== "OPEN") {
+        return NextResponse.json(
+          { error: "Forbidden: You cannot withdraw a complaint that is already under review or resolved" },
+          { status: 403 }
+        );
+      }
+    } else if (session.user.role === "TEACHER") {
       const teacher = await prisma.teacher.findUnique({
         where: { userId: session.user.id }
       });
@@ -109,6 +125,11 @@ export async function DELETE(
         );
       }
     }
+
+    // Cascade delete any complaint messages first
+    await prisma.complaintMessage.deleteMany({
+      where: { complaintId: id }
+    });
 
     await prisma.complaint.delete({
       where: { id },

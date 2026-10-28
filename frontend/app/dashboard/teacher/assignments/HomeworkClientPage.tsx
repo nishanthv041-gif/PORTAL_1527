@@ -2,16 +2,16 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { 
-  BookOpen, 
-  Calendar as CalendarIcon, 
-  Trash2, 
-  MessageSquare, 
-  Sparkles, 
-  PlusCircle, 
-  GraduationCap, 
-  Clock, 
-  CheckCircle2, 
+import {
+  BookOpen,
+  Calendar as CalendarIcon,
+  Trash2,
+  MessageSquare,
+  Sparkles,
+  PlusCircle,
+  GraduationCap,
+  Clock,
+  CheckCircle2,
   AlertCircle,
   FileText,
   Send,
@@ -90,7 +90,7 @@ export default function HomeworkClientPage({
   const [activeTab, setActiveTab] = useState<"CREATE" | "TODAY" | "HISTORY">("TODAY");
   const [assignments, setAssignments] = useState<AssignmentItem[]>(initialAssignments);
   const [portalAssignments, setPortalAssignments] = useState<AssignmentItem[]>(classPortalAssignments);
-  
+
   // Creator form state
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
@@ -130,7 +130,7 @@ export default function HomeworkClientPage({
     if (!selectedClassId) return [];
     const cls = classes.find(c => c.id === selectedClassId);
     if (!cls) return [];
-    
+
     // Strict isolation: only return subjects where this teacher is the assigned teacher
     return cls.subjects.filter(s => s.teacherId === teacher.id);
   }, [selectedClassId, classes, teacher.id]);
@@ -173,9 +173,9 @@ export default function HomeworkClientPage({
   const handleCreateHomework = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedClassId || !selectedSubjectId || !title.trim() || !deadline) {
-      setCreateFeedback({ 
-        type: "error", 
-        text: "Please select an assigned class, select your subject, provide a title, and pick a due date." 
+      setCreateFeedback({
+        type: "error",
+        text: "Please select an assigned class, select your subject, provide a title, and pick a due date."
       });
       return;
     }
@@ -228,7 +228,7 @@ export default function HomeworkClientPage({
       setAssignments([newItem, ...assignments]);
       setPortalAssignments([newItem, ...portalAssignments]);
       setCreateFeedback({ type: "success", text: "✨ Home Work successfully assigned and sent to parents!" });
-      
+
       // Reset form fields
       setTitle("");
       setDescription("");
@@ -249,7 +249,7 @@ export default function HomeworkClientPage({
   const confirmDelete = async () => {
     if (!itemToDelete) return;
     setDeletingId(itemToDelete.id);
-    
+
     const res = await deleteAssignment(itemToDelete.id);
     if (res.success) {
       setAssignments(prev => prev.filter(a => a.id !== itemToDelete.id));
@@ -317,12 +317,12 @@ export default function HomeworkClientPage({
         </div>
 
         {/* Top 3 Tab Switchers */}
-        <div 
-          style={{ 
-            display: "inline-flex", 
-            padding: "4px", 
-            backgroundColor: "var(--card)", 
-            borderRadius: "12px", 
+        <div
+          style={{
+            display: "inline-flex",
+            padding: "4px",
+            backgroundColor: "var(--card)",
+            borderRadius: "12px",
             border: "1px solid var(--border)",
             gap: "4px",
             boxShadow: "0 2px 6px rgba(0,0,0,0.04)"
@@ -349,13 +349,13 @@ export default function HomeworkClientPage({
             <LayoutDashboard size={15} />
             <span>Today&apos;s Home Work</span>
             {portalAssignments.length > 0 && (
-              <span 
-                style={{ 
-                  padding: "2px 6px", 
-                  borderRadius: "10px", 
-                  backgroundColor: activeTab === "TODAY" ? "rgba(255,255,255,0.25)" : "rgba(99, 102, 241, 0.15)", 
+              <span
+                style={{
+                  padding: "2px 6px",
+                  borderRadius: "10px",
+                  backgroundColor: activeTab === "TODAY" ? "rgba(255,255,255,0.25)" : "rgba(99, 102, 241, 0.15)",
                   color: activeTab === "TODAY" ? "#fff" : "var(--primary)",
-                  fontSize: "0.75rem" 
+                  fontSize: "0.75rem"
                 }}
               >
                 {portalAssignments.length}
@@ -406,13 +406,13 @@ export default function HomeworkClientPage({
             <History size={15} />
             <span>My Subject History</span>
             {assignments.length > 0 && (
-              <span 
-                style={{ 
-                  padding: "2px 6px", 
-                  borderRadius: "10px", 
-                  backgroundColor: activeTab === "HISTORY" ? "rgba(255,255,255,0.25)" : "rgba(99, 102, 241, 0.15)", 
+              <span
+                style={{
+                  padding: "2px 6px",
+                  borderRadius: "10px",
+                  backgroundColor: activeTab === "HISTORY" ? "rgba(255,255,255,0.25)" : "rgba(99, 102, 241, 0.15)",
                   color: activeTab === "HISTORY" ? "#fff" : "var(--primary)",
-                  fontSize: "0.75rem" 
+                  fontSize: "0.75rem"
                 }}
               >
                 {assignments.length}
@@ -428,34 +428,34 @@ export default function HomeworkClientPage({
       {activeTab === "TODAY" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
           {/* Top Quick Stats Card */}
-          <div 
-            style={{ 
-              display: "grid", 
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", 
-              gap: "1rem" 
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: "1rem"
             }}
           >
-            <div 
-              className={styles.chartCard} 
-              style={{ 
-                padding: "1.25rem", 
-                display: "flex", 
-                alignItems: "center", 
+            <div
+              className={styles.chartCard}
+              style={{
+                padding: "1.25rem",
+                display: "flex",
+                alignItems: "center",
                 gap: "1rem",
                 borderRadius: "12px",
                 border: "1px solid var(--border)"
               }}
             >
-              <div 
-                style={{ 
-                  width: 48, 
-                  height: 48, 
-                  borderRadius: "12px", 
-                  backgroundColor: "rgba(99, 102, 241, 0.12)", 
-                  color: "var(--primary)", 
-                  display: "flex", 
-                  alignItems: "center", 
-                  justifyContent: "center" 
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "12px",
+                  backgroundColor: "rgba(99, 102, 241, 0.12)",
+                  color: "var(--primary)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
                 }}
               >
                 <BookOpen size={24} />
@@ -468,27 +468,27 @@ export default function HomeworkClientPage({
               </div>
             </div>
 
-            <div 
-              className={styles.chartCard} 
-              style={{ 
-                padding: "1.25rem", 
-                display: "flex", 
-                alignItems: "center", 
+            <div
+              className={styles.chartCard}
+              style={{
+                padding: "1.25rem",
+                display: "flex",
+                alignItems: "center",
                 gap: "1rem",
                 borderRadius: "12px",
                 border: "1px solid var(--border)"
               }}
             >
-              <div 
-                style={{ 
-                  width: 48, 
-                  height: 48, 
-                  borderRadius: "12px", 
-                  backgroundColor: "rgba(16, 185, 129, 0.12)", 
-                  color: "var(--success)", 
-                  display: "flex", 
-                  alignItems: "center", 
-                  justifyContent: "center" 
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "12px",
+                  backgroundColor: "rgba(16, 185, 129, 0.12)",
+                  color: "var(--success)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
                 }}
               >
                 <Sparkles size={24} />
@@ -501,27 +501,27 @@ export default function HomeworkClientPage({
               </div>
             </div>
 
-            <div 
-              className={styles.chartCard} 
-              style={{ 
-                padding: "1.25rem", 
-                display: "flex", 
-                alignItems: "center", 
+            <div
+              className={styles.chartCard}
+              style={{
+                padding: "1.25rem",
+                display: "flex",
+                alignItems: "center",
                 gap: "1rem",
                 borderRadius: "12px",
                 border: "1px solid var(--border)"
               }}
             >
-              <div 
-                style={{ 
-                  width: 48, 
-                  height: 48, 
-                  borderRadius: "12px", 
-                  backgroundColor: "rgba(234, 179, 8, 0.12)", 
-                  color: "#ca8a04", 
-                  display: "flex", 
-                  alignItems: "center", 
-                  justifyContent: "center" 
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "12px",
+                  backgroundColor: "rgba(234, 179, 8, 0.12)",
+                  color: "#ca8a04",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
                 }}
               >
                 <Clock size={24} />
@@ -536,15 +536,15 @@ export default function HomeworkClientPage({
           </div>
 
           {/* Filter Bar for Class Portal View */}
-          <div 
-            className={styles.chartCard} 
-            style={{ 
-              padding: "0.85rem 1.25rem", 
-              display: "flex", 
-              justifyContent: "space-between", 
-              alignItems: "center", 
-              flexWrap: "wrap", 
-              gap: "1rem" 
+          <div
+            className={styles.chartCard}
+            style={{
+              padding: "0.85rem 1.25rem",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "1rem"
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
@@ -816,8 +816,8 @@ export default function HomeworkClientPage({
             })}
 
             {filteredPortalAssignments.length === 0 && (
-              <div 
-                className={styles.chartCard} 
+              <div
+                className={styles.chartCard}
                 style={{ textAlign: "center", padding: "3rem 1.5rem", color: "var(--text-secondary)" }}
               >
                 <FileText size={44} style={{ opacity: 0.3, margin: "0 auto 0.75rem" }} />
@@ -825,8 +825,8 @@ export default function HomeworkClientPage({
                   No Active Home Work Found for Today
                 </h4>
                 <p style={{ margin: "0 0 1rem 0", fontSize: "0.85rem" }}>
-                  {portalClassFilter !== "ALL" 
-                    ? "No homework has been assigned for this class yet." 
+                  {portalClassFilter !== "ALL"
+                    ? "No homework has been assigned for this class yet."
                     : "Create homework from the 'Create Home Work' tab to notify parents and start the work conversation."}
                 </p>
                 <button
@@ -1411,8 +1411,8 @@ export default function HomeworkClientPage({
             ))}
 
             {filteredHistoryAssignments.length === 0 && (
-              <div 
-                className={styles.chartCard} 
+              <div
+                className={styles.chartCard}
                 style={{ textAlign: "center", padding: "3rem 1.5rem", color: "var(--text-secondary)" }}
               >
                 <FileText size={44} style={{ opacity: 0.3, margin: "0 auto 0.75rem" }} />
@@ -1420,8 +1420,8 @@ export default function HomeworkClientPage({
                   No Home Work Found in History
                 </h4>
                 <p style={{ margin: 0, fontSize: "0.85rem" }}>
-                  {assignments.length === 0 
-                    ? "Active home work will appear here until its deadline expires." 
+                  {assignments.length === 0
+                    ? "Active home work will appear here until its deadline expires."
                     : "No home work records match the selected class or subject filters."}
                 </p>
               </div>

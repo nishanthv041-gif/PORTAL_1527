@@ -352,7 +352,7 @@ export default function ParentHomeworkList({
               No active home work
             </h4>
             <p style={{ margin: 0, fontSize: "0.85rem" }}>
-              {assignments.length === 0 
+              {assignments.length === 0
                 ? `No active home work for ${childName}'s class. Homework automatically deletes after the deadline.`
                 : "No home works match the selected subject filter."}
             </p>

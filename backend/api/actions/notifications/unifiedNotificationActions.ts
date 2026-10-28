@@ -112,11 +112,17 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
         category = "MESSAGE";
         badgeLabel = "Message";
         badgeColors = { bg: "rgba(6, 182, 212, 0.12)", text: "#0284c7", border: "rgba(6, 182, 212, 0.25)" };
+      } else if (typeStr.includes("COMPLAINT") || titleLower.includes("complaint")) {
+        category = "SYSTEM";
+        badgeLabel = "Complaint";
+        badgeColors = { bg: "rgba(239, 68, 68, 0.12)", text: "#ef4444", border: "rgba(239, 68, 68, 0.25)" };
       }
 
       let defaultLink = userRole === "PARENT" ? "/dashboard/parent/notifications" : userRole === "TEACHER" ? "/dashboard/teacher/notifications" : "/dashboard/admin/notifications";
       if (typeStr.includes("PROGRAM")) {
         defaultLink = userRole === "PARENT" ? "/dashboard/parent/programs" : userRole === "ADMIN" ? "/dashboard/admin/programs" : "/dashboard/teacher/calendar";
+      } else if (typeStr.includes("COMPLAINT") || titleLower.includes("complaint")) {
+        defaultLink = userRole === "PARENT" ? "/dashboard/parent/complaints" : userRole === "ADMIN" ? "/dashboard/admin/complaints" : "/dashboard/teacher/complaints";
       }
 
       items.push({

@@ -9,10 +9,10 @@ export async function createSubjectAction(formData: FormData) {
     const code = (formData.get("code") as string)?.trim();
     const { getSystemSetting } = await import("@/backend/api/actions/dashboard/admin/settings/actions");
     const defaultPassSetting = await getSystemSetting("DEFAULT_PASSING_MARKS", "40");
-    
+
     const maxMarks = parseInt(formData.get("maxMarks") as string || "100", 10);
     const passMarks = parseInt(formData.get("passMarks") as string || defaultPassSetting, 10);
-    
+
     // Per-class teacher assignments: [{ classId: string, teacherId?: string | null }]
     const classAssignmentsRaw = formData.get("classAssignments") as string;
     let assignments: { classId: string; teacherId?: string | null }[] = [];
@@ -105,7 +105,7 @@ export async function updateSubjectGroupAction(formData: FormData) {
     // Check if newName conflicts with an existing different subject
     if (newName.toLowerCase() !== originalName.toLowerCase()) {
       const conflict = await prisma.subject.findFirst({
-        where: { 
+        where: {
           name: { equals: newName, mode: "insensitive" },
           NOT: { name: originalName }
         }
