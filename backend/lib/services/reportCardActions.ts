@@ -378,11 +378,11 @@ export async function createAndSendReportCardAction(payload: CreateReportCardPay
     if (session.user.role === "TEACHER") {
       const teacher = await prisma.teacher.findUnique({
         where: { userId: session.user.id },
-        include: { classes: true }
+        include: { classes: true, classTeacherOf: true }
       });
-      const teachesClass = teacher?.classes.some(c => c.id === classId);
+      const teachesClass = teacher?.classes.some(c => c.id === classId) || teacher?.classTeacherOf?.id === classId;
       if (!teachesClass) {
-        return { success: false, error: "Unauthorized: You do not teach this class" };
+        return { success: false, error: "Unauthorized: You do not teach or manage this class" };
       }
     }
 
@@ -620,9 +620,9 @@ export async function deleteReportCardAction(reportCardId: string) {
     if (session.user.role === "TEACHER") {
       const teacher = await prisma.teacher.findUnique({
         where: { userId: session.user.id },
-        include: { classes: true }
+        include: { classes: true, classTeacherOf: true }
       });
-      const teaches = teacher?.classes.some(c => c.id === reportCard.student.classId);
+      const teaches = teacher?.classes.some(c => c.id === reportCard.student.classId) || teacher?.classTeacherOf?.id === reportCard.student.classId;
       if (!teaches) {
         return { success: false, error: "You are not authorized to delete report cards for this class" };
       }

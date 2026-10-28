@@ -13,11 +13,7 @@ import {
   createAndSendReportCardAction,
   deleteReportCardAction
 } from "@/backend/lib/services/reportCardActions";
-import dynamic from "next/dynamic";
-const ReportCardDocumentScanModal = dynamic(
-  () => import("./ReportCardDocumentScanModal"),
-  { ssr: false }
-);
+import ReportCardDocumentScanModal from "./ReportCardDocumentScanModal";
 
 export type ClassSubject = {
   id: string;
@@ -659,9 +655,9 @@ export default function TeacherReportCardsClient({
                   onChange={(e) => handleClassChange(e.target.value)}
                   required
                 >
-                  {classes.map(c => (
+                  {(classes || []).map(c => (
                     <option key={c.id} value={c.id}>
-                      Class {c.name} - {c.section} ({c.students.length} students)
+                      Class {c.name} - {c.section} ({(c.students || []).length} students)
                     </option>
                   ))}
                 </select>
@@ -1413,20 +1409,22 @@ export default function TeacherReportCardsClient({
       )}
 
       {/* Document & OCR Scanner Modal */}
-      <ReportCardDocumentScanModal
-        isOpen={showScanModal}
-        onClose={() => setShowScanModal(false)}
-        classes={classes}
-        selectedClassId={selectedClassId}
-        onReportCardCreated={(newCard, recipients) => {
-          setHistory(prev => [newCard, ...prev]);
-          setSuccessBanner({
-            message: `Report card created from scanned document and connected to database for ${newCard.studentName}!`,
-            recipients
-          });
-          router.refresh();
-        }}
-      />
+      {showScanModal && (
+        <ReportCardDocumentScanModal
+          isOpen={showScanModal}
+          onClose={() => setShowScanModal(false)}
+          classes={classes}
+          selectedClassId={selectedClassId}
+          onReportCardCreated={(newCard, recipients) => {
+            setHistory(prev => [newCard, ...prev]);
+            setSuccessBanner({
+              message: `Report card created from scanned document and connected to database for ${newCard.studentName}!`,
+              recipients
+            });
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

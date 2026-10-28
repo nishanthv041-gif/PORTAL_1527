@@ -7,6 +7,7 @@ import {
   Award, Calendar, User, ChevronRight, X, ArrowRight, ShieldCheck, Check
 } from "lucide-react";
 import type { TeacherClass, ClassSubject, ClassStudent, HistoryItem } from "./TeacherReportCardsClient";
+import { scanReportCardAction } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardAction";
 import type { ScanReportCardResult, ScannedReportCardSubject } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardTypes";
 import { createAndSendReportCardAction } from "@/backend/lib/services/reportCardActions";
 
@@ -56,7 +57,49 @@ export default function ReportCardDocumentScanModal({
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  // Live Summary Calculation (Declared at top level with all hooks)
+  const totals = useMemo(() => {
+    let obtained = 0;
+    let maximum = 0;
+    let hasFail = false;
+    let hasAnyMarks = false;
+
+    subjects.forEach(sub => {
+      maximum += sub.maxScore;
+      if (sub.score !== "") {
+        hasAnyMarks = true;
+        const num = Number(sub.score);
+        obtained += num;
+        if (num < sub.passMarks) {
+          hasFail = true;
+        }
+      }
+    });
+
+    const percentage = maximum > 0 && hasAnyMarks ? parseFloat(((obtained / maximum) * 100).toFixed(1)) : 0;
+    let grade = "-";
+    if (hasAnyMarks) {
+      if (hasFail && percentage < 40) grade = "F";
+      else if (percentage >= 90) grade = "A+";
+      else if (percentage >= 80) grade = "A";
+      else if (percentage >= 70) grade = "B";
+      else if (percentage >= 60) grade = "C";
+      else if (percentage >= 50) grade = "D";
+      else grade = "F";
+    }
+
+    const hasValidationErrors = subjects.some(s => s.isInvalid || s.score === "");
+
+    return {
+      obtained,
+      maximum,
+      percentage,
+      grade,
+      hasFail,
+      hasAnyMarks,
+      hasValidationErrors
+    };
+  }, [subjects]);
 
   // Handle Class Switch
   const handleClassChange = (newClassId: string) => {
@@ -114,17 +157,7 @@ export default function ReportCardDocumentScanModal({
       formData.set("classId", activeClassId);
       formData.set("file", file);
 
-      const res = await fetch("/api/teacher/report-cards/scan", {
-        method: "POST",
-        body: formData
-      });
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || `Server error (${res.status}) while processing document.`);
-      }
-
-      const result: ScanReportCardResult = await res.json();
+      const result = await scanReportCardAction(formData);
       applyScanResult(result);
     } catch (err) {
       console.error("Scan error:", err);
@@ -254,50 +287,6 @@ export default function ReportCardDocumentScanModal({
     setSubjects(prev => [...prev, newSub]);
   };
 
-  // Live Summary Calculation
-  const totals = useMemo(() => {
-    let obtained = 0;
-    let maximum = 0;
-    let hasFail = false;
-    let hasAnyMarks = false;
-
-    subjects.forEach(sub => {
-      maximum += sub.maxScore;
-      if (sub.score !== "") {
-        hasAnyMarks = true;
-        const num = Number(sub.score);
-        obtained += num;
-        if (num < sub.passMarks) {
-          hasFail = true;
-        }
-      }
-    });
-
-    const percentage = maximum > 0 && hasAnyMarks ? parseFloat(((obtained / maximum) * 100).toFixed(1)) : 0;
-    let grade = "-";
-    if (hasAnyMarks) {
-      if (hasFail && percentage < 40) grade = "F";
-      else if (percentage >= 90) grade = "A+";
-      else if (percentage >= 80) grade = "A";
-      else if (percentage >= 70) grade = "B";
-      else if (percentage >= 60) grade = "C";
-      else if (percentage >= 50) grade = "D";
-      else grade = "F";
-    }
-
-    const hasValidationErrors = subjects.some(s => s.isInvalid || s.score === "");
-
-    return {
-      obtained,
-      maximum,
-      percentage,
-      grade,
-      hasFail,
-      hasAnyMarks,
-      hasValidationErrors
-    };
-  }, [subjects]);
-
   // Connect to Database & Create Report Card
   const handleConnectAndSaveToDatabase = async () => {
     if (!activeClassId) {
@@ -402,6 +391,8 @@ export default function ReportCardDocumentScanModal({
       setIsSaving(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div style={{
