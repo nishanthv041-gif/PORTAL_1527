@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import styles from "./PortalBreadcrumb.module.css";
 
@@ -364,6 +363,7 @@ function formatSlug(slug: string): string {
 }
 
 export default function PortalBreadcrumb() {
+  const router = useRouter();
   const pathname = usePathname();
 
   if (!pathname) return null;
@@ -386,144 +386,75 @@ export default function PortalBreadcrumb() {
     return null;
   }
 
+  let parentHref = "/dashboard";
+  let currentLabel = "";
+
   // 1. Direct match in ROUTE_MAP
   if (ROUTE_MAP[cleanPath]) {
     const info = ROUTE_MAP[cleanPath];
-    return (
-      <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-        <Link href={info.parentHref} className={styles.backLink}>
-          <ArrowLeft size={16} /> {info.parentLabel}
-        </Link>
-        <span className={styles.separator}>/</span>
-        <span className={styles.currentPage}>{info.currentLabel}</span>
-      </nav>
-    );
+    parentHref = info.parentHref;
+    currentLabel = info.currentLabel;
+  } else {
+    // 2. Dynamic sub-route detection (e.g., /messages/[id], /exams/[id], /classes/[id], etc.)
+    const segments = cleanPath.split("/").filter(Boolean);
+
+    if (segments.length >= 3) {
+      const role = segments[1]; // "admin", "teacher", "parent"
+      const section = segments[2]; // "messages", "exams", "classes", etc.
+
+      if (section === "messages" && segments.length >= 4) {
+        parentHref = `/dashboard/${role}/messages`;
+        currentLabel = "Direct Conversation";
+      } else if (section === "exams" && segments.length >= 4) {
+        parentHref = `/dashboard/${role}/exams`;
+        currentLabel = "Exam Details";
+      } else if (section === "classes" && segments.length >= 4) {
+        parentHref = `/dashboard/${role}/classes`;
+        currentLabel = "Class Roster";
+      } else if ((section === "assignments" || section === "homework") && segments.length >= 4) {
+        parentHref = `/dashboard/${role}/assignments`;
+        currentLabel = "Home Work Console";
+      } else if (section === "report-cards" && segments.length >= 4) {
+        parentHref = `/dashboard/${role}/report-cards`;
+        currentLabel = "Student Report Card";
+      } else if (section === "subjects" && segments.length >= 4) {
+        parentHref = `/dashboard/${role}/subjects`;
+        currentLabel = decodeURIComponent(segments[3]);
+      } else if (section === "parents" && segments.length >= 4) {
+        parentHref = `/dashboard/${role}/parents`;
+        currentLabel = "Parent Details";
+      } else {
+        const parentSegments = segments.slice(0, -1);
+        parentHref = "/" + parentSegments.join("/");
+        currentLabel = formatSlug(segments[segments.length - 1]);
+      }
+    } else if (segments.length > 0) {
+      parentHref = "/dashboard";
+      currentLabel = formatSlug(segments[segments.length - 1]);
+    }
   }
 
-  // 2. Dynamic sub-route detection (e.g., /messages/[id], /exams/[id], /classes/[id], etc.)
-  const segments = cleanPath.split("/").filter(Boolean);
-
-  // Example: ["dashboard", "admin", "messages", "clx123"]
-  if (segments.length >= 3) {
-    const role = segments[1]; // "admin", "teacher", "parent"
-    const section = segments[2]; // "messages", "exams", "classes", "subjects", "parents", "report-cards", etc.
-
-    // If it's a message thread
-    if (section === "messages" && segments.length >= 4) {
-      return (
-        <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-          <Link href={`/dashboard/${role}/messages`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Messages
-          </Link>
-          <span className={styles.separator}>/</span>
-          <span className={styles.currentPage}>Direct Conversation</span>
-        </nav>
-      );
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push(parentHref);
     }
+  };
 
-    // If it's exams marks/details
-    if (section === "exams" && segments.length >= 4) {
-      return (
-        <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-          <Link href={`/dashboard/${role}/exams`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Examinations
-          </Link>
-          <span className={styles.separator}>/</span>
-          <span className={styles.currentPage}>Exam Details</span>
-        </nav>
-      );
-    }
-
-    // If it's class roster
-    if (section === "classes" && segments.length >= 4) {
-      return (
-        <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-          <Link href={`/dashboard/${role}/classes`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Classes
-          </Link>
-          <span className={styles.separator}>/</span>
-          <span className={styles.currentPage}>Class Roster</span>
-        </nav>
-      );
-    }
-
-    // If it's assignment or homework console
-    if ((section === "assignments" || section === "homework") && segments.length >= 4) {
-      return (
-        <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-          <Link href={`/dashboard/${role}/assignments`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Home Work
-          </Link>
-          <span className={styles.separator}>/</span>
-          <span className={styles.currentPage}>Home Work Console</span>
-        </nav>
-      );
-    }
-
-    // If it's report-cards individual student
-    if (section === "report-cards" && segments.length >= 4) {
-      return (
-        <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-          <Link href={`/dashboard/${role}/report-cards`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Report Cards
-          </Link>
-          <span className={styles.separator}>/</span>
-          <span className={styles.currentPage}>Student Report Card</span>
-        </nav>
-      );
-    }
-
-    // If it's subject detail
-    if (section === "subjects" && segments.length >= 4) {
-      return (
-        <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-          <Link href={`/dashboard/${role}/subjects`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Subjects
-          </Link>
-          <span className={styles.separator}>/</span>
-          <span className={styles.currentPage}>{decodeURIComponent(segments[3])}</span>
-        </nav>
-      );
-    }
-
-    // If it's parent detail
-    if (section === "parents" && segments.length >= 4) {
-      return (
-        <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-          <Link href={`/dashboard/${role}/parents`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Parents
-          </Link>
-          <span className={styles.separator}>/</span>
-          <span className={styles.currentPage}>Parent Details</span>
-        </nav>
-      );
-    }
-
-    // General fallback for sub-items
-    const parentSegments = segments.slice(0, -1);
-    const parentHref = "/" + parentSegments.join("/");
-    const parentLabel = formatSlug(parentSegments[parentSegments.length - 1]);
-    const currentLabel = formatSlug(segments[segments.length - 1]);
-
-    return (
-      <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-        <Link href={parentHref} className={styles.backLink}>
-          <ArrowLeft size={16} /> {parentLabel}
-        </Link>
-        <span className={styles.separator}>/</span>
-        <span className={styles.currentPage}>{currentLabel}</span>
-      </nav>
-    );
-  }
-
-  // Fallback for any other dashboard path
   return (
     <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
-      <Link href="/dashboard" className={styles.backLink}>
-        <ArrowLeft size={16} /> Dashboard
-      </Link>
+      <button
+        type="button"
+        onClick={handleBack}
+        className={styles.backLink}
+        title="Go back to previous page"
+        aria-label="Back to previous page"
+      >
+        <ArrowLeft size={16} /> Back
+      </button>
       <span className={styles.separator}>/</span>
-      <span className={styles.currentPage}>{formatSlug(segments[segments.length - 1])}</span>
+      <span className={styles.currentPage}>{currentLabel}</span>
     </nav>
   );
 }

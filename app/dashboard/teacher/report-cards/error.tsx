@@ -70,8 +70,15 @@ export default function TeacherReportCardsError({
           <span>Reload &amp; Retry</span>
         </button>
 
-        <Link
-          href="/dashboard/teacher"
+        <button
+          type="button"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              window.history.back();
+            } else {
+              window.location.href = "/dashboard/teacher";
+            }
+          }}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -83,12 +90,12 @@ export default function TeacherReportCardsError({
             color: "var(--foreground)",
             fontWeight: 700,
             fontSize: "0.88rem",
-            textDecoration: "none"
+            cursor: "pointer"
           }}
         >
           <ArrowLeft size={15} />
-          <span>Back to Dashboard</span>
-        </Link>
+          <span>Back</span>
+        </button>
       </div>
     </div>
   );

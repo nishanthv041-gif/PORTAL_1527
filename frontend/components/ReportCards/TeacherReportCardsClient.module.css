@@ -178,7 +178,9 @@
   gap: 0.4rem;
 }
 
-.fieldSelect, .fieldInput, .fieldTextarea {
+.fieldSelect,
+.fieldInput,
+.fieldTextarea {
   width: 100%;
   padding: 0.75rem 0.95rem;
   font-size: 0.95rem;
@@ -192,7 +194,9 @@
   font-family: inherit;
 }
 
-.fieldSelect:focus, .fieldInput:focus, .fieldTextarea:focus {
+.fieldSelect:focus,
+.fieldInput:focus,
+.fieldTextarea:focus {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
@@ -1103,11 +1107,11 @@
     width: 100%;
     box-sizing: border-box;
   }
-  
+
   .mainTitle {
     font-size: 1.35rem;
   }
-  
+
   .subtitle {
     font-size: 0.82rem;
   }
@@ -1124,7 +1128,7 @@
     min-height: 40px;
     gap: 0.35rem;
   }
-  
+
   .formCard {
     padding: 0.85rem;
     border-radius: 16px;
@@ -1175,7 +1179,7 @@
     font-size: 0.7rem;
     padding: 0.15rem 0.4rem;
   }
-  
+
   .subjectRowCard {
     padding: 0.8rem;
     border-radius: 12px;
@@ -1198,7 +1202,7 @@
   .customCriteriaInput {
     width: 55px;
   }
-  
+
   .markInputGroup {
     width: 100%;
     display: flex;
@@ -1215,7 +1219,7 @@
   .maxScoreTag {
     font-size: 0.82rem;
   }
-  
+
   .calculationPanel {
     padding: 1rem 0.9rem;
     border-radius: 16px;
@@ -1232,11 +1236,12 @@
     font-size: 0.78rem;
   }
 
-  .statusPassBadge, .statusFailBadge {
+  .statusPassBadge,
+  .statusFailBadge {
     font-size: 0.74rem;
     padding: 0.25rem 0.6rem;
   }
-  
+
   .calcMetricGroup {
     display: flex;
     align-items: center;
@@ -1280,20 +1285,21 @@
     font-size: 0.92rem;
     justify-content: center;
   }
-  
+
   .cardActionFooter {
     flex-direction: column;
     align-items: stretch;
     gap: 0.65rem;
   }
-  
+
   .cardButtonGrp {
     width: 100%;
     display: flex;
     gap: 0.5rem;
   }
-  
-  .previewBtn, .deleteBtn {
+
+  .previewBtn,
+  .deleteBtn {
     flex: 1;
     justify-content: center;
     min-height: 40px;

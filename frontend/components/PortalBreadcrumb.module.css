@@ -18,8 +18,15 @@
   font-weight: 600;
   transition: all 0.15s ease;
   border-radius: 6px;
-  padding: 0.2rem 0.4rem;
+  padding: 0.2rem 0.5rem;
   margin-left: -0.4rem;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  user-select: none;
 }
 
 .backLink:hover {

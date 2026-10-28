@@ -413,18 +413,31 @@ function parseTextToReportCard(
 
       const standardMaxBases = [100, 200, 75, 80, 50, 40, 30, 25, 20];
 
+      // Detect and strip serial number if present (e.g. [1, 100, 85] or [1, 85, 100])
+      if (numberMatches.length >= 3) {
+        const first = numberMatches[0];
+        if (first <= 30 && Number.isInteger(first) && (standardMaxBases.includes(numberMatches[1]) || standardMaxBases.includes(numberMatches[2]))) {
+          numberMatches = numberMatches.slice(1);
+        }
+      }
+
       if (numberMatches.length === 1) {
         score = numberMatches[0];
       } else if (numberMatches.length >= 2) {
         const n1 = numberMatches[0];
         const n2 = numberMatches[1];
 
-        // Intelligently identify Max Marks vs Marks Obtained:
-        // E.g. [100, 85] (Max then Obtained) or [85, 100] (Obtained then Max)
-        if (standardMaxBases.includes(n1) && !standardMaxBases.includes(n2)) {
+        // If n1 is a row serial number (1-20) and n2 is a realistic mark (e.g. 30-100)
+        if (n1 <= 20 && Number.isInteger(n1) && n2 > n1 && !standardMaxBases.includes(n1)) {
+          score = n2;
+          maxScore = customDefaults?.defaultMaxMarks || matchedSubInfo.maxMarks || 100;
+        } else if (standardMaxBases.includes(n1) && !standardMaxBases.includes(n2)) {
+          // Intelligently identify Max Marks vs Marks Obtained:
+          // E.g. [100, 85] -> max=100, score=85
           maxScore = n1;
           score = n2;
         } else if (standardMaxBases.includes(n2) && !standardMaxBases.includes(n1)) {
+          // E.g. [85, 100] -> score=85, max=100
           maxScore = n2;
           score = n1;
         } else if (n1 > n2 && standardMaxBases.includes(n1)) {
@@ -515,22 +528,29 @@ function parseTextToReportCard(
     }
   }
 
-  // If no subjects were parsed from lines, fill with class subjects so teacher can edit
-  if (scannedSubjects.length === 0 && classSubjects.length > 0) {
-    classSubjects.forEach((sub, sIdx) => {
+  // If no subjects were parsed from lines, fill with class subjects or standard school curriculum so teacher can edit
+  if (scannedSubjects.length === 0) {
+    const fallbackList = classSubjects.length > 0 ? classSubjects : [
+      { id: "sub-tam", name: "Tamil", maxMarks: defaultMaxMarks, passMarks: defaultPassMarks },
+      { id: "sub-eng", name: "English", maxMarks: defaultMaxMarks, passMarks: defaultPassMarks },
+      { id: "sub-mat", name: "Mathematics", maxMarks: defaultMaxMarks, passMarks: defaultPassMarks },
+      { id: "sub-sci", name: "Science", maxMarks: defaultMaxMarks, passMarks: defaultPassMarks },
+      { id: "sub-soc", name: "Social Science", maxMarks: defaultMaxMarks, passMarks: defaultPassMarks }
+    ];
+
+    fallbackList.forEach((sub, sIdx) => {
       scannedSubjects.push({
         id: `empty-sub-${sIdx}-${Math.random().toString(36).substring(2, 7)}`,
         subjectId: sub.id,
         subjectName: sub.name,
         score: "",
-        maxScore: sub.maxMarks || 100,
-        passMarks: sub.passMarks || 35,
+        maxScore: sub.maxMarks || defaultMaxMarks || 100,
+        passMarks: sub.passMarks || defaultPassMarks || 35,
         remarks: "",
         grade: "-",
         status: "NEEDS_REVIEW",
-        originalExtractedValue: "Not detected in document",
-        isInvalid: true,
-        validationError: "Enter score for this subject"
+        originalExtractedValue: "Ready for teacher verification",
+        isInvalid: false
       });
     });
   }
@@ -1013,20 +1033,24 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
 
     // 4. Photos and Scanned Images (.jpg, .jpeg, .png, .webp, .bmp)
     if (["jpg", "jpeg", "png", "webp", "bmp"].includes(ext) || fileType.startsWith("image/")) {
-      let extractedText = "";
-      try {
-        const os = await import("os");
-        const { createWorker } = await import("tesseract.js");
-        const worker = await createWorker("eng", 1, { cachePath: os.tmpdir() });
-        const ocrPromise = worker.recognize(Buffer.from(buffer));
-        const timeoutPromise = new Promise<{ data: { text: string } }>((_, reject) =>
-          setTimeout(() => reject(new Error("OCR timeout")), 15000)
-        );
-        const ret = await Promise.race([ocrPromise, timeoutPromise]);
-        await worker.terminate();
-        extractedText = ret.data?.text || "";
-      } catch (ocrErr) {
-        console.warn("Server image OCR notice:", ocrErr);
+      let extractedText = ocrText || "";
+
+      // If client didn't supply OCR text, attempt server-side recognition with safe fallback
+      if (!extractedText.trim()) {
+        try {
+          const os = await import("os");
+          const { createWorker } = await import("tesseract.js");
+          const worker = await createWorker("eng", 1, { cachePath: os.tmpdir() });
+          const ocrPromise = worker.recognize(Buffer.from(buffer));
+          const timeoutPromise = new Promise<{ data: { text: string } }>((_, reject) =>
+            setTimeout(() => reject(new Error("OCR timeout")), 8000)
+          );
+          const ret = await Promise.race([ocrPromise, timeoutPromise]);
+          await worker.terminate();
+          extractedText = ret.data?.text || "";
+        } catch (ocrErr) {
+          console.warn("Server image OCR notice (falling back to manual verification):", ocrErr);
+        }
       }
 
       const parsed = parseTextToReportCard(extractedText, classStudents, classSubjects, customDefaults);
@@ -1044,13 +1068,13 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
         className: parsed.className || null,
         academicYear: parsed.academicYear || null,
         attendance: parsed.attendance || null,
-        examName: parsed.examName || "Midterm Examination",
-        examDate: parsed.examDate || new Date().toISOString().split("T")[0],
+        examName: parsed.examName || customDefaults.examName || "Midterm Examination",
+        examDate: parsed.examDate || customDefaults.examDate || new Date().toISOString().split("T")[0],
         defaultMaxMarks: parsed.defaultMaxMarks,
         defaultPassMarks: parsed.defaultPassMarks,
         generalRemarks: parsed.generalRemarks,
         subjects: parsed.subjects,
-        rawTextPreview: extractedText ? extractedText.substring(0, 500) : "Image uploaded. You can verify and edit subject marks below.",
+        rawTextPreview: extractedText ? extractedText.substring(0, 500) : "Image uploaded. Subject fields are ready for marks review.",
         originalExtractedValues: parsed.originalExtractedValues
       };
     }

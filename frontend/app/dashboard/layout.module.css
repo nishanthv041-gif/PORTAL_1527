@@ -104,12 +104,12 @@
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   }
 
-  .mobileMenuToggle:checked ~ .sidebarWrapper {
+  .mobileMenuToggle:checked~.sidebarWrapper {
     transform: translateX(0);
   }
 
-  .mobileMenuToggle:checked ~ .menuOverlay,
-  .mobileMenuToggle:checked ~ .mainContent .menuOverlay {
+  .mobileMenuToggle:checked~.menuOverlay,
+  .mobileMenuToggle:checked~.mainContent .menuOverlay {
     display: block;
   }
 

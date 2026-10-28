@@ -253,7 +253,7 @@ export default function ReportCardDocumentStudio({
     }
   };
 
-  // Process a Queued Item via API
+  // Process a Queued Item via API with high-reliability client-side OCR for images
   const processQueueItem = async (entry: QueuedFile) => {
     if (!activeClassId) {
       setGlobalError("Please select a target class before scanning documents.");
@@ -261,10 +261,40 @@ export default function ReportCardDocumentStudio({
     }
 
     setFileQueue(prev =>
-      prev.map(f => (f.id === entry.id ? { ...f, status: "PROCESSING", progressText: `Scanning ${entry.ext.toUpperCase()} document...` } : f))
+      prev.map(f => (f.id === entry.id ? { ...f, status: "PROCESSING", progressText: `Processing ${entry.ext.toUpperCase()} document...` } : f))
     );
 
     try {
+      let ocrText = "";
+      const isImage = ["jpg", "jpeg", "png", "webp", "bmp"].includes(entry.ext) || entry.file.type.startsWith("image/");
+
+      if (isImage) {
+        setFileQueue(prev =>
+          prev.map(f => (f.id === entry.id ? { ...f, progressText: "Scanning image text (OCR)..." } : f))
+        );
+
+        try {
+          const Tesseract = await import("tesseract.js");
+          const ret = await Tesseract.recognize(entry.file, "eng", {
+            logger: (m: { status?: string; progress?: number }) => {
+              if (m.status === "recognizing text" && typeof m.progress === "number") {
+                const pct = Math.round(m.progress * 100);
+                setFileQueue(prev =>
+                  prev.map(f => (f.id === entry.id ? { ...f, progressText: `Scanning text... ${pct}%` } : f))
+                );
+              }
+            }
+          });
+          ocrText = ret.data?.text || "";
+        } catch (clientOcrErr) {
+          console.warn("Client-side OCR notice, delegating to server parser:", clientOcrErr);
+        }
+      }
+
+      setFileQueue(prev =>
+        prev.map(f => (f.id === entry.id ? { ...f, progressText: "Analyzing academic marks..." } : f))
+      );
+
       const formData = new FormData();
       formData.set("classId", activeClassId);
       formData.set("file", entry.file);
@@ -272,6 +302,9 @@ export default function ReportCardDocumentStudio({
       formData.set("defaultPassMarks", String(examPassMarks));
       formData.set("examDate", examDate);
       formData.set("examName", examName);
+      if (ocrText) {
+        formData.set("ocrText", ocrText);
+      }
 
       const res = await fetch("/api/teacher/report-cards/scan", {
         method: "POST",
