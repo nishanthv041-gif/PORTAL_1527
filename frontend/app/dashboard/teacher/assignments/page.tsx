@@ -43,7 +43,7 @@ export default async function TeacherAssignmentsPage() {
       <div className={styles.chartsContainer}>
         <div className={styles.chartCard}>
           <h3 className={styles.chartHeader}>My Assignments</h3>
-          
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {assignments.map((assignment) => (
               <Link href={`/dashboard/teacher/assignments/${assignment.id}`} key={assignment.id} style={{ textDecoration: 'none' }}>

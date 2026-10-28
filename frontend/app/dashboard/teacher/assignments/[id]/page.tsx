@@ -3,8 +3,9 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import Link from "next/link";
 import styles from "../../../dashboard.module.css";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, BookOpen, GraduationCap } from "lucide-react";
 import GradeForm from "./GradeForm";
+import OpenConversationButton from "@/frontend/components/homework/OpenConversationButton";
 
 export default async function TeacherAssignmentDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -21,11 +22,18 @@ export default async function TeacherAssignmentDetailsPage({ params }: { params:
           }
         }
       },
-      submissions: true
+      subject: true,
+      teacher: {
+        include: { user: true }
+      },
+      submissions: true,
+      _count: {
+        select: { comments: true }
+      }
     }
   });
 
-  if (!assignment) return <p>Assignment not found.</p>;
+  if (!assignment) return <p style={{ padding: "2rem" }}>Home Work not found.</p>;
 
   // Create a map of submissions by studentId for easier lookup
   const submissionMap = new Map();
@@ -35,19 +43,68 @@ export default async function TeacherAssignmentDetailsPage({ params }: { params:
 
   return (
     <div className={styles.dashboard}>
-      <div style={{ marginBottom: '1rem' }}>
+      <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
+          <Link
+            href="/dashboard/teacher/assignments"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              color: 'var(--primary)',
+              textDecoration: 'none',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              marginBottom: '0.75rem'
+            }}
+          >
+            <ArrowLeft size={16} /> Back to Home Work
+          </Link>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.4rem" }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '3px 10px', borderRadius: '12px', backgroundColor: 'rgba(99, 102, 241, 0.12)', color: 'var(--primary)', fontSize: '0.75rem', fontWeight: 700 }}>
+              <BookOpen size={13} />
+              {assignment.subject?.name || "General Subject"}
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '3px 10px', borderRadius: '12px', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: 'var(--success)', fontSize: '0.75rem', fontWeight: 700 }}>
+              <GraduationCap size={13} />
+              {assignment.class.name} - {assignment.class.section}
+            </span>
+          </div>
+
           <h1 className={styles.title} style={{ margin: 0 }}>
             {assignment.title}
           </h1>
-          <p style={{ margin: 0, opacity: 0.7, fontSize: '0.875rem' }}>
-            Class: {assignment.class.name} - {assignment.class.section} | Due: {new Date(assignment.deadline).toLocaleDateString()}
+          <p style={{ margin: '0.3rem 0 0 0', opacity: 0.7, fontSize: '0.875rem' }}>
+            Due: {new Date(assignment.deadline).toLocaleDateString()} • Assigned on: {new Date(assignment.createdAt).toLocaleDateString()}
           </p>
+          {assignment.description && (
+            <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem', color: 'var(--text-secondary)', maxWidth: '700px' }}>
+              {assignment.description}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <OpenConversationButton
+            assignmentId={assignment.id}
+            assignmentTitle={assignment.title}
+            subjectName={assignment.subject?.name}
+            className={`${assignment.class.name} - ${assignment.class.section}`}
+            teacherName={assignment.teacher.user.name}
+            currentUser={{
+              id: session.user.id,
+              name: session.user.name || "Teacher",
+              role: session.user.role || "TEACHER"
+            }}
+            initialCommentCount={assignment._count.comments}
+            label="💬 Work Conversation"
+          />
         </div>
       </div>
 
       <div className={styles.chartCard}>
-        <h3 className={styles.chartHeader}>Submissions</h3>
+        <h3 className={styles.chartHeader}>Student Submissions</h3>
         
         <div style={{ overflowX: "auto", width: "100%", maxWidth: "100%", minWidth: 0, WebkitOverflowScrolling: "touch" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "500px" }}>

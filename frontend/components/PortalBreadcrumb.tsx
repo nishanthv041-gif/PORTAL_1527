@@ -189,7 +189,12 @@ const ROUTE_MAP: Record<string, BreadcrumbInfo> = {
   "/dashboard/teacher/assignments": {
     parentHref: "/dashboard/teacher",
     parentLabel: "Dashboard",
-    currentLabel: "Assignments & Homework"
+    currentLabel: "Home Work"
+  },
+  "/dashboard/teacher/homework": {
+    parentHref: "/dashboard/teacher",
+    parentLabel: "Dashboard",
+    currentLabel: "Home Work"
   },
   "/dashboard/teacher/exams": {
     parentHref: "/dashboard/teacher",
@@ -276,7 +281,12 @@ const ROUTE_MAP: Record<string, BreadcrumbInfo> = {
   "/dashboard/parent/assignments": {
     parentHref: "/dashboard/parent",
     parentLabel: "Dashboard",
-    currentLabel: "Assignments & Homework"
+    currentLabel: "Home Work"
+  },
+  "/dashboard/parent/homework": {
+    parentHref: "/dashboard/parent",
+    parentLabel: "Dashboard",
+    currentLabel: "Home Work"
   },
   "/dashboard/parent/exams": {
     parentHref: "/dashboard/parent",
@@ -437,15 +447,15 @@ export default function PortalBreadcrumb() {
       );
     }
 
-    // If it's assignment submissions
-    if (section === "assignments" && segments.length >= 4) {
+    // If it's assignment or homework submissions
+    if ((section === "assignments" || section === "homework") && segments.length >= 4) {
       return (
         <nav aria-label="Breadcrumb navigation" className={styles.breadcrumbBar}>
           <Link href={`/dashboard/${role}/assignments`} className={styles.backLink}>
-            <ArrowLeft size={16} /> Assignments
+            <ArrowLeft size={16} /> Home Work
           </Link>
           <span className={styles.separator}>/</span>
-          <span className={styles.currentPage}>Assignment Submissions</span>
+          <span className={styles.currentPage}>Home Work Submissions</span>
         </nav>
       );
     }
