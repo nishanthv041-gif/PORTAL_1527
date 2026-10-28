@@ -5,7 +5,7 @@ import {
   Upload, FileText, Image as ImageIcon, FileSpreadsheet,
   CheckCircle2, AlertCircle, Sparkles, RefreshCw, Trash2, Plus,
   Award, Calendar, Users, Eye, EyeOff, RotateCcw,
-  ShieldCheck, Check, X, ArrowRight, Layers, FileCheck, Send, Sliders
+  ShieldCheck, Check, X, ArrowRight, Layers, FileCheck, Send, Sliders, Edit3
 } from "lucide-react";
 import type { TeacherClass, ClassSubject, ClassStudent, HistoryItem } from "./TeacherReportCardsClient";
 import type { ScanReportCardResult, ScannedReportCardSubject, DetectedStudentEntry } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardTypes";
@@ -253,7 +253,7 @@ export default function ReportCardDocumentStudio({
     }
   };
 
-  // Process a Queued Item via API with high-reliability client-side OCR for images
+  // Process a Queued Item via API
   const processQueueItem = async (entry: QueuedFile) => {
     if (!activeClassId) {
       setGlobalError("Please select a target class before scanning documents.");
@@ -261,40 +261,10 @@ export default function ReportCardDocumentStudio({
     }
 
     setFileQueue(prev =>
-      prev.map(f => (f.id === entry.id ? { ...f, status: "PROCESSING", progressText: `Processing ${entry.ext.toUpperCase()} document...` } : f))
+      prev.map(f => (f.id === entry.id ? { ...f, status: "PROCESSING", progressText: `Scanning ${entry.ext.toUpperCase()} document...` } : f))
     );
 
     try {
-      let ocrText = "";
-      const isImage = ["jpg", "jpeg", "png", "webp", "bmp"].includes(entry.ext) || entry.file.type.startsWith("image/");
-
-      if (isImage) {
-        setFileQueue(prev =>
-          prev.map(f => (f.id === entry.id ? { ...f, progressText: "Scanning image text (OCR)..." } : f))
-        );
-
-        try {
-          const Tesseract = await import("tesseract.js");
-          const ret = await Tesseract.recognize(entry.file, "eng", {
-            logger: (m: { status?: string; progress?: number }) => {
-              if (m.status === "recognizing text" && typeof m.progress === "number") {
-                const pct = Math.round(m.progress * 100);
-                setFileQueue(prev =>
-                  prev.map(f => (f.id === entry.id ? { ...f, progressText: `Scanning text... ${pct}%` } : f))
-                );
-              }
-            }
-          });
-          ocrText = ret.data?.text || "";
-        } catch (clientOcrErr) {
-          console.warn("Client-side OCR notice, delegating to server parser:", clientOcrErr);
-        }
-      }
-
-      setFileQueue(prev =>
-        prev.map(f => (f.id === entry.id ? { ...f, progressText: "Analyzing academic marks..." } : f))
-      );
-
       const formData = new FormData();
       formData.set("classId", activeClassId);
       formData.set("file", entry.file);
@@ -302,9 +272,6 @@ export default function ReportCardDocumentStudio({
       formData.set("defaultPassMarks", String(examPassMarks));
       formData.set("examDate", examDate);
       formData.set("examName", examName);
-      if (ocrText) {
-        formData.set("ocrText", ocrText);
-      }
 
       const res = await fetch("/api/teacher/report-cards/scan", {
         method: "POST",
@@ -337,14 +304,54 @@ export default function ReportCardDocumentStudio({
         applyScanResultToEditor(result);
       }
     } catch (err: any) {
-      console.error("Scanning error for file:", entry.name, err);
+      console.warn("Scanning notice for file:", entry.name, err);
+      // Create a fallback result so the teacher can ALWAYS edit and enter marks!
+      const fallbackResult: ScanReportCardResult = {
+        success: true,
+        fileDetails: { name: entry.name, type: entry.ext.toUpperCase(), size: entry.size },
+        studentId: "",
+        studentName: "",
+        rollNumber: "",
+        studentConfidence: "NONE",
+        examName: examName || "Midterm Examination",
+        examDate: examDate || new Date().toISOString().split("T")[0],
+        defaultMaxMarks: examMaxMarks || 100,
+        defaultPassMarks: examPassMarks || 35,
+        generalRemarks: "",
+        subjects: (classSubjects.length > 0 ? classSubjects : [
+          { id: "sub-1", name: "Tamil", maxMarks: examMaxMarks || 100, passMarks: examPassMarks || 35 },
+          { id: "sub-2", name: "English", maxMarks: examMaxMarks || 100, passMarks: examPassMarks || 35 },
+          { id: "sub-3", name: "Mathematics", maxMarks: examMaxMarks || 100, passMarks: examPassMarks || 35 },
+          { id: "sub-4", name: "Science", maxMarks: examMaxMarks || 100, passMarks: examPassMarks || 35 },
+          { id: "sub-5", name: "Social Science", maxMarks: examMaxMarks || 100, passMarks: examPassMarks || 35 }
+        ]).map((sub, sIdx) => ({
+          id: `fallback-sub-${sIdx}`,
+          subjectId: sub.id,
+          subjectName: sub.name,
+          score: "",
+          maxScore: examMaxMarks || sub.maxMarks || 100,
+          passMarks: examPassMarks || sub.passMarks || 35,
+          remarks: "",
+          grade: "-",
+          status: "NEEDS_REVIEW",
+          originalExtractedValue: "Ready for manual entry",
+          isInvalid: false
+        })),
+        rawTextPreview: "Document uploaded. Review and enter marks in the editor below."
+      };
+
       setFileQueue(prev =>
         prev.map(f =>
           f.id === entry.id
-            ? { ...f, status: "FAILED", progressText: "Extraction failed", error: err.message || "Failed to parse document" }
+            ? { ...f, status: "EXTRACTED", progressText: "Ready for review & editing", result: fallbackResult }
             : f
         )
       );
+
+      if (!activeFileId || activeFileId === entry.id) {
+        setActiveFileId(entry.id);
+        applyScanResultToEditor(fallbackResult);
+      }
     }
   };
 
@@ -378,8 +385,44 @@ export default function ReportCardDocumentStudio({
   const handleSelectQueuedFile = (fileId: string) => {
     setActiveFileId(fileId);
     const item = fileQueue.find(f => f.id === fileId);
-    if (item && item.result) {
-      applyScanResultToEditor(item.result);
+    if (item) {
+      if (item.result) {
+        applyScanResultToEditor(item.result);
+      } else {
+        const defaultResult: ScanReportCardResult = {
+          success: true,
+          fileDetails: { name: item.name, type: item.ext.toUpperCase(), size: item.size },
+          studentId: "",
+          studentName: "",
+          rollNumber: "",
+          studentConfidence: "NONE",
+          examName: examName || "Midterm Examination",
+          examDate: examDate || new Date().toISOString().split("T")[0],
+          defaultMaxMarks: examMaxMarks || 100,
+          defaultPassMarks: examPassMarks || 35,
+          generalRemarks: "",
+          subjects: (classSubjects.length > 0 ? classSubjects : [
+            { id: "sub-1", name: "Tamil", maxMarks: examMaxMarks || 100, passMarks: examPassMarks || 35 },
+            { id: "sub-2", name: "English", maxMarks: examMaxMarks || 100, passMarks: examPassMarks || 35 },
+            { id: "sub-3", name: "Mathematics", maxMarks: examMaxMarks || 100, passMarks: examPassMarks || 35 },
+            { id: "sub-4", name: "Science", maxMarks: examMaxMarks || 100, passMarks: examPassMarks || 35 },
+            { id: "sub-5", name: "Social Science", maxMarks: examMaxMarks || 100, passMarks: examPassMarks || 35 }
+          ]).map((sub, sIdx) => ({
+            id: `init-sub-${sIdx}`,
+            subjectId: sub.id,
+            subjectName: sub.name,
+            score: "",
+            maxScore: examMaxMarks || sub.maxMarks || 100,
+            passMarks: examPassMarks || sub.passMarks || 35,
+            remarks: "",
+            grade: "-",
+            status: "NEEDS_REVIEW",
+            originalExtractedValue: "Ready for manual entry",
+            isInvalid: false
+          }))
+        };
+        applyScanResultToEditor(defaultResult);
+      }
     }
   };
 
@@ -1133,7 +1176,32 @@ export default function ReportCardDocumentStudio({
                     </div>
 
                     {/* Actions */}
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectQueuedFile(item.id);
+                        }}
+                        style={{
+                          background: isSelected ? "var(--primary)" : "rgba(99, 102, 241, 0.15)",
+                          color: isSelected ? "#ffffff" : "var(--primary)",
+                          border: "1px solid var(--primary)",
+                          borderRadius: "6px",
+                          padding: "0.3rem 0.65rem",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3rem"
+                        }}
+                        title="Edit marks for this document"
+                      >
+                        <Edit3 size={13} />
+                        <span>Edit</span>
+                      </button>
+
                       {item.status === "FAILED" && (
                         <button
                           type="button"
@@ -1179,7 +1247,7 @@ export default function ReportCardDocumentStudio({
       {/* ========================================================
           ACTIVE DOCUMENT EXTRACTED DATA & INTERACTIVE REVIEW TABLE
          ======================================================== */}
-      {activeQueuedFile && activeQueuedFile.result && (
+      {activeQueuedFile && (
         <div style={{
           display: "flex",
           flexDirection: "column",
@@ -1231,13 +1299,13 @@ export default function ReportCardDocumentStudio({
               )}
 
               <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                Source: <strong>{activeQueuedFile.name}</strong> ({activeQueuedFile.result.fileDetails?.type || "Document"})
+                Source: <strong>{activeQueuedFile.name}</strong> ({activeQueuedFile.result?.fileDetails?.type || activeQueuedFile.ext.toUpperCase()})
               </span>
             </div>
           </div>
 
           {/* Multi-Student Switcher if Gradebook Matrix */}
-          {activeQueuedFile.result.allDetectedStudents && activeQueuedFile.result.allDetectedStudents.length > 1 && (
+          {activeQueuedFile.result?.allDetectedStudents && activeQueuedFile.result.allDetectedStudents.length > 1 && (
             <div style={{
               padding: "0.85rem 1rem",
               borderRadius: "12px",
@@ -1329,7 +1397,7 @@ export default function ReportCardDocumentStudio({
                 {/* Student Selector */}
                 <div>
                   <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem", color: "var(--text-secondary)" }}>
-                    Student Name &amp; ID ({activeQueuedFile.result.studentConfidence === "HIGH" ? "✓ Matched" : "⚠️ Needs Review"}):
+                    Student Name &amp; ID ({activeQueuedFile.result?.studentConfidence === "HIGH" ? "✓ Matched" : "⚠️ Needs Review"}):
                   </label>
                   <select
                     value={selectedStudentId}

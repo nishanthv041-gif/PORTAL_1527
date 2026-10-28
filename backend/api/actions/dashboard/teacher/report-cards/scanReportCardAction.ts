@@ -50,6 +50,17 @@ function cleanString(str: string): string {
   return (str || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function computeGrade(score: number, max: number): string {
+  if (max <= 0) return "-";
+  const pct = (score / max) * 100;
+  if (pct >= 90) return "A+";
+  if (pct >= 80) return "A";
+  if (pct >= 70) return "B";
+  if (pct >= 60) return "C";
+  if (pct >= 50) return "D";
+  return "F";
+}
+
 /**
  * Match a raw subject name against class subjects and standard synonyms
  */
@@ -191,6 +202,7 @@ function parseTextToReportCard(
   defaultPassMarks: number;
   generalRemarks: string;
   subjects: ScannedReportCardSubject[];
+  allDetectedStudents?: DetectedStudentEntry[];
   originalExtractedValues?: {
     student?: string;
     rollNumber?: string;
@@ -315,11 +327,207 @@ function parseTextToReportCard(
     }
   }
 
-  // Pass 2: Extract Subjects and Marks
-  const processedSubjectNames = new Set<string>();
-
   // Sort subjects longest-first so "Social Science" matches before "Science"
   const sortedClassSubjects = [...classSubjects].sort((a, b) => b.name.length - a.name.length);
+
+  // Pass 1.5: Detect Multi-Student / Bulk Gradebook Matrix (e.g. S.No | Student Name | Roll No | Tamil | English | Maths...)
+  const allDetectedStudents: DetectedStudentEntry[] = [];
+  let matrixHeaderLineIndex = -1;
+  const matrixSubjectCols: Array<{
+    subjectId: string;
+    subjectName: string;
+    maxMarks: number;
+    passMarks: number;
+    subPos: number;
+  }> = [];
+
+  for (let lIdx = 0; lIdx < Math.min(15, lines.length); lIdx++) {
+    const l = lines[lIdx];
+
+    // Match all subjects in this line
+    const foundSubs: typeof matrixSubjectCols = [];
+    for (const sub of sortedClassSubjects) {
+      const subName = sub.name.toLowerCase();
+      const regex = new RegExp(`\\b${subName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, "i");
+      const match = regex.exec(l);
+      if (match) {
+        foundSubs.push({
+          subjectId: sub.id,
+          subjectName: sub.name,
+          maxMarks: customDefaults?.defaultMaxMarks || sub.maxMarks || 100,
+          passMarks: customDefaults?.defaultPassMarks || sub.passMarks || 35,
+          subPos: match.index
+        });
+      }
+    }
+
+    for (const [canonical, aliases] of Object.entries(SUBJECT_ALIASES)) {
+      if (foundSubs.some(s => cleanString(s.subjectName) === cleanString(canonical))) continue;
+      for (const alias of aliases) {
+        const regex = new RegExp(`\\b${alias.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, "i");
+        const match = regex.exec(l);
+        if (match) {
+          const matched = matchSubject(canonical, classSubjects);
+          foundSubs.push({
+            subjectId: matched.subjectId,
+            subjectName: matched.subjectName,
+            maxMarks: customDefaults?.defaultMaxMarks || matched.maxMarks || 100,
+            passMarks: customDefaults?.defaultPassMarks || matched.passMarks || 35,
+            subPos: match.index
+          });
+          break;
+        }
+      }
+    }
+
+    // If 2 or more subjects are found on this header line, it is a multi-student gradebook matrix!
+    if (foundSubs.length >= 2) {
+      matrixHeaderLineIndex = lIdx;
+      matrixSubjectCols.push(...foundSubs.sort((a, b) => a.subPos - b.subPos));
+      break;
+    }
+  }
+
+  // If a multi-student gradebook header was found, parse each student row
+  if (matrixHeaderLineIndex !== -1 && matrixSubjectCols.length >= 2) {
+    for (let rIdx = matrixHeaderLineIndex + 1; rIdx < lines.length; rIdx++) {
+      const rowLine = lines[rIdx].trim();
+      if (!rowLine) continue;
+
+      if (/^(?:total|grand\s*total|average|avg|result|percentage|note|illustrative)\b/i.test(rowLine)) {
+        continue;
+      }
+
+      const allNumsWithIndex = Array.from(rowLine.matchAll(/\b\d+(?:\.\d+)?\b/g));
+      if (allNumsWithIndex.length < 2) continue;
+
+      let matchedStud = matchStudent(rowLine, classStudents);
+      let studentName = matchedStud.studentName;
+      let rollNumber = matchedStud.rollNumber;
+      let studentId = matchedStud.studentId;
+
+      if (!rollNumber) {
+        const rollPatternMatch = rowLine.match(/\b([0-9]{4,}[A-Za-z0-9_-]*)\b/);
+        if (rollPatternMatch) {
+          rollNumber = rollPatternMatch[1];
+          if (!studentId) {
+            const byRoll = matchStudent(rollNumber, classStudents);
+            if (byRoll.studentId) {
+              studentId = byRoll.studentId;
+              studentName = byRoll.studentName;
+            }
+          }
+        }
+      }
+
+      if (!studentName) {
+        const textWithoutSno = rowLine.replace(/^\s*\d+\s+/, "");
+        const nameCandidate = textWithoutSno.split(/\s{2,}|\b[0-9]{4,}|\b\d+(?:\.\d+)?/)[0]?.trim();
+        if (nameCandidate && nameCandidate.length >= 2 && !/^(total|avg|grade|rank)/i.test(nameCandidate)) {
+          studentName = nameCandidate;
+          if (!studentId) {
+            const byName = matchStudent(studentName, classStudents);
+            if (byName.studentId) studentId = byName.studentId;
+          }
+        }
+      }
+
+      let numValues = allNumsWithIndex.map(m => parseFloat(m[0]));
+      // Strip leading serial number (e.g. 1, 2...)
+      if (numValues.length > matrixSubjectCols.length && numValues[0] <= 50 && Number.isInteger(numValues[0])) {
+        numValues = numValues.slice(1);
+      }
+
+      const studentSubs: ScannedReportCardSubject[] = [];
+      let total = 0;
+      let maxTotal = 0;
+
+      matrixSubjectCols.forEach((col, cIdx) => {
+        const rawScore = numValues[cIdx];
+        const numScore = rawScore !== undefined && !isNaN(rawScore) ? rawScore : "";
+        const maxScore = col.maxMarks;
+        const passMarks = col.passMarks;
+
+        let status: "PASS" | "FAIL" | "NEEDS_REVIEW" = "NEEDS_REVIEW";
+        let isInvalid = false;
+        let validationError = "";
+
+        if (numScore === "") {
+          isInvalid = true;
+          validationError = "Score required";
+        } else if (numScore < 0 || numScore > maxScore) {
+          isInvalid = true;
+          validationError = `Between 0 and ${maxScore}`;
+        } else {
+          total += numScore;
+          maxTotal += maxScore;
+          status = numScore >= passMarks ? "PASS" : "FAIL";
+        }
+
+        const grade = computeGrade(Number(numScore) || 0, maxScore);
+
+        studentSubs.push({
+          id: `matrix-stud-${rIdx}-sub-${cIdx}`,
+          subjectId: col.subjectId,
+          subjectName: col.subjectName,
+          score: numScore,
+          maxScore,
+          passMarks,
+          remarks: "",
+          grade,
+          status,
+          originalExtractedValue: String(numScore),
+          isInvalid,
+          validationError
+        });
+      });
+
+      const percentage = maxTotal > 0 ? parseFloat(((total / maxTotal) * 100).toFixed(1)) : 0;
+      let grade = computeGrade(percentage, 100);
+
+      allDetectedStudents.push({
+        studentId: studentId || "",
+        studentName: studentName || `Student ${allDetectedStudents.length + 1}`,
+        rollNumber: rollNumber || "-",
+        subjects: studentSubs,
+        totalMarks: total,
+        percentage,
+        grade
+      });
+    }
+  }
+
+  // If a multi-student matrix was found with detected students, return immediately
+  if (allDetectedStudents.length > 0) {
+    const first = allDetectedStudents[0];
+    return {
+      student: {
+        studentId: first.studentId,
+        studentName: first.studentName,
+        rollNumber: first.rollNumber,
+        confidence: first.studentId ? "HIGH" : "LOW"
+      },
+      className: detectedClassName,
+      academicYear: detectedAcademicYear,
+      attendance: detectedAttendance,
+      examName: detectedExamName,
+      examDate: detectedExamDate,
+      defaultMaxMarks,
+      defaultPassMarks,
+      generalRemarks: generalRemarks || "Bulk student marks extracted from marksheet.",
+      subjects: first.subjects,
+      allDetectedStudents,
+      originalExtractedValues: {
+        student: first.studentName,
+        rollNumber: first.rollNumber,
+        exam: detectedExamName,
+        date: detectedExamDate
+      }
+    };
+  }
+
+  // Pass 2: Extract Subjects and Marks
+  const processedSubjectNames = new Set<string>();
 
   for (let idx = 0; idx < lines.length; idx++) {
     const line = lines[idx];
@@ -413,31 +621,18 @@ function parseTextToReportCard(
 
       const standardMaxBases = [100, 200, 75, 80, 50, 40, 30, 25, 20];
 
-      // Detect and strip serial number if present (e.g. [1, 100, 85] or [1, 85, 100])
-      if (numberMatches.length >= 3) {
-        const first = numberMatches[0];
-        if (first <= 30 && Number.isInteger(first) && (standardMaxBases.includes(numberMatches[1]) || standardMaxBases.includes(numberMatches[2]))) {
-          numberMatches = numberMatches.slice(1);
-        }
-      }
-
       if (numberMatches.length === 1) {
         score = numberMatches[0];
       } else if (numberMatches.length >= 2) {
         const n1 = numberMatches[0];
         const n2 = numberMatches[1];
 
-        // If n1 is a row serial number (1-20) and n2 is a realistic mark (e.g. 30-100)
-        if (n1 <= 20 && Number.isInteger(n1) && n2 > n1 && !standardMaxBases.includes(n1)) {
-          score = n2;
-          maxScore = customDefaults?.defaultMaxMarks || matchedSubInfo.maxMarks || 100;
-        } else if (standardMaxBases.includes(n1) && !standardMaxBases.includes(n2)) {
-          // Intelligently identify Max Marks vs Marks Obtained:
-          // E.g. [100, 85] -> max=100, score=85
+        // Intelligently identify Max Marks vs Marks Obtained:
+        // E.g. [100, 85] (Max then Obtained) or [85, 100] (Obtained then Max)
+        if (standardMaxBases.includes(n1) && !standardMaxBases.includes(n2)) {
           maxScore = n1;
           score = n2;
         } else if (standardMaxBases.includes(n2) && !standardMaxBases.includes(n1)) {
-          // E.g. [85, 100] -> score=85, max=100
           maxScore = n2;
           score = n1;
         } else if (n1 > n2 && standardMaxBases.includes(n1)) {
@@ -528,29 +723,22 @@ function parseTextToReportCard(
     }
   }
 
-  // If no subjects were parsed from lines, fill with class subjects or standard school curriculum so teacher can edit
-  if (scannedSubjects.length === 0) {
-    const fallbackList = classSubjects.length > 0 ? classSubjects : [
-      { id: "sub-tam", name: "Tamil", maxMarks: defaultMaxMarks, passMarks: defaultPassMarks },
-      { id: "sub-eng", name: "English", maxMarks: defaultMaxMarks, passMarks: defaultPassMarks },
-      { id: "sub-mat", name: "Mathematics", maxMarks: defaultMaxMarks, passMarks: defaultPassMarks },
-      { id: "sub-sci", name: "Science", maxMarks: defaultMaxMarks, passMarks: defaultPassMarks },
-      { id: "sub-soc", name: "Social Science", maxMarks: defaultMaxMarks, passMarks: defaultPassMarks }
-    ];
-
-    fallbackList.forEach((sub, sIdx) => {
+  // If no subjects were parsed from lines, fill with class subjects so teacher can edit
+  if (scannedSubjects.length === 0 && classSubjects.length > 0) {
+    classSubjects.forEach((sub, sIdx) => {
       scannedSubjects.push({
         id: `empty-sub-${sIdx}-${Math.random().toString(36).substring(2, 7)}`,
         subjectId: sub.id,
         subjectName: sub.name,
         score: "",
-        maxScore: sub.maxMarks || defaultMaxMarks || 100,
-        passMarks: sub.passMarks || defaultPassMarks || 35,
+        maxScore: sub.maxMarks || 100,
+        passMarks: sub.passMarks || 35,
         remarks: "",
         grade: "-",
         status: "NEEDS_REVIEW",
-        originalExtractedValue: "Ready for teacher verification",
-        isInvalid: false
+        originalExtractedValue: "Not detected in document",
+        isInvalid: true,
+        validationError: "Enter score for this subject"
       });
     });
   }
@@ -884,6 +1072,7 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
         defaultPassMarks: parsed.defaultPassMarks,
         generalRemarks: parsed.generalRemarks,
         subjects: parsed.subjects,
+        allDetectedStudents: parsed.allDetectedStudents,
         rawTextPreview: ocrText.substring(0, 500)
       };
     }
@@ -977,6 +1166,7 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
         defaultPassMarks: parsed.defaultPassMarks,
         generalRemarks: parsed.generalRemarks,
         subjects: parsed.subjects,
+        allDetectedStudents: parsed.allDetectedStudents,
         rawTextPreview: text.substring(0, 500),
         originalExtractedValues: parsed.originalExtractedValues
       };
@@ -1026,6 +1216,7 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
         defaultPassMarks: parsed.defaultPassMarks,
         generalRemarks: parsed.generalRemarks,
         subjects: parsed.subjects,
+        allDetectedStudents: parsed.allDetectedStudents,
         rawTextPreview: text.substring(0, 500),
         originalExtractedValues: parsed.originalExtractedValues
       };
@@ -1034,8 +1225,6 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
     // 4. Photos and Scanned Images (.jpg, .jpeg, .png, .webp, .bmp)
     if (["jpg", "jpeg", "png", "webp", "bmp"].includes(ext) || fileType.startsWith("image/")) {
       let extractedText = ocrText || "";
-
-      // If client didn't supply OCR text, attempt server-side recognition with safe fallback
       if (!extractedText.trim()) {
         try {
           const os = await import("os");
@@ -1049,7 +1238,7 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
           await worker.terminate();
           extractedText = ret.data?.text || "";
         } catch (ocrErr) {
-          console.warn("Server image OCR notice (falling back to manual verification):", ocrErr);
+          console.warn("Server image OCR notice:", ocrErr);
         }
       }
 
@@ -1074,7 +1263,8 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
         defaultPassMarks: parsed.defaultPassMarks,
         generalRemarks: parsed.generalRemarks,
         subjects: parsed.subjects,
-        rawTextPreview: extractedText ? extractedText.substring(0, 500) : "Image uploaded. Subject fields are ready for marks review.",
+        allDetectedStudents: parsed.allDetectedStudents,
+        rawTextPreview: extractedText ? extractedText.substring(0, 500) : "Image uploaded. You can verify and edit subject marks below.",
         originalExtractedValues: parsed.originalExtractedValues
       };
     }

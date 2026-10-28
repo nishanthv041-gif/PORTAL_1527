@@ -486,6 +486,29 @@ export default function TeacherReportCardsClient({
               <span className={styles.tabBadge}>{history.length}</span>
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("STUDIO")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.65rem 1.15rem",
+              borderRadius: "12px",
+              background: "linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(14, 165, 233, 0.15) 100%)",
+              border: "1.5px solid rgba(99, 102, 241, 0.35)",
+              color: "var(--primary)",
+              fontWeight: 800,
+              fontSize: "0.85rem",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+              whiteSpace: "nowrap"
+            }}
+          >
+            <Upload size={16} />
+            <span>Scan &amp; Upload Doc (Studio)</span>
+          </button>
         </div>
       </div>
 
@@ -566,64 +589,6 @@ export default function TeacherReportCardsClient({
           ========================================================= */}
       {activeTab === "CREATE" && (
         <form onSubmit={handleSendReportCard} className={styles.formCard}>
-          {/* OCR Document Scanner Fast-Track Banner */}
-          <div style={{
-            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(14, 165, 233, 0.08) 100%)",
-            border: "1.5px dashed rgba(99, 102, 241, 0.35)",
-            borderRadius: "16px",
-            padding: "1rem 1.25rem",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "0.85rem"
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <div style={{
-                width: "42px",
-                height: "42px",
-                borderRadius: "12px",
-                background: "var(--primary)",
-                color: "#ffffff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0
-              }}>
-                <Sparkles size={22} />
-              </div>
-              <div>
-                <h3 style={{ margin: "0 0 0.2rem 0", fontSize: "0.95rem", fontWeight: 800, color: "var(--foreground)" }}>
-                  Scan &amp; Upload Report Card File (OCR)
-                </h3>
-                <p style={{ margin: 0, fontSize: "0.825rem", color: "var(--text-secondary)" }}>
-                  Scan any student mark sheet to extract marks automatically and send to parents.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setActiveTab("STUDIO")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.45rem",
-                padding: "0.65rem 1.25rem",
-                borderRadius: "10px",
-                background: "var(--primary)",
-                color: "#ffffff",
-                border: "none",
-                fontWeight: 700,
-                fontSize: "0.88rem",
-                cursor: "pointer",
-                boxShadow: "0 2px 10px rgba(99, 102, 241, 0.25)"
-              }}
-            >
-              <Upload size={16} />
-              <span>Scan &amp; Upload Document (Studio)</span>
-            </button>
-          </div>
-
           {/* STEP 1: SELECT CLASS & STUDENT */}
           <div className={styles.sectionGroup}>
             <div className={styles.sectionHeader}>
