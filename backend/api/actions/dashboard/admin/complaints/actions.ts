@@ -153,9 +153,9 @@ export async function updateComplaintStatusAction(id: string, status: string, re
 
     await prisma.complaint.update({
       where: { id },
-      data: { 
-        status, 
-        remarks: remarks?.trim() || null 
+      data: {
+        status,
+        remarks: remarks?.trim() || null
       }
     });
 

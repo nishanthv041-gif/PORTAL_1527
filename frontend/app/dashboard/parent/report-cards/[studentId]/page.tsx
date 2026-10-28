@@ -95,7 +95,7 @@ export default async function ParentIndividualReportCardPage({
   });
 
   return (
-    <div style={{ padding: 'clamp(0.5rem, 2vw, 1.5rem)' }}>
+    <div style={{ padding: 'clamp(0.5rem, 2vw, 1.5rem)', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
       <div style={{ marginBottom: '1rem' }}>
         <Link 
           href="/dashboard/parent/report-cards"

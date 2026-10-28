@@ -6,13 +6,14 @@ import {
   Send, Trash2, Eye, CheckCircle2, Clock, Sparkles, 
   BookOpen, Users, Award, AlertCircle, Calendar,
   Search, Check, X, ShieldAlert, FileText, ChevronRight,
-  Sliders, Settings2, Target
+  Sliders, Settings2, Target, Upload
 } from "lucide-react";
 import styles from "./TeacherReportCardsClient.module.css";
 import { 
   createAndSendReportCardAction, 
   deleteReportCardAction 
 } from "@/backend/lib/services/reportCardActions";
+import ReportCardDocumentScanModal from "./ReportCardDocumentScanModal";
 
 export type ClassSubject = {
   id: string;
@@ -136,6 +137,9 @@ export default function TeacherReportCardsClient({
   const [historySearch, setHistorySearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [previewItem, setPreviewItem] = useState<HistoryItem | null>(null);
+
+  // Document / OCR Scan Modal State
+  const [showScanModal, setShowScanModal] = useState(false);
 
   // Selected Class Object
   const currentClass = useMemo(() => {
@@ -444,29 +448,54 @@ export default function TeacherReportCardsClient({
           </p>
         </div>
 
-        {/* Tab Switcher */}
-        <div className={styles.tabNav} role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "CREATE"}
-            className={`${styles.tabBtn} ${activeTab === "CREATE" ? styles.tabBtnActive : ""}`}
-            onClick={() => setActiveTab("CREATE")}
-          >
-            <Sparkles size={16} />
-            <span>Create &amp; Send</span>
-          </button>
+        {/* Tab Switcher & Scan Action */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+          <div className={styles.tabNav} role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "CREATE"}
+              className={`${styles.tabBtn} ${activeTab === "CREATE" ? styles.tabBtnActive : ""}`}
+              onClick={() => setActiveTab("CREATE")}
+            >
+              <Sparkles size={16} />
+              <span>Create &amp; Send</span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "HISTORY"}
+              className={`${styles.tabBtn} ${activeTab === "HISTORY" ? styles.tabBtnActive : ""}`}
+              onClick={() => setActiveTab("HISTORY")}
+            >
+              <Clock size={16} />
+              <span>Sent History</span>
+              <span className={styles.tabBadge}>{history.length}</span>
+            </button>
+          </div>
 
           <button
             type="button"
-            role="tab"
-            aria-selected={activeTab === "HISTORY"}
-            className={`${styles.tabBtn} ${activeTab === "HISTORY" ? styles.tabBtnActive : ""}`}
-            onClick={() => setActiveTab("HISTORY")}
+            onClick={() => setShowScanModal(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.65rem 1.15rem",
+              borderRadius: "12px",
+              background: "linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(14, 165, 233, 0.15) 100%)",
+              border: "1.5px solid rgba(99, 102, 241, 0.35)",
+              color: "var(--primary)",
+              fontWeight: 800,
+              fontSize: "0.85rem",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+              whiteSpace: "nowrap"
+            }}
           >
-            <Clock size={16} />
-            <span>Sent History</span>
-            <span className={styles.tabBadge}>{history.length}</span>
+            <Upload size={16} />
+            <span>Scan &amp; Upload Doc (OCR)</span>
           </button>
         </div>
       </div>
@@ -548,6 +577,64 @@ export default function TeacherReportCardsClient({
           ========================================================= */}
       {activeTab === "CREATE" && (
         <form onSubmit={handleSendReportCard} className={styles.formCard}>
+          {/* OCR Document Scanner Fast-Track Banner */}
+          <div style={{
+            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(14, 165, 233, 0.08) 100%)",
+            border: "1.5px dashed rgba(99, 102, 241, 0.35)",
+            borderRadius: "16px",
+            padding: "1rem 1.25rem",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "0.85rem"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <div style={{
+                width: "42px",
+                height: "42px",
+                borderRadius: "12px",
+                background: "var(--primary)",
+                color: "#ffffff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0
+              }}>
+                <Sparkles size={22} />
+              </div>
+              <div>
+                <h3 style={{ margin: "0 0 0.2rem 0", fontSize: "0.95rem", fontWeight: 800, color: "var(--foreground)" }}>
+                  Scan &amp; Upload Report Card File (OCR)
+                </h3>
+                <p style={{ margin: 0, fontSize: "0.825rem", color: "var(--text-secondary)" }}>
+                  Upload photos (JPG, PNG), PDFs, Excel sheets, or Word docs. The scanner extracts student marks, flags invalid data for editing, and connects directly to the database.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowScanModal(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.45rem",
+                padding: "0.65rem 1.25rem",
+                borderRadius: "10px",
+                background: "var(--primary)",
+                color: "#ffffff",
+                border: "none",
+                fontWeight: 700,
+                fontSize: "0.88rem",
+                cursor: "pointer",
+                boxShadow: "0 2px 10px rgba(99, 102, 241, 0.25)"
+              }}
+            >
+              <Upload size={16} />
+              <span>Scan &amp; Upload Document</span>
+            </button>
+          </div>
+
           {/* STEP 1: SELECT CLASS & STUDENT */}
           <div className={styles.sectionGroup}>
             <div className={styles.sectionHeader}>
@@ -1321,6 +1408,22 @@ export default function TeacherReportCardsClient({
           </div>
         </div>
       )}
+
+      {/* Document & OCR Scanner Modal */}
+      <ReportCardDocumentScanModal
+        isOpen={showScanModal}
+        onClose={() => setShowScanModal(false)}
+        classes={classes}
+        selectedClassId={selectedClassId}
+        onReportCardCreated={(newCard, recipients) => {
+          setHistory(prev => [newCard, ...prev]);
+          setSuccessBanner({
+            message: `Report card created from scanned document and connected to database for ${newCard.studentName}!`,
+            recipients
+          });
+          router.refresh();
+        }}
+      />
     </div>
   );
 }

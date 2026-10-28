@@ -54,7 +54,7 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
 
     // 1. Direct Notifications from Notification table
     const dbNotifications = await prisma.notification.findMany({
-      where: { 
+      where: {
         userId,
         ...(options?.unreadOnly ? { isRead: false } : {})
       },
@@ -80,9 +80,9 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
         badgeLabel = "Meeting";
         badgeColors = { bg: "rgba(245, 158, 11, 0.12)", text: "#d97706", border: "rgba(245, 158, 11, 0.3)" };
       } else if (
-        typeStr.includes("INSTRUCT") || 
-        typeStr.includes("CIRCULAR") || 
-        titleLower.includes("instruction") || 
+        typeStr.includes("INSTRUCT") ||
+        typeStr.includes("CIRCULAR") ||
+        titleLower.includes("instruction") ||
         contentLower.includes("instruction") ||
         titleLower.includes("circular") ||
         contentLower.includes("circular") ||
@@ -284,9 +284,9 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
           badgeLabel = "Meeting Notice";
           badgeColors = { bg: "rgba(245, 158, 11, 0.12)", text: "#d97706", border: "rgba(245, 158, 11, 0.3)" };
         } else if (
-          titleLower.includes("instruction") || 
+          titleLower.includes("instruction") ||
           contentLower.includes("instruction") ||
-          titleLower.includes("circular") || 
+          titleLower.includes("circular") ||
           contentLower.includes("circular") ||
           titleLower.includes("guideline") ||
           titleLower.includes("rule") ||

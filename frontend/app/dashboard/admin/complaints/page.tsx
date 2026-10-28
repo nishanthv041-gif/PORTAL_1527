@@ -18,11 +18,11 @@ export default async function AdminComplaintsPage() {
       include: {
         teacher: { include: { user: true } },
         parent: { include: { user: true } },
-        student: { 
-          include: { 
-            class: true, 
-            parents: { include: { parent: { include: { user: true } } } } 
-          } 
+        student: {
+          include: {
+            class: true,
+            parents: { include: { parent: { include: { user: true } } } }
+          }
         },
         messages: {
           orderBy: { createdAt: 'asc' },
@@ -116,7 +116,7 @@ export default async function AdminComplaintsPage() {
 
   return (
     <div className={styles.dashboard}>
-      <ComplaintsClient 
+      <ComplaintsClient
         complaints={formattedComplaints}
         studentsList={studentsList}
         currentUser={{

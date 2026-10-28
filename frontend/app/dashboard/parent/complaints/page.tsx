@@ -2,9 +2,9 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { getParentAndSelectedChild } from "../parentChildHelper";
-import ParentComplaintsClient, { 
-  ParentChildOption, 
-  ParentComplaintItem 
+import ParentComplaintsClient, {
+  ParentChildOption,
+  ParentComplaintItem
 } from "./ParentComplaintsClient";
 import styles from "../../dashboard.module.css";
 

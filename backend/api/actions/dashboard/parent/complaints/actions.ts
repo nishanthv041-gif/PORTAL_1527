@@ -139,16 +139,16 @@ export async function submitParentComplaintAction(formData: FormData) {
     revalidatePath("/dashboard/parent/notifications");
     revalidatePath("/dashboard/admin/notifications");
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       count: createdComplaints.length,
       complaintIds: createdComplaints.map(c => c.id)
     };
   } catch (error) {
     console.error("Error submitting parent complaint:", error);
-    return { 
-      success: false, 
-      error: (error instanceof Error ? error.message : String(error)) || "Failed to submit complaint" 
+    return {
+      success: false,
+      error: (error instanceof Error ? error.message : String(error)) || "Failed to submit complaint"
     };
   }
 }
@@ -360,9 +360,9 @@ export async function deleteParentComplaintAction(complaintId: string) {
 
     return { success: true };
   } catch (error) {
-    return { 
-      success: false, 
-      error: (error instanceof Error ? error.message : String(error)) || "Failed to delete complaint" 
+    return {
+      success: false,
+      error: (error instanceof Error ? error.message : String(error)) || "Failed to delete complaint"
     };
   }
 }

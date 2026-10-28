@@ -38,7 +38,7 @@ export async function PATCH(
       const teacher = await prisma.teacher.findUnique({
         where: { userId: session.user.id }
       });
-      
+
       if (!teacher || complaint.teacherId !== teacher.id) {
         return NextResponse.json(
           { error: "Forbidden: You can only edit complaints you raised" },
@@ -110,7 +110,7 @@ export async function DELETE(
       const teacher = await prisma.teacher.findUnique({
         where: { userId: session.user.id }
       });
-      
+
       if (!teacher || complaint.teacherId !== teacher.id) {
         return NextResponse.json(
           { error: "Forbidden: You can only delete complaints you raised" },

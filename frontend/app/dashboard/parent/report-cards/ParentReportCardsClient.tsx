@@ -43,7 +43,7 @@ export default function ParentReportCardsClient({
   const activeCard = reportCards[selectedIndex] || reportCards[0];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", marginTop: "1.5rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", marginTop: "1.25rem", width: "100%", maxWidth: "100%", boxSizing: "border-box", overflow: "hidden" }}>
       {/* If child has multiple exam report cards in history, show an intuitive selector */}
       {reportCards.length > 1 && (
         <div style={{

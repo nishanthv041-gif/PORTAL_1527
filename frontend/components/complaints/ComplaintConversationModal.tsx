@@ -1,22 +1,22 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { 
-  MessageSquare, 
-  Send, 
-  X, 
-  RefreshCw, 
-  User, 
-  ShieldCheck, 
-  HeartHandshake, 
-  AlertCircle, 
-  GraduationCap, 
-  Clock, 
-  CheckCircle2 
+import {
+  MessageSquare,
+  Send,
+  X,
+  RefreshCw,
+  User,
+  ShieldCheck,
+  HeartHandshake,
+  AlertCircle,
+  GraduationCap,
+  Clock,
+  CheckCircle2
 } from "lucide-react";
-import { 
-  addComplaintMessageAction, 
-  getComplaintMessagesAction 
+import {
+  addComplaintMessageAction,
+  getComplaintMessagesAction
 } from "@/backend/api/actions/dashboard/parent/complaints/actions";
 
 export type ComplaintMessageItem = {
@@ -354,13 +354,13 @@ export default function ComplaintConversationModal({
                       backgroundColor: isAdmin
                         ? "rgba(99, 102, 241, 0.15)"
                         : isParent
-                        ? "rgba(16, 185, 129, 0.15)"
-                        : "rgba(245, 158, 11, 0.15)",
+                          ? "rgba(16, 185, 129, 0.15)"
+                          : "rgba(245, 158, 11, 0.15)",
                       color: isAdmin
                         ? "var(--primary)"
                         : isParent
-                        ? "var(--success)"
-                        : "#d97706"
+                          ? "var(--success)"
+                          : "#d97706"
                     }}
                   >
                     {isAdmin ? "Administration" : isParent ? "Parent" : "Teacher"}
@@ -377,8 +377,8 @@ export default function ComplaintConversationModal({
                     backgroundColor: isMe
                       ? "var(--primary)"
                       : isAdmin
-                      ? "rgba(99, 102, 241, 0.1)"
-                      : "var(--background)",
+                        ? "rgba(99, 102, 241, 0.1)"
+                        : "var(--background)",
                     color: isMe ? "var(--primary-fg)" : "var(--foreground)",
                     border: isMe ? "none" : "1px solid var(--border)",
                     fontSize: "0.9rem",

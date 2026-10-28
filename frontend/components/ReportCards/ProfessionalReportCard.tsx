@@ -175,15 +175,16 @@ export default function ProfessionalReportCard({
           <span>Subject-Wise Performance Breakdown</span>
         </h3>
 
+        {/* Desktop & Tablet Table (with responsive scroll & minimum width) */}
         <div className={styles.tableContainer}>
           <table className={styles.subjectsTable}>
             <thead className={styles.tableHead}>
               <tr>
-                <th>Subject Name</th>
-                <th style={{ textAlign: "center" }}>Marks Scored</th>
-                <th style={{ textAlign: "center" }}>Max Marks</th>
-                <th style={{ textAlign: "center" }}>Pass Marks</th>
-                <th style={{ textAlign: "center" }}>Status</th>
+                <th style={{ width: "38%" }}>Subject Name</th>
+                <th style={{ textAlign: "center", width: "16%" }}>Marks Scored</th>
+                <th style={{ textAlign: "center", width: "15%" }}>Max Marks</th>
+                <th style={{ textAlign: "center", width: "15%" }}>Pass Marks</th>
+                <th style={{ textAlign: "center", width: "16%" }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -216,6 +217,38 @@ export default function ProfessionalReportCard({
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile-Optimized Subject Cards View (Ultra-responsive for Parent phones) */}
+        <div className={styles.mobileSubjectsList}>
+          {reportCard.marks.map((m, idx) => {
+            const pass = m.passMarks ?? 35;
+            const isSubjectPass = m.score >= pass;
+            return (
+              <div key={idx} className={styles.mobileSubjectCard}>
+                <div className={styles.mobileSubjectHeader}>
+                  <span className={styles.mobileSubjectName}>{m.subjectName}</span>
+                  <span className={isSubjectPass ? styles.statusPass : styles.statusFail}>
+                    {isSubjectPass ? "PASS" : "FAIL"}
+                  </span>
+                </div>
+                <div className={styles.mobileSubjectGrid}>
+                  <div className={styles.mobileGridItem}>
+                    <span className={styles.mobileGridLabel}>Scored</span>
+                    <span className={styles.mobileGridValueHighlight}>{m.score}</span>
+                  </div>
+                  <div className={styles.mobileGridItem}>
+                    <span className={styles.mobileGridLabel}>Max</span>
+                    <span className={styles.mobileGridValue}>{m.maxScore}</span>
+                  </div>
+                  <div className={styles.mobileGridItem}>
+                    <span className={styles.mobileGridLabel}>Pass</span>
+                    <span className={styles.mobileGridValue}>{pass}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
