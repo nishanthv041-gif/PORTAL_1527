@@ -13,6 +13,7 @@ import {
   createAndSendReportCardAction,
   deleteReportCardAction
 } from "@/backend/lib/services/reportCardActions";
+import ReportCardDocumentStudio from "./ReportCardDocumentStudio";
 import ReportCardDocumentScanModal from "./ReportCardDocumentScanModal";
 
 export type ClassSubject = {
@@ -105,8 +106,8 @@ export default function TeacherReportCardsClient({
 }: TeacherReportCardsClientProps) {
   const router = useRouter();
 
-  // Active Tab: "CREATE" or "HISTORY"
-  const [activeTab, setActiveTab] = useState<"CREATE" | "HISTORY">("CREATE");
+  // Active Tab: "CREATE", "STUDIO", or "HISTORY"
+  const [activeTab, setActiveTab] = useState<"CREATE" | "STUDIO" | "HISTORY">("CREATE");
 
   // Selection States
   const [selectedClassId, setSelectedClassId] = useState<string>(classes[0]?.id || "");
@@ -465,6 +466,17 @@ export default function TeacherReportCardsClient({
             <button
               type="button"
               role="tab"
+              aria-selected={activeTab === "STUDIO"}
+              className={`${styles.tabBtn} ${activeTab === "STUDIO" ? styles.tabBtnActive : ""}`}
+              onClick={() => setActiveTab("STUDIO")}
+            >
+              <Upload size={16} />
+              <span>AI Document &amp; OCR Studio</span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
               aria-selected={activeTab === "HISTORY"}
               className={`${styles.tabBtn} ${activeTab === "HISTORY" ? styles.tabBtnActive : ""}`}
               onClick={() => setActiveTab("HISTORY")}
@@ -477,7 +489,7 @@ export default function TeacherReportCardsClient({
 
           <button
             type="button"
-            onClick={() => setShowScanModal(true)}
+            onClick={() => setActiveTab("STUDIO")}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -495,7 +507,7 @@ export default function TeacherReportCardsClient({
             }}
           >
             <Upload size={16} />
-            <span>Scan &amp; Upload Doc (OCR)</span>
+            <span>Scan &amp; Upload Doc (Studio)</span>
           </button>
         </div>
       </div>
@@ -1116,7 +1128,26 @@ export default function TeacherReportCardsClient({
       )}
 
       {/* =========================================================
-          TAB 2: TEACHER SENT HISTORY (WITH DELETE OPTION)
+          TAB 2: AI DOCUMENT & OCR STUDIO (FULL-PAGE WORKSPACE)
+          ========================================================= */}
+      {activeTab === "STUDIO" && (
+        <ReportCardDocumentStudio
+          classes={classes}
+          selectedClassId={selectedClassId}
+          onClassChange={setSelectedClassId}
+          onReportCardCreated={(newCard, recipients) => {
+            setHistory(prev => [newCard, ...prev]);
+            setSuccessBanner({
+              message: `Report card created from scanned document and connected to database for ${newCard.studentName}!`,
+              recipients
+            });
+            router.refresh();
+          }}
+        />
+      )}
+
+      {/* =========================================================
+          TAB 3: TEACHER SENT HISTORY (WITH DELETE OPTION)
           ========================================================= */}
       {activeTab === "HISTORY" && (
         <div className={styles.historyContainer}>

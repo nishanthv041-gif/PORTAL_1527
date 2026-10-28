@@ -1,11 +1,14 @@
 export interface ScannedReportCardSubject {
-  id: string; // Temporary ID for client editing
+  id: string; // Temporary unique ID for client editing
   subjectId: string; // Mapped class subject ID (empty if unmatched)
   subjectName: string;
   score: number | "";
   maxScore: number;
   passMarks: number;
   remarks: string;
+  grade?: string | null;
+  status?: "PASS" | "FAIL" | "NEEDS_REVIEW";
+  originalExtractedValue?: string | null;
   isInvalid?: boolean;
   validationError?: string;
 }
@@ -14,6 +17,9 @@ export interface DetectedStudentEntry {
   studentId: string;
   studentName: string;
   rollNumber: string;
+  className?: string | null;
+  academicYear?: string | null;
+  attendance?: number | string | null;
   subjects: ScannedReportCardSubject[];
   totalMarks?: number;
   percentage?: number;
@@ -33,6 +39,9 @@ export interface ScanReportCardResult {
   studentName: string;
   rollNumber: string;
   studentConfidence: "HIGH" | "MEDIUM" | "LOW" | "NONE";
+  className?: string | null;
+  academicYear?: string | null;
+  attendance?: number | string | null;
   examName: string;
   examDate: string; // YYYY-MM-DD
   defaultMaxMarks: number;
@@ -41,4 +50,12 @@ export interface ScanReportCardResult {
   subjects: ScannedReportCardSubject[];
   allDetectedStudents?: DetectedStudentEntry[];
   rawTextPreview?: string;
+  originalExtractedValues?: {
+    student?: string;
+    rollNumber?: string;
+    exam?: string;
+    date?: string;
+    attendance?: string;
+    marks?: Record<string, string>;
+  };
 }

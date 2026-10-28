@@ -175,12 +175,23 @@ function parseTextToReportCard(
   classSubjects: Array<{ id: string; name: string; maxMarks?: number; passMarks?: number }>
 ): {
   student: { studentId: string; studentName: string; rollNumber: string; confidence: "HIGH" | "MEDIUM" | "LOW" | "NONE" };
+  className?: string | null;
+  academicYear?: string | null;
+  attendance?: number | string | null;
   examName: string;
   examDate: string;
   defaultMaxMarks: number;
   defaultPassMarks: number;
   generalRemarks: string;
   subjects: ScannedReportCardSubject[];
+  originalExtractedValues?: {
+    student?: string;
+    rollNumber?: string;
+    exam?: string;
+    date?: string;
+    attendance?: string;
+    marks?: Record<string, string>;
+  };
 } {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
@@ -192,17 +203,24 @@ function parseTextToReportCard(
   } = { studentId: "", studentName: "", rollNumber: "", confidence: "NONE" };
   let detectedExamName = "Midterm Examination";
   let detectedExamDate = new Date().toISOString().split("T")[0];
+  let detectedClassName: string | null = null;
+  let detectedAcademicYear: string | null = null;
+  let detectedAttendance: string | null = null;
   let defaultMaxMarks = 100;
   let defaultPassMarks = 35;
   let generalRemarks = "";
   const scannedSubjects: ScannedReportCardSubject[] = [];
+  const originalMarksMap: Record<string, string> = {};
 
   // Regex patterns
   const studentNamePattern = /(?:student(?:\s*name)?|name|candidate)\s*[:=\-]\s*([A-Za-z\s.'-]+)/i;
-  const rollPattern = /(?:roll(?:\s*no|\s*number)?|reg(?:\s*no)?|id)\s*[:=\-]\s*([A-Za-z0-9_-]+)/i;
-  const examPattern = /(?:exam(?:\s*name)?|examination|test)\s*[:=\-]\s*([A-Za-z0-9\s-]+)/i;
+  const rollPattern = /(?:roll(?:\s*no|\s*number)?|reg(?:\s*no)?|id|admission(?:\s*no)?)\s*[:=\-]\s*([A-Za-z0-9_-]+)/i;
+  const examPattern = /(?:exam(?:\s*name)?|examination|test|term)\s*[:=\-]\s*([A-Za-z0-9\s-]+)/i;
   const datePattern = /(?:date|conducted\s*on)\s*[:=\-]\s*(\d{1,4}[-/\.]\d{1,2}[-/\.]\d{1,4})/i;
   const remarksPattern = /(?:remarks?|feedback|comments?|teacher'?s?\s*remarks?)\s*[:=\-]\s*(.+)/i;
+  const attendancePattern = /(?:attendance|present(?:\s*days)?|working\s*days|att(?:endance)?)\s*[:=\-]\s*(\d+(?:\.\d+)?%?)/i;
+  const academicYearPattern = /(?:academic\s*year|session|year)\s*[:=\-]\s*(\d{4}(?:\s*[-/]\s*\d{2,4})?)/i;
+  const classPattern = /(?:class|grade|standard|sec(?:tion)?)\s*[:=\-]\s*([A-Za-z0-9\s-]+)/i;
 
   // Pass 1: Extract Header Entities
   for (const line of lines) {
@@ -270,6 +288,24 @@ function parseTextToReportCard(
     if (remMatch) {
       generalRemarks = remMatch[1].trim();
     }
+
+    // Attendance match
+    const attMatch = line.match(attendancePattern);
+    if (attMatch && !detectedAttendance) {
+      detectedAttendance = attMatch[1].trim();
+    }
+
+    // Academic Year match
+    const yearMatch = line.match(academicYearPattern);
+    if (yearMatch && !detectedAcademicYear) {
+      detectedAcademicYear = yearMatch[1].trim();
+    }
+
+    // Class match
+    const classMatch = line.match(classPattern);
+    if (classMatch && !detectedClassName) {
+      detectedClassName = classMatch[1].trim();
+    }
   }
 
   // Pass 2: Extract Subjects and Marks
@@ -317,6 +353,14 @@ function parseTextToReportCard(
       // E.g. "Maths: 85/100" or "English 92" or "Science | 78 | 100 | 35 | Pass"
       const numberMatches = Array.from(line.matchAll(/\b\d+(?:\.\d+)?\b/g)).map(m => parseFloat(m[0]));
 
+      // Fallback: Check adjacent line if no number found on the subject line
+      if (numberMatches.length === 0 && idx + 1 < lines.length) {
+        const nextLineNumbers = Array.from(lines[idx + 1].matchAll(/\b\d+(?:\.\d+)?\b/g)).map(m => parseFloat(m[0]));
+        if (nextLineNumbers.length > 0) {
+          numberMatches.push(...nextLineNumbers);
+        }
+      }
+
       let score: number | "" = "";
       let maxScore = matchedSubInfo.maxMarks;
       let passMarks = matchedSubInfo.passMarks;
@@ -359,6 +403,25 @@ function parseTextToReportCard(
         validationError = `Score (${score}) exceeds maximum marks (${maxScore}).`;
       }
 
+      let status: "PASS" | "FAIL" | "NEEDS_REVIEW" = "NEEDS_REVIEW";
+      let grade = "-";
+      if (score !== "") {
+        if (score >= passMarks) {
+          status = "PASS";
+        } else {
+          status = "FAIL";
+        }
+        const pct = (Number(score) / maxScore) * 100;
+        if (pct >= 90) grade = "A+";
+        else if (pct >= 80) grade = "A";
+        else if (pct >= 70) grade = "B";
+        else if (pct >= 60) grade = "C";
+        else if (pct >= 50) grade = "D";
+        else grade = "F";
+      }
+
+      originalMarksMap[matchedSubInfo.subjectName] = line.trim();
+
       scannedSubjects.push({
         id: `scanned-${idx}-${Math.random().toString(36).substring(2, 7)}`,
         subjectId: matchedSubInfo.subjectId,
@@ -367,6 +430,9 @@ function parseTextToReportCard(
         maxScore,
         passMarks,
         remarks,
+        grade,
+        status,
+        originalExtractedValue: line.trim(),
         isInvalid,
         validationError
       });
@@ -384,6 +450,9 @@ function parseTextToReportCard(
         maxScore: sub.maxMarks || 100,
         passMarks: sub.passMarks || 35,
         remarks: "",
+        grade: "-",
+        status: "NEEDS_REVIEW",
+        originalExtractedValue: "Not detected in document",
         isInvalid: true,
         validationError: "Enter score for this subject"
       });
@@ -392,12 +461,23 @@ function parseTextToReportCard(
 
   return {
     student: detectedStudent,
+    className: detectedClassName,
+    academicYear: detectedAcademicYear,
+    attendance: detectedAttendance,
     examName: detectedExamName,
     examDate: detectedExamDate,
     defaultMaxMarks,
     defaultPassMarks,
     generalRemarks,
-    subjects: scannedSubjects
+    subjects: scannedSubjects,
+    originalExtractedValues: {
+      student: detectedStudent.studentName,
+      rollNumber: detectedStudent.rollNumber,
+      exam: detectedExamName,
+      date: detectedExamDate,
+      attendance: detectedAttendance || undefined,
+      marks: originalMarksMap
+    }
   };
 }
 
@@ -457,11 +537,12 @@ function parseExcelToReportCard(
 
     if (hasStudentOrRoll && subjectsFoundInRow >= 1) {
       headerRowIndex = r;
-      rollCol = rowStrings.findIndex(c => c.includes("roll") || c.includes("reg") || c.includes("id"));
+      rollCol = rowStrings.findIndex(c => c.includes("roll") || c.includes("reg") || c.includes("id") || c.includes("admission"));
       nameCol = rowStrings.findIndex(c => c.includes("name") || c.includes("student"));
+      const attCol = rowStrings.findIndex(c => c.includes("att") || c.includes("present"));
 
       rowStrings.forEach((c, colIdx) => {
-        if (colIdx !== rollCol && colIdx !== nameCol) {
+        if (colIdx !== rollCol && colIdx !== nameCol && colIdx !== attCol) {
           const match = matchSubject(c, classSubjects);
           if (match.subjectId || Object.keys(SUBJECT_ALIASES).includes(cleanString(c))) {
             subjectColMap.push({
@@ -481,6 +562,9 @@ function parseExcelToReportCard(
   // If Gradebook Matrix detected with student rows
   if (headerRowIndex !== -1 && subjectColMap.length > 0) {
     const allDetectedStudents: DetectedStudentEntry[] = [];
+    const attCol = rollCol !== -1 && headerRowIndex !== -1
+      ? rows[headerRowIndex].map((c: any) => String(c || "").toLowerCase()).findIndex((c: string) => c.includes("att") || c.includes("present"))
+      : -1;
 
     for (let r = headerRowIndex + 1; r < rows.length; r++) {
       const row = rows[r];
@@ -488,6 +572,7 @@ function parseExcelToReportCard(
 
       const rawRoll = rollCol !== -1 ? String(row[rollCol] || "").trim() : "";
       const rawName = nameCol !== -1 ? String(row[nameCol] || "").trim() : "";
+      const rawAtt = attCol !== -1 && row[attCol] !== undefined ? String(row[attCol]).trim() : undefined;
       if (!rawRoll && !rawName) continue;
 
       const studentMatch = matchStudent(`${rawRoll} ${rawName}`, classStudents);
@@ -519,6 +604,23 @@ function parseExcelToReportCard(
           maxTotal += subInfo.maxMarks;
         }
 
+        let status: "PASS" | "FAIL" | "NEEDS_REVIEW" = "NEEDS_REVIEW";
+        let grade = "-";
+        if (numScore !== "") {
+          if (numScore >= subInfo.passMarks) {
+            status = "PASS";
+          } else {
+            status = "FAIL";
+          }
+          const pct = (Number(numScore) / subInfo.maxMarks) * 100;
+          if (pct >= 90) grade = "A+";
+          else if (pct >= 80) grade = "A";
+          else if (pct >= 70) grade = "B";
+          else if (pct >= 60) grade = "C";
+          else if (pct >= 50) grade = "D";
+          else grade = "F";
+        }
+
         studentSubs.push({
           id: `excel-row-${r}-sub-${subIdx}`,
           subjectId: subInfo.subjectId,
@@ -527,6 +629,9 @@ function parseExcelToReportCard(
           maxScore: subInfo.maxMarks,
           passMarks: subInfo.passMarks,
           remarks: "",
+          grade,
+          status,
+          originalExtractedValue: rawScore !== undefined && rawScore !== null ? String(rawScore) : undefined,
           isInvalid,
           validationError
         });
@@ -544,6 +649,7 @@ function parseExcelToReportCard(
         studentId: studentMatch.studentId,
         studentName: studentMatch.studentName || rawName || "Student",
         rollNumber: studentMatch.rollNumber || rawRoll || "-",
+        attendance: rawAtt || null,
         subjects: studentSubs,
         totalMarks: total,
         percentage,
@@ -749,13 +855,17 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
         studentName: parsed.student.studentName,
         rollNumber: parsed.student.rollNumber,
         studentConfidence: parsed.student.confidence,
+        className: parsed.className || null,
+        academicYear: parsed.academicYear || null,
+        attendance: parsed.attendance || null,
         examName: parsed.examName,
         examDate: parsed.examDate,
         defaultMaxMarks: parsed.defaultMaxMarks,
         defaultPassMarks: parsed.defaultPassMarks,
         generalRemarks: parsed.generalRemarks,
         subjects: parsed.subjects,
-        rawTextPreview: text.substring(0, 500)
+        rawTextPreview: text.substring(0, 500),
+        originalExtractedValues: parsed.originalExtractedValues
       };
     }
 
@@ -794,13 +904,17 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
         studentName: parsed.student.studentName,
         rollNumber: parsed.student.rollNumber,
         studentConfidence: parsed.student.confidence,
+        className: parsed.className || null,
+        academicYear: parsed.academicYear || null,
+        attendance: parsed.attendance || null,
         examName: parsed.examName,
         examDate: parsed.examDate,
         defaultMaxMarks: parsed.defaultMaxMarks,
         defaultPassMarks: parsed.defaultPassMarks,
         generalRemarks: parsed.generalRemarks,
         subjects: parsed.subjects,
-        rawTextPreview: text.substring(0, 500)
+        rawTextPreview: text.substring(0, 500),
+        originalExtractedValues: parsed.originalExtractedValues
       };
     }
 
@@ -834,13 +948,17 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
         studentName: parsed.student.studentName,
         rollNumber: parsed.student.rollNumber,
         studentConfidence: parsed.student.confidence,
+        className: parsed.className || null,
+        academicYear: parsed.academicYear || null,
+        attendance: parsed.attendance || null,
         examName: parsed.examName || "Midterm Examination",
         examDate: parsed.examDate || new Date().toISOString().split("T")[0],
         defaultMaxMarks: parsed.defaultMaxMarks,
         defaultPassMarks: parsed.defaultPassMarks,
         generalRemarks: parsed.generalRemarks,
         subjects: parsed.subjects,
-        rawTextPreview: extractedText ? extractedText.substring(0, 500) : "Image uploaded. You can verify and edit subject marks below."
+        rawTextPreview: extractedText ? extractedText.substring(0, 500) : "Image uploaded. You can verify and edit subject marks below.",
+        originalExtractedValues: parsed.originalExtractedValues
       };
     }
 
