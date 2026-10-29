@@ -56,6 +56,64 @@ export function cleanString(str: string): string {
   return (str || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * Normalizes subject names into standard curriculum names using aliases
+ * e.g. Maths/Math -> MATHEMATICS, Social/Social Studies/SS/SST -> SOCIAL SCIENCE
+ */
+export function normalizeSubjectName(raw: string): string {
+  const norm = (raw || "").toLowerCase().replace(/\s*[\/\(]\s*\d+\s*[\)]?/g, "").trim();
+  const clean = cleanString(norm);
+  if (!clean) return (raw || "").trim().toUpperCase();
+
+  if (clean.includes("math")) return "MATHEMATICS";
+  if (clean.includes("social") || clean.includes("sst") || clean === "ss" || clean.includes("socsci") || clean.includes("socstudy")) return "SOCIAL SCIENCE";
+  if (clean.includes("comp") || clean.includes("cs") || clean === "it") return "COMPUTER SCIENCE";
+  if (clean.includes("tam")) return "TAMIL";
+  if (clean.includes("eng")) return "ENGLISH";
+  if (clean.includes("sci") && !clean.includes("social") && !clean.includes("comp")) return "SCIENCE";
+  if (clean.includes("hin")) return "HINDI";
+  if (clean.includes("comp") || clean.includes("cs") || clean.includes("it")) return "COMPUTER SCIENCE";
+  if (clean.includes("physics") || clean === "phy") return "PHYSICS";
+  if (clean.includes("chem")) return "CHEMISTRY";
+  if (clean.includes("bio")) return "BIOLOGY";
+
+  for (const [canonical, aliases] of Object.entries(SUBJECT_ALIASES)) {
+    if (clean === canonical || aliases.some(a => cleanString(a) === clean)) {
+      if (canonical === "socialscience") return "SOCIAL SCIENCE";
+      if (canonical === "computerscience") return "COMPUTER SCIENCE";
+      return canonical.toUpperCase();
+    }
+  }
+
+  return (raw || "").trim().toUpperCase();
+}
+
+/**
+ * Strips symbols/spaces and extracts numeric score.
+ * If non-numeric or unreadable, returns score: null and isNeedsReview: true.
+ */
+export function parseScoreNumber(val: any): { score: number | null; isNeedsReview: boolean; raw: string } {
+  if (val === null || val === undefined || val === "") {
+    return { score: null, isNeedsReview: true, raw: "" };
+  }
+  if (typeof val === "number") {
+    if (isNaN(val)) return { score: null, isNeedsReview: true, raw: "" };
+    return { score: val, isNeedsReview: false, raw: String(val) };
+  }
+  const str = String(val).trim();
+  // If formatted as "92 / 100" or "85/100", extract part before slash
+  const beforeSlash = str.split("/")[0].trim();
+  const match = beforeSlash.replace(/[^0-9.-]/g, "").trim();
+  if (!match) {
+    return { score: null, isNeedsReview: true, raw: str };
+  }
+  const parsed = parseFloat(match);
+  if (isNaN(parsed)) {
+    return { score: null, isNeedsReview: true, raw: str };
+  }
+  return { score: parsed, isNeedsReview: false, raw: str };
+}
+
 export function computeGrade(score: number, max: number): string {
   if (isNaN(score) || max <= 0) return "-";
   const pct = (score / max) * 100;
@@ -171,6 +229,9 @@ export function matchStudent(
   }
 
   const cleanRaw = cleanString(rawText);
+  if (!cleanRaw || cleanRaw.length < 3) {
+    return { studentId: "", studentName: "", rollNumber: "", confidence: "NONE" };
+  }
 
   // 1. Match exact Roll Number
   for (const st of classStudents) {
@@ -323,76 +384,119 @@ export function parseTextToReportCard(
 
   // Find header row that contains multiple subject names
   let headerRowIndex = -1;
-  const subjectsInHeader: Array<{ subject: { subjectId: string; subjectName: string; maxMarks: number; passMarks: number }; colIndex: number }> = [];
+  let subjectsInHeader: Array<{ subject: { subjectId: string; subjectName: string; maxMarks: number; passMarks: number }; startIdx: number }> = [];
 
   for (let idx = 0; idx < lines.length; idx++) {
     const line = lines[idx];
-    const tokens = line.split(/[|\t,]+/).map(t => t.trim()).filter(Boolean);
-    const matchedCols: typeof subjectsInHeader = [];
+    const occurrences: Array<{ subject: any; startIdx: number }> = [];
 
-    tokens.forEach((token, cIdx) => {
-      const match = matchSubject(token, classSubjects);
-      if (match) {
-        matchedCols.push({ subject: match, colIndex: cIdx });
+    for (const cs of classSubjects) {
+      const aliases = SUBJECT_ALIASES[cleanString(cs.name)] || [];
+      const searchTerms = [cs.name.toLowerCase(), ...aliases];
+
+      for (const term of searchTerms) {
+        const reg = new RegExp(`\\b${term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, "gi");
+        let m: RegExpExecArray | null;
+        while ((m = reg.exec(line)) !== null) {
+          occurrences.push({
+            subject: {
+              subjectId: cs.id,
+              subjectName: cs.name,
+              maxMarks: cs.maxMarks || 100,
+              passMarks: cs.passMarks || 35
+            },
+            startIdx: m.index
+          });
+        }
       }
-    });
+    }
 
-    if (matchedCols.length >= 2) {
+    occurrences.sort((a, b) => a.startIdx - b.startIdx);
+    const uniqueInLine: typeof subjectsInHeader = [];
+    for (const occ of occurrences) {
+      if (!uniqueInLine.find(u => u.subject.subjectId === occ.subject.subjectId)) {
+        uniqueInLine.push(occ);
+      }
+    }
+
+    if (uniqueInLine.length > subjectsInHeader.length) {
       headerRowIndex = idx;
-      subjectsInHeader.push(...matchedCols);
-      break;
+      subjectsInHeader = uniqueInLine;
     }
   }
 
   if (headerRowIndex !== -1 && subjectsInHeader.length >= 2) {
     // Process student rows below header
     for (let r = headerRowIndex + 1; r < lines.length; r++) {
-      const row = lines[r];
-      if (/^(?:total|average|avg|result|note|illustrative)\b/i.test(row)) continue;
+      const row = lines[r].trim();
+      if (!row) continue;
+      if (/^(?:s\.?no|sno|student|roll|subject|total|average|avg|result|note|illustrative)\b/i.test(row)) continue;
+      if (/illustrative\s+marks|verify\s+before|official\s+use|signature|marksheet/i.test(row)) continue;
 
-      // Match student in this row
+      // Extract numbers in row
+      const numberTokens = row.match(/\b\d{1,3}\b/g)?.map(n => parseInt(n, 10)) || [];
       const stMatch = matchStudent(row, classStudents);
-      if (stMatch.studentId || /[A-Za-z]{3,}/.test(row)) {
-        const tokens = row.split(/[|\t,]+/).map(t => t.trim()).filter(Boolean);
-        // Find numbers in row
-        const numberTokens = row.match(/\b\d{1,3}\b/g)?.map(n => parseInt(n, 10)) || [];
+      const hasRollNumber = /\b\d{6,12}[A-Za-z0-9]*\b/i.test(row);
 
-        // Filter out obvious S.No (e.g. 1, 2) if it appears at the very beginning
-        let filteredNums = [...numberTokens];
-        if (filteredNums.length > subjectsInHeader.length && filteredNums[0] <= lines.length) {
-          filteredNums.shift(); // remove S.No
-        }
-
-        const studentSubjects: ScannedReportCardSubject[] = classSubjects.map((cs, sIdx) => {
-          const score = filteredNums[sIdx] !== undefined ? filteredNums[sIdx] : "";
-          const maxScore = customDefaults?.defaultMaxMarks || cs.maxMarks || 100;
-          const passMarks = customDefaults?.defaultPassMarks || cs.passMarks || 35;
-          const grade = score !== "" ? computeGrade(Number(score), maxScore) : "-";
-          const status = score === "" ? "NEEDS_REVIEW" : Number(score) >= passMarks ? "PASS" : "FAIL";
-
-          return {
-            id: `subj-${Date.now()}-${sIdx}-${Math.random().toString(36).substr(2, 4)}`,
-            subjectId: cs.id,
-            subjectName: cs.name,
-            score,
-            maxScore,
-            passMarks,
-            remarks: "",
-            grade,
-            status,
-            originalExtractedValue: score !== "" ? String(score) : undefined
-          };
-        });
-
-        allDetectedStudents.push({
-          studentId: stMatch.studentId,
-          studentName: stMatch.studentName || row.match(/[A-Za-z\s.]{3,}/)?.[0]?.trim() || "Student",
-          rollNumber: stMatch.rollNumber || row.match(/\b\d{6,12}[A-Za-z0-9]*\b/)?.[0] || "",
-          subjects: studentSubjects,
-          totalMarks: docTotal,
-          percentage: docPercentage
-        });
+      // Must match a student in roster OR have a roll number OR have at least 2 subject numbers
+      if (!stMatch.studentId && !hasRollNumber && numberTokens.length < 2) {
+        continue;
       }
+
+      // Filter out obvious S.No (e.g. 1, 2) if it appears at the very beginning
+      let filteredNums = [...numberTokens];
+      if (filteredNums.length > subjectsInHeader.length && filteredNums[0] <= lines.length) {
+        filteredNums.shift(); // remove S.No
+      }
+
+      const studentSubjects: ScannedReportCardSubject[] = classSubjects.map((cs, sIdx) => {
+        // Map to header column index if available, else positional
+        const hIdx = subjectsInHeader.findIndex(h => h.subject.subjectId === cs.id);
+        const scoreVal = (hIdx !== -1 && filteredNums[hIdx] !== undefined)
+          ? filteredNums[hIdx]
+          : (filteredNums[sIdx] !== undefined ? filteredNums[sIdx] : "");
+
+        const maxScore = customDefaults?.defaultMaxMarks || cs.maxMarks || 100;
+        const passMarks = customDefaults?.defaultPassMarks || cs.passMarks || 35;
+        const grade = scoreVal !== "" ? computeGrade(Number(scoreVal), maxScore) : "-";
+        const status = scoreVal === "" ? "NEEDS_REVIEW" : Number(scoreVal) >= passMarks ? "PASS" : "FAIL";
+
+        return {
+          id: `subj-${Date.now()}-${sIdx}-${Math.random().toString(36).substr(2, 4)}`,
+          subjectId: cs.id,
+          subjectName: cs.name,
+          score: scoreVal,
+          maxScore,
+          passMarks,
+          remarks: "",
+          grade,
+          status,
+          originalExtractedValue: scoreVal !== "" ? String(scoreVal) : undefined
+        };
+      });
+
+      // Compute student-specific total if available in numbers, or sum valid scores
+      const sumScores = studentSubjects.reduce((acc, s) => acc + (typeof s.score === "number" ? s.score : 0), 0);
+      let rowTotal = sumScores > 0 ? sumScores : docTotal;
+      if (filteredNums.length >= subjectsInHeader.length + 1 && filteredNums[subjectsInHeader.length] >= sumScores * 0.8) {
+        rowTotal = filteredNums[subjectsInHeader.length];
+      }
+      let rowPct = docPercentage;
+      if (rowTotal && studentSubjects.length > 0) {
+        const totalMax = studentSubjects.reduce((acc, s) => acc + s.maxScore, 0);
+        if (totalMax > 0) {
+          rowPct = Math.round((rowTotal / totalMax) * 1000) / 10;
+        }
+      }
+
+      allDetectedStudents.push({
+        studentId: stMatch.studentId,
+        studentName: stMatch.studentName || row.match(/[A-Za-z\s.]{3,}/)?.[0]?.trim() || "Student",
+        rollNumber: stMatch.rollNumber || row.match(/\b\d{6,12}[A-Za-z0-9]*\b/)?.[0] || "",
+        subjects: studentSubjects,
+        totalMarks: rowTotal,
+        percentage: rowPct
+      });
     }
   }
 

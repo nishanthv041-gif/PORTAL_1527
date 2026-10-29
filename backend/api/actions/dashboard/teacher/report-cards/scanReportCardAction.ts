@@ -228,6 +228,37 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
       }
     }
 
+    if (!extractedData && isImage) {
+      try {
+        const path = await import("path");
+        const workerPath = path.join(process.cwd(), "node_modules", "tesseract.js", "src", "worker-script", "node", "index.js");
+        const { createWorker } = await import("tesseract.js");
+        const worker = await createWorker("eng", 1, { workerPath });
+        const ret = await worker.recognize(buffer);
+        await worker.terminate();
+        const text = ret?.data?.text || "";
+        if (text && text.trim().length > 10) {
+          const parsed = parseTextToReportCard(
+            text,
+            classSubjects,
+            classStudents,
+            { defaultMaxMarks, defaultPassMarks }
+          );
+          if (parsed.allDetectedStudents && parsed.allDetectedStudents.length > 0) {
+            extractedData = {
+              detectedStudents: parsed.allDetectedStudents,
+              examName: parsed.examName,
+              examDate: parsed.examDate,
+              docTotal: parsed.docTotal,
+              docPercentage: parsed.docPercentage
+            };
+          }
+        }
+      } catch (ocrErr) {
+        console.warn("Server-side action image OCR notice:", ocrErr);
+      }
+    }
+
     if (!extractedData && isPdf) {
       try {
         const { extractText } = await import("unpdf");
@@ -345,6 +376,7 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
       studentId: first?.studentId || "",
       studentName: first?.studentName || "",
       rollNumber: first?.rollNumber || "",
+      extractedName: first?.extractedName || first?.studentName || "",
       studentConfidence: first?.studentId ? "HIGH" : "NONE",
       examName: extractedData.examName || "Midterm Examination",
       examDate: extractedData.examDate || new Date().toISOString().split("T")[0],
@@ -353,8 +385,9 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
       generalRemarks: first?.remarks || "",
       subjects: first?.subjects || [],
       allDetectedStudents: extractedData.detectedStudents,
-      docTotal: extractedData.docTotal,
-      docPercentage: extractedData.docPercentage
+      detectedStudents: extractedData.detectedStudents,
+      docTotal: first?.docTotal ?? extractedData.docTotal,
+      docPercentage: first?.docPercentage ?? extractedData.docPercentage
     };
   } catch (err: any) {
     console.error("scanReportCardAction unexpected error:", err);

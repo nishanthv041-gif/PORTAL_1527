@@ -129,6 +129,39 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 1b. Fallback for images if Gemini Vision is unavailable: in-memory Tesseract OCR
+    if (!extractionResult && isImage) {
+      try {
+        const path = await import("path");
+        const workerPath = path.join(process.cwd(), "node_modules", "tesseract.js", "src", "worker-script", "node", "index.js");
+        const { createWorker } = await import("tesseract.js");
+        const worker = await createWorker("eng", 1, { workerPath });
+        const ret = await worker.recognize(buffer);
+        await worker.terminate();
+        const text = ret?.data?.text || "";
+        if (text && text.trim().length > 10) {
+          const parsed = parseTextToReportCard(
+            text,
+            classSubjects,
+            classStudents,
+            { defaultMaxMarks, defaultPassMarks }
+          );
+          if (parsed.allDetectedStudents && parsed.allDetectedStudents.length > 0) {
+            extractionResult = {
+              success: true,
+              detectedStudents: parsed.allDetectedStudents,
+              examName: parsed.examName,
+              examDate: parsed.examDate,
+              docTotal: parsed.docTotal,
+              docPercentage: parsed.docPercentage
+            };
+          }
+        }
+      } catch (ocrErr) {
+        console.warn("Server-side image OCR fallback notice:", ocrErr);
+      }
+    }
+
     // 2. If PDF, extract text in-memory using unpdf
     if (!extractionResult && isPdf) {
       try {
@@ -255,19 +288,50 @@ export async function POST(req: NextRequest) {
             subjects: defaultSubjects
           }
         ],
+        allDetectedStudents: [
+          {
+            studentId: fallbackStudent?.id || "",
+            studentName: fallbackStudent?.name || "Student",
+            rollNumber: fallbackStudent?.rollNumber || "",
+            subjects: defaultSubjects
+          }
+        ],
         examName: "Midterm Examination",
         examDate: new Date().toISOString().split("T")[0]
       };
     }
 
+    const rawDetectedList: any[] = extractionResult.allDetectedStudents || extractionResult.detectedStudents || [];
+    const withScores = rawDetectedList.filter(
+      (st: any) => st.subjects && st.subjects.some((s: any) => s.score !== "" && s.score !== null && s.score !== undefined)
+    );
+    const validList = withScores.length > 0 ? withScores : rawDetectedList;
+    const firstStudent = validList.find((st: any) => st.studentId) || validList[0];
+
     return NextResponse.json({
       success: true,
       fileDetails: {
         name: file.name,
-        type: file.type,
+        type: file.type || "application/octet-stream",
         size: file.size
       },
-      ...extractionResult
+      studentId: firstStudent?.studentId || "",
+      studentName: firstStudent?.studentName || "",
+      rollNumber: firstStudent?.rollNumber || "",
+      extractedName: firstStudent?.extractedName || firstStudent?.studentName || "",
+      studentConfidence: firstStudent?.studentId ? "HIGH" : "NONE",
+      examName: extractionResult.examName || "Midterm Examination",
+      examDate: extractionResult.examDate || new Date().toISOString().split("T")[0],
+      academicYear: extractionResult.academicYear || "2026-2027",
+      defaultMaxMarks,
+      defaultPassMarks,
+      attendance: firstStudent?.attendance ?? null,
+      generalRemarks: firstStudent?.remarks || "",
+      subjects: firstStudent?.subjects || [],
+      allDetectedStudents: validList,
+      detectedStudents: validList,
+      docTotal: firstStudent?.docTotal ?? extractionResult.docTotal,
+      docPercentage: firstStudent?.docPercentage ?? extractionResult.docPercentage
     });
   } catch (err: any) {
     console.error("Report card extraction API error:", err);

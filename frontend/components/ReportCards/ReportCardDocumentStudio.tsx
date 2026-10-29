@@ -63,6 +63,10 @@ async function compressImageForUpload(file: File): Promise<Blob> {
   if (!file.type.startsWith("image/") && !/\.(jpg|jpeg|png|webp|bmp)$/i.test(file.name)) {
     return file;
   }
+  // If file is already <= 4MB, preserve pristine quality for OCR text recognition
+  if (file.size <= 4 * 1024 * 1024) {
+    return file;
+  }
   return new Promise((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -231,7 +235,7 @@ export default function ReportCardDocumentStudio({
 
     const isAllEntered = subjects.length > 0 && emptyCount === 0;
     const percentage = maximum > 0 && hasAnyMarks ? parseFloat(((obtained / maximum) * 100).toFixed(1)) : 0;
-
+    
     let grade = "-";
     if (isAllEntered) {
       if (hasFail && percentage < 40) grade = "F";
@@ -249,8 +253,8 @@ export default function ReportCardDocumentStudio({
     const resultStatus: "PENDING" | "PASSED" | "NEEDS SUPPORT" = !isAllEntered
       ? "PENDING"
       : hasFail || percentage < 35
-        ? "NEEDS SUPPORT"
-        : "PASSED";
+      ? "NEEDS SUPPORT"
+      : "PASSED";
 
     return {
       obtained,
@@ -351,24 +355,9 @@ export default function ReportCardDocumentStudio({
     );
 
     try {
-      // 1. Client-Side Image Prep: Downscale/compress images to avoid Vercel 4.5MB limit
+      // 1. Client-Side Image Prep: Downscale/compress images only if above 4MB to avoid Vercel 4.5MB limit
       const uploadBlob = await compressImageForUpload(entry.file);
       const uploadFile = new File([uploadBlob], entry.file.name, { type: uploadBlob.type || entry.file.type });
-
-      let browserOcrText = "";
-      // Optional client OCR fallback
-      if (["png", "jpg", "jpeg", "webp", "bmp"].includes(entry.ext) || entry.file.type.startsWith("image/")) {
-        try {
-          const { createWorker } = await import("tesseract.js");
-          const worker = await createWorker("eng");
-          await worker.setParameters({ tessedit_pageseg_mode: "3" as any });
-          const ocrResult = await worker.recognize(uploadFile);
-          await worker.terminate();
-          browserOcrText = ocrResult?.data?.text || "";
-        } catch (ocrErr) {
-          console.warn("Client OCR notice:", ocrErr);
-        }
-      }
 
       const formData = new FormData();
       formData.set("classId", activeClassId);
@@ -377,9 +366,6 @@ export default function ReportCardDocumentStudio({
       formData.set("defaultPassMarks", String(examPassMarks));
       formData.set("examDate", examDate);
       formData.set("examName", examName);
-      if (browserOcrText) {
-        formData.set("clientOcrText", browserOcrText);
-      }
 
       // 2. Call server extraction endpoint
       let res = await fetch("/api/report-cards/extract", {
@@ -1822,8 +1808,8 @@ export default function ReportCardDocumentStudio({
                     !selectedStudentId
                       ? "Select an enrolled student before sending"
                       : totals.hasValidationErrors
-                        ? "Fill in all subject marks before sending"
-                        : "Send Report Card to Parent"
+                      ? "Fill in all subject marks before sending"
+                      : "Send Report Card to Parent"
                   }
                 >
                   <Send size={18} />
@@ -1893,4 +1879,3 @@ export default function ReportCardDocumentStudio({
     </div>
   );
 }
-
