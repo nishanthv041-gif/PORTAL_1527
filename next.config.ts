@@ -2,12 +2,12 @@ import type { NextConfig } from "next";
 
 const cspHeader = `
     default-src 'self';
-    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://va.vercel-scripts.com;
+    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://va.vercel-scripts.com https://cdn.jsdelivr.net;
     style-src 'self' 'unsafe-inline';
     img-src 'self' blob: data: https:;
     font-src 'self' data:;
-    connect-src 'self' blob: data: https: http:;
-    worker-src 'self' blob:;
+    connect-src 'self' blob: data: https: http: https://cdn.jsdelivr.net https://tessdata.projectnaptha.com;
+    worker-src 'self' blob: https://cdn.jsdelivr.net;
     object-src 'none';
     base-uri 'self';
     form-action 'self';
@@ -16,6 +16,7 @@ const cspHeader = `
 `;
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ['tesseract.js', 'sharp', 'unpdf', 'mammoth', 'xlsx'],
   compress: true,
   poweredByHeader: false,
   devIndicators: false,
