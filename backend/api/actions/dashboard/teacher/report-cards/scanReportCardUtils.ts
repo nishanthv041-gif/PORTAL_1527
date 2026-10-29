@@ -166,10 +166,10 @@ export function matchSubject(
     return null;
   }
 
-  // 1. Direct or partial match with class subjects
+  // 1. Exact match first
   for (const s of classSubjects) {
     const cleanSub = cleanString(s.name);
-    if (cleanSub === cleanRaw || cleanRaw.includes(cleanSub) || cleanSub.includes(cleanRaw)) {
+    if (cleanSub === cleanRaw) {
       return {
         subjectId: s.id,
         subjectName: s.name,
@@ -194,6 +194,22 @@ export function matchSubject(
           passMarks: foundInClass.passMarks || 35
         };
       }
+    }
+  }
+
+  // 3. Partial inclusion (with guards for science vs social science / computer science)
+  for (const s of classSubjects) {
+    const cleanSub = cleanString(s.name);
+    if (cleanRaw === "science" && cleanSub !== "science") continue;
+    if (cleanSub === "science" && cleanRaw !== "science" && (cleanRaw.includes("social") || cleanRaw.includes("comp"))) continue;
+
+    if (cleanRaw.includes(cleanSub) || cleanSub.includes(cleanRaw)) {
+      return {
+        subjectId: s.id,
+        subjectName: s.name,
+        maxMarks: s.maxMarks || 100,
+        passMarks: s.passMarks || 35
+      };
     }
   }
 
@@ -605,5 +621,261 @@ export function parseTextToReportCard(
     rawTextPreview: lines.slice(0, 15).join("\n"),
     docTotal,
     docPercentage
+  };
+}
+
+/**
+ * Parses uploaded JSON documents into structured report card records for single or multiple students.
+ * Supports standard format ({ examName, examDate, students: [...] }), direct student arrays,
+ * key-value subjects, and single-student objects.
+ */
+export function parseJsonToReportCard(
+  jsonText: string,
+  classSubjects: Array<{ id: string; name: string; maxMarks?: number; passMarks?: number }>,
+  classStudents: Array<{ id: string; rollNumber: string; name: string }>,
+  customDefaults?: { defaultMaxMarks?: number; defaultPassMarks?: number }
+): {
+  studentId: string;
+  studentName: string;
+  rollNumber: string;
+  studentConfidence: "HIGH" | "MEDIUM" | "LOW" | "NONE";
+  examName: string;
+  examDate: string;
+  academicYear: string;
+  subjects: ScannedReportCardSubject[];
+  allDetectedStudents: DetectedStudentEntry[];
+  rawTextPreview: string;
+  docTotal?: number;
+  docPercentage?: number;
+} {
+  let data: any;
+  try {
+    data = JSON.parse(jsonText);
+  } catch (err: any) {
+    throw new Error(`Failed to parse JSON file: ${err?.message || "Invalid JSON syntax"}`);
+  }
+
+  const defMax = data?.defaultMaxMarks || customDefaults?.defaultMaxMarks || 100;
+  const defPass = data?.defaultPassMarks || customDefaults?.defaultPassMarks || 35;
+  const examName = data?.examName || data?.examination || data?.exam || "Midterm Examination";
+  const examDate = data?.examDate || data?.date || new Date().toISOString().split("T")[0];
+  const academicYear = data?.academicYear || data?.year || "2026-2027";
+
+  let rawStudents: any[] = [];
+  if (Array.isArray(data)) {
+    rawStudents = data;
+  } else if (Array.isArray(data?.students)) {
+    rawStudents = data.students;
+  } else if (Array.isArray(data?.records)) {
+    rawStudents = data.records;
+  } else if (Array.isArray(data?.data)) {
+    rawStudents = data.data;
+  } else if (typeof data === "object" && data !== null) {
+    rawStudents = [data];
+  }
+
+  const allDetectedStudents: DetectedStudentEntry[] = [];
+
+  for (let sIdx = 0; sIdx < rawStudents.length; sIdx++) {
+    const rawSt = rawStudents[sIdx];
+    if (!rawSt || typeof rawSt !== "object") continue;
+
+    const rawName = String(rawSt.studentName || rawSt.name || rawSt.student || "").trim();
+    const rawRoll = String(rawSt.rollNumber || rawSt.rollNo || rawSt.roll || "").trim();
+    const combinedQuery = `${rawName} ${rawRoll}`.trim();
+    const stMatch = matchStudent(combinedQuery, classStudents);
+
+    const rawSubjects = rawSt.subjects || rawSt.marks || rawSt.scores || {};
+    let subjectEntries: Array<{ name: string; score: any; maxScore?: any; passMarks?: any; remarks?: string }> = [];
+
+    if (Array.isArray(rawSubjects)) {
+      subjectEntries = rawSubjects.map(sub => {
+        if (typeof sub === "object" && sub !== null) {
+          return {
+            name: String(sub.subjectName || sub.name || sub.subject || "").trim(),
+            score: sub.score ?? sub.mark ?? sub.marks ?? sub.marksScored ?? "",
+            maxScore: sub.maxScore ?? sub.maxMarks ?? sub.max ?? defMax,
+            passMarks: sub.passMarks ?? sub.passMark ?? sub.pass ?? defPass,
+            remarks: sub.remarks || sub.remark || ""
+          };
+        }
+        return { name: "", score: "" };
+      });
+    } else if (typeof rawSubjects === "object" && rawSubjects !== null) {
+      subjectEntries = Object.entries(rawSubjects).map(([key, val]) => {
+        if (typeof val === "object" && val !== null) {
+          return {
+            name: key.trim(),
+            score: (val as any).score ?? (val as any).marks ?? (val as any).mark ?? "",
+            maxScore: (val as any).maxScore ?? (val as any).maxMarks ?? defMax,
+            passMarks: (val as any).passMarks ?? defPass,
+            remarks: (val as any).remarks || ""
+          };
+        }
+        return {
+          name: key.trim(),
+          score: val,
+          maxScore: defMax,
+          passMarks: defPass,
+          remarks: ""
+        };
+      });
+    }
+
+    const studentSubjects: ScannedReportCardSubject[] = classSubjects.map((cs, cIdx) => {
+      const match = subjectEntries.find(se => {
+        if (!se.name) return false;
+        return matchSubject(se.name, [cs]) !== null;
+      });
+
+      const parsedScore = match ? parseScoreNumber(match.score) : { score: null, isNeedsReview: true, raw: "" };
+      const scoreVal = parsedScore.score !== null ? parsedScore.score : "";
+      const maxScore = match?.maxScore || cs.maxMarks || defMax;
+      const passMarks = match?.passMarks || cs.passMarks || defPass;
+      const grade = scoreVal !== "" ? computeGrade(Number(scoreVal), maxScore) : "-";
+      const status = scoreVal === "" ? "NEEDS_REVIEW" : Number(scoreVal) >= passMarks ? "PASS" : "FAIL";
+
+      return {
+        id: `subj-${Date.now()}-${sIdx}-${cIdx}-${Math.random().toString(36).substr(2, 4)}`,
+        subjectId: cs.id,
+        subjectName: cs.name,
+        score: scoreVal,
+        maxScore,
+        passMarks,
+        remarks: match?.remarks || "",
+        grade,
+        status,
+        originalExtractedValue: scoreVal !== "" ? String(scoreVal) : undefined
+      };
+    });
+
+    // Also include any subjects provided in the JSON that are not part of default classSubjects
+    subjectEntries.forEach((se, unmappedIdx) => {
+      if (!se.name) return;
+      const alreadyIncluded = classSubjects.some(cs => matchSubject(se.name, [cs]) !== null);
+      if (!alreadyIncluded) {
+        const parsedScore = parseScoreNumber(se.score);
+        const scoreVal = parsedScore.score !== null ? parsedScore.score : "";
+        const maxScore = se.maxScore || defMax;
+        const passMarks = se.passMarks || defPass;
+        const grade = scoreVal !== "" ? computeGrade(Number(scoreVal), maxScore) : "-";
+        const status = scoreVal === "" ? "NEEDS_REVIEW" : Number(scoreVal) >= passMarks ? "PASS" : "FAIL";
+
+        studentSubjects.push({
+          id: `custom-${Date.now()}-${sIdx}-${unmappedIdx}`,
+          subjectId: "",
+          subjectName: se.name.toUpperCase(),
+          score: scoreVal,
+          maxScore,
+          passMarks,
+          remarks: se.remarks || "",
+          grade,
+          status,
+          isCustomSubject: true,
+          originalExtractedValue: scoreVal !== "" ? String(scoreVal) : undefined
+        });
+      }
+    });
+
+    // Compute student total & percentage
+    const validScores = studentSubjects.filter(s => typeof s.score === "number");
+    const sumScores = validScores.reduce((acc, s) => acc + (s.score as number), 0);
+    const sumMax = studentSubjects.reduce((acc, s) => acc + s.maxScore, 0);
+    const totalMarks = rawSt.totalMarks ?? rawSt.total ?? (validScores.length > 0 ? sumScores : undefined);
+    const percentage = rawSt.percentage ?? rawSt.pct ?? (sumMax > 0 && validScores.length > 0 ? Math.round((sumScores / sumMax) * 1000) / 10 : undefined);
+
+    allDetectedStudents.push({
+      studentId: stMatch.studentId,
+      studentName: stMatch.studentName || rawName || "Student",
+      rollNumber: stMatch.rollNumber || rawRoll || "",
+      attendance: rawSt.attendance !== undefined ? String(rawSt.attendance) : undefined,
+      remarks: rawSt.remarks || rawSt.generalRemarks || "",
+      subjects: studentSubjects,
+      totalMarks,
+      percentage
+    });
+  }
+
+  const primary = allDetectedStudents[0];
+
+  return {
+    studentId: primary?.studentId || "",
+    studentName: primary?.studentName || "",
+    rollNumber: primary?.rollNumber || "",
+    studentConfidence: primary?.studentId ? "HIGH" : "NONE",
+    examName,
+    examDate,
+    academicYear,
+    subjects: primary?.subjects || [],
+    allDetectedStudents,
+    rawTextPreview: jsonText.slice(0, 500),
+    docTotal: primary?.totalMarks,
+    docPercentage: primary?.percentage
+  };
+}
+
+/**
+ * Generates standard JSON template for downloading, pre-populated with active class subjects and enrolled students.
+ */
+export function generateStandardJsonTemplate(
+  className?: string,
+  classSubjects?: Array<{ id: string; name: string; maxMarks?: number; passMarks?: number }>,
+  classStudents?: Array<{ id: string; rollNumber: string; name: string }>
+): object {
+  const defaultSubjects = (classSubjects && classSubjects.length > 0)
+    ? classSubjects.map(s => ({
+        subjectName: s.name,
+        score: 85,
+        maxScore: s.maxMarks || 100,
+        passMarks: s.passMarks || 35,
+        remarks: "Good performance"
+      }))
+    : [
+        { subjectName: "Tamil", score: 85, maxScore: 100, passMarks: 35, remarks: "Good performance" },
+        { subjectName: "English", score: 80, maxScore: 100, passMarks: 35, remarks: "Fluent" },
+        { subjectName: "Mathematics", score: 90, maxScore: 100, passMarks: 35, remarks: "Excellent" },
+        { subjectName: "Science", score: 88, maxScore: 100, passMarks: 35, remarks: "Strong concepts" },
+        { subjectName: "Social Science", score: 86, maxScore: 100, passMarks: 35, remarks: "Consistent" }
+      ];
+
+  const studentsList = (classStudents && classStudents.length > 0)
+    ? classStudents.map((st, idx) => ({
+        rollNumber: st.rollNumber || `ROLL-00${idx + 1}`,
+        studentName: st.name || `Student ${idx + 1}`,
+        attendance: "95%",
+        remarks: "Diligent student with commendable academic consistency.",
+        subjects: defaultSubjects.map(sub => ({
+          ...sub,
+          score: Math.min(100, Math.max(35, Math.round(75 + (idx * 5) % 20)))
+        }))
+      }))
+    : [
+        {
+          rollNumber: "7376252AD216",
+          studentName: "KIRITHIK M",
+          attendance: "96%",
+          remarks: "Excellent overall academic progress and participation.",
+          subjects: defaultSubjects
+        },
+        {
+          rollNumber: "7376251EE172",
+          studentName: "RAJESWARI M",
+          attendance: "98%",
+          remarks: "Outstanding consistency, dedication, and leadership.",
+          subjects: defaultSubjects
+        }
+      ];
+
+  return {
+    $schema: "https://nipoportal.vercel.app/schemas/report-card.json",
+    instructions: "Fill or modify student marks and upload this .json file via the Report Card OCR & Document Studio. The marks will be validated and saved to the portal database.",
+    className: className || "Class 2 - Section A",
+    examName: "Midterm Examination",
+    examDate: new Date().toISOString().split("T")[0],
+    term: "Midterm",
+    academicYear: "2026-2027",
+    defaultMaxMarks: 100,
+    defaultPassMarks: 35,
+    students: studentsList
   };
 }

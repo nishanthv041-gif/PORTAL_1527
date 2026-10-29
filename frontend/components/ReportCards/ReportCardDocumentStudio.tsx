@@ -5,10 +5,11 @@ import {
   Upload, FileText, Image as ImageIcon, FileSpreadsheet,
   CheckCircle2, AlertCircle, Sparkles, RefreshCw, Trash2, Plus,
   Award, Calendar, Users, Eye, EyeOff, RotateCcw,
-  ShieldCheck, Check, X, ArrowRight, Layers, FileCheck, Send, Sliders, Edit3
+  ShieldCheck, Check, X, ArrowRight, Layers, FileCheck, Send, Sliders, Edit3, Download
 } from "lucide-react";
 import type { TeacherClass, ClassSubject, ClassStudent, HistoryItem } from "./TeacherReportCardsClient";
 import type { ScanReportCardResult, ScannedReportCardSubject, DetectedStudentEntry } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardTypes";
+import { generateStandardJsonTemplate } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardUtils";
 import { createAndSendReportCardAction } from "@/backend/lib/services/reportCardActions";
 import styles from "./ReportCardDocumentStudio.module.css";
 
@@ -34,7 +35,7 @@ interface ReportCardDocumentStudioProps {
   isModalView?: boolean;
 }
 
-const SUPPORTED_EXTS = ["jpg", "jpeg", "png", "webp", "bmp", "pdf", "xlsx", "xls", "csv", "docx", "doc"];
+const SUPPORTED_EXTS = ["jpg", "jpeg", "png", "webp", "bmp", "pdf", "xlsx", "xls", "csv", "docx", "doc", "json"];
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
 
 function formatFileSize(bytes: number): string {
@@ -61,10 +62,6 @@ function calculateGrade(score: number, maxScore: number): string {
  */
 async function compressImageForUpload(file: File): Promise<Blob> {
   if (!file.type.startsWith("image/") && !/\.(jpg|jpeg|png|webp|bmp)$/i.test(file.name)) {
-    return file;
-  }
-  // If file is already <= 4MB, preserve pristine quality for OCR text recognition
-  if (file.size <= 4 * 1024 * 1024) {
     return file;
   }
   return new Promise((resolve) => {
@@ -235,7 +232,7 @@ export default function ReportCardDocumentStudio({
 
     const isAllEntered = subjects.length > 0 && emptyCount === 0;
     const percentage = maximum > 0 && hasAnyMarks ? parseFloat(((obtained / maximum) * 100).toFixed(1)) : 0;
-    
+
     let grade = "-";
     if (isAllEntered) {
       if (hasFail && percentage < 40) grade = "F";
@@ -253,8 +250,8 @@ export default function ReportCardDocumentStudio({
     const resultStatus: "PENDING" | "PASSED" | "NEEDS SUPPORT" = !isAllEntered
       ? "PENDING"
       : hasFail || percentage < 35
-      ? "NEEDS SUPPORT"
-      : "PASSED";
+        ? "NEEDS SUPPORT"
+        : "PASSED";
 
     return {
       obtained,
@@ -355,7 +352,7 @@ export default function ReportCardDocumentStudio({
     );
 
     try {
-      // 1. Client-Side Image Prep: Downscale/compress images only if above 4MB to avoid Vercel 4.5MB limit
+      // 1. Client-Side Image Prep: Downscale/compress images in-memory to keep upload fast
       const uploadBlob = await compressImageForUpload(entry.file);
       const uploadFile = new File([uploadBlob], entry.file.name, { type: uploadBlob.type || entry.file.type });
 
@@ -815,6 +812,145 @@ export default function ReportCardDocumentStudio({
     }
   };
 
+  // Download Standard JSON Template
+  const handleDownloadJsonTemplate = () => {
+    try {
+      const template = generateStandardJsonTemplate(
+        currentClass ? `${currentClass.name} - ${currentClass.section}` : "Class Template",
+        classSubjects,
+        classStudents
+      );
+      const jsonStr = JSON.stringify(template, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const sanitizedName = (currentClass?.name || "class_report_card").replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
+      a.href = url;
+      a.download = `report_card_template_${sanitizedName}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error("Template generation error:", err);
+      setGlobalError("Failed to generate JSON template: " + (err?.message || "Unknown error"));
+    }
+  };
+
+  // Bulk Save all detected students in JSON / Multi-student sheet to database
+  const handleSaveAllStudentsToDatabase = async () => {
+    if (!activeClassId) {
+      setGlobalError("Please select a target class before saving.");
+      return;
+    }
+    if (detectedStudentsList.length === 0) {
+      setGlobalError("No students available to save.");
+      return;
+    }
+
+    setIsSaving(true);
+    setGlobalError(null);
+    setSaveSuccess(null);
+
+    let savedCount = 0;
+    const errors: string[] = [];
+
+    // Save active student's current edits in studentEditsRef first
+    studentEditsRef.current[activeStudentIndex] = {
+      studentId: selectedStudentId,
+      subjects: [...subjects],
+      attendance,
+      generalRemarks
+    };
+
+    for (let idx = 0; idx < detectedStudentsList.length; idx++) {
+      const entry = detectedStudentsList[idx];
+      const edits = studentEditsRef.current[idx];
+      const targetStudentId = edits?.studentId || entry.studentId;
+      const targetSubjects = edits?.subjects || entry.subjects || [];
+      const targetRemarks = edits?.generalRemarks || entry.remarks || generalRemarks;
+
+      if (!targetStudentId) {
+        errors.push(`Student #${idx + 1} (${entry.studentName}) is not matched to an enrolled student.`);
+        continue;
+      }
+
+      const formattedMarks = targetSubjects.map(s => {
+        let finalSubjectId = s.subjectId;
+        if (!finalSubjectId) {
+          const match = classSubjects.find(
+            cs => cs.name.toLowerCase() === s.subjectName.toLowerCase()
+          );
+          finalSubjectId = match?.id || classSubjects[0]?.id || "";
+        }
+        return {
+          subjectId: finalSubjectId,
+          score: Number(s.score) || 0,
+          maxScore: s.maxScore || 100,
+          passMarks: s.passMarks || 35,
+          remarks: s.remarks || undefined
+        };
+      });
+
+      try {
+        const res = await createAndSendReportCardAction({
+          studentId: targetStudentId,
+          classId: activeClassId,
+          examName: examName.trim(),
+          examDate,
+          marks: formattedMarks,
+          remarks: targetRemarks?.trim() || undefined
+        });
+
+        if (res.success && res.reportCardId) {
+          savedCount++;
+          const studentObj = classStudents.find(s => s.id === targetStudentId);
+          const newHistoryItem: HistoryItem = {
+            id: res.reportCardId,
+            studentId: targetStudentId,
+            studentName: studentObj?.name || entry.studentName || "Student",
+            rollNumber: studentObj?.rollNumber || entry.rollNumber || "",
+            className: currentClass ? `${currentClass.name} - ${currentClass.section}` : "Class",
+            classId: activeClassId,
+            examId: `exam-${Date.now()}-${idx}`,
+            examName: examName.trim(),
+            examDate: new Date(examDate).toISOString(),
+            totalMarks: res.totalMarks || 0,
+            percentage: res.percentage || 0,
+            grade: res.grade || "-",
+            remarks: targetRemarks?.trim() || null,
+            published: true,
+            parentVerified: false,
+            marks: targetSubjects.map(s => ({
+              id: `m-${s.id}`,
+              subjectId: s.subjectId,
+              subjectName: s.subjectName,
+              score: Number(s.score) || 0,
+              maxScore: s.maxScore || 100,
+              passMarks: s.passMarks || 35,
+              remarks: s.remarks || null
+            }))
+          };
+          onReportCardCreated(newHistoryItem, res.recipients || []);
+        } else {
+          errors.push(`Failed to save ${entry.studentName}: ${res.error || "Unknown error"}`);
+        }
+      } catch (err: any) {
+        errors.push(`Error saving ${entry.studentName}: ${err?.message || "Server error"}`);
+      }
+    }
+
+    setIsSaving(false);
+    if (savedCount > 0) {
+      const allIndices = new Set(detectedStudentsList.map((_, i) => i));
+      setVerifiedIndices(allIndices);
+      setSaveSuccess(`Successfully saved ${savedCount} student report card(s) to database! All linked parents have been notified.`);
+    }
+    if (errors.length > 0) {
+      setGlobalError(errors.join(" | "));
+    }
+  };
+
   return (
     <div className={styles.studioContainer}>
       {/* Target Class & Header Bar */}
@@ -1060,7 +1196,7 @@ export default function ReportCardDocumentStudio({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".jpg,.jpeg,.png,.webp,.bmp,.pdf,.xlsx,.xls,.csv,.docx,.doc"
+          accept=".jpg,.jpeg,.png,.webp,.bmp,.pdf,.xlsx,.xls,.csv,.docx,.doc,.json,application/json"
           multiple
           style={{ display: "none" }}
           onChange={e => handleAddFiles(e.target.files)}
@@ -1082,8 +1218,75 @@ export default function ReportCardDocumentStudio({
           Drag &amp; drop document, or click to browse
         </h3>
         <p style={{ margin: "0 0 0.85rem 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-          Supports JPG, PNG, PDF, Excel, and Word files up to 25MB
+          Supports JPG, PNG, PDF, Excel, Word, and JSON (.json) files up to 25MB
         </p>
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "0.5rem" }}>
+          <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(59, 130, 246, 0.12)", color: "#60a5fa", border: "1px solid rgba(59, 130, 246, 0.25)" }}>📷 Photos (OCR)</span>
+          <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(239, 68, 68, 0.12)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.25)" }}>📕 PDF</span>
+          <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(16, 185, 129, 0.12)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.25)" }}>📊 Excel / CSV</span>
+          <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(168, 85, 247, 0.12)", color: "#c084fc", border: "1px solid rgba(168, 85, 247, 0.25)" }}>📄 JSON Data</span>
+        </div>
+      </div>
+
+      {/* JSON Template Download Helper */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+        gap: "0.75rem",
+        padding: "0.75rem 1rem",
+        background: "rgba(59, 130, 246, 0.05)",
+        border: "1px dashed rgba(59, 130, 246, 0.3)",
+        borderRadius: "12px",
+        marginTop: "-0.5rem"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          <div style={{
+            width: "32px",
+            height: "32px",
+            borderRadius: "8px",
+            background: "rgba(59, 130, 246, 0.15)",
+            color: "#60a5fa",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}>
+            <FileText size={16} />
+          </div>
+          <div>
+            <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--foreground)" }}>
+              Need a standard JSON format to fill marks?
+            </div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+              Download pre-filled template with enrolled students and subjects for {currentClass ? `${currentClass.name} - ${currentClass.section}` : "selected class"}.
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleDownloadJsonTemplate}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.45rem",
+            padding: "0.45rem 0.9rem",
+            background: "#2563eb",
+            border: "none",
+            borderRadius: "8px",
+            color: "#ffffff",
+            fontSize: "0.8rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            boxShadow: "0 2px 8px rgba(37, 99, 235, 0.35)",
+            transition: "all 0.15s ease"
+          }}
+          title="Download report card JSON template"
+        >
+          <Download size={14} />
+          <span>Download JSON Template</span>
+        </button>
       </div>
 
       {/* Document Queue Bar */}
@@ -1796,9 +1999,37 @@ export default function ReportCardDocumentStudio({
                 display: "flex",
                 justifyContent: "flex-end",
                 alignItems: "center",
+                flexWrap: "wrap",
                 gap: "1rem",
                 marginTop: "0.5rem"
               }}>
+                {detectedStudentsList.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleSaveAllStudentsToDatabase}
+                    disabled={isSaving}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      padding: "0.75rem 1.25rem",
+                      background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: "10px",
+                      fontWeight: 800,
+                      fontSize: "0.92rem",
+                      cursor: "pointer",
+                      boxShadow: "0 4px 12px rgba(16, 185, 129, 0.35)",
+                      transition: "all 0.15s ease"
+                    }}
+                    title="Save all extracted students to database and notify parents"
+                  >
+                    <CheckCircle2 size={18} />
+                    <span>{isSaving ? "Saving All..." : `Save All to Database (${detectedStudentsList.length} Students)`}</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={handleConnectAndSaveToDatabase}
@@ -1808,12 +2039,12 @@ export default function ReportCardDocumentStudio({
                     !selectedStudentId
                       ? "Select an enrolled student before sending"
                       : totals.hasValidationErrors
-                      ? "Fill in all subject marks before sending"
-                      : "Send Report Card to Parent"
+                        ? "Fill in all subject marks before sending"
+                        : "Send Report Card to Parent"
                   }
                 >
                   <Send size={18} />
-                  <span>{isSaving ? "Sending to Parent..." : "Send Report Card to Parent"}</span>
+                  <span>{isSaving ? "Sending to Parent..." : detectedStudentsList.length > 1 ? "Save Current Student" : "Send Report Card to Parent"}</span>
                 </button>
               </div>
             </div>

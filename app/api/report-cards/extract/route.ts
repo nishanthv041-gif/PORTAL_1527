@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { extractWithGemini } from "@/backend/api/actions/dashboard/teacher/report-cards/extractReportCardGemini";
-import { parseTextToReportCard } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardUtils";
+import { parseTextToReportCard, parseJsonToReportCard } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardUtils";
 
 // In-memory rate limiting map: userId -> [timestamp array]
 const rateLimitMap = new Map<string, number[]>();
@@ -111,6 +111,7 @@ export async function POST(req: NextRequest) {
     const isPdf = file.type === "application/pdf" || fileName.endsWith(".pdf");
     const isExcel = /\.(xlsx|xls|csv)$/i.test(fileName);
     const isWord = /\.(docx|doc)$/i.test(fileName);
+    const isJson = file.type === "application/json" || fileName.endsWith(".json");
 
     let extractionResult: any = null;
 
@@ -242,6 +243,32 @@ export async function POST(req: NextRequest) {
         }
       } catch (wordErr) {
         console.warn("Word in-memory parsing failed:", wordErr);
+      }
+    }
+
+    // 4b. If JSON document, parse structured data in-memory
+    if (!extractionResult && isJson) {
+      try {
+        const jsonText = buffer.toString("utf-8");
+        const parsed = parseJsonToReportCard(
+          jsonText,
+          classSubjects,
+          classStudents,
+          { defaultMaxMarks, defaultPassMarks }
+        );
+        extractionResult = {
+          success: true,
+          detectedStudents: parsed.allDetectedStudents,
+          allDetectedStudents: parsed.allDetectedStudents,
+          examName: parsed.examName,
+          examDate: parsed.examDate,
+          academicYear: parsed.academicYear,
+          docTotal: parsed.docTotal,
+          docPercentage: parsed.docPercentage
+        };
+      } catch (jsonErr: any) {
+        console.warn("JSON in-memory parsing failed:", jsonErr);
+        return NextResponse.json({ error: `JSON extraction failed: ${jsonErr.message}` }, { status: 400 });
       }
     }
 

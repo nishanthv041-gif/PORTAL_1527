@@ -9,7 +9,8 @@ import type {
   DetectedStudentEntry
 } from "./scanReportCardTypes";
 import {
-  parseTextToReportCard
+  parseTextToReportCard,
+  parseJsonToReportCard
 } from "./scanReportCardUtils";
 import { extractWithGemini } from "./extractReportCardGemini";
 
@@ -212,6 +213,7 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
     const isPdf = file.type === "application/pdf" || fileName.endsWith(".pdf");
     const isExcel = /\.(xlsx|xls|csv)$/i.test(fileName);
     const isWord = /\.(docx|doc)$/i.test(fileName);
+    const isJson = file.type === "application/json" || fileName.endsWith(".json");
 
     let extractedData: any = null;
 
@@ -315,6 +317,38 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
         }
       } catch (e) {
         console.warn("Word parse error:", e);
+      }
+    }
+
+    if (!extractedData && isJson) {
+      try {
+        const jsonText = buffer.toString("utf-8");
+        const parsed = parseJsonToReportCard(jsonText, classSubjects, classStudents, { defaultMaxMarks, defaultPassMarks });
+        extractedData = {
+          detectedStudents: parsed.allDetectedStudents,
+          examName: parsed.examName,
+          examDate: parsed.examDate,
+          academicYear: parsed.academicYear,
+          docTotal: parsed.docTotal,
+          docPercentage: parsed.docPercentage
+        };
+      } catch (e: any) {
+        console.warn("JSON parse error:", e);
+        return {
+          success: false,
+          error: `JSON extraction failed: ${e?.message || "Invalid JSON"}`,
+          fileDetails: { name: file.name, type: file.type || "application/json", size: file.size },
+          studentId: "",
+          studentName: "",
+          rollNumber: "",
+          studentConfidence: "NONE",
+          examName: "Midterm Examination",
+          examDate: new Date().toISOString().split("T")[0],
+          defaultMaxMarks,
+          defaultPassMarks,
+          generalRemarks: "",
+          subjects: []
+        };
       }
     }
 
