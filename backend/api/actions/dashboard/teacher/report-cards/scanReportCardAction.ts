@@ -375,3 +375,4 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
     };
   }
 }
+

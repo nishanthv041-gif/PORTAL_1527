@@ -231,7 +231,7 @@ export default function ReportCardDocumentStudio({
 
     const isAllEntered = subjects.length > 0 && emptyCount === 0;
     const percentage = maximum > 0 && hasAnyMarks ? parseFloat(((obtained / maximum) * 100).toFixed(1)) : 0;
-    
+
     let grade = "-";
     if (isAllEntered) {
       if (hasFail && percentage < 40) grade = "F";
@@ -249,8 +249,8 @@ export default function ReportCardDocumentStudio({
     const resultStatus: "PENDING" | "PASSED" | "NEEDS SUPPORT" = !isAllEntered
       ? "PENDING"
       : hasFail || percentage < 35
-      ? "NEEDS SUPPORT"
-      : "PASSED";
+        ? "NEEDS SUPPORT"
+        : "PASSED";
 
     return {
       obtained,
@@ -1822,8 +1822,8 @@ export default function ReportCardDocumentStudio({
                     !selectedStudentId
                       ? "Select an enrolled student before sending"
                       : totals.hasValidationErrors
-                      ? "Fill in all subject marks before sending"
-                      : "Send Report Card to Parent"
+                        ? "Fill in all subject marks before sending"
+                        : "Send Report Card to Parent"
                   }
                 >
                   <Send size={18} />
@@ -1893,3 +1893,4 @@ export default function ReportCardDocumentStudio({
     </div>
   );
 }
+

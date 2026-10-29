@@ -286,7 +286,7 @@ export function parseTextToReportCard(
           detectedExamDate = `${match[1]}-${String(match[2]).padStart(2, "0")}-${String(match[3]).padStart(2, "0")}`;
         }
         break;
-      } catch {}
+      } catch { }
     }
   }
 
@@ -311,7 +311,7 @@ export function parseTextToReportCard(
   }
 
   const pctMatch = rawText.match(/\b(?:percentage|average|avg)\b[^\d]*(\d{1,3}(?:\.\d+)?)\s*%/i) ||
-                   rawText.match(/\b(\d{1,3}(?:\.\d+)?)\s*%\b/i);
+    rawText.match(/\b(\d{1,3}(?:\.\d+)?)\s*%\b/i);
   if (pctMatch) {
     const val = parseFloat(pctMatch[1]);
     if (val >= 0 && val <= 100) docPercentage = val;

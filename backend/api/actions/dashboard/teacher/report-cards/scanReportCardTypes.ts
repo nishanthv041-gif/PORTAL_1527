@@ -89,3 +89,4 @@ export interface ScanReportCardResult {
   docTotal?: number;
   docPercentage?: number;
 }
+
