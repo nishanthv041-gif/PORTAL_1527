@@ -91,9 +91,8 @@ export function normalizeSubjectName(raw: string): string {
 /**
  * Strips symbols/spaces and extracts numeric score.
  * If non-numeric or unreadable, returns score: null and isNeedsReview: true.
- * Handles "AB", "ABS", "A", "Absent" gracefully.
  */
-export function parseScoreNumber(val: any): { score: number | null; isNeedsReview: boolean; isAbsent?: boolean; raw: string } {
+export function parseScoreNumber(val: any): { score: number | null; isNeedsReview: boolean; raw: string } {
   if (val === null || val === undefined || val === "") {
     return { score: null, isNeedsReview: true, raw: "" };
   }
@@ -102,9 +101,6 @@ export function parseScoreNumber(val: any): { score: number | null; isNeedsRevie
     return { score: val, isNeedsReview: false, raw: String(val) };
   }
   const str = String(val).trim();
-  if (/^(?:ab|abs|a|absent)$/i.test(str)) {
-    return { score: null, isNeedsReview: false, isAbsent: true, raw: "Absent" };
-  }
   // If formatted as "92 / 100" or "85/100", extract part before slash
   const beforeSlash = str.split("/")[0].trim();
   const match = beforeSlash.replace(/[^0-9.-]/g, "").trim();
@@ -118,52 +114,6 @@ export function parseScoreNumber(val: any): { score: number | null; isNeedsRevie
   return { score: parsed, isNeedsReview: false, raw: str };
 }
 
-/**
- * Normalizes look-alike characters common in OCR errors (O->0, I/l/|->1, S->5, B->8).
- */
-export function normalizeLookAlikes(str: string): string {
-  if (!str) return "";
-  return str
-    .toUpperCase()
-    .replace(/[O]/g, "0")
-    .replace(/[Il|]/g, "1")
-    .replace(/[S]/g, "5")
-    .replace(/[B]/g, "8");
-}
-
-/**
- * Cleans subject headers by stripping /100, /50 suffixes, punctuation, and extra whitespace.
- */
-export function cleanSubjectHeader(header: string): string {
-  if (!header) return "";
-  let clean = header.replace(/\s*[\/:(\[]\s*\d+\s*[)\]]?\s*$/i, "").trim();
-  clean = clean.replace(/[^\w\s-]/g, " ").trim();
-  clean = clean.replace(/\s+/g, " ");
-  return clean;
-}
-
-/**
- * Compares calculated totals with printed document totals and returns discrepancy diagnostics.
- */
-export function compareDocumentTotals(
-  calculatedTotal: number,
-  printedTotal: number | null | undefined,
-  calculatedPct?: number,
-  printedPct?: number | null | undefined
-): { matches: boolean; warning?: string; diff?: number } {
-  if (printedTotal === null || printedTotal === undefined || isNaN(printedTotal)) {
-    return { matches: true };
-  }
-
-  const diff = printedTotal - calculatedTotal;
-  if (diff === 0) {
-    return { matches: true };
-  }
-
-  const warning = `Document says ${printedTotal}, calculated ${calculatedTotal}. Check subject marks.`;
-  return { matches: false, warning, diff };
-}
-
 export function computeGrade(score: number, max: number): string {
   if (isNaN(score) || max <= 0) return "-";
   const pct = (score / max) * 100;
@@ -173,6 +123,176 @@ export function computeGrade(score: number, max: number): string {
   if (pct >= 60) return "C";
   if (pct >= 50) return "D";
   return "F";
+}
+
+/**
+ * Converts any value into a clean number or null (e.g. absent or unreadable).
+ * Handles string formats like "86", " 86 / 100 ", "91.5", and absent markers like "AB", "A", "ABS".
+ */
+export function toNumber(val: any): number | null {
+  if (val === null || val === undefined || val === "") return null;
+  if (typeof val === "number") {
+    return isNaN(val) ? null : val;
+  }
+  const str = String(val).trim();
+  if (isAbsentScore(str)) return null;
+
+  // Split on "/" if present (e.g. "86 / 100" -> "86")
+  const part = str.split("/")[0].trim();
+  const cleaned = part.replace(/[^0-9.-]/g, "");
+  if (!cleaned) return null;
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? null : num;
+}
+
+/**
+ * Checks if a value represents an absent student ("AB", "A", "ABS", "ABSENT")
+ */
+export function isAbsentScore(val: any): boolean {
+  if (!val) return false;
+  const s = String(val).trim().toUpperCase();
+  return s === "AB" || s === "A" || s === "ABS" || s === "ABSENT";
+}
+
+/**
+ * Strips max mark indicators like /100, /50, (100) from subject header strings
+ */
+export function cleanSubjectHeader(str: string): string {
+  return (str || "").replace(/\s*[\/\(]\s*\d+\s*[\)]?/g, "").trim();
+}
+
+/**
+ * Compares calculated sum of marks with printed document total.
+ */
+export function compareDocumentTotals(calculatedTotal: number, printedTotal?: number | null): {
+  matches: boolean;
+  diff: number;
+  warning?: string;
+} {
+  if (printedTotal === undefined || printedTotal === null || isNaN(printedTotal)) {
+    return { matches: true, diff: 0 };
+  }
+  const diff = calculatedTotal - printedTotal;
+  const matches = diff === 0;
+  const warning = matches ? undefined : `Document printed total is ${printedTotal}, but calculated total is ${calculatedTotal} (difference: ${diff > 0 ? `+${diff}` : diff})`;
+  return { matches, diff, warning };
+}
+
+/**
+ * Single source of truth merge function:
+ * 1. Iterates extracted subjects first.
+ * 2. Matches each extracted subject against classSubjects via normalizeSubjectName & aliases.
+ * 3. Never overwrites an extracted mark with an empty template row.
+ * 4. Appends any curriculum subjects not in the scan as empty rows with status NEEDS_REVIEW and isInvalid: true.
+ * 5. Unknown/custom subjects not in the curriculum are preserved with isCustomSubject: true.
+ */
+export function mergeStudentSubjects(
+  extractedSubjects: Array<{
+    id?: string;
+    subjectId?: string;
+    subjectName: string;
+    score?: any;
+    marksScored?: any;
+    marksObtained?: any;
+    maxScore?: number;
+    maxMarks?: number;
+    passMarks?: number;
+    remarks?: string;
+    grade?: string | null;
+    status?: any;
+    originalExtractedValue?: string | null;
+  }>,
+  classSubjects: Array<{ id: string; name: string; maxMarks?: number; passMarks?: number }>,
+  defaultMaxMarks: number = 100,
+  defaultPassMarks: number = 35
+): ScannedReportCardSubject[] {
+  const merged: ScannedReportCardSubject[] = [];
+  const matchedClassSubjectIds = new Set<string>();
+
+  // 1. Process extracted subjects
+  for (let i = 0; i < (extractedSubjects || []).length; i++) {
+    const ext = extractedSubjects[i];
+    const normExtName = normalizeSubjectName(ext.subjectName);
+
+    // Find matching curriculum subject
+    const matchedClassSubject = classSubjects.find(cs => {
+      const normCsName = normalizeSubjectName(cs.name);
+      if (normCsName === normExtName) return true;
+      const aliases = SUBJECT_ALIASES[cleanString(cs.name)] || [];
+      return aliases.some(a => cleanString(a) === cleanString(normExtName));
+    });
+
+    const subId = matchedClassSubject?.id || ext.subjectId || `custom-${Date.now()}-${i}`;
+    if (matchedClassSubject) {
+      matchedClassSubjectIds.add(matchedClassSubject.id);
+    }
+
+    const rawScoreVal = ext.marksScored !== undefined && ext.marksScored !== null && ext.marksScored !== ""
+      ? ext.marksScored
+      : (ext.marksObtained !== undefined && ext.marksObtained !== null && ext.marksObtained !== ""
+        ? ext.marksObtained
+        : ext.score);
+
+    const numericScore = toNumber(rawScoreVal);
+    const maxScore = ext.maxScore || ext.maxMarks || matchedClassSubject?.maxMarks || defaultMaxMarks;
+    const passMarks = ext.passMarks || matchedClassSubject?.passMarks || defaultPassMarks;
+
+    let status: "PASS" | "FAIL" | "NEEDS_REVIEW" = "NEEDS_REVIEW";
+    let isInvalid = false;
+    let validationError = "";
+
+    if (numericScore !== null) {
+      status = numericScore >= passMarks ? "PASS" : "FAIL";
+    } else if (isAbsentScore(rawScoreVal)) {
+      status = "NEEDS_REVIEW";
+      validationError = "Marked Absent";
+    } else {
+      status = "NEEDS_REVIEW";
+      isInvalid = true;
+      validationError = "Score required";
+    }
+
+    const finalName = matchedClassSubject ? matchedClassSubject.name : normExtName;
+
+    merged.push({
+      id: ext.id || `subj-${Date.now()}-${i}`,
+      subjectId: subId,
+      subjectName: finalName,
+      score: numericScore !== null ? numericScore : "",
+      marksScored: numericScore !== null ? numericScore : "",
+      maxScore,
+      passMarks,
+      remarks: ext.remarks || (numericScore !== null && numericScore >= 80 ? "Good" : ""),
+      grade: numericScore !== null ? computeGrade(numericScore, maxScore) : "-",
+      status,
+      originalExtractedValue: rawScoreVal !== null && rawScoreVal !== undefined ? String(rawScoreVal) : undefined,
+      isInvalid,
+      validationError,
+      isCustomSubject: !matchedClassSubject
+    });
+  }
+
+  // 2. Append any missing curriculum subjects as empty rows flagged NEEDS_REVIEW
+  for (const cs of classSubjects) {
+    if (!matchedClassSubjectIds.has(cs.id)) {
+      merged.push({
+        id: `subj-missing-${Date.now()}-${cs.id}`,
+        subjectId: cs.id,
+        subjectName: cs.name,
+        score: "",
+        marksScored: "",
+        maxScore: cs.maxMarks || defaultMaxMarks,
+        passMarks: cs.passMarks || defaultPassMarks,
+        remarks: "",
+        grade: "-",
+        status: "NEEDS_REVIEW",
+        isInvalid: true,
+        validationError: "Score required"
+      });
+    }
+  }
+
+  return merged;
 }
 
 export function levenshteinDistance(s1: string, s2: string): number {
@@ -289,14 +409,7 @@ export function matchSubject(
 export function matchStudent(
   rawText: string,
   classStudents: Array<{ id: string; rollNumber: string; name: string }>
-): {
-  studentId: string;
-  studentName: string;
-  rollNumber: string;
-  confidence: "HIGH" | "MEDIUM" | "LOW" | "NONE";
-  isLookAlikeMatch?: boolean;
-  suggestedRollNumber?: string;
-} {
+): { studentId: string; studentName: string; rollNumber: string; confidence: "HIGH" | "MEDIUM" | "LOW" | "NONE" } {
   if (!rawText || classStudents.length === 0) {
     return { studentId: "", studentName: "", rollNumber: "", confidence: "NONE" };
   }
@@ -315,22 +428,6 @@ export function matchStudent(
         studentName: st.name,
         rollNumber: st.rollNumber,
         confidence: "HIGH"
-      };
-    }
-  }
-
-  // 1b. Match OCR Look-Alike Roll Number (0/O, 1/I, 5/S, 8/B)
-  const normRaw = normalizeLookAlikes(cleanRaw);
-  for (const st of classStudents) {
-    const normRoll = normalizeLookAlikes(cleanString(st.rollNumber));
-    if (normRoll && normRaw.includes(normRoll)) {
-      return {
-        studentId: st.id,
-        studentName: st.name,
-        rollNumber: st.rollNumber,
-        confidence: "HIGH",
-        isLookAlikeMatch: true,
-        suggestedRollNumber: st.rollNumber
       };
     }
   }
@@ -368,7 +465,7 @@ export function matchStudent(
   let bestSim = 0;
   for (const st of classStudents) {
     const sim = stringSimilarity(cleanRaw, st.name);
-    if (sim > bestSim && sim >= 0.70) {
+    if (sim > bestSim && sim >= 0.72) {
       bestSim = sim;
       bestStudent = st;
     }
@@ -406,7 +503,6 @@ export function parseTextToReportCard(
   rawTextPreview: string;
   docTotal?: number;
   docPercentage?: number;
-  academicYear: string;
 } {
   const lines = rawText.split("\n").map(l => l.trim()).filter(Boolean);
 
@@ -694,8 +790,7 @@ export function parseTextToReportCard(
     allDetectedStudents,
     rawTextPreview: lines.slice(0, 15).join("\n"),
     docTotal,
-    docPercentage,
-    academicYear: "2026-2027"
+    docPercentage
   };
 }
 

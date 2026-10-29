@@ -9,12 +9,7 @@ import {
 } from "lucide-react";
 import type { TeacherClass, ClassSubject, ClassStudent, HistoryItem } from "./TeacherReportCardsClient";
 import type { ScanReportCardResult, ScannedReportCardSubject, DetectedStudentEntry } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardTypes";
-import {
-  generateStandardJsonTemplate,
-  parseJsonToReportCard,
-  parseTextToReportCard,
-  compareDocumentTotals
-} from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardUtils";
+import { generateStandardJsonTemplate } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardUtils";
 import { createAndSendReportCardAction } from "@/backend/lib/services/reportCardActions";
 import styles from "./ReportCardDocumentStudio.module.css";
 
@@ -345,7 +340,7 @@ export default function ReportCardDocumentStudio({
     }
   };
 
-  // Process a Queued Item via API with client-side OCR & local parsing fallback
+  // Process a Queued Item via API
   const processQueueItem = async (entry: QueuedFile) => {
     if (!activeClassId) {
       setGlobalError("Please select a target class before scanning documents.");
@@ -357,118 +352,7 @@ export default function ReportCardDocumentStudio({
     );
 
     try {
-      let clientOcrText = "";
-      const isImage = ["jpg", "jpeg", "png", "webp", "bmp"].includes(entry.ext) || entry.file.type.startsWith("image/");
-      const isJson = entry.ext === "json" || entry.file.type === "application/json";
-
-      // 1. If JSON file, parse immediately in-memory
-      let localParsedResult: ScanReportCardResult | null = null;
-      if (isJson) {
-        try {
-          const jsonText = await entry.file.text();
-          const parsedJson = parseJsonToReportCard(jsonText, classSubjects, classStudents, {
-            defaultMaxMarks: examMaxMarks,
-            defaultPassMarks: examPassMarks
-          });
-          if (parsedJson.allDetectedStudents && parsedJson.allDetectedStudents.length > 0) {
-            localParsedResult = {
-              success: true,
-              fileDetails: { name: entry.name, type: "JSON", size: entry.size },
-              studentId: parsedJson.allDetectedStudents[0]?.studentId || "",
-              studentName: parsedJson.allDetectedStudents[0]?.studentName || "",
-              rollNumber: parsedJson.allDetectedStudents[0]?.rollNumber || "",
-              studentConfidence: "HIGH",
-              examName: parsedJson.examName || examName,
-              examDate: parsedJson.examDate || examDate,
-              academicYear: parsedJson.academicYear || academicYear,
-              defaultMaxMarks: examMaxMarks,
-              defaultPassMarks: examPassMarks,
-              generalRemarks: "",
-              subjects: parsedJson.allDetectedStudents[0]?.subjects || [],
-              allDetectedStudents: parsedJson.allDetectedStudents,
-              detectedStudents: parsedJson.allDetectedStudents,
-              docTotal: parsedJson.docTotal,
-              docPercentage: parsedJson.docPercentage
-            };
-          }
-        } catch (jErr) {
-          console.warn("Client JSON parse notice:", jErr);
-        }
-      }
-
-      // 2. If image, run client-side OCR with canvas enhancement as an ultra-reliable tier
-      if (isImage) {
-        setFileQueue(prev =>
-          prev.map(f => (f.id === entry.id ? { ...f, progressText: "Scanning document text..." } : f))
-        );
-
-        try {
-          const Tesseract = await import("tesseract.js");
-          const img = new Image();
-          const objectUrl = URL.createObjectURL(entry.file);
-          await new Promise<void>((resolve, reject) => {
-            img.onload = () => resolve();
-            img.onerror = () => reject(new Error("Image failed to load"));
-            img.src = objectUrl;
-          });
-          URL.revokeObjectURL(objectUrl);
-
-          const canvas = document.createElement("canvas");
-          const scale = Math.max(1, 2400 / img.width);
-          canvas.width = Math.round(img.width * scale);
-          canvas.height = Math.round(img.height * scale);
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.filter = "grayscale(100%) contrast(150%)";
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          }
-
-          const worker = await Tesseract.createWorker("eng");
-          await worker.setParameters({ tessedit_pageseg_mode: "6" as any });
-          const ret = await worker.recognize(canvas);
-          await worker.terminate();
-          clientOcrText = ret?.data?.text || "";
-
-          // Parse client OCR text locally as immediate backup
-          if (clientOcrText && clientOcrText.trim().length > 10) {
-            const parsedText = parseTextToReportCard(clientOcrText, classSubjects, classStudents, {
-              defaultMaxMarks: examMaxMarks,
-              defaultPassMarks: examPassMarks
-            });
-            if (parsedText.allDetectedStudents && parsedText.allDetectedStudents.length > 0) {
-              const firstSt = parsedText.allDetectedStudents[0];
-              localParsedResult = {
-                success: true,
-                fileDetails: { name: entry.name, type: entry.ext.toUpperCase(), size: entry.size },
-                studentId: firstSt?.studentId || "",
-                studentName: firstSt?.studentName || "",
-                rollNumber: firstSt?.rollNumber || "",
-                studentConfidence: firstSt?.studentId ? "HIGH" : "NONE",
-                examName: parsedText.examName || examName,
-                examDate: parsedText.examDate || examDate,
-                academicYear: academicYear,
-                defaultMaxMarks: examMaxMarks,
-                defaultPassMarks: examPassMarks,
-                generalRemarks: "",
-                subjects: firstSt?.subjects || [],
-                allDetectedStudents: parsedText.allDetectedStudents,
-                detectedStudents: parsedText.allDetectedStudents,
-                docTotal: firstSt?.totalMarks ?? parsedText.docTotal,
-                docPercentage: firstSt?.percentage ?? parsedText.docPercentage,
-                rawTextPreview: clientOcrText
-              };
-            }
-          }
-        } catch (clientOcrErr) {
-          console.warn("Client-side OCR notice, delegating to server:", clientOcrErr);
-        }
-      }
-
-      setFileQueue(prev =>
-        prev.map(f => (f.id === entry.id ? { ...f, progressText: "Analyzing marks & subjects..." } : f))
-      );
-
-      // Downscale/compress images in-memory to keep upload fast
+      // 1. Client-Side Image Prep: Downscale/compress images in-memory to keep upload fast
       const uploadBlob = await compressImageForUpload(entry.file);
       const uploadFile = new File([uploadBlob], entry.file.name, { type: uploadBlob.type || entry.file.type });
 
@@ -479,53 +363,41 @@ export default function ReportCardDocumentStudio({
       formData.set("defaultPassMarks", String(examPassMarks));
       formData.set("examDate", examDate);
       formData.set("examName", examName);
-      if (clientOcrText) {
-        formData.set("clientOcrText", clientOcrText);
-      }
 
-      let serverResult: ScanReportCardResult | null = null;
-      try {
-        let res = await fetch("/api/report-cards/extract", {
+      // 2. Call server extraction endpoint
+      let res = await fetch("/api/report-cards/extract", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!res.ok) {
+        res = await fetch("/api/teacher/report-cards/scan", {
           method: "POST",
           body: formData
         });
-
-        if (!res.ok) {
-          res = await fetch("/api/teacher/report-cards/scan", {
-            method: "POST",
-            body: formData
-          });
-        }
-
-        if (res.ok) {
-          serverResult = await res.json();
-        }
-      } catch (netErr) {
-        console.warn("Server route network notice:", netErr);
       }
 
-      // Check if serverResult has valid students with non-empty scores
-      const serverHasScores = serverResult?.success && (serverResult.allDetectedStudents || []).some(
-        st => (st.subjects || []).some(s => s.score !== "" && s.score !== null && s.score !== undefined)
-      );
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Server returned ${res.status} while processing ${entry.name}`);
+      }
 
-      const finalResult = (serverHasScores ? serverResult : (localParsedResult || serverResult));
-
-      if (!finalResult || !finalResult.success) {
-        throw new Error(finalResult?.error || `Failed to extract data from ${entry.name}`);
+      const result: ScanReportCardResult = await res.json();
+      if (!result.success) {
+        throw new Error(result.error || `Failed to extract data from ${entry.name}`);
       }
 
       setFileQueue(prev =>
         prev.map(f =>
           f.id === entry.id
-            ? { ...f, status: "EXTRACTED", progressText: "Extracted successfully", result: finalResult }
+            ? { ...f, status: "EXTRACTED", progressText: "Extracted successfully", result }
             : f
         )
       );
 
       if (!activeFileId || activeFileId === entry.id) {
         setActiveFileId(entry.id);
-        applyScanResultToEditor(finalResult);
+        applyScanResultToEditor(result);
       }
     } catch (err: any) {
       console.warn("Scanning notice for file:", entry.name, err);
@@ -1542,63 +1414,22 @@ export default function ReportCardDocumentStudio({
             </span>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
-            <div className={styles.studentStepperContainer} style={{ flex: 1, minWidth: 0 }}>
-              {detectedStudentsList.map((st, sIdx) => {
-                const isCurrent = activeStudentIndex === sIdx;
-                const isVerified = verifiedIndices.has(sIdx);
-                return (
-                  <button
-                    key={sIdx}
-                    type="button"
-                    onClick={() => handleSwitchStudent(sIdx)}
-                    className={`${styles.studentStepTab} ${isCurrent ? styles.studentStepTabActive : ""} ${isVerified ? styles.studentStepTabVerified : ""}`}
-                  >
-                    <span>Student {sIdx + 1}: {st.studentName || `Student ${sIdx + 1}`}</span>
-                    {isVerified && <CheckCircle2 size={15} color="#10b981" />}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
-              <button
-                type="button"
-                disabled={activeStudentIndex <= 0}
-                onClick={() => handleSwitchStudent(activeStudentIndex - 1)}
-                style={{
-                  padding: "0.4rem 0.75rem",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color)",
-                  background: "var(--card-bg, #1e293b)",
-                  color: activeStudentIndex <= 0 ? "var(--text-secondary)" : "var(--foreground)",
-                  cursor: activeStudentIndex <= 0 ? "not-allowed" : "pointer",
-                  fontWeight: 700,
-                  fontSize: "0.8rem",
-                  opacity: activeStudentIndex <= 0 ? 0.5 : 1
-                }}
-              >
-                ← Prev
-              </button>
-              <button
-                type="button"
-                disabled={activeStudentIndex >= detectedStudentsList.length - 1}
-                onClick={() => handleSwitchStudent(activeStudentIndex + 1)}
-                style={{
-                  padding: "0.4rem 0.75rem",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color)",
-                  background: "var(--card-bg, #1e293b)",
-                  color: activeStudentIndex >= detectedStudentsList.length - 1 ? "var(--text-secondary)" : "var(--foreground)",
-                  cursor: activeStudentIndex >= detectedStudentsList.length - 1 ? "not-allowed" : "pointer",
-                  fontWeight: 700,
-                  fontSize: "0.8rem",
-                  opacity: activeStudentIndex >= detectedStudentsList.length - 1 ? 0.5 : 1
-                }}
-              >
-                Next →
-              </button>
-            </div>
+          <div className={styles.studentStepperContainer}>
+            {detectedStudentsList.map((st, sIdx) => {
+              const isCurrent = activeStudentIndex === sIdx;
+              const isVerified = verifiedIndices.has(sIdx);
+              return (
+                <button
+                  key={sIdx}
+                  type="button"
+                  onClick={() => handleSwitchStudent(sIdx)}
+                  className={`${styles.studentStepTab} ${isCurrent ? styles.studentStepTabActive : ""} ${isVerified ? styles.studentStepTabVerified : ""}`}
+                >
+                  <span>Student {sIdx + 1}: {st.studentName || `Student ${sIdx + 1}`}</span>
+                  {isVerified && <CheckCircle2 size={15} color="#10b981" />}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1911,11 +1742,6 @@ export default function ReportCardDocumentStudio({
                                 textAlign: "center"
                               }}
                             />
-                            {sub.isInvalid && (
-                              <div style={{ color: "#ef4444", fontSize: "0.68rem", fontWeight: 700, marginTop: "2px", whiteSpace: "nowrap" }}>
-                                {sub.validationError || "Score required (0 - 100)"}
-                              </div>
-                            )}
                           </td>
 
                           <td style={{ padding: "0.6rem 0.85rem", textAlign: "center", color: "var(--text-secondary)" }}>
@@ -2076,7 +1902,7 @@ export default function ReportCardDocumentStudio({
 
                       {sub.isInvalid && (
                         <span style={{ fontSize: "0.75rem", color: "#ef4444", fontWeight: 700 }}>
-                          {sub.validationError || "Score required (0 - 100)"}
+                          {sub.validationError || "Invalid score"}
                         </span>
                       )}
 
@@ -2100,48 +1926,6 @@ export default function ReportCardDocumentStudio({
                   );
                 })}
               </div>
-
-              {/* Document vs Calculated Comparison Banner */}
-              {(() => {
-                const docTotal = detectedStudentsList[activeStudentIndex]?.totalMarks ?? activeQueuedFile?.result?.docTotal;
-                const docPct = detectedStudentsList[activeStudentIndex]?.percentage ?? activeQueuedFile?.result?.docPercentage;
-                const comparison = compareDocumentTotals(totals.obtained, docTotal, totals.percentage, docPct);
-
-                if (docTotal !== undefined && docTotal !== null) {
-                  if (comparison.matches) {
-                    return (
-                      <div style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                        padding: "0.65rem 1rem",
-                        borderRadius: "10px",
-                        background: "rgba(16, 185, 129, 0.1)",
-                        border: "1.5px solid rgba(16, 185, 129, 0.3)",
-                        color: "#10b981",
-                        fontSize: "0.85rem",
-                        fontWeight: 700
-                      }}>
-                        <CheckCircle2 size={16} />
-                        <span>✓ Matches document ({docTotal} / {totals.maximum} • {docPct ? `${docPct}%` : `${totals.percentage}%`})</span>
-                      </div>
-                    );
-                  } else {
-                    return (
-                      <div className={styles.discrepancyBanner}>
-                        <AlertCircle size={18} style={{ flexShrink: 0, marginTop: "2px" }} />
-                        <div>
-                          <strong>{comparison.warning}</strong>
-                          <div style={{ fontSize: "0.78rem", opacity: 0.9, marginTop: "2px" }}>
-                            Document printed total is {docTotal}, but sum of current subject marks is {totals.obtained}. Difference is {Math.abs(comparison.diff || 0)} marks.
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }
-                }
-                return null;
-              })()}
 
               {/* Live Totals & Feedback Bar */}
               <div className={styles.totalsGrid}>
@@ -2210,86 +1994,58 @@ export default function ReportCardDocumentStudio({
                 />
               </div>
 
-              {/* Action Buttons & Pre-Send Validation Checklist */}
+              {/* Action Buttons */}
               <div style={{
                 display: "flex",
-                justifyContent: "space-between",
+                justifyContent: "flex-end",
                 alignItems: "center",
                 flexWrap: "wrap",
                 gap: "1rem",
                 marginTop: "0.5rem"
               }}>
-                {/* Pre-Send Live Checklist */}
-                <div style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.3rem",
-                  fontSize: "0.78rem",
-                  color: "var(--text-secondary)"
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: selectedStudentId ? "#10b981" : "#ef4444", fontWeight: 600 }}>
-                    {selectedStudentId ? <Check size={14} /> : <X size={14} />}
-                    <span>{selectedStudentId ? "Student matched & enrolled" : "Select enrolled student"}</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: totals.isAllEntered && !totals.hasValidationErrors ? "#10b981" : "#ef4444", fontWeight: 600 }}>
-                    {totals.isAllEntered && !totals.hasValidationErrors ? <Check size={14} /> : <X size={14} />}
-                    <span>
-                      {totals.isAllEntered && !totals.hasValidationErrors
-                        ? `All marks valid (${subjects.length}/${subjects.length})`
-                        : `Marks require correction (${totals.invalidCount} pending)`}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: examName.trim() && examDate ? "#10b981" : "#ef4444", fontWeight: 600 }}>
-                    {examName.trim() && examDate ? <Check size={14} /> : <X size={14} />}
-                    <span>Exam details complete</span>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-                  {detectedStudentsList.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={handleSaveAllStudentsToDatabase}
-                      disabled={isSaving}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                        padding: "0.75rem 1.25rem",
-                        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                        color: "#ffffff",
-                        border: "none",
-                        borderRadius: "10px",
-                        fontWeight: 800,
-                        fontSize: "0.92rem",
-                        cursor: "pointer",
-                        boxShadow: "0 4px 12px rgba(16, 185, 129, 0.35)",
-                        transition: "all 0.15s ease"
-                      }}
-                      title="Save all extracted students to database and notify parents"
-                    >
-                      <CheckCircle2 size={18} />
-                      <span>{isSaving ? "Saving All..." : `Save All to Database (${detectedStudentsList.length} Students)`}</span>
-                    </button>
-                  )}
-
+                {detectedStudentsList.length > 1 && (
                   <button
                     type="button"
-                    onClick={handleConnectAndSaveToDatabase}
-                    disabled={isSaving || totals.hasValidationErrors || !selectedStudentId}
-                    className={styles.sendBtn}
-                    title={
-                      !selectedStudentId
-                        ? "Select an enrolled student before sending"
-                        : totals.hasValidationErrors
-                          ? "Fill in all subject marks before sending"
-                          : "Send Report Card to Parent"
-                    }
+                    onClick={handleSaveAllStudentsToDatabase}
+                    disabled={isSaving}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      padding: "0.75rem 1.25rem",
+                      background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: "10px",
+                      fontWeight: 800,
+                      fontSize: "0.92rem",
+                      cursor: "pointer",
+                      boxShadow: "0 4px 12px rgba(16, 185, 129, 0.35)",
+                      transition: "all 0.15s ease"
+                    }}
+                    title="Save all extracted students to database and notify parents"
                   >
-                    <Send size={18} />
-                    <span>{isSaving ? "Sending to Parent..." : detectedStudentsList.length > 1 ? "Save Current Student" : "Send Report Card to Parent"}</span>
+                    <CheckCircle2 size={18} />
+                    <span>{isSaving ? "Saving All..." : `Save All to Database (${detectedStudentsList.length} Students)`}</span>
                   </button>
-                </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleConnectAndSaveToDatabase}
+                  disabled={isSaving || totals.hasValidationErrors || !selectedStudentId}
+                  className={styles.sendBtn}
+                  title={
+                    !selectedStudentId
+                      ? "Select an enrolled student before sending"
+                      : totals.hasValidationErrors
+                        ? "Fill in all subject marks before sending"
+                        : "Send Report Card to Parent"
+                  }
+                >
+                  <Send size={18} />
+                  <span>{isSaving ? "Sending to Parent..." : detectedStudentsList.length > 1 ? "Save Current Student" : "Send Report Card to Parent"}</span>
+                </button>
               </div>
             </div>
           </div>

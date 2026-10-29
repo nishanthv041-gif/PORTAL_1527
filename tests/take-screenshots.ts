@@ -1,3 +1,4 @@
+
 import puppeteer from "puppeteer-core";
 import path from "path";
 import fs from "fs";
@@ -13,16 +14,19 @@ async function main() {
   const browser = await puppeteer.launch({
     executablePath: CHROME_PATH,
     headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--window-size=1280,1050"]
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"]
   });
 
   try {
-    const page = await browser.newPage();
+    const sampleImagePath = path.join(ARTIFACT_DIR, ".user_uploaded", "media_1793196769031_7c9682eb.png");
 
-    console.log("Setting desktop viewport (1280x1050)...");
-    await page.setViewport({ width: 1280, height: 1050, isMobile: false });
-
-    await page.setCookie({
+    // ==========================================
+    // 1. DESKTOP VIEW (1280x1050)
+    // ==========================================
+    console.log("Capturing Desktop 1280px view...");
+    const desktopPage = await browser.newPage();
+    await desktopPage.setViewport({ width: 1280, height: 1050, isMobile: false });
+    await desktopPage.setCookie({
       name: "next-auth.session-token",
       value: TEACHER_TOKEN,
       domain: "localhost",
@@ -31,79 +35,104 @@ async function main() {
       sameSite: "Lax"
     });
 
-    console.log("Navigating to teacher report cards...");
-    await page.goto("http://localhost:3005/dashboard/teacher/report-cards", { waitUntil: "networkidle2", timeout: 20000 });
+    await desktopPage.goto("http://localhost:3005/dashboard/teacher/report-cards", { waitUntil: "networkidle2", timeout: 20000 });
 
-    // Switch to "AI Document & OCR Studio" tab
-    await page.evaluate(() => {
-      const tabs = Array.from(document.querySelectorAll('button, div[role="tab"]'));
-      const studioTab = tabs.find(t => t.textContent?.includes("AI Document") || t.textContent?.includes("OCR"));
-      if (studioTab) (studioTab as HTMLElement).click();
+    // Switch to OCR Studio tab
+    await desktopPage.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll('button'));
+      const studioBtn = btns.find(b => b.textContent?.includes("AI Document & OCR Studio") || b.textContent?.includes("OCR Studio"));
+      if (studioBtn) (studioBtn as HTMLElement).click();
     });
 
     await new Promise(r => setTimeout(r, 1000));
 
-    // Upload sample file (KIRITHIK M & RAJESWARI M marksheet)
-    const sampleImagePath = path.join(ARTIFACT_DIR, ".user_uploaded", "media_1793196769031_7c9682eb.png");
+    // Upload sample marksheet
     if (fs.existsSync(sampleImagePath)) {
-      console.log("Found sample image at:", sampleImagePath);
-      const fileInput = await page.$('input[type="file"]');
+      const fileInput = await desktopPage.$('input[type="file"]');
       if (fileInput) {
-        console.log("Uploading sample image...");
         await fileInput.uploadFile(sampleImagePath);
-
-        console.log("Waiting for extraction response...");
-        await page.waitForResponse(
-          res => (res.url().includes("/api/report-cards/extract") || res.url().includes("/api/teacher/report-cards/scan")),
+        await desktopPage.waitForResponse(
+          res => res.url().includes("/api/report-cards/extract") || res.url().includes("/api/teacher/report-cards/scan"),
           { timeout: 25000 }
-        ).catch(e => console.warn("Wait response notice:", e.message));
-
-        await new Promise(r => setTimeout(r, 4000));
+        ).catch(() => { });
+        await new Promise(r => setTimeout(r, 3000));
       }
     }
 
-    // Scroll window down to display the editor (students list, marks table, calculation badges)
-    await page.evaluate(() => {
+    // Scroll to editor
+    await desktopPage.evaluate(() => {
       window.scrollTo(0, 920);
+    });
+    await new Promise(r => setTimeout(r, 800));
+
+    const desktopPath = path.join(ARTIFACT_DIR, "report_cards_ocr_desktop_1280px.png");
+    await desktopPage.screenshot({ path: desktopPath });
+    console.log("Saved desktop screenshot to:", desktopPath);
+    await desktopPage.close();
+
+    // ==========================================
+    // 2. MOBILE VIEW (390x844)
+    // ==========================================
+    console.log("Capturing Mobile 390px view with filled marks...");
+    const mobilePage = await browser.newPage();
+    await mobilePage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+    await mobilePage.setCookie({
+      name: "next-auth.session-token",
+      value: TEACHER_TOKEN,
+      domain: "localhost",
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax"
+    });
+
+    await mobilePage.goto("http://localhost:3005/dashboard/teacher/report-cards", { waitUntil: "networkidle2", timeout: 20000 });
+
+    // Switch to OCR Studio tab
+    await mobilePage.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll('button'));
+      const studioBtn = btns.find(b => b.textContent?.includes("AI Document & OCR Studio") || b.textContent?.includes("OCR Studio"));
+      if (studioBtn) (studioBtn as HTMLElement).click();
     });
 
     await new Promise(r => setTimeout(r, 1000));
 
-    const desktopPath = path.join(ARTIFACT_DIR, "report_cards_ocr_desktop_1280px.png");
-    await page.screenshot({ path: desktopPath, fullPage: false });
-    console.log("Saved desktop screenshot to:", desktopPath);
+    // Upload sample marksheet on mobile
+    if (fs.existsSync(sampleImagePath)) {
+      const fileInput = await mobilePage.$('input[type="file"]');
+      if (fileInput) {
+        await fileInput.uploadFile(sampleImagePath);
+        await mobilePage.waitForResponse(
+          res => res.url().includes("/api/report-cards/extract") || res.url().includes("/api/teacher/report-cards/scan"),
+          { timeout: 25000 }
+        ).catch(() => { });
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
 
-    // 2. Mobile 390px view of Teacher Report Cards OCR Studio
-    console.log("Setting mobile viewport (390x844)...");
-    await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
-
-    await page.evaluate(() => {
-      const tabs = Array.from(document.querySelectorAll('button, div[role="tab"]'));
-      const studioTab = tabs.find(t => t.textContent?.includes("AI Document") || t.textContent?.includes("OCR"));
-      if (studioTab) (studioTab as HTMLElement).click();
-    });
-
-    await new Promise(r => setTimeout(r, 600));
-
-    await page.evaluate(() => {
-      const editorHeading = Array.from(document.querySelectorAll('h2, h3, h4, div')).find(el => el.textContent?.includes("Data Review & Error Correction Editor"));
-      if (editorHeading) {
-        editorHeading.scrollIntoView({ behavior: "instant", block: "start" });
+    // Scroll to the mobile marks cards section showing auto-filled marks
+    await mobilePage.evaluate(() => {
+      const cards = document.querySelector('[class*="mobileCardsView"]');
+      if (cards) {
+        cards.scrollIntoView({ behavior: "instant", block: "start" });
       } else {
-        window.scrollTo(0, 1650);
+        window.scrollTo(0, 1100);
       }
     });
 
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 1000));
 
     const mobilePath = path.join(ARTIFACT_DIR, "report_cards_ocr_mobile_390px.png");
-    await page.screenshot({ path: mobilePath, fullPage: false });
+    await mobilePage.screenshot({ path: mobilePath });
     console.log("Saved mobile screenshot to:", mobilePath);
+    await mobilePage.close();
 
-    // 3. Mobile 390px view of Parent Dashboard (another role) to prove no layout regressions
+    // ==========================================
+    // 3. PARENT DASHBOARD VERIFICATION (390px)
+    // ==========================================
     console.log("Switching to parent user for parent dashboard verification...");
-    await page.deleteCookie({ name: "next-auth.session-token", domain: "localhost" });
-    await page.setCookie({
+    const parentPage = await browser.newPage();
+    await parentPage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+    await parentPage.setCookie({
       name: "next-auth.session-token",
       value: PARENT_TOKEN,
       domain: "localhost",
@@ -112,12 +141,13 @@ async function main() {
       sameSite: "Lax"
     });
 
-    await page.goto("http://localhost:3005/dashboard/parent", { waitUntil: "networkidle2", timeout: 20000 });
+    await parentPage.goto("http://localhost:3005/dashboard/parent", { waitUntil: "networkidle2", timeout: 20000 });
     await new Promise(r => setTimeout(r, 1000));
 
     const parentMobilePath = path.join(ARTIFACT_DIR, "dashboard_parent_mobile_390px.png");
-    await page.screenshot({ path: parentMobilePath, fullPage: false });
+    await parentPage.screenshot({ path: parentMobilePath });
     console.log("Saved parent mobile screenshot to:", parentMobilePath);
+    await parentPage.close();
 
   } finally {
     await browser.close();
@@ -125,6 +155,6 @@ async function main() {
 }
 
 main().catch(err => {
-  console.error("Puppeteer script failed:", err);
+  console.error("Screenshot capture error:", err);
   process.exit(1);
 });

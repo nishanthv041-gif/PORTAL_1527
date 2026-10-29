@@ -217,7 +217,7 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
 
     let extractedData: any = null;
 
-    if (isImage && process.env.GEMINI_API_KEY) {
+    if (isImage) {
       const geminiRes = await extractWithGemini({
         buffer,
         mimeType: file.type || "image/jpeg",
@@ -230,46 +230,13 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
       }
     }
 
-    // High-speed client OCR text parsing if provided
-    if (!extractedData && clientOcrText && clientOcrText.trim().length > 10) {
-      const parsed = parseTextToReportCard(
-        clientOcrText,
-        classSubjects,
-        classStudents,
-        { defaultMaxMarks, defaultPassMarks }
-      );
-      if (parsed.allDetectedStudents && parsed.allDetectedStudents.length > 0) {
-        extractedData = {
-          detectedStudents: parsed.allDetectedStudents,
-          allDetectedStudents: parsed.allDetectedStudents,
-          examName: parsed.examName,
-          examDate: parsed.examDate,
-          academicYear: parsed.academicYear,
-          docTotal: parsed.docTotal,
-          docPercentage: parsed.docPercentage
-        };
-      }
-    }
-
     if (!extractedData && isImage) {
       try {
-        let ocrBuffer = buffer;
-        try {
-          const sharp = (await import("sharp")).default;
-          ocrBuffer = await sharp(buffer)
-            .resize({ width: 2400, withoutEnlargement: false })
-            .grayscale()
-            .normalize()
-            .sharpen()
-            .toBuffer();
-        } catch (sharpErr) {
-          console.warn("Sharp preprocessing notice, using raw buffer:", sharpErr);
-        }
-
+        const path = await import("path");
+        const workerPath = path.join(process.cwd(), "node_modules", "tesseract.js", "src", "worker-script", "node", "index.js");
         const { createWorker } = await import("tesseract.js");
-        const worker = await createWorker("eng");
-        await worker.setParameters({ tessedit_pageseg_mode: "6" as any });
-        const ret = await worker.recognize(ocrBuffer);
+        const worker = await createWorker("eng", 1, { workerPath });
+        const ret = await worker.recognize(buffer);
         await worker.terminate();
         const text = ret?.data?.text || "";
         if (text && text.trim().length > 10) {
@@ -282,10 +249,8 @@ export async function scanReportCardAction(formData: FormData): Promise<ScanRepo
           if (parsed.allDetectedStudents && parsed.allDetectedStudents.length > 0) {
             extractedData = {
               detectedStudents: parsed.allDetectedStudents,
-              allDetectedStudents: parsed.allDetectedStudents,
               examName: parsed.examName,
               examDate: parsed.examDate,
-              academicYear: parsed.academicYear,
               docTotal: parsed.docTotal,
               docPercentage: parsed.docPercentage
             };

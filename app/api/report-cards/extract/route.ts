@@ -115,8 +115,8 @@ export async function POST(req: NextRequest) {
 
     let extractionResult: any = null;
 
-    // 1. Try Gemini Vision for images if API key is configured
-    if (isImage && process.env.GEMINI_API_KEY) {
+    // 1. Try Gemini Vision for images
+    if (isImage) {
       const geminiResult = await extractWithGemini({
         buffer,
         mimeType: file.type || "image/jpeg",
@@ -130,48 +130,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. High-speed client OCR text parsing (if client provided OCR text from browser canvas/Tesseract)
-    if (!extractionResult && clientOcrText && clientOcrText.trim().length > 10) {
-      const parsed = parseTextToReportCard(
-        clientOcrText,
-        classSubjects,
-        classStudents,
-        { defaultMaxMarks, defaultPassMarks }
-      );
-      if (parsed.allDetectedStudents && parsed.allDetectedStudents.length > 0) {
-        extractionResult = {
-          success: true,
-          detectedStudents: parsed.allDetectedStudents,
-          allDetectedStudents: parsed.allDetectedStudents,
-          examName: parsed.examName,
-          examDate: parsed.examDate,
-          academicYear: parsed.academicYear,
-          docTotal: parsed.docTotal,
-          docPercentage: parsed.docPercentage
-        };
-      }
-    }
-
-    // 3. Fallback for images if Gemini Vision is unavailable: in-memory sharp contrast + Tesseract OCR
+    // 1b. Fallback for images if Gemini Vision is unavailable: in-memory Tesseract OCR
     if (!extractionResult && isImage) {
       try {
-        let ocrBuffer = buffer;
-        try {
-          const sharp = (await import("sharp")).default;
-          ocrBuffer = await sharp(buffer)
-            .resize({ width: 2400, withoutEnlargement: false })
-            .grayscale()
-            .normalize()
-            .sharpen()
-            .toBuffer();
-        } catch (sharpErr) {
-          console.warn("Sharp preprocessing notice, using raw buffer:", sharpErr);
-        }
-
+        const path = await import("path");
+        const workerPath = path.join(process.cwd(), "node_modules", "tesseract.js", "src", "worker-script", "node", "index.js");
         const { createWorker } = await import("tesseract.js");
-        const worker = await createWorker("eng");
-        await worker.setParameters({ tessedit_pageseg_mode: "6" as any });
-        const ret = await worker.recognize(ocrBuffer);
+        const worker = await createWorker("eng", 1, { workerPath });
+        const ret = await worker.recognize(buffer);
         await worker.terminate();
         const text = ret?.data?.text || "";
         if (text && text.trim().length > 10) {
@@ -185,10 +151,8 @@ export async function POST(req: NextRequest) {
             extractionResult = {
               success: true,
               detectedStudents: parsed.allDetectedStudents,
-              allDetectedStudents: parsed.allDetectedStudents,
               examName: parsed.examName,
               examDate: parsed.examDate,
-              academicYear: parsed.academicYear,
               docTotal: parsed.docTotal,
               docPercentage: parsed.docPercentage
             };

@@ -5,6 +5,7 @@ export interface ScannedReportCardSubject {
   subjectId: string; // Mapped class subject ID (empty if unmatched)
   subjectName: string;
   score: number | "";
+  marksScored?: number | ""; // Canonical alias for marks scored
   maxScore: number;
   passMarks: number;
   remarks: string;
@@ -31,6 +32,8 @@ export interface DetectedStudentEntry {
   remarks?: string;
   docTotal?: number;
   docPercentage?: number;
+  hasMarks?: boolean;
+  scannerConfigured?: boolean;
   confidence?: number | string;
 }
 
@@ -53,9 +56,7 @@ export interface ExtractedStudentSchema {
   }>;
   totalMarks?: number | null;
   total?: number | null;
-  printedTotal?: number | null;
   percentage?: number | null;
-  printedPercentage?: number | null;
   grade?: string | null;
   teacherRemarks?: string | null;
   confidence?: number | string | null;
@@ -72,6 +73,8 @@ export interface StructuredExtractionResult {
 export interface ScanReportCardResult {
   success: boolean;
   error?: string;
+  scannerConfigured?: boolean;
+  hasMarks?: boolean;
   fileDetails: {
     name: string;
     type: string;
@@ -127,10 +130,11 @@ export interface StudentEditorRecord {
 }
 
 export const ScannedReportCardSubjectSchema = z.object({
-  id: z.string(),
+  id: z.string().optional().default(() => `sub-${Math.random().toString(36).substring(2, 9)}`),
   subjectId: z.string().default(""),
   subjectName: z.string(),
   score: z.union([z.number(), z.literal("")]),
+  marksScored: z.union([z.number(), z.literal("")]).optional(),
   maxScore: z.number().default(100),
   passMarks: z.number().default(35),
   remarks: z.string().optional().default(""),
@@ -138,7 +142,8 @@ export const ScannedReportCardSubjectSchema = z.object({
   status: z.enum(["PASS", "FAIL", "NEEDS_REVIEW"]).optional(),
   originalExtractedValue: z.string().nullable().optional(),
   isInvalid: z.boolean().optional(),
-  validationError: z.string().optional()
+  validationError: z.string().optional(),
+  isCustomSubject: z.boolean().optional()
 });
 
 export const DetectedStudentEntrySchema = z.object({
@@ -187,4 +192,16 @@ export const ScanReportCardResultSchema = z.object({
   originalExtractedValues: z.record(z.string(), z.any()).optional(),
   docTotal: z.number().optional(),
   docPercentage: z.number().optional()
+}).transform((data) => {
+  const students = data.allDetectedStudents || data.detectedStudents || [];
+  const first = students[0];
+  return {
+    ...data,
+    allDetectedStudents: data.allDetectedStudents || data.detectedStudents || [],
+    detectedStudents: data.detectedStudents || data.allDetectedStudents || [],
+    studentName: data.studentName || first?.studentName || "",
+    studentId: data.studentId || first?.studentId || "",
+    rollNumber: data.rollNumber || first?.rollNumber || "",
+    subjects: data.subjects && data.subjects.length > 0 ? data.subjects : (first?.subjects || [])
+  };
 });
