@@ -25,6 +25,34 @@ export interface DetectedStudentEntry {
   percentage?: number;
   grade?: string;
   remarks?: string;
+  docTotal?: number;
+  docPercentage?: number;
+  confidence?: number;
+}
+
+export interface ExtractedStudentSchema {
+  studentName: string;
+  rollNumber?: string;
+  attendance?: string;
+  subjects: Array<{
+    subjectName: string;
+    marksObtained: number | null;
+    maxMarks?: number | null;
+    passMarks?: number | null;
+    grade?: string | null;
+    remarks?: string | null;
+  }>;
+  totalMarks?: number | null;
+  percentage?: number | null;
+  grade?: string | null;
+  teacherRemarks?: string | null;
+}
+
+export interface StructuredExtractionResult {
+  examName?: string;
+  examDate?: string;
+  academicYear?: string;
+  students: ExtractedStudentSchema[];
 }
 
 export interface ScanReportCardResult {
@@ -58,4 +86,6 @@ export interface ScanReportCardResult {
     attendance?: string;
     marks?: Record<string, string>;
   };
+  docTotal?: number;
+  docPercentage?: number;
 }

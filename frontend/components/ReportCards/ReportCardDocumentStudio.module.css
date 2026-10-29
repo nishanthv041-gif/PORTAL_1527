@@ -28,6 +28,52 @@
   box-sizing: border-box;
 }
 
+/* Multi-Student Stepper Tabs */
+.studentStepperContainer {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  overflow-x: auto;
+  padding: 0.5rem 0.25rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.studentStepTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  border: 1.5px solid var(--border-color, #334155);
+  background: var(--card-bg, #1e293b);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.studentStepTab:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--foreground);
+}
+
+.studentStepTabActive {
+  border-color: var(--primary, #3b82f6) !important;
+  background: rgba(59, 130, 246, 0.12) !important;
+  color: var(--primary, #3b82f6) !important;
+  box-shadow: 0 0 0 1px var(--primary, #3b82f6);
+}
+
+.studentStepTabVerified {
+  border-color: #10b981 !important;
+  color: #10b981 !important;
+}
+
 /* Criteria Setup Bar */
 .criteriaCard {
   background: var(--card-bg, #1e293b);
@@ -148,6 +194,7 @@
   .desktopTableView {
     display: none !important;
   }
+
   .mobileCardsView {
     display: flex !important;
   }
@@ -249,6 +296,27 @@
   flex-wrap: wrap;
 }
 
+.statusBadgeNoWrap {
+  white-space: nowrap !important;
+  display: inline-block;
+  text-align: center;
+}
+
+/* Discrepancy Banner */
+.discrepancyBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 1.15rem;
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1.5px solid rgba(245, 158, 11, 0.35);
+  color: #f59e0b;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  box-sizing: border-box;
+}
+
 /* Totals Summary Bar */
 .totalsGrid {
   display: grid;
@@ -291,8 +359,44 @@
   min-height: 48px;
 }
 
+.sendBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 @media (max-width: 600px) {
   .sendBtn {
     width: 100%;
   }
+}
+
+/* Fullscreen Pan / Zoom Modal */
+.zoomModalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(8px);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+}
+
+.zoomModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.25rem;
+  background: rgba(30, 41, 59, 0.9);
+  border-bottom: 1px solid var(--border-color, #334155);
+}
+
+.zoomModalContent {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  user-select: none;
 }
