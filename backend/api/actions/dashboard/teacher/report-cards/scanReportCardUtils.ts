@@ -91,8 +91,9 @@ export function normalizeSubjectName(raw: string): string {
 /**
  * Strips symbols/spaces and extracts numeric score.
  * If non-numeric or unreadable, returns score: null and isNeedsReview: true.
+ * Handles "AB", "ABS", "A", "Absent" gracefully.
  */
-export function parseScoreNumber(val: any): { score: number | null; isNeedsReview: boolean; raw: string } {
+export function parseScoreNumber(val: any): { score: number | null; isNeedsReview: boolean; isAbsent?: boolean; raw: string } {
   if (val === null || val === undefined || val === "") {
     return { score: null, isNeedsReview: true, raw: "" };
   }
@@ -101,6 +102,9 @@ export function parseScoreNumber(val: any): { score: number | null; isNeedsRevie
     return { score: val, isNeedsReview: false, raw: String(val) };
   }
   const str = String(val).trim();
+  if (/^(?:ab|abs|a|absent)$/i.test(str)) {
+    return { score: null, isNeedsReview: false, isAbsent: true, raw: "Absent" };
+  }
   // If formatted as "92 / 100" or "85/100", extract part before slash
   const beforeSlash = str.split("/")[0].trim();
   const match = beforeSlash.replace(/[^0-9.-]/g, "").trim();
@@ -112,6 +116,52 @@ export function parseScoreNumber(val: any): { score: number | null; isNeedsRevie
     return { score: null, isNeedsReview: true, raw: str };
   }
   return { score: parsed, isNeedsReview: false, raw: str };
+}
+
+/**
+ * Normalizes look-alike characters common in OCR errors (O->0, I/l/|->1, S->5, B->8).
+ */
+export function normalizeLookAlikes(str: string): string {
+  if (!str) return "";
+  return str
+    .toUpperCase()
+    .replace(/[O]/g, "0")
+    .replace(/[Il|]/g, "1")
+    .replace(/[S]/g, "5")
+    .replace(/[B]/g, "8");
+}
+
+/**
+ * Cleans subject headers by stripping /100, /50 suffixes, punctuation, and extra whitespace.
+ */
+export function cleanSubjectHeader(header: string): string {
+  if (!header) return "";
+  let clean = header.replace(/\s*[\/:(\[]\s*\d+\s*[)\]]?\s*$/i, "").trim();
+  clean = clean.replace(/[^\w\s-]/g, " ").trim();
+  clean = clean.replace(/\s+/g, " ");
+  return clean;
+}
+
+/**
+ * Compares calculated totals with printed document totals and returns discrepancy diagnostics.
+ */
+export function compareDocumentTotals(
+  calculatedTotal: number,
+  printedTotal: number | null | undefined,
+  calculatedPct?: number,
+  printedPct?: number | null | undefined
+): { matches: boolean; warning?: string; diff?: number } {
+  if (printedTotal === null || printedTotal === undefined || isNaN(printedTotal)) {
+    return { matches: true };
+  }
+
+  const diff = printedTotal - calculatedTotal;
+  if (diff === 0) {
+    return { matches: true };
+  }
+
+  const warning = `Document says ${printedTotal}, calculated ${calculatedTotal}. Check subject marks.`;
+  return { matches: false, warning, diff };
 }
 
 export function computeGrade(score: number, max: number): string {
@@ -239,7 +289,14 @@ export function matchSubject(
 export function matchStudent(
   rawText: string,
   classStudents: Array<{ id: string; rollNumber: string; name: string }>
-): { studentId: string; studentName: string; rollNumber: string; confidence: "HIGH" | "MEDIUM" | "LOW" | "NONE" } {
+): {
+  studentId: string;
+  studentName: string;
+  rollNumber: string;
+  confidence: "HIGH" | "MEDIUM" | "LOW" | "NONE";
+  isLookAlikeMatch?: boolean;
+  suggestedRollNumber?: string;
+} {
   if (!rawText || classStudents.length === 0) {
     return { studentId: "", studentName: "", rollNumber: "", confidence: "NONE" };
   }
@@ -258,6 +315,22 @@ export function matchStudent(
         studentName: st.name,
         rollNumber: st.rollNumber,
         confidence: "HIGH"
+      };
+    }
+  }
+
+  // 1b. Match OCR Look-Alike Roll Number (0/O, 1/I, 5/S, 8/B)
+  const normRaw = normalizeLookAlikes(cleanRaw);
+  for (const st of classStudents) {
+    const normRoll = normalizeLookAlikes(cleanString(st.rollNumber));
+    if (normRoll && normRaw.includes(normRoll)) {
+      return {
+        studentId: st.id,
+        studentName: st.name,
+        rollNumber: st.rollNumber,
+        confidence: "HIGH",
+        isLookAlikeMatch: true,
+        suggestedRollNumber: st.rollNumber
       };
     }
   }
@@ -295,7 +368,7 @@ export function matchStudent(
   let bestSim = 0;
   for (const st of classStudents) {
     const sim = stringSimilarity(cleanRaw, st.name);
-    if (sim > bestSim && sim >= 0.72) {
+    if (sim > bestSim && sim >= 0.70) {
       bestSim = sim;
       bestStudent = st;
     }
@@ -333,6 +406,7 @@ export function parseTextToReportCard(
   rawTextPreview: string;
   docTotal?: number;
   docPercentage?: number;
+  academicYear: string;
 } {
   const lines = rawText.split("\n").map(l => l.trim()).filter(Boolean);
 
@@ -620,7 +694,8 @@ export function parseTextToReportCard(
     allDetectedStudents,
     rawTextPreview: lines.slice(0, 15).join("\n"),
     docTotal,
-    docPercentage
+    docPercentage,
+    academicYear: "2026-2027"
   };
 }
 
@@ -824,47 +899,47 @@ export function generateStandardJsonTemplate(
 ): object {
   const defaultSubjects = (classSubjects && classSubjects.length > 0)
     ? classSubjects.map(s => ({
-        subjectName: s.name,
-        score: 85,
-        maxScore: s.maxMarks || 100,
-        passMarks: s.passMarks || 35,
-        remarks: "Good performance"
-      }))
+      subjectName: s.name,
+      score: 85,
+      maxScore: s.maxMarks || 100,
+      passMarks: s.passMarks || 35,
+      remarks: "Good performance"
+    }))
     : [
-        { subjectName: "Tamil", score: 85, maxScore: 100, passMarks: 35, remarks: "Good performance" },
-        { subjectName: "English", score: 80, maxScore: 100, passMarks: 35, remarks: "Fluent" },
-        { subjectName: "Mathematics", score: 90, maxScore: 100, passMarks: 35, remarks: "Excellent" },
-        { subjectName: "Science", score: 88, maxScore: 100, passMarks: 35, remarks: "Strong concepts" },
-        { subjectName: "Social Science", score: 86, maxScore: 100, passMarks: 35, remarks: "Consistent" }
-      ];
+      { subjectName: "Tamil", score: 85, maxScore: 100, passMarks: 35, remarks: "Good performance" },
+      { subjectName: "English", score: 80, maxScore: 100, passMarks: 35, remarks: "Fluent" },
+      { subjectName: "Mathematics", score: 90, maxScore: 100, passMarks: 35, remarks: "Excellent" },
+      { subjectName: "Science", score: 88, maxScore: 100, passMarks: 35, remarks: "Strong concepts" },
+      { subjectName: "Social Science", score: 86, maxScore: 100, passMarks: 35, remarks: "Consistent" }
+    ];
 
   const studentsList = (classStudents && classStudents.length > 0)
     ? classStudents.map((st, idx) => ({
-        rollNumber: st.rollNumber || `ROLL-00${idx + 1}`,
-        studentName: st.name || `Student ${idx + 1}`,
-        attendance: "95%",
-        remarks: "Diligent student with commendable academic consistency.",
-        subjects: defaultSubjects.map(sub => ({
-          ...sub,
-          score: Math.min(100, Math.max(35, Math.round(75 + (idx * 5) % 20)))
-        }))
+      rollNumber: st.rollNumber || `ROLL-00${idx + 1}`,
+      studentName: st.name || `Student ${idx + 1}`,
+      attendance: "95%",
+      remarks: "Diligent student with commendable academic consistency.",
+      subjects: defaultSubjects.map(sub => ({
+        ...sub,
+        score: Math.min(100, Math.max(35, Math.round(75 + (idx * 5) % 20)))
       }))
+    }))
     : [
-        {
-          rollNumber: "7376252AD216",
-          studentName: "KIRITHIK M",
-          attendance: "96%",
-          remarks: "Excellent overall academic progress and participation.",
-          subjects: defaultSubjects
-        },
-        {
-          rollNumber: "7376251EE172",
-          studentName: "RAJESWARI M",
-          attendance: "98%",
-          remarks: "Outstanding consistency, dedication, and leadership.",
-          subjects: defaultSubjects
-        }
-      ];
+      {
+        rollNumber: "7376252AD216",
+        studentName: "KIRITHIK M",
+        attendance: "96%",
+        remarks: "Excellent overall academic progress and participation.",
+        subjects: defaultSubjects
+      },
+      {
+        rollNumber: "7376251EE172",
+        studentName: "RAJESWARI M",
+        attendance: "98%",
+        remarks: "Outstanding consistency, dedication, and leadership.",
+        subjects: defaultSubjects
+      }
+    ];
 
   return {
     $schema: "https://nipoportal.vercel.app/schemas/report-card.json",

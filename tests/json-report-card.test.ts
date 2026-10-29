@@ -68,7 +68,7 @@ async function runTests() {
 
   const parsed = parseJsonToReportCard(sampleJson, classSubjects, classStudents);
   assert.strictEqual(parsed.allDetectedStudents.length, 2, "Should extract 2 students");
-  
+
   const kirithik = parsed.allDetectedStudents[0];
   assert.strictEqual(kirithik.studentName, "KIRITHIK M");
   assert.strictEqual(kirithik.rollNumber, "7376252AD216");

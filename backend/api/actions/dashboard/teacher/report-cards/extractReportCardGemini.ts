@@ -140,9 +140,12 @@ No markdown backticks, no explanatory text, return ONLY the raw JSON object.
     const detectedStudents: DetectedStudentEntry[] = [];
 
     for (const extStudent of parsedJson.students) {
-      // Fuzzy match student in class roster
+      const studentRawName = extStudent.studentName || extStudent.name || "";
+      const studentRawRoll = extStudent.rollNumber || extStudent.rollNo || "";
+
+      // Match student in class roster with exact, look-alike, and fuzzy fallback
       const stMatch = matchStudent(
-        `${extStudent.studentName || ""} ${extStudent.rollNumber || ""}`,
+        `${studentRawName} ${studentRawRoll}`,
         classStudents
       );
 
@@ -150,11 +153,13 @@ No markdown backticks, no explanatory text, return ONLY the raw JSON object.
       const mappedSubjects: ScannedReportCardSubject[] = [];
 
       (extStudent.subjects || []).forEach((es, idx) => {
-        const normName = normalizeSubjectName(es.subjectName || "");
+        const rawSubName = es.subjectName || es.name || "";
+        const normName = normalizeSubjectName(rawSubName);
         const matched = matchSubject(normName, classSubjects);
-        const maxScore = customDefaults?.defaultMaxMarks || es.maxMarks || matched?.maxMarks || 100;
+        const maxScore = customDefaults?.defaultMaxMarks || es.maxMarks || es.maxMark || matched?.maxMarks || 100;
         const passMarks = customDefaults?.defaultPassMarks || es.passMarks || matched?.passMarks || 35;
-        const parsed = parseScoreNumber(es.marksObtained);
+        const rawScoreVal = es.marksObtained !== undefined ? es.marksObtained : es.marksScored;
+        const parsed = parseScoreNumber(rawScoreVal);
         const score = parsed.score !== null ? parsed.score : "";
         const grade = score !== "" ? computeGrade(Number(score), maxScore) : "-";
         const status = score === "" ? "NEEDS_REVIEW" : Number(score) >= passMarks ? "PASS" : "FAIL";
@@ -211,19 +216,22 @@ No markdown backticks, no explanatory text, return ONLY the raw JSON object.
         }
       });
 
+      const stTotal = extStudent.totalMarks ?? extStudent.printedTotal ?? extStudent.total ?? undefined;
+      const stPct = extStudent.percentage ?? extStudent.printedPercentage ?? undefined;
+
       detectedStudents.push({
         studentId: stMatch.studentId,
-        studentName: stMatch.studentName || extStudent.studentName || "Student",
-        rollNumber: stMatch.rollNumber || extStudent.rollNumber || "",
-        extractedName: extStudent.studentName,
+        studentName: stMatch.studentName || studentRawName || "Student",
+        rollNumber: stMatch.rollNumber || studentRawRoll || "",
+        extractedName: studentRawName,
         attendance: extStudent.attendance || null,
         subjects: mappedSubjects,
-        totalMarks: extStudent.totalMarks || undefined,
-        percentage: extStudent.percentage || undefined,
+        totalMarks: stTotal,
+        percentage: stPct,
         grade: extStudent.grade || undefined,
         remarks: extStudent.teacherRemarks || undefined,
-        docTotal: extStudent.totalMarks || undefined,
-        docPercentage: extStudent.percentage || undefined,
+        docTotal: stTotal,
+        docPercentage: stPct,
         confidence: stMatch.confidence === "HIGH" ? 0.95 : stMatch.confidence === "MEDIUM" ? 0.8 : 0.5
       });
     }

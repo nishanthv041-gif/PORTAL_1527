@@ -53,7 +53,9 @@ export interface ExtractedStudentSchema {
   }>;
   totalMarks?: number | null;
   total?: number | null;
+  printedTotal?: number | null;
   percentage?: number | null;
+  printedPercentage?: number | null;
   grade?: string | null;
   teacherRemarks?: string | null;
   confidence?: number | string | null;

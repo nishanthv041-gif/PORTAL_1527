@@ -486,29 +486,6 @@ export default function TeacherReportCardsClient({
               <span className={styles.tabBadge}>{history.length}</span>
             </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("STUDIO")}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.45rem",
-              padding: "0.65rem 1.15rem",
-              borderRadius: "12px",
-              background: "linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(14, 165, 233, 0.15) 100%)",
-              border: "1.5px solid rgba(99, 102, 241, 0.35)",
-              color: "var(--primary)",
-              fontWeight: 800,
-              fontSize: "0.85rem",
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-              whiteSpace: "nowrap"
-            }}
-          >
-            <Upload size={16} />
-            <span>Scan &amp; Upload Doc (Studio)</span>
-          </button>
         </div>
       </div>
 
