@@ -77,6 +77,22 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
     previewUrlRef.current = previewAudioUrl;
   }, [previewAudioUrl]);
 
+  const stopMediaTracks = () => {
+    if (visualizerRafRef.current) {
+      cancelAnimationFrame(visualizerRafRef.current);
+      visualizerRafRef.current = null;
+    }
+    if (audioPipelineRef.current) {
+      audioPipelineRef.current.cleanup();
+      audioPipelineRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    setAudioLevel(0);
+  };
+
   // Clean up media streams and timers on unmount only
   useEffect(() => {
     return () => {
@@ -107,21 +123,7 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
     }
   };
 
-  const stopMediaTracks = () => {
-    if (visualizerRafRef.current) {
-      cancelAnimationFrame(visualizerRafRef.current);
-      visualizerRafRef.current = null;
-    }
-    if (audioPipelineRef.current) {
-      audioPipelineRef.current.cleanup();
-      audioPipelineRef.current = null;
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      mediaStreamRef.current = null;
-    }
-    setAudioLevel(0);
-  };
+
 
   // Start Voice Recording with Smart Amplification & Audio Stabilization
   const startRecording = async () => {

@@ -85,13 +85,6 @@ export default function BulkUpload({
     ? scanResult.availableClasses
     : classes;
 
-  // Load history on tab switch
-  useEffect(() => {
-    if (activeTab === "HISTORY") {
-      fetchHistory();
-    }
-  }, [activeTab]);
-
   const fetchHistory = async () => {
     setLoadingHistory(true);
     try {
@@ -105,6 +98,13 @@ export default function BulkUpload({
       setLoadingHistory(false);
     }
   };
+
+  // Load history on tab switch
+  useEffect(() => {
+    if (activeTab === "HISTORY") {
+      fetchHistory();
+    }
+  }, [activeTab]);
 
   const handleClearAllHistory = async () => {
     setClearingHistory(true);
