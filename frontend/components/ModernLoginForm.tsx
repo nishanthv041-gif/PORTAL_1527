@@ -4,18 +4,17 @@ import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
-  GraduationCap,
   Eye,
   EyeOff,
   ArrowLeft,
   ArrowRight,
   AlertCircle,
   Loader2,
-  Lock,
   Sparkles,
 } from "lucide-react";
 import styles from "@/frontend/app/login/modern-login.module.css";
 import ThemeToggle from "@/frontend/components/ThemeToggle";
+import SrtLogo from "@/frontend/components/ui/SrtLogo";
 
 interface ModernLoginFormProps {
   schoolName?: string;
@@ -162,7 +161,9 @@ export default function ModernLoginForm({
         <div className={styles.leftPanel}>
           {/* Brand Header */}
             <div className={styles.brandRow}>
-              {schoolLogo ? (
+              {schoolLogo === "/logo/srt-logo.svg" ? (
+                <SrtLogo size={40} alt={portalDisplayName} />
+              ) : schoolLogo ? (
                 <div
                   style={{
                     width: 38,
@@ -180,9 +181,7 @@ export default function ModernLoginForm({
                   />
                 </div>
               ) : (
-                <div className={styles.brandLogo}>
-                  <GraduationCap size={20} />
-                </div>
+                <SrtLogo size={40} alt={portalDisplayName} />
               )}
               <div className={styles.brandTextGroup}>
                 <span className={styles.brandName}>{portalDisplayName}</span>

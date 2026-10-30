@@ -13,3 +13,10 @@ export type { ConfirmOptions, ConfirmVariant } from "./ConfirmDialog";
 
 export { default as Modal } from "./Modal";
 export type { ModalProps, ModalSize } from "./Modal";
+
+export { default as SrtLogo } from "./SrtLogo";
+export type { SrtLogoProps } from "./SrtLogo";
+
+export { default as SplashScreen } from "./SplashScreen";
+export type { SplashScreenProps } from "./SplashScreen";
+

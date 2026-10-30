@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { redirect } from "next/navigation";
-import ModernLoginForm from "@/frontend/components/ModernLoginForm";
+import HomeClient from "../HomeClient";
 import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/settings/actions";
 
 interface LoginPageProps {
@@ -27,11 +27,11 @@ export default async function LoginPage(props: LoginPageProps) {
   }
 
   const settings = await getSystemSettings();
-  const schoolName = settings.SCHOOL_NAME || "SRT Portal";
-  const schoolLogo = settings.SCHOOL_LOGO || null;
+  const schoolName = settings.SCHOOL_NAME || "SRT UNIVERSAL SCHOOL";
+  const schoolLogo = settings.SCHOOL_LOGO || "/logo/srt-logo.svg";
 
   return (
-    <ModernLoginForm
+    <HomeClient
       schoolName={schoolName}
       schoolLogo={schoolLogo}
       initialError={searchParams.error}

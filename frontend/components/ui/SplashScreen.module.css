@@ -1,0 +1,439 @@
+/* ============================================================
+   SRT UNIVERSAL SCHOOL - INTRO / SPLASH PAGE STYLES
+   Royal Blue (#0504A9) | Gold (#F2B84B) | Maroon Accents (#80231D)
+   ============================================================ */
+
+.splashContainer {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  width: 100%;
+  min-height: 100dvh;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top, 20px) env(safe-area-inset-right, 20px)
+    env(safe-area-inset-bottom, 20px) env(safe-area-inset-left, 20px);
+  background: radial-gradient(
+    circle at 50% 45%,
+    #0c1445 0%,
+    #050826 40%,
+    #020414 75%,
+    #01020a 100%
+  );
+  color: #ffffff;
+  user-select: none;
+  touch-action: manipulation;
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    filter 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.splashExit {
+  opacity: 0 !important;
+  transform: scale(1.03) !important;
+  filter: blur(8px) !important;
+  pointer-events: none !important;
+}
+
+/* Background Radial Glow behind Crest */
+.radialGlow {
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  width: clamp(260px, 60vmin, 600px);
+  height: clamp(260px, 60vmin, 600px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    rgba(5, 4, 169, 0.45) 0%,
+    rgba(242, 184, 75, 0.16) 32%,
+    rgba(128, 35, 29, 0.12) 50%,
+    transparent 72%
+  );
+  filter: blur(28px);
+  animation: glowPulse 3.5s ease-in-out infinite alternate;
+}
+
+@keyframes glowPulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.92);
+    opacity: 0.65;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.08);
+    opacity: 0.95;
+  }
+}
+
+/* Subtle Floating Particles */
+.particleWrapper {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: floatParticle 3.2s ease-in-out infinite alternate;
+}
+
+@keyframes floatParticle {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.85);
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.65;
+  }
+  100% {
+    transform: translate3d(var(--tx, 14px), var(--ty, -28px), 0) scale(1.2);
+    opacity: 0.2;
+  }
+}
+
+/* Core Content Center Stage */
+.contentStage {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  max-width: 90vw;
+  perspective: 1000px;
+  transform-style: preserve-3d;
+}
+
+/* 3D Rotating Logo Container */
+.logoWrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: clamp(14px, 3.5vh, 28px);
+  will-change: transform, opacity;
+  animation: logoIntro 1.65s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+  opacity: 0;
+  transform: scale(0.4) rotateY(0deg);
+}
+
+@keyframes logoIntro {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) rotateY(0deg);
+  }
+  18% {
+    opacity: 1;
+  }
+  82% {
+    transform: scale(1.025) rotateY(726deg);
+  }
+  92% {
+    transform: scale(0.99) rotateY(718deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotateY(720deg);
+  }
+}
+
+/* Soft Shine Sweep Overlay across Logo */
+.shineSweep {
+  position: absolute;
+  inset: -12%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.55) 48%,
+    rgba(242, 184, 75, 0.6) 52%,
+    transparent 75%
+  );
+  transform: translateX(-160%) rotate(15deg);
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: shineSweep 0.8s ease-out 1.75s forwards;
+}
+
+@keyframes shineSweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-160%) rotate(15deg);
+  }
+  25% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(160%) rotate(15deg);
+  }
+}
+
+/* Typography Container */
+.textGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* School Name - Letter by Letter */
+.schoolName {
+  font-family: inherit;
+  font-size: clamp(1.25rem, 4.5vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #ffffff;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7),
+    0 0 30px rgba(59, 130, 246, 0.35);
+  line-height: 1.25;
+}
+
+.word {
+  display: inline-flex;
+  white-space: nowrap;
+}
+
+.letter {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(16px) scale(0.88);
+  filter: blur(3px);
+  will-change: transform, opacity, filter;
+  animation: letterFadeUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes letterFadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.88);
+    filter: blur(3px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+/* Thin Gold Divider Drawing from Centre Outward */
+.divider {
+  width: clamp(140px, 36vw, 240px);
+  height: 2px;
+  margin: clamp(10px, 2vh, 16px) 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(242, 184, 75, 0.4) 15%,
+    #f2b84b 50%,
+    rgba(242, 184, 75, 0.4) 85%,
+    transparent 100%
+  );
+  box-shadow: 0 0 10px rgba(242, 184, 75, 0.55);
+  border-radius: 9999px;
+  transform: scaleX(0);
+  transform-origin: center;
+  will-change: transform;
+  animation: drawDivider 0.65s cubic-bezier(0.16, 1, 0.3, 1) 2.05s forwards;
+}
+
+@keyframes drawDivider {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+/* Tagline */
+.tagline {
+  font-family: inherit;
+  font-size: clamp(0.8rem, 2.2vw, 1.25rem);
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #f2b84b;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  transform: translateY(12px);
+  will-change: transform, opacity;
+  animation: taglineSlide 0.55s ease-out 2.22s forwards;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6),
+    0 0 16px rgba(242, 184, 75, 0.4);
+}
+
+@keyframes taglineSlide {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Slim Gold Progress Bar Track */
+.progressTrack {
+  width: clamp(160px, 35vw, 240px);
+  height: 3px;
+  margin-top: clamp(18px, 3.5vh, 28px);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.progressBar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #f2b84b, #ffe494, #f2b84b);
+  border-radius: 9999px;
+  box-shadow: 0 0 12px rgba(242, 184, 75, 0.7);
+  will-change: width;
+  animation: progressFill 0.85s cubic-bezier(0.4, 0, 0.2, 1) 2.55s forwards;
+}
+
+@keyframes progressFill {
+  0% {
+    width: 0%;
+    opacity: 0.7;
+  }
+  50% {
+    width: 70%;
+    opacity: 1;
+  }
+  100% {
+    width: 100%;
+    opacity: 1;
+  }
+}
+
+/* Skip Button */
+.skipButton {
+  position: absolute;
+  bottom: max(22px, env(safe-area-inset-bottom, 22px));
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 9999px;
+  padding: 7px 18px;
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.skipButton:hover,
+.skipButton:focus-visible {
+  color: #ffffff;
+  border-color: rgba(242, 184, 75, 0.5);
+  background: rgba(242, 184, 75, 0.14);
+  box-shadow: 0 0 14px rgba(242, 184, 75, 0.35);
+  transform: translateY(-1px);
+}
+
+.skipButton:active {
+  transform: translateY(0);
+}
+
+/* Accessibility: prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .logoWrapper,
+  .letter,
+  .divider,
+  .tagline,
+  .progressBar {
+    animation: simpleFadeIn 0.5s ease forwards !important;
+    transform: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+  }
+
+  .radialGlow,
+  .shineSweep,
+  .particleWrapper {
+    display: none !important;
+  }
+
+  .divider {
+    transform: scaleX(1) !important;
+  }
+
+  .progressBar {
+    width: 100% !important;
+  }
+}
+
+@keyframes simpleFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Landscape Phone Orientation Adjustment */
+@media (max-height: 520px) and (orientation: landscape) {
+  .contentStage {
+    transform: scale(0.85);
+  }
+
+  .logoWrapper {
+    margin-bottom: 10px;
+  }
+
+  .divider {
+    margin: 8px 0;
+  }
+
+  .progressTrack {
+    margin-top: 12px;
+  }
+
+  .skipButton {
+    bottom: max(10px, env(safe-area-inset-bottom, 10px));
+    padding: 4px 14px;
+    font-size: 0.72rem;
+  }
+}

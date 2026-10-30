@@ -191,6 +191,8 @@ export default async function RootLayout({
   return (
     <html lang="en" data-theme={initialTheme} suppressHydrationWarning>
       <head>
+        {/* Preload school crest logo for instant splash rendering */}
+        <link rel="preload" href="/logo/srt-logo.svg" as="image" type="image/svg+xml" />
         {/* Flash-prevention: runs synchronously before paint */}
         <Script
           id="flash-prevention-script"
