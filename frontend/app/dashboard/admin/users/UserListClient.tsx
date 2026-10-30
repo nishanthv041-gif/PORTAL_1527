@@ -6,6 +6,7 @@ import { Search, Shield, CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { deactivateUser, activateUser, activateAllUsers, deleteUser } from "@/backend/api/actions/dashboard/admin/users/actions";
 import { User, Teacher, Parent } from "@prisma/client";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 import { MoreVertical, Eye, Trash2 } from "lucide-react";
 
@@ -22,6 +23,7 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
   const [isActivating, setIsActivating] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const router = useRouter();
+  const confirm = useConfirm();
 
   // Close action menu when clicking outside anywhere on the page or pressing Escape
   useEffect(() => {
@@ -68,20 +70,34 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
   }).sort((a, b) => a.name.trim().localeCompare(b.name.trim()));
 
   const handleDeactivate = async (id: string) => {
-    if (confirm("Are you sure you want to deactivate this user? Their records will be preserved.")) {
-      await deactivateUser(id);
-      setOpenMenuId(null);
-      router.refresh();
-    }
+    const ok = await confirm({
+      title: "Deactivate User?",
+      message: "Are you sure you want to deactivate this user? Their records will be preserved.",
+      confirmText: "Deactivate",
+      cancelText: "Cancel",
+      variant: "warning"
+    });
+    if (!ok) return;
+
+    await deactivateUser(id);
+    setOpenMenuId(null);
+    router.refresh();
   };
 
   const handleActivateAll = async () => {
-    if (confirm("Are you sure you want to activate all inactive users?")) {
-      setIsActivating(true);
-      await activateAllUsers();
-      setIsActivating(false);
-      router.refresh();
-    }
+    const ok = await confirm({
+      title: "Activate All Inactive Users?",
+      message: "Are you sure you want to activate all inactive users across all roles?",
+      confirmText: "Activate All",
+      cancelText: "Cancel",
+      variant: "primary"
+    });
+    if (!ok) return;
+
+    setIsActivating(true);
+    await activateAllUsers();
+    setIsActivating(false);
+    router.refresh();
   };
 
   return (
@@ -250,12 +266,19 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
                       {user.role !== 'ADMIN' && (
                         <button 
                           onClick={async () => {
-                            if (confirm("Are you sure you want to schedule this user for deletion in 84 hours?")) {
-                              const { setUserExpiry } = await import('@/backend/api/actions/dashboard/admin/users/actions');
-                              await setUserExpiry(user.id, 84);
-                              setOpenMenuId(null);
-                              router.refresh();
-                            }
+                            const ok = await confirm({
+                              title: `Schedule 84h Deletion for ${user.name}?`,
+                              message: "Are you sure you want to schedule this user for deletion in 84 hours? Access will expire automatically.",
+                              confirmText: "Schedule Deletion",
+                              cancelText: "Cancel",
+                              variant: "warning"
+                            });
+                            if (!ok) return;
+
+                            const { setUserExpiry } = await import('@/backend/api/actions/dashboard/admin/users/actions');
+                            await setUserExpiry(user.id, 84);
+                            setOpenMenuId(null);
+                            router.refresh();
                           }}
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--warning)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
                         >
@@ -265,19 +288,26 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
                       {user.role !== 'ADMIN' && (
                         <button 
                           onClick={async () => {
-                            if (confirm(`WARNING: This will permanently delete user "${user.name}". This cannot be undone. Are you sure?`)) {
-                              setOpenMenuId(null);
-                              const previousUsers = [...userList];
-                              // 0ms optimistic removal
-                              setUserList(prev => prev.filter(u => u.id !== user.id));
+                            const ok = await confirm({
+                              title: `Delete User "${user.name}"?`,
+                              message: `WARNING: This will permanently delete user "${user.name}". This cannot be undone. All credentials and sessions will be revoked.`,
+                              confirmText: "Delete User",
+                              cancelText: "Cancel",
+                              variant: "danger"
+                            });
+                            if (!ok) return;
 
-                              const res = await deleteUser(user.id);
-                              if (res?.error) {
-                                alert(res.error);
-                                setUserList(previousUsers); // Rollback if error
-                              } else {
-                                router.refresh();
-                              }
+                            setOpenMenuId(null);
+                            const previousUsers = [...userList];
+                            // 0ms optimistic removal
+                            setUserList(prev => prev.filter(u => u.id !== user.id));
+
+                            const res = await deleteUser(user.id);
+                            if (res?.error) {
+                              alert(res.error);
+                              setUserList(previousUsers); // Rollback if error
+                            } else {
+                              router.refresh();
                             }
                           }}
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--danger)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}

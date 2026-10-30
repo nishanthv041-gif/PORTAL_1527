@@ -21,6 +21,7 @@ import {
   deleteParentComplaintAction
 } from "@/backend/api/actions/dashboard/parent/complaints/actions";
 import ComplaintConversationModal, { ComplaintMessageItem } from "@/frontend/components/complaints/ComplaintConversationModal";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import styles from "../../dashboard.module.css";
 
 export type ParentChildOption = {
@@ -96,6 +97,7 @@ export default function ParentComplaintsClient({
   const [activeTab, setActiveTab] = useState<"CREATE" | "HISTORY">(
     initialComplaints.length > 0 ? "HISTORY" : "CREATE"
   );
+  const confirm = useConfirm();
   const [complaints, setComplaints] = useState<ParentComplaintItem[]>(initialComplaints);
 
   // Form states - Multi-choice student selection
@@ -172,7 +174,14 @@ export default function ParentComplaintsClient({
   };
 
   const handleDeleteComplaint = async (id: string) => {
-    if (!confirm("Are you sure you want to withdraw and delete this complaint?")) return;
+    const ok = await confirm({
+      title: "Withdraw Complaint?",
+      message: "Are you sure you want to withdraw and delete this complaint? This cannot be undone.",
+      confirmText: "Withdraw Complaint",
+      cancelText: "Keep Complaint",
+      variant: "danger"
+    });
+    if (!ok) return;
 
     const res = await deleteParentComplaintAction(id);
     if (res.success) {

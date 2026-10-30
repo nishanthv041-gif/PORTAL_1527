@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Megaphone, Clock, AlertCircle, Link as LinkIcon, Edit2, Trash2, BookOpen, Users, GraduationCap } from "lucide-react";
 import { Announcement, Class } from "@prisma/client";
 import { createTeacherAnnouncementAction } from "@/backend/api/actions/dashboard/teacher/announcements/actions";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 export default function TeacherAnnouncementsClient({
   announcements,
@@ -22,6 +23,7 @@ export default function TeacherAnnouncementsClient({
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   const router = useRouter();
+  const confirm = useConfirm();
 
   const handleEditClick = (announcement: Announcement) => {
     setEditingId(announcement.id);
@@ -31,14 +33,21 @@ export default function TeacherAnnouncementsClient({
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this announcement?")) {
-      const res = await fetch(`/api/announcements/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const errorData = await res.json();
-        alert(errorData.error || "Failed to delete announcement");
-      } else {
-        router.refresh();
-      }
+    const ok = await confirm({
+      title: "Delete Announcement?",
+      message: "Are you sure you want to delete this announcement? This action cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
+
+    const res = await fetch(`/api/announcements/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const errorData = await res.json();
+      alert(errorData.error || "Failed to delete announcement");
+    } else {
+      router.refresh();
     }
   };
 

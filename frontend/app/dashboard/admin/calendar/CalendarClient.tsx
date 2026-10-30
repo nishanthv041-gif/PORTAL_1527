@@ -5,12 +5,14 @@ import { Plus, Trash2, Calendar as CalendarIcon, MapPin, Clock, Users } from "lu
 import { createEventAction, deleteEventAction } from "@/backend/api/actions/dashboard/admin/calendar/actions";
 
 import { CalendarEvent } from "@prisma/client";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 export default function CalendarClient({ events }: { events: CalendarEvent[] }) {
   const [view, setView] = useState<'Day' | 'Week' | 'Month'>('Day');
   const [showCreate, setShowCreate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   // Default to today
   const today = new Date();
@@ -50,9 +52,16 @@ export default function CalendarClient({ events }: { events: CalendarEvent[] }) 
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this event?")) {
-      await deleteEventAction(id);
-    }
+    const ok = await confirm({
+      title: "Delete Event?",
+      message: "Are you sure you want to delete this event from the school calendar? This cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
+
+    await deleteEventAction(id);
   };
 
   const getEventColor = (type: string) => {

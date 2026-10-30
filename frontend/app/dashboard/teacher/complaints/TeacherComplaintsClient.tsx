@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { User, Clock, AlertCircle, Edit2, Trash2 } from "lucide-react";
 import { raiseComplaintAction } from "@/backend/api/actions/dashboard/teacher/complaints/actions";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 type ComplaintWithStudent = {
   id: string;
@@ -36,6 +37,7 @@ export default function TeacherComplaintsClient({
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   const router = useRouter();
+  const confirm = useConfirm();
 
   const handleEditClick = (complaint: ComplaintWithStudent) => {
     setEditingId(complaint.id);
@@ -44,14 +46,21 @@ export default function TeacherComplaintsClient({
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this complaint?")) {
-      const res = await fetch(`/api/complaints/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const errorData = await res.json();
-        alert(errorData.error || "Failed to delete complaint");
-      } else {
-        router.refresh();
-      }
+    const ok = await confirm({
+      title: "Delete Complaint?",
+      message: "Are you sure you want to delete this complaint? This cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
+
+    const res = await fetch(`/api/complaints/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const errorData = await res.json();
+      alert(errorData.error || "Failed to delete complaint");
+    } else {
+      router.refresh();
     }
   };
 

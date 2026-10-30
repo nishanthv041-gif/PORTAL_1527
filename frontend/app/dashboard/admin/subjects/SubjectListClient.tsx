@@ -7,6 +7,7 @@ import Link from "next/link";
 import { createSubjectAction, deleteSubjectGroupByName } from "@/backend/api/actions/dashboard/admin/subjects/actions";
 import { Subject, Class, Teacher, User, Student, Mark } from "@prisma/client";
 import EditSubjectModal from "./EditSubjectModal";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 type TeacherWithUser = Teacher & { user: User };
 type SubjectWithRelations = Subject & {
@@ -25,6 +26,7 @@ export default function SubjectListClient({
   teachers: TeacherWithUser[]; 
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [subjectList, setSubjectList] = useState(subjects);
   const [showCreate, setShowCreate] = useState(false);
   const [editingSubject, setEditingSubject] = useState<{ name: string; instances: SubjectWithRelations[] } | null>(null);
@@ -100,9 +102,14 @@ export default function SubjectListClient({
   };
 
   const handleDeleteSubjectGroup = async (name: string) => {
-    if (!confirm(`WARNING: This will permanently delete subject "${name}" across all classes, including associated timetable entries and marks. This cannot be undone. Are you sure?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Delete Subject "${name}"?`,
+      message: `WARNING: This will permanently delete subject "${name}" across all classes, including associated timetable entries and marks. This cannot be undone.`,
+      confirmText: "Delete Subject Group",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
 
     const previousSubjects = [...subjectList];
     // 0ms instant optimistic removal

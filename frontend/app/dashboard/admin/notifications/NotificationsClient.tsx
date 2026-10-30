@@ -11,6 +11,7 @@ import { markNotificationReadAction } from "@/backend/api/actions/notifications/
 import { createCustomNotificationAction } from "@/backend/api/actions/dashboard/admin/notifications/createNotificationAction";
 import ToggleNotifications from "@/frontend/components/ToggleNotifications";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 type NotificationWithUser = Notification & { user: User };
 
@@ -28,6 +29,7 @@ export default function NotificationsClient({
   users?: Array<{ id: string; name: string; role: string }>;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [showCreate, setShowCreate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [targetType, setTargetType] = useState("ALL");
@@ -56,11 +58,18 @@ export default function NotificationsClient({
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Delete this notification?")) {
-      const res = await deleteNotification(id);
-      if (res.error) alert(res.error);
-      else router.refresh();
-    }
+    const ok = await confirm({
+      title: "Delete Notification?",
+      message: "Are you sure you want to delete this notification?",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
+
+    const res = await deleteNotification(id);
+    if (res.error) alert(res.error);
+    else router.refresh();
   };
 
   const handleMarkParticularRead = async (id: string) => {

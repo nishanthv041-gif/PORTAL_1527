@@ -24,6 +24,7 @@ import {
   deleteHomeworkComment
 } from "@/backend/api/actions/dashboard/teacher/assignments/actions";
 import styles from "@/frontend/app/dashboard/dashboard.module.css";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 export type ConsoleComment = {
   id: string;
@@ -76,6 +77,7 @@ export default function HomeworkConsoleClient({
   assignedStaffName
 }: HomeworkConsoleClientProps) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [comments, setComments] = useState<ConsoleComment[]>(initialComments);
   const [inputText, setInputText] = useState("");
   const [sending, setSending] = useState(false);
@@ -125,7 +127,14 @@ export default function HomeworkConsoleClient({
   };
 
   const handleDeleteComment = async (commentId: string) => {
-    if (!confirm("Are you sure you want to delete this message?")) return;
+    const ok = await confirm({
+      title: "Delete Message?",
+      message: "Are you sure you want to delete this message? This cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
 
     const res = await deleteHomeworkComment(commentId);
     if (res.success) {

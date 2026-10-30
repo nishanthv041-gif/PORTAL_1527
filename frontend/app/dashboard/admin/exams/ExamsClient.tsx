@@ -6,6 +6,7 @@ import { toggleExamPublishAction } from "@/backend/api/actions/dashboard/admin/e
 import { Exam, Class, Student, Subject, Mark, ExamRequest, Teacher, User } from "@prisma/client";
 import { BarChart, Bar, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { acceptExamRequest, declineExamRequest } from "@/backend/api/actions/dashboard/admin/exams/actions";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 import styles from "./ExamsClient.module.css";
 
@@ -22,6 +23,7 @@ type ExamRequestWithRelations = ExamRequest & {
 
 export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRelations[], examRequests: ExamRequestWithRelations[] }) {
   const [selectedExam, setSelectedExam] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   const togglePublish = async (examId: string, currentStatus: boolean) => {
     const res = await toggleExamPublishAction(examId, !currentStatus);
@@ -50,10 +52,17 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
                 <div className={styles.requestActions}>
                   <button 
                     onClick={async () => {
-                      if (confirm("Approve this exam request?")) {
-                        const res = await acceptExamRequest(req.id);
-                        if (res.error) alert(res.error);
-                      }
+                      const ok = await confirm({
+                        title: "Approve Exam Request?",
+                        message: `Approve the exam request for ${req.subject.name} (Class: ${req.class.name}) requested by ${req.teacher.user.name}?`,
+                        confirmText: "Approve",
+                        cancelText: "Cancel",
+                        variant: "primary"
+                      });
+                      if (!ok) return;
+
+                      const res = await acceptExamRequest(req.id);
+                      if (res.error) alert(res.error);
                     }}
                     className={styles.approveBtn}
                   >

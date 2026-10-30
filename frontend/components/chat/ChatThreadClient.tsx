@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import ChatMessageItem, { ChatMessage } from "./ChatMessageItem";
 import ChatComposer from "./ChatComposer";
-import ClearChatModal from "./ClearChatModal";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 interface ChatThreadClientProps {
   initialMessages: ChatMessage[];
@@ -41,7 +41,7 @@ export default function ChatThreadClient({
   channelBadge,
 }: ChatThreadClientProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
-  const [showClearModal, setShowClearModal] = useState(false);
+  const confirm = useConfirm();
   const [showMenu, setShowMenu] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
@@ -558,9 +558,17 @@ export default function ChatThreadClient({
 
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     setShowMenu(false);
-                    setShowClearModal(true);
+                    const ok = await confirm({
+                      title: `Clear Chat with ${otherUser.name}?`,
+                      message: `Clearing this chat will remove all message history with ${otherUser.name} from your view. New messages will still appear normally.`,
+                      confirmText: "Clear Chat",
+                      cancelText: "Cancel",
+                      variant: "danger"
+                    });
+                    if (!ok) return;
+                    await handleConfirmClear();
                   }}
                   style={{
                     width: "100%",
@@ -714,14 +722,6 @@ export default function ChatThreadClient({
       }}>
         <ChatComposer onSendMessage={handleSendMessage} />
       </div>
-
-      {/* Clear Chat Confirmation Modal */}
-      <ClearChatModal
-        isOpen={showClearModal}
-        onClose={() => setShowClearModal(false)}
-        onConfirmClear={handleConfirmClear}
-        otherUserName={otherUser.name}
-      />
     </div>
   );
 }

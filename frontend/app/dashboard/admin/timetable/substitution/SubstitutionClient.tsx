@@ -32,6 +32,7 @@ import {
   type AbsentPeriodSlot
 } from "@/backend/api/actions/dashboard/admin/substitution/substitutionActions";
 import { formatSchoolDate } from "@/backend/lib/timetable/getEffectiveTimetable";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 interface TeacherItem {
   id: string;
@@ -57,6 +58,7 @@ export default function SubstitutionClient({
 }: SubstitutionClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [data, setData] = useState(initialData);
@@ -301,9 +303,15 @@ export default function SubstitutionClient({
 
   // Cancel Absence
   const handleCancelCurrentAbsence = async (absenceId: string) => {
-    if (!confirm("Cancel this teacher absence? All associated substitutions will be reverted to the normal schedule.")) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Cancel Teacher Absence?",
+      message: "Are you sure you want to cancel this teacher absence? All associated substitutions will be reverted to the normal schedule.",
+      confirmText: "Cancel Absence",
+      cancelText: "Keep Absence",
+      variant: "danger"
+    });
+    if (!ok) return;
+
     startTransition(async () => {
       const res = await cancelAbsenceAction(absenceId);
       if (!res.success) {

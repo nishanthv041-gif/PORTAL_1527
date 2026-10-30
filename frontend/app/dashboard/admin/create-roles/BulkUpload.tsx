@@ -17,6 +17,7 @@ import {
   generateErrorReportAction
 } from "@/backend/api/actions/dashboard/admin/excel-import/actions";
 import { RowValidationResult, ExcelScanResult, ImportCommitResult } from "@/backend/lib/services/excelImportEngine";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 type ClassItem = {
   id: string;
@@ -46,6 +47,7 @@ export default function BulkUpload({
   classes?: ClassItem[];
 }) {
   const [isPending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
   // Active view tab in bulk upload
   const [activeTab, setActiveTab] = useState<"UPLOAD" | "HISTORY">("UPLOAD");
@@ -122,7 +124,15 @@ export default function BulkUpload({
   };
 
   const handleDeleteSingleHistory = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this import audit entry?")) return;
+    const ok = await confirm({
+      title: "Delete Import Audit Entry?",
+      message: "Are you sure you want to delete this import audit entry from the batch history?",
+      confirmText: "Delete Entry",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
+
     try {
       const res = await deleteImportBatchAction(id);
       if (res.success) {

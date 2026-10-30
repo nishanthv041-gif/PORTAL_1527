@@ -9,6 +9,7 @@ import { Student, Class, ParentStudent, Parent, User, Attendance } from "@prisma
 
 import { MoreVertical, Trash2 } from "lucide-react";
 import { activateStudent, deactivateStudent, deleteStudent } from "@/backend/api/actions/dashboard/admin/students/actions";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 type StudentWithRelations = Student & {
   class: Class | null;
@@ -26,6 +27,7 @@ export default function StudentListClient({ students, classes }: { students: Stu
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
   const router = useRouter();
+  const confirm = useConfirm();
 
   // Close action menu when clicking outside anywhere on the page or pressing Escape
   useEffect(() => {
@@ -248,12 +250,19 @@ export default function StudentListClient({ students, classes }: { students: Stu
                         {student.isActive ? (
                           <button
                             onClick={async () => {
-                              if (confirm("Are you sure you want to deactivate this student?")) {
-                                const res = await deactivateStudent(student.id);
-                                if (res?.error) alert(res.error);
-                                else router.refresh();
-                                setOpenMenuId(null);
-                              }
+                              const ok = await confirm({
+                                title: `Deactivate ${student.firstName} ${student.lastName}?`,
+                                message: "Are you sure you want to deactivate this student? Their academic history and records will be preserved.",
+                                confirmText: "Deactivate",
+                                cancelText: "Cancel",
+                                variant: "warning"
+                              });
+                              if (!ok) return;
+
+                              const res = await deactivateStudent(student.id);
+                              if (res?.error) alert(res.error);
+                              else router.refresh();
+                              setOpenMenuId(null);
                             }}
                             style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--warning)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
                           >
@@ -262,12 +271,19 @@ export default function StudentListClient({ students, classes }: { students: Stu
                         ) : (
                           <button
                             onClick={async () => {
-                              if (confirm("Are you sure you want to activate this student?")) {
-                                const res = await activateStudent(student.id);
-                                if (res?.error) alert(res.error);
-                                else router.refresh();
-                                setOpenMenuId(null);
-                              }
+                              const ok = await confirm({
+                                title: `Activate ${student.firstName} ${student.lastName}?`,
+                                message: "Are you sure you want to activate this student account?",
+                                confirmText: "Activate",
+                                cancelText: "Cancel",
+                                variant: "primary"
+                              });
+                              if (!ok) return;
+
+                              const res = await activateStudent(student.id);
+                              if (res?.error) alert(res.error);
+                              else router.refresh();
+                              setOpenMenuId(null);
                             }}
                             style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--success)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
                           >
@@ -276,12 +292,19 @@ export default function StudentListClient({ students, classes }: { students: Stu
                         )}
                         <button
                           onClick={async () => {
-                            if (confirm("WARNING: This will permanently delete this student and cannot be undone. Are you sure?")) {
-                              const res = await deleteStudent(student.id);
-                              if (res?.error) alert(res.error);
-                              else router.refresh();
-                              setOpenMenuId(null);
-                            }
+                            const ok = await confirm({
+                              title: `Delete Student ${student.firstName} ${student.lastName}?`,
+                              message: "WARNING: This will permanently delete this student and cannot be undone. All enrollments and marks will be removed.",
+                              confirmText: "Delete Student",
+                              cancelText: "Cancel",
+                              variant: "danger"
+                            });
+                            if (!ok) return;
+
+                            const res = await deleteStudent(student.id);
+                            if (res?.error) alert(res.error);
+                            else router.refresh();
+                            setOpenMenuId(null);
                           }}
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--danger)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
                         >

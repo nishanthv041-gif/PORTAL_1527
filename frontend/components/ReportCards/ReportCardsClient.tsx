@@ -5,6 +5,7 @@ import Link from "next/link";
 import { User, Book, FileText, ChevronRight, Save, Edit, Send, Mail, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { sendClassReportCardsToAllParentsAction } from "@/backend/lib/services/reportCardActions";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 type StudentData = {
   id: string;
@@ -50,6 +51,7 @@ interface ReportCardsClientProps {
 
 export default function ReportCardsClient({ classData, exams, subjects, marks, baseUrl }: ReportCardsClientProps) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [view, setView] = useState<"STUDENT" | "SUBJECT" | "CLASS">("STUDENT");
   const [selectedSubject, setSelectedSubject] = useState(subjects[0]?.id || "");
   const [selectedExam, setSelectedExam] = useState(exams[0]?.id || "");
@@ -64,9 +66,15 @@ export default function ReportCardsClient({ classData, exams, subjects, marks, b
   } | null>(null);
 
   const handleSendAllParents = async () => {
-    if (!confirm(`Are you sure you want to send report cards to all parents in Class ${classData.name} - ${classData.section}?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Send Report Cards to All Parents?",
+      message: `Are you sure you want to send report cards to all parents in Class ${classData.name} - ${classData.section}? Emails will be dispatched immediately.`,
+      confirmText: "Send All Report Cards",
+      cancelText: "Cancel",
+      variant: "primary"
+    });
+    if (!ok) return;
+
     setIsSendingAll(true);
     setBulkResult(null);
     try {

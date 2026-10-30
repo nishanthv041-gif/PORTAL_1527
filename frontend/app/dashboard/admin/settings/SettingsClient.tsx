@@ -9,6 +9,7 @@ import {
   Server, Save, Loader2, CheckCircle2
 } from "lucide-react";
 import styles from "./settings.module.css";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 const SETTINGS_CATEGORIES = [
   {
@@ -120,6 +121,7 @@ const SETTINGS_CATEGORIES = [
 
 export default function SettingsClient({ initialSettings }: { initialSettings: SystemSetting[] }) {
   const [activeTab, setActiveTab] = useState(SETTINGS_CATEGORIES[0].id);
+  const confirm = useConfirm();
   const [settingsValues, setSettingsValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     initialSettings.forEach(s => { initial[s.key] = s.value; });
@@ -137,8 +139,16 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
   };
 
   const handleActivateAll = async () => {
-    if (window.confirm("IMPORTANT: Activating all options is on your own responsibility. Do you want to proceed?")) {
-      const nextValues = { ...settingsValues };
+    const ok = await confirm({
+      title: "Activate All System Features?",
+      message: "IMPORTANT: Activating all system options enables open registrations and global permissions under your administrative responsibility. Do you want to proceed?",
+      confirmText: "Activate All",
+      cancelText: "Cancel",
+      variant: "warning"
+    });
+    if (!ok) return;
+
+    const nextValues = { ...settingsValues };
       const batch: any[] = [];
       
       SETTINGS_CATEGORIES.forEach(category => {
@@ -166,7 +176,6 @@ export default function SettingsClient({ initialSettings }: { initialSettings: S
         setTimeout(() => setSaveSuccess(false), 3000);
       }
       setIsSubmitting(false);
-    }
   };
 
   const handleSaveAll = async () => {

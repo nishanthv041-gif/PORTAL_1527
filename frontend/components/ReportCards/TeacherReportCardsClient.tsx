@@ -15,6 +15,7 @@ import {
 } from "@/backend/lib/services/reportCardActions";
 import ReportCardDocumentStudio from "./ReportCardDocumentStudio";
 import ReportCardDocumentScanModal from "./ReportCardDocumentScanModal";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 export type ClassSubject = {
   id: string;
@@ -105,6 +106,7 @@ export default function TeacherReportCardsClient({
   schoolLogo
 }: TeacherReportCardsClientProps) {
   const router = useRouter();
+  const confirm = useConfirm();
 
   // Active Tab: "CREATE", "STUDIO", or "HISTORY"
   const [activeTab, setActiveTab] = useState<"CREATE" | "STUDIO" | "HISTORY">("CREATE");
@@ -400,9 +402,14 @@ export default function TeacherReportCardsClient({
 
   // DELETE REPORT CARD FROM HISTORY (Teacher Exclusive Feature)
   const handleDeleteHistoryItem = async (reportCardId: string, studentName: string) => {
-    if (!confirm(`Are you sure you want to delete the report card for ${studentName}?\n\nThis will remove it from both your history and the parent's portal.`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Delete Report Card for ${studentName}?`,
+      message: `Are you sure you want to delete the report card for ${studentName}? This will permanently remove it from both your history and the parent's portal.`,
+      confirmText: "Delete Report Card",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
 
     setDeletingId(reportCardId);
     try {

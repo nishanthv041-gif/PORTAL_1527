@@ -31,6 +31,7 @@ import {
   Users,
   Check,
 } from "lucide-react";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 export interface SchoolClassOption {
   id: string;
@@ -57,6 +58,7 @@ export default function ProfessionalSchoolCalendar({
 }: ProfessionalSchoolCalendarProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
   const isAdmin = role === "ADMIN";
 
@@ -173,9 +175,16 @@ export default function ProfessionalSchoolCalendar({
     });
   };
 
-  const handleResetDayDefault = () => {
+  const handleResetDayDefault = async () => {
     if (!selectedDay || !isAdmin) return;
-    if (!confirm("Reset this date back to default calendar rules?")) return;
+    const ok = await confirm({
+      title: "Reset Date Rules?",
+      message: `Reset ${selectedDay.dateStr} back to standard school calendar rules? Custom working day / holiday settings will be removed.`,
+      confirmText: "Reset Date",
+      cancelText: "Cancel",
+      variant: "warning"
+    });
+    if (!ok) return;
 
     startTransition(async () => {
       const res = await deleteSchoolDayStatusAction(selectedDay.dateStr);
@@ -186,9 +195,16 @@ export default function ProfessionalSchoolCalendar({
     });
   };
 
-  const handleDeleteEvent = (id: string) => {
+  const handleDeleteEvent = async (id: string) => {
     if (!isAdmin) return;
-    if (!confirm("Are you sure you want to delete this event?")) return;
+    const ok = await confirm({
+      title: "Delete Calendar Event?",
+      message: "Are you sure you want to delete this event? This will remove it for all staff and students.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
 
     startTransition(async () => {
       await deleteEventAction(id);

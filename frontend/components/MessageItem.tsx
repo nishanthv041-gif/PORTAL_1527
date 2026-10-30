@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Edit2, Trash2, X, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 export default function MessageItem({
   message,
@@ -16,11 +17,19 @@ export default function MessageItem({
   const [editContent, setEditContent] = useState(message.content);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const confirm = useConfirm();
 
   if (message.isDeleted) return null;
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this message?")) return;
+    const ok = await confirm({
+      title: "Delete Message?",
+      message: "Are you sure you want to delete this message? This action cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
     
     setIsLoading(true);
     try {

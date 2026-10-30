@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Plus, Eye, EyeOff, Calendar as CalendarIcon, MapPin, Clock, Trash2, ChevronDown, ChevronUp, History, Bell, Send } from "lucide-react";
 import { createProgramAction, updateProgramStatusAction, deleteProgramAction, sendProgramNotificationToAllAction } from "@/backend/api/actions/dashboard/admin/programs/actions";
 import { CalendarEvent } from "@prisma/client";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 export default function ProgramsClient({ 
   programs,
@@ -20,6 +21,7 @@ export default function ProgramsClient({
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [notifyingId, setNotifyingId] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   // Close action menu when clicking outside anywhere on the page or pressing Escape
   useEffect(() => {
@@ -75,7 +77,15 @@ export default function ProgramsClient({
   };
 
   const handleSendNotification = async (id: string, title: string) => {
-    if (!confirm(`Send school program notification for "${title}" to everyone (all parents, teachers & staff)?`)) return;
+    const ok = await confirm({
+      title: "Broadcast Program Notification?",
+      message: `Send school program notification for "${title}" to everyone (all parents, teachers & staff)?`,
+      confirmText: "Broadcast",
+      cancelText: "Cancel",
+      variant: "primary"
+    });
+    if (!ok) return;
+
     setNotifyingId(id);
     setOpenMenuId(null);
     const res = await sendProgramNotificationToAllAction(id);
@@ -94,7 +104,15 @@ export default function ProgramsClient({
   };
 
   const handleDelete = async (id: string, title: string) => {
-    if (!confirm(`Delete "${title}"?\n\nThis action cannot be undone.`)) return;
+    const ok = await confirm({
+      title: `Delete "${title}"?`,
+      message: `Are you sure you want to delete this program? This action cannot be undone.`,
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
+
     setDeletingId(id);
     setOpenMenuId(null);
     const res = await deleteProgramAction(id);

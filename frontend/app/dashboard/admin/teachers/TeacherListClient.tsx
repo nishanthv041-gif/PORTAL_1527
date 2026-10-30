@@ -7,6 +7,7 @@ import Link from "next/link";
 import { deactivateTeacher, assignClassTeacher, deleteTeacher } from "@/backend/api/actions/dashboard/admin/teachers/actions";
 import { Teacher, User, Class, Subject } from "@prisma/client";
 import { MoreVertical } from "lucide-react";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 type TeacherWithRelations = Teacher & {
   user: User;
@@ -23,6 +24,7 @@ export default function TeacherListClient({ teachers, allClasses, allSubjects }:
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
   const router = useRouter();
+  const confirm = useConfirm();
 
   // Close action menu when clicking outside anywhere on the page or pressing Escape
   useEffect(() => {
@@ -72,11 +74,18 @@ export default function TeacherListClient({ teachers, allClasses, allSubjects }:
   const paginatedTeachers = filteredTeachers.slice(startIndex, startIndex + pageSize);
 
   const handleDeactivate = async (id: string) => {
-    if (confirm("Are you sure you want to deactivate this teacher?")) {
-      await deactivateTeacher(id);
-      setOpenMenuId(null);
-      router.refresh();
-    }
+    const ok = await confirm({
+      title: "Deactivate Teacher?",
+      message: "Are you sure you want to deactivate this teacher? They will not be able to log in, but historical class records and assignments are preserved.",
+      confirmText: "Deactivate",
+      cancelText: "Cancel",
+      variant: "warning"
+    });
+    if (!ok) return;
+
+    await deactivateTeacher(id);
+    setOpenMenuId(null);
+    router.refresh();
   };
 
   const handleAssignClassTeacher = async (teacherId: string, classId: string) => {
@@ -240,12 +249,19 @@ export default function TeacherListClient({ teachers, allClasses, allSubjects }:
                         )}
                         <button 
                           onClick={async () => {
-                            if (confirm("WARNING: This will permanently delete this teacher and cannot be undone. Are you sure?")) {
-                              const res = await deleteTeacher(teacher.id);
-                              if (res?.error) alert(res.error);
-                              else router.refresh();
-                              setOpenMenuId(null);
-                            }
+                            const ok = await confirm({
+                              title: `Delete Teacher "${teacher.user.name}"?`,
+                              message: "WARNING: This will permanently delete this teacher record and credentials. This action cannot be undone.",
+                              confirmText: "Delete Teacher",
+                              cancelText: "Cancel",
+                              variant: "danger"
+                            });
+                            if (!ok) return;
+
+                            const res = await deleteTeacher(teacher.id);
+                            if (res?.error) alert(res.error);
+                            else router.refresh();
+                            setOpenMenuId(null);
                           }}
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--danger)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
                         >

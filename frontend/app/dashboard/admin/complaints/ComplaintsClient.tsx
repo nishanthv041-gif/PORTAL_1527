@@ -26,6 +26,7 @@ import {
   deleteComplaintAction
 } from "@/backend/api/actions/dashboard/admin/complaints/actions";
 import ComplaintConversationModal, { ComplaintMessageItem } from "@/frontend/components/complaints/ComplaintConversationModal";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import styles from "../../dashboard.module.css";
 
 export type StudentLookupOption = {
@@ -116,6 +117,7 @@ export default function ComplaintsClient({
   currentUser
 }: ComplaintsClientProps) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [complaints, setComplaints] = useState<AdminComplaintItem[]>(initialComplaints);
 
   // Search & Filter state
@@ -245,7 +247,14 @@ export default function ComplaintsClient({
 
   // Handle Delete
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this complaint? This cannot be undone.")) return;
+    const ok = await confirm({
+      title: "Delete Complaint?",
+      message: "Are you sure you want to delete this complaint record? All linked responses and audit logs will be permanently removed.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
 
     const res = await deleteComplaintAction(id);
     if (res.success) {

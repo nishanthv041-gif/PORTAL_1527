@@ -17,6 +17,7 @@ import {
   deleteBatchAction
 } from "@/backend/api/actions/dashboard/admin/batches/actions";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 interface BatchClassItem {
   id: string;
@@ -55,6 +56,7 @@ export default function BatchManagementClient({
   unassignedClasses: initialUnassignedClasses
 }: BatchManagementClientProps) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState<"OVERVIEW" | "ALL_BATCHES" | "ALUMNI" | "AUDIT">("OVERVIEW");
   const [showWizard, setShowWizard] = useState<boolean>(false);
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
@@ -187,8 +189,15 @@ export default function BatchManagementClient({
   };
 
   // Handle Set Current Batch
-  const handleSetCurrent = (batchId: string, batchName: string) => {
-    if (!confirm(`Are you sure you want to set Batch '${batchName}' as the active academic session?`)) return;
+  const handleSetCurrent = async (batchId: string, batchName: string) => {
+    const ok = await confirm({
+      title: `Set Active Session: ${batchName}?`,
+      message: `Are you sure you want to set Batch '${batchName}' as the active academic session? Portal promotions, classes, and records will reference this session.`,
+      confirmText: "Set Active",
+      cancelText: "Cancel",
+      variant: "primary"
+    });
+    if (!ok) return;
 
     setFeedbackError(null);
     setFeedbackSuccess(null);

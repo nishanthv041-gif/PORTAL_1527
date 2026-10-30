@@ -4,15 +4,22 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCheck, Loader2 } from "lucide-react";
 import { clearAllNotificationsAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 export default function ClearAllNotificationsButton() {
   const [isClearing, setIsClearing] = useState(false);
   const router = useRouter();
+  const confirm = useConfirm();
 
   const handleClear = async () => {
-    if (!confirm("Clear all notifications? This will mark all your notifications as read and silence alerts.")) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Clear All Notifications?",
+      message: "Are you sure you want to clear all notifications? This will mark all your notifications as read and silence active alerts.",
+      confirmText: "Clear All",
+      cancelText: "Cancel",
+      variant: "warning"
+    });
+    if (!ok) return;
 
     setIsClearing(true);
     try {

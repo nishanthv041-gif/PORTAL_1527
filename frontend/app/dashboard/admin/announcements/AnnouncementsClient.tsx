@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Megaphone, Clock, Trash2, Users, BookOpen, GraduationCap, Link as LinkIcon, AlertCircle, Edit2 } from "lucide-react";
 import { createAnnouncementAction, deleteAnnouncementAction } from "@/backend/api/actions/dashboard/admin/announcements/actions";
 import { Announcement, Class } from "@prisma/client";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 export default function AnnouncementsClient({ announcements, classes }: { announcements: Announcement[], classes: Class[] }) {
   const [activeTab, setActiveTab] = useState<"TEACHER" | "PARENT">("TEACHER");
@@ -14,6 +15,7 @@ export default function AnnouncementsClient({ announcements, classes }: { announ
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const router = useRouter();
+  const confirm = useConfirm();
 
   const handleEditClick = (announcement: Announcement) => {
     setEditingId(announcement.id);
@@ -73,10 +75,17 @@ export default function AnnouncementsClient({ announcements, classes }: { announ
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this announcement?")) {
-      const res = await deleteAnnouncementAction(id);
-      if (res.error) alert(res.error);
-    }
+    const ok = await confirm({
+      title: "Delete Announcement?",
+      message: "Are you sure you want to delete this announcement? It will be removed from all recipient portals immediately.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
+
+    const res = await deleteAnnouncementAction(id);
+    if (res.error) alert(res.error);
   };
 
   const getTargetIcon = (type: string) => {

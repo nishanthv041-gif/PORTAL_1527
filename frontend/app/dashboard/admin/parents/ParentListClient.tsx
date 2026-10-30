@@ -5,6 +5,7 @@ import { Search, Eye, CheckCircle2, XCircle, MoreVertical, Trash2, Download } fr
 import Link from "next/link";
 import { deactivateParent, activateParent, deleteParent } from "@/backend/api/actions/dashboard/admin/parents/actions";
 import { Parent, User, ParentStudent, Student, Class } from "@prisma/client";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 type ParentWithRelations = Parent & {
   user: User;
@@ -27,6 +28,7 @@ export default function ParentListClient({
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
+  const confirm = useConfirm();
 
   // Close action menu when clicking outside anywhere on the page or pressing Escape
   useEffect(() => {
@@ -273,10 +275,17 @@ export default function ParentListClient({
                         {parent.isActive ? (
                           <button 
                             onClick={async () => {
-                              if (confirm("Are you sure you want to deactivate this parent? Their linked student records will NOT be deleted.")) {
-                                await deactivateParent(parent.id);
-                                setOpenMenuId(null);
-                              }
+                              const ok = await confirm({
+                                title: `Deactivate Parent Account?`,
+                                message: `Are you sure you want to deactivate ${parent.user.name}'s account? Their linked student records will NOT be deleted.`,
+                                confirmText: "Deactivate",
+                                cancelText: "Cancel",
+                                variant: "warning"
+                              });
+                              if (!ok) return;
+
+                              await deactivateParent(parent.id);
+                              setOpenMenuId(null);
                             }}
                             style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--warning)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
                           >
@@ -285,10 +294,17 @@ export default function ParentListClient({
                         ) : (
                           <button 
                             onClick={async () => {
-                              if (confirm("Are you sure you want to activate this parent?")) {
-                                await activateParent(parent.id);
-                                setOpenMenuId(null);
-                              }
+                              const ok = await confirm({
+                                title: `Activate Parent Account?`,
+                                message: `Are you sure you want to activate ${parent.user.name}'s account?`,
+                                confirmText: "Activate",
+                                cancelText: "Cancel",
+                                variant: "primary"
+                              });
+                              if (!ok) return;
+
+                              await activateParent(parent.id);
+                              setOpenMenuId(null);
                             }}
                             style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--success)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
                           >
@@ -297,11 +313,18 @@ export default function ParentListClient({
                         )}
                         <button 
                           onClick={async () => {
-                            if (confirm("WARNING: This will permanently delete this parent and cannot be undone. Are you sure?")) {
-                              const res = await deleteParent(parent.id);
-                              if (res?.error) alert(res.error);
-                              setOpenMenuId(null);
-                            }
+                            const ok = await confirm({
+                              title: `Delete Parent "${parent.user.name}"?`,
+                              message: "WARNING: This will permanently delete this parent account and cannot be undone. Are you sure?",
+                              confirmText: "Delete Parent",
+                              cancelText: "Cancel",
+                              variant: "danger"
+                            });
+                            if (!ok) return;
+
+                            const res = await deleteParent(parent.id);
+                            if (res?.error) alert(res.error);
+                            setOpenMenuId(null);
                           }}
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--danger)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
                         >

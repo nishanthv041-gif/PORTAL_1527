@@ -50,6 +50,7 @@ import type {
   PeriodType
 } from "@/backend/lib/timetable/timetableTypes";
 import TimetableScanModal from "./TimetableScanModal";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 const DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 const SHORT_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -143,6 +144,7 @@ export default function TimetableClient({
 }: TimetableClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const confirm = useConfirm();
 
   const [selectedClass, setSelectedClass] = useState(initialClassId);
   const [selectedWeek, setSelectedWeek] = useState(weekOf);
@@ -199,23 +201,32 @@ export default function TimetableClient({
 
   // Dynamically resolve subjects for currently selected class, falling back to all subjects
   const currentClassSubjects = useMemo(() => {
+    let list: Array<{
+      id: string;
+      name: string;
+      code: string;
+      classId?: string | null;
+      teacherId?: string | null;
+      teacher?: { id: string; user?: { name: string } | null } | null;
+    }> = [];
+
     // 1. If allSubjects is provided, check for subjects matching selectedClass
     if (allSubjects && allSubjects.length > 0) {
       const classSpecific = allSubjects.filter(s => s.classId === selectedClass);
-      if (classSpecific.length > 0) return classSpecific;
+      if (classSpecific.length > 0) list = classSpecific;
     }
 
     // 2. Check availableSubjects
-    if (availableSubjects && availableSubjects.length > 0) {
+    if (list.length === 0 && availableSubjects && availableSubjects.length > 0) {
       const classSpecific = availableSubjects.filter(s => !s.classId || s.classId === selectedClass);
-      if (classSpecific.length > 0) return classSpecific;
-      return availableSubjects;
+      if (classSpecific.length > 0) list = classSpecific;
+      else list = availableSubjects;
     }
 
     // 3. Fallback to distinct subjects across the school so the dropdown is NEVER empty
-    if (allSubjects && allSubjects.length > 0) {
+    if (list.length === 0 && allSubjects && allSubjects.length > 0) {
       const seen = new Set<string>();
-      return allSubjects.filter(s => {
+      list = allSubjects.filter(s => {
         const key = s.name.trim().toUpperCase();
         if (seen.has(key)) return false;
         seen.add(key);
@@ -223,7 +234,18 @@ export default function TimetableClient({
       });
     }
 
-    return [];
+    // 4. Default school subjects safety fallback
+    if (list.length === 0) {
+      list = [
+        { id: "fallback-tamil", name: "TAMIL", code: "TAM001", classId: selectedClass, teacherId: null, teacher: null },
+        { id: "fallback-english", name: "ENGLISH", code: "ENG002", classId: selectedClass, teacherId: null, teacher: null },
+        { id: "fallback-maths", name: "MATHEMATICS", code: "MAT001", classId: selectedClass, teacherId: null, teacher: null },
+        { id: "fallback-science", name: "SCIENCE", code: "SCI002", classId: selectedClass, teacherId: null, teacher: null },
+        { id: "fallback-social", name: "SOCIAL SCIENCE", code: "SOCI001", classId: selectedClass, teacherId: null, teacher: null },
+      ];
+    }
+
+    return list;
   }, [allSubjects, availableSubjects, selectedClass]);
 
   // Assign consistent colors to subjects
@@ -308,17 +330,24 @@ export default function TimetableClient({
 
   // Delete slot
   const deleteSlot = async (id: string) => {
-    if (confirm("Remove this period slot from the timetable?")) {
-      startTransition(async () => {
-        const res = await deleteTimetableSlotAction(id);
-        if (res.error) {
-          setActionError(res.error);
-        } else {
-          setActionSuccess("Slot removed successfully.");
-          router.refresh();
-        }
-      });
-    }
+    const ok = await confirm({
+      title: "Remove Period Slot?",
+      message: "Are you sure you want to remove this period slot from the timetable? This cannot be undone.",
+      confirmText: "Remove Slot",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
+
+    startTransition(async () => {
+      const res = await deleteTimetableSlotAction(id);
+      if (res.error) {
+        setActionError(res.error);
+      } else {
+        setActionSuccess("Slot removed successfully.");
+        router.refresh();
+      }
+    });
   };
 
   // Publish timetable for currently selected class (zero blocking)
@@ -338,9 +367,15 @@ export default function TimetableClient({
 
   // Publish All Classes at once with one click
   const handlePublishAll = async () => {
-    if (!confirm("Publish timetable for ALL classes? Parents and teachers across all grades will see the published schedule.")) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Publish All Timetables?",
+      message: "Publish timetable for ALL classes? Parents and teachers across all grades will see the published schedule.",
+      confirmText: "Publish All",
+      cancelText: "Cancel",
+      variant: "primary"
+    });
+    if (!ok) return;
+
     setActionError(null);
     setActionSuccess(null);
     startTransition(async () => {
@@ -356,9 +391,15 @@ export default function TimetableClient({
 
   // Unpublish all classes (revert to Draft)
   const handleUnpublishAll = async () => {
-    if (!confirm("Revert all timetables to DRAFT? Schedules will be hidden from parent & student views until published again.")) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Revert to Draft?",
+      message: "Revert all timetables to DRAFT? Schedules will be hidden from parent & student views until published again.",
+      confirmText: "Revert to Draft",
+      cancelText: "Cancel",
+      variant: "warning"
+    });
+    if (!ok) return;
+
     setActionError(null);
     setActionSuccess(null);
     startTransition(async () => {
@@ -374,9 +415,15 @@ export default function TimetableClient({
 
   // Clear timetable for selected class
   const handleClearTimetable = async () => {
-    if (!confirm(`Are you sure you want to clear the entire timetable for ${selectedClassName}? This cannot be undone.`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Clear Timetable for ${selectedClassName}?`,
+      message: `Are you sure you want to clear the entire timetable for ${selectedClassName}? All scheduled lessons and assignments will be removed. This cannot be undone.`,
+      confirmText: "Clear Timetable",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
+
     startTransition(async () => {
       const res = await clearClassTimetableAction(selectedClass);
       if (!res.success) {

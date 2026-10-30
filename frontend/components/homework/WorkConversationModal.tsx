@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { MessageSquare, Send, Trash2, X, RefreshCw, BookOpen, GraduationCap } from "lucide-react";
 import { addHomeworkComment, getHomeworkComments, deleteHomeworkComment } from "@/backend/api/actions/dashboard/teacher/assignments/actions";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 export type CommentItem = {
   id: string;
@@ -42,6 +43,7 @@ export default function WorkConversationModal({
   onClose,
   onCommentsUpdated
 }: WorkConversationModalProps) {
+  const confirm = useConfirm();
   const [comments, setComments] = useState<CommentItem[]>(initialComments);
   const [inputText, setInputText] = useState("");
   const [sending, setSending] = useState(false);
@@ -104,7 +106,14 @@ export default function WorkConversationModal({
   };
 
   const handleDeleteComment = async (commentId: string) => {
-    if (!confirm("Are you sure you want to delete this message?")) return;
+    const ok = await confirm({
+      title: "Delete Message?",
+      message: "Are you sure you want to delete this message? This cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
 
     const res = await deleteHomeworkComment(commentId);
     if (res.success) {

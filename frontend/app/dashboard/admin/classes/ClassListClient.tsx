@@ -14,6 +14,7 @@ import {
   deleteClassGroupByNameAction 
 } from "@/backend/api/actions/dashboard/admin/classes/actions";
 import { Class, Teacher, User, Student, Attendance } from "@prisma/client";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 const CLASS_OPTIONS = Array.from({ length: 12 }, (_, i) => `Class ${i + 1}`);
 const SECTION_OPTIONS = ["A", "B", "C", "D", "E"];
@@ -33,6 +34,7 @@ export default function ClassListClient({
   teachers: TeacherWithUser[]; 
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [classList, setClassList] = useState(classes);
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -158,9 +160,14 @@ export default function ClassListClient({
 
   // Class-wise Delete (Deletes entire class group)
   const handleDeleteClassGroup = async (className: string) => {
-    if (!confirm(`WARNING: This will permanently delete "${className}" and all its sections. Enrolled students will be preserved and unassigned. This cannot be undone. Are you sure?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Delete Class "${className}"?`,
+      message: `WARNING: This will permanently delete "${className}" and all its sections. Enrolled students will be preserved and unassigned. This cannot be undone.`,
+      confirmText: "Delete Class Group",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
 
     const previousList = [...classList];
     // 0ms instant optimistic removal
@@ -177,9 +184,14 @@ export default function ClassListClient({
 
   // Section-wise Delete
   const handleDeleteSection = async (sectionId: string, className: string, sectionName: string) => {
-    if (!confirm(`WARNING: Are you sure you want to permanently delete ${className} - Section ${sectionName}?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Delete ${className} - Section ${sectionName}?`,
+      message: `WARNING: Are you sure you want to permanently delete ${className} - Section ${sectionName}? This action cannot be undone.`,
+      confirmText: "Delete Section",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
 
     const previousList = [...classList];
     setClassList(prev => prev.filter(c => c.id !== sectionId));

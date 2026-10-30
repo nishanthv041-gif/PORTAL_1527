@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle, XCircle, Clock, Calendar, User, AlertTriangle } from "lucide-react";
 import { acceptLeaveRequest, rejectLeaveRequest } from "@/backend/api/actions/dashboard/teacher/leaves/actions";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 interface StudentLeave {
   id: string;
@@ -23,11 +24,17 @@ export default function TeacherLeavesClient({ initialLeaves }: { initialLeaves: 
   const [leaves, setLeaves] = useState<StudentLeave[]>(initialLeaves);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const confirm = useConfirm();
 
   const handleAccept = async (id: string, studentName: string) => {
-    if (!confirm(`Accept and approve leave request for ${studentName}? This will automatically mark their attendance as "LEAVE" for all dates in this period.`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Approve Leave for ${studentName}?`,
+      message: `Accept and approve leave request for ${studentName}? This will automatically mark their attendance as "LEAVE" for all dates in this period.`,
+      confirmText: "Approve Leave",
+      cancelText: "Cancel",
+      variant: "primary"
+    });
+    if (!ok) return;
 
     setProcessingId(id);
     setMessage(null);
@@ -49,9 +56,14 @@ export default function TeacherLeavesClient({ initialLeaves }: { initialLeaves: 
   };
 
   const handleReject = async (id: string, studentName: string) => {
-    if (!confirm(`Decline / reject leave request for ${studentName}?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Reject Leave for ${studentName}?`,
+      message: `Are you sure you want to decline / reject this leave request for ${studentName}?`,
+      confirmText: "Decline Leave",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
 
     setProcessingId(id);
     setMessage(null);

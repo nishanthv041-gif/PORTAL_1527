@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, ShieldAlert, Calendar, User, FileText, Trash2, ShieldCheck, Shield } from "lucide-react";
 import { createDisciplineRecordAction, deleteDisciplineRecordAction } from "@/backend/api/actions/dashboard/admin/discipline/actions";
 import { DisciplineRecord, Student, Class } from "@prisma/client";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 type StudentWithClass = Student & { class: Class | null };
 type DisciplineRecordWithRelations = DisciplineRecord & { student: StudentWithClass };
@@ -11,6 +12,7 @@ type DisciplineRecordWithRelations = DisciplineRecord & { student: StudentWithCl
 export default function DisciplineClient({ records, students }: { records: DisciplineRecordWithRelations[], students: StudentWithClass[] }) {
   const [showCreate, setShowCreate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const confirm = useConfirm();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -26,10 +28,17 @@ export default function DisciplineClient({ records, students }: { records: Disci
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this record?")) {
-      const res = await deleteDisciplineRecordAction(id);
-      if (res.error) alert(res.error);
-    }
+    const ok = await confirm({
+      title: "Delete Discipline Record?",
+      message: "Are you sure you want to delete this discipline record? This action cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
+
+    const res = await deleteDisciplineRecordAction(id);
+    if (res.error) alert(res.error);
   };
 
   const getSeverityIcon = (severity: string) => {

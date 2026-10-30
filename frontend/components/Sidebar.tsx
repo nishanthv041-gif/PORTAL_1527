@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState, useEffect } from "react";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import styles from "./Sidebar.module.css";
 import { 
   Menu,
@@ -36,6 +37,7 @@ import {
 export default function Sidebar({ role, settings = {} }: { role: string; settings?: Record<string, string> }) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const confirm = useConfirm();
 
   useEffect(() => {
     // Close mobile menu on route change
@@ -176,7 +178,16 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
       </nav>
       <div className={styles.logoutWrapper}>
         <button 
-          onClick={() => {
+          onClick={async () => {
+            const ok = await confirm({
+              title: "Sign out of School Portal?",
+              message: "Are you sure you want to log out? Any unsaved changes in progress will be lost.",
+              confirmText: "Sign Out",
+              cancelText: "Stay Logged In",
+              variant: "primary"
+            });
+            if (!ok) return;
+
             try {
               sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
               sessionStorage.removeItem("srt_portal_fresh_login");

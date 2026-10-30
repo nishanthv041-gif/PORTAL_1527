@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import styles from "../users/users.module.css";
 import { Plus, Mail, CheckCircle, Loader2 } from "lucide-react";
 import { User, Parent } from "@prisma/client";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 type UserWithParent = User & { parent: Parent | null };
 
@@ -12,6 +13,7 @@ export default function ParentEmailsPage() {
   const [loading, setLoading] = useState(true);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
+  const confirm = useConfirm();
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -55,9 +57,15 @@ export default function ParentEmailsPage() {
   const [isSendingAll, setIsSendingAll] = useState(false);
 
   const handleSendAllInvites = async () => {
-    if (!confirm(`Are you sure you want to send portal invitation emails to all ${users.length} registered parents?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Send Invitation Emails?",
+      message: `Are you sure you want to send portal invitation emails to all ${users.length} registered parents?`,
+      confirmText: "Send All Invitations",
+      cancelText: "Cancel",
+      variant: "primary"
+    });
+    if (!ok) return;
+
     setIsSendingAll(true);
     let successCount = 0;
     const newSentIds = new Set(sentIds);

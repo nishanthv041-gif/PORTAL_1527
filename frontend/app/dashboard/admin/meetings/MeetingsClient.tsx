@@ -19,6 +19,7 @@ import {
   getDayOfWeekFromDate
 } from "./meetingUtils";
 import { Meeting, Teacher, Parent, User, Class } from "@prisma/client";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 export type TimetableSlotItem = {
   id: string;
@@ -63,6 +64,7 @@ export default function MeetingsClient({
 }: MeetingsClientProps) {
   // Navigation / Page Tab State: "PARENTS" or "TEACHERS"
   const [activeTab, setActiveTab] = useState<"PARENTS" | "TEACHERS">("PARENTS");
+  const confirm = useConfirm();
 
   // Filtering & Search
   const [searchQuery, setSearchQuery] = useState("");
@@ -321,10 +323,15 @@ export default function MeetingsClient({
   };
 
   // Handle Delete Meeting
-  const handleDeleteMeeting = (meetingId: string, topic: string) => {
-    if (!confirm(`Are you sure you want to delete the meeting '${topic}'? This will also remove any linked calendar event.`)) {
-      return;
-    }
+  const handleDeleteMeeting = async (meetingId: string, topic: string) => {
+    const ok = await confirm({
+      title: `Delete Meeting: "${topic}"?`,
+      message: `Are you sure you want to delete the meeting '${topic}'? This will also remove any linked calendar events and notifications. This cannot be undone.`,
+      confirmText: "Delete Meeting",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
 
     setDeletingId(meetingId);
     setFeedbackError(null);
