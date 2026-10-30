@@ -110,12 +110,14 @@ export async function savePeriodSlotsAction(
       }))
     });
 
-    // Update existing timetable slot times to match the new period configuration.
-    // Run as parallel batch — prisma.timetable.updateMany() is idempotent here.
-    await Promise.all(
-      slots.map((slot, i) => {
-        const isNonTeaching = slot.type === "BREAK" || slot.type === "LUNCH";
-        return prisma.timetable.updateMany({
+    // 3. Update existing timetable slot times to match the new period configuration.
+    // Execute sequentially so we don't saturate Neon/PgBouncer connection pooler
+    // which caused "Transaction not found" errors when executed via Promise.all.
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      const isNonTeaching = slot.type === "BREAK" || slot.type === "LUNCH";
+      try {
+        await prisma.timetable.updateMany({
           where: {
             period: i + 1,
             ...(targetClassId ? { classId: targetClassId } : {})
@@ -127,8 +129,28 @@ export async function savePeriodSlotsAction(
             isBreak: isNonTeaching
           }
         });
-      })
-    );
+      } catch (err: any) {
+        console.warn(`Warning updating slot period ${i + 1}:`, err?.message);
+        // Retry once on transient transaction error
+        try {
+          await new Promise((r) => setTimeout(r, 200));
+          await prisma.timetable.updateMany({
+            where: {
+              period: i + 1,
+              ...(targetClassId ? { classId: targetClassId } : {})
+            },
+            data: {
+              startTime: slot.startTime,
+              endTime: slot.endTime,
+              slotType: slot.type,
+              isBreak: isNonTeaching
+            }
+          });
+        } catch (retryErr) {
+          console.warn(`Retry failed for slot period ${i + 1}:`, retryErr);
+        }
+      }
+    }
 
     revalidatePath("/dashboard/admin/timetable");
     revalidatePath("/dashboard/teacher/timetable");

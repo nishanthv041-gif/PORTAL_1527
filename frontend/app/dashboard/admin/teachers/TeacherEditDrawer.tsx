@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import {
   X, User, Mail, Phone, BookOpen, GraduationCap, Calendar, Shield, Key, Eye, EyeOff,
   Copy, Check, AlertTriangle, Trash2, CheckCircle2, XCircle, Sparkles, Loader2, Link2
@@ -125,7 +126,23 @@ export default function TeacherEditDrawer({
     }
   }, [isOpen, teacher]);
 
-  if (!isOpen) return null;
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
+
+  if (!isOpen || !mounted) return null;
 
   // Password strength calculation
   const getPasswordStrength = (pass: string) => {
@@ -310,7 +327,7 @@ export default function TeacherEditDrawer({
     }
   };
 
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed",
@@ -1111,6 +1128,7 @@ export default function TeacherEditDrawer({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -17,6 +17,7 @@ import {
   deleteBatchAction
 } from "@/backend/api/actions/dashboard/admin/batches/actions";
 import { useRouter } from "next/navigation";
+import { Modal } from "@/frontend/components/ui";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 interface BatchClassItem {
@@ -1153,509 +1154,376 @@ export default function BatchManagementClient({
       )}
 
       {/* ======================================================== */}
-      {/* CREATE BATCH MODAL */}
+      {/* CREATE BATCH MODAL (PORTALED SHARED MODAL) */}
       {/* ======================================================== */}
-      {showCreateModal && (
-        <div style={{
-          position: "fixed",
-          inset: 0,
-          backgroundColor: "rgba(0, 0, 0, 0.6)",
-          backdropFilter: "blur(4px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 9999,
-          padding: "1rem"
-        }}>
-          <div style={{
-            backgroundColor: "var(--card-bg, #ffffff)",
-            borderRadius: "16px",
-            border: "1px solid var(--border-color)",
-            width: "100%",
-            maxWidth: "500px",
-            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-            overflow: "hidden"
-          }}>
-            <div style={{
-              padding: "1.25rem 1.5rem",
-              borderBottom: "1px solid var(--border-color)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between"
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Plus size={18} color="var(--primary)" />
-                <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700 }}>Create New Academic Batch</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateBatch} style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 700, marginBottom: "0.35rem" }}>
-                  Batch Name (e.g. "25-26" or "2025-2026") *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. 25-26 or 2026-2027"
-                  value={newBatchName}
-                  onChange={(e) => setNewBatchName(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.6rem 0.75rem",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border-color)",
-                    backgroundColor: "transparent",
-                    color: "var(--foreground)",
-                    fontSize: "0.9375rem"
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 700, marginBottom: "0.35rem" }}>
-                  Academic Year Description (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Academic Year 2026-2027"
-                  value={newBatchAcademicYear}
-                  onChange={(e) => setNewBatchAcademicYear(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.6rem 0.75rem",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border-color)",
-                    backgroundColor: "transparent",
-                    color: "var(--foreground)",
-                    fontSize: "0.875rem"
-                  }}
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    value={newBatchStartDate}
-                    onChange={(e) => setNewBatchStartDate(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "0.5rem 0.75rem",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border-color)",
-                      backgroundColor: "transparent",
-                      color: "var(--foreground)",
-                      fontSize: "0.875rem"
-                    }}
-                  />
-                  <span style={{ display: "block", fontSize: "0.725rem", color: "var(--text-secondary)", marginTop: "0.3rem", lineHeight: 1.35 }}>
-                    📅 <strong>Calendar &amp; Attendance:</strong> Connects to School Calendar and starts day-to-day working day attendance count from this date.
-                  </span>
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                    End Date
-                  </label>
-                  <input
-                    type="date"
-                    value={newBatchEndDate}
-                    onChange={(e) => setNewBatchEndDate(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "0.5rem 0.75rem",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border-color)",
-                      backgroundColor: "transparent",
-                      color: "var(--foreground)",
-                      fontSize: "0.875rem"
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.25rem" }}>
-                <input
-                  type="checkbox"
-                  id="batchIsCurrentCheckbox"
-                  checked={newBatchIsCurrent}
-                  onChange={(e) => setNewBatchIsCurrent(e.target.checked)}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                />
-                <label htmlFor="batchIsCurrentCheckbox" style={{ fontSize: "0.875rem", fontWeight: 600, cursor: "pointer" }}>
-                  Set as current active academic session immediately
-                </label>
-              </div>
-
-              <div style={{
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Create New Academic Batch"
+        icon={<Plus size={18} color="var(--primary)" />}
+        size="form"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(false)}
+              disabled={isPending}
+              style={{
+                padding: "0.5rem 1rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color)",
+                backgroundColor: "transparent",
+                color: "var(--foreground)",
+                fontSize: "0.875rem",
+                cursor: "pointer",
+                fontWeight: 600
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="create-batch-form"
+              disabled={isPending}
+              style={{
+                padding: "0.5rem 1.25rem",
+                borderRadius: "8px",
+                border: "none",
+                backgroundColor: "var(--primary, #6366f1)",
+                color: "#ffffff",
+                fontSize: "0.875rem",
+                cursor: "pointer",
+                fontWeight: 700,
                 display: "flex",
-                justifyContent: "flex-end",
-                gap: "0.75rem",
-                marginTop: "0.5rem",
-                paddingTop: "1rem",
-                borderTop: "1px solid var(--border-color)"
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  disabled={isPending}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border-color)",
-                    backgroundColor: "transparent",
-                    color: "var(--foreground)",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                    fontWeight: 600
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  style={{
-                    padding: "0.5rem 1.25rem",
-                    borderRadius: "8px",
-                    border: "none",
-                    backgroundColor: "var(--primary, #6366f1)",
-                    color: "#ffffff",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                    fontWeight: 700,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.4rem"
-                  }}
-                >
-                  {isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Create Batch
-                </button>
-              </div>
-            </form>
+                alignItems: "center",
+                gap: "0.4rem"
+              }}
+            >
+              {isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Create Batch
+            </button>
+          </>
+        }
+      >
+        <form id="create-batch-form" onSubmit={handleCreateBatch} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div>
+            <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+              Batch Name (e.g. "25-26" or "2025-2026") *
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. 25-26 or 2026-2027"
+              value={newBatchName}
+              onChange={(e) => setNewBatchName(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.55rem 0.75rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color)",
+                backgroundColor: "transparent",
+                color: "var(--foreground)",
+                fontSize: "0.9375rem"
+              }}
+            />
           </div>
-        </div>
-      )}
 
-      {/* ======================================================== */}
-      {/* EDIT BATCH DATES & DETAILS MODAL */}
-      {/* ======================================================== */}
-      {editingBatch && (
-        <div style={{
-          position: "fixed",
-          inset: 0,
-          backgroundColor: "rgba(0, 0, 0, 0.6)",
-          backdropFilter: "blur(4px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 9999,
-          padding: "1rem"
-        }}>
-          <div style={{
-            backgroundColor: "var(--card-bg, #ffffff)",
-            borderRadius: "16px",
-            border: "1px solid var(--border-color)",
-            width: "100%",
-            maxWidth: "500px",
-            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-            overflow: "hidden"
-          }}>
-            <div style={{
-              padding: "1.25rem 1.5rem",
-              borderBottom: "1px solid var(--border-color)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between"
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Edit3 size={18} color="var(--primary)" />
-                <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700 }}>
-                  Edit Dates &amp; Details: Batch {editingBatch.name}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingBatch(null)}
-                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEditDates} style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 700, marginBottom: "0.35rem" }}>
-                  Batch Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editBatchName}
-                  onChange={(e) => setEditBatchName(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.6rem 0.75rem",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border-color)",
-                    backgroundColor: "transparent",
-                    color: "var(--foreground)",
-                    fontSize: "0.9375rem"
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 700, marginBottom: "0.35rem" }}>
-                  Academic Year Description (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Academic Year 2026-2027"
-                  value={editBatchAcademicYear}
-                  onChange={(e) => setEditBatchAcademicYear(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.6rem 0.75rem",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border-color)",
-                    backgroundColor: "transparent",
-                    color: "var(--foreground)",
-                    fontSize: "0.875rem"
-                  }}
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    value={editBatchStartDate}
-                    onChange={(e) => setEditBatchStartDate(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "0.5rem 0.75rem",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border-color)",
-                      backgroundColor: "transparent",
-                      color: "var(--foreground)",
-                      fontSize: "0.875rem"
-                    }}
-                  />
-                  <span style={{ display: "block", fontSize: "0.725rem", color: "var(--text-secondary)", marginTop: "0.3rem", lineHeight: 1.35 }}>
-                    📅 <strong>Calendar &amp; Attendance:</strong> Syncs with School Calendar and calculates attendance working days starting from this date.
-                  </span>
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                    End Date
-                  </label>
-                  <input
-                    type="date"
-                    value={editBatchEndDate}
-                    onChange={(e) => setEditBatchEndDate(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "0.5rem 0.75rem",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border-color)",
-                      backgroundColor: "transparent",
-                      color: "var(--foreground)",
-                      fontSize: "0.875rem"
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: "0.75rem",
-                marginTop: "0.5rem",
-                paddingTop: "1rem",
-                borderTop: "1px solid var(--border-color)"
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setEditingBatch(null)}
-                  disabled={isPending}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border-color)",
-                    backgroundColor: "transparent",
-                    color: "var(--foreground)",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                    fontWeight: 600
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  style={{
-                    padding: "0.5rem 1.25rem",
-                    borderRadius: "8px",
-                    border: "none",
-                    backgroundColor: "var(--primary, #6366f1)",
-                    color: "#ffffff",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                    fontWeight: 700,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.4rem"
-                  }}
-                >
-                  {isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Save Changes
-                </button>
-              </div>
-            </form>
+          <div>
+            <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+              Academic Year Description (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Academic Year 2026-2027"
+              value={newBatchAcademicYear}
+              onChange={(e) => setNewBatchAcademicYear(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.55rem 0.75rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color)",
+                backgroundColor: "transparent",
+                color: "var(--foreground)",
+                fontSize: "0.875rem"
+              }}
+            />
           </div>
-        </div>
-      )}
 
-      {/* ======================================================== */}
-      {/* DELETE BATCH CONFIRMATION MODAL */}
-      {/* ======================================================== */}
-      {deletingBatch && (
-        <div style={{
-          position: "fixed",
-          inset: 0,
-          backgroundColor: "rgba(0, 0, 0, 0.65)",
-          backdropFilter: "blur(4px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 9999,
-          padding: "1rem"
-        }}>
-          <div style={{
-            backgroundColor: "var(--card-bg, #ffffff)",
-            borderRadius: "16px",
-            border: "1px solid rgba(239, 68, 68, 0.3)",
-            width: "100%",
-            maxWidth: "460px",
-            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.25)",
-            overflow: "hidden"
-          }}>
-            <div style={{
-              padding: "1.25rem 1.5rem",
-              borderBottom: "1px solid var(--border-color)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between"
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Trash2 size={20} color="#ef4444" />
-                <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700, color: "#ef4444" }}>
-                  Delete Batch &amp; Academic Year ({deletingBatch.name})
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDeletingBatch(null)}
-                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <p style={{ margin: 0, fontSize: "0.9375rem", color: "var(--foreground)", lineHeight: 1.5 }}>
-                Are you sure you want to permanently delete <strong>Batch &apos;{deletingBatch.name}&apos;</strong> and its academic year data?
-              </p>
-              
-              <div style={{
-                padding: "0.85rem 1rem",
-                borderRadius: "10px",
-                backgroundColor: "rgba(239, 68, 68, 0.08)",
-                border: "1px solid rgba(239, 68, 68, 0.2)",
-                fontSize: "0.8125rem",
-                color: "var(--text-secondary)",
-                lineHeight: 1.5
-              }}>
-                ⚠️ <strong>Safety guarantee:</strong> Any classes linked to this batch ({deletingBatch.classes.length} class{deletingBatch.classes.length === 1 ? "" : "es"}) will be safely unassigned so that no classes, teacher assignments, or student accounts are lost.
-              </div>
-
-              {deletingBatch.isCurrent && (
-                <div style={{
-                  padding: "0.75rem 1rem",
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={newBatchStartDate}
+                onChange={(e) => setNewBatchStartDate(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "0.55rem",
                   borderRadius: "8px",
-                  backgroundColor: "rgba(245, 158, 11, 0.1)",
-                  border: "1px solid rgba(245, 158, 11, 0.25)",
-                  fontSize: "0.8125rem",
-                  color: "#d97706"
-                }}>
-                  Note: This is currently the active academic batch. A fallback batch will automatically be designated as active.
-                </div>
-              )}
+                  border: "1px solid var(--border-color)",
+                  backgroundColor: "transparent",
+                  color: "var(--foreground)",
+                  fontSize: "0.875rem"
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                End Date
+              </label>
+              <input
+                type="date"
+                value={newBatchEndDate}
+                onChange={(e) => setNewBatchEndDate(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "0.55rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  backgroundColor: "transparent",
+                  color: "var(--foreground)",
+                  fontSize: "0.875rem"
+                }}
+              />
+            </div>
+          </div>
 
-              <div style={{
+          <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", cursor: "pointer", marginTop: "0.25rem" }}>
+            <input
+              type="checkbox"
+              checked={newBatchIsCurrent}
+              onChange={(e) => setNewBatchIsCurrent(e.target.checked)}
+              style={{ width: "16px", height: "16px", cursor: "pointer" }}
+            />
+            <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>Set as currently active school batch</span>
+          </label>
+        </form>
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* EDIT BATCH DATES & DETAILS MODAL (PORTALED SHARED MODAL) */}
+      {/* ======================================================== */}
+      <Modal
+        isOpen={Boolean(editingBatch)}
+        onClose={() => setEditingBatch(null)}
+        title={editingBatch ? `Edit Dates & Details: Batch ${editingBatch.name}` : "Edit Batch"}
+        icon={<Edit3 size={18} color="var(--primary)" />}
+        size="form"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setEditingBatch(null)}
+              disabled={isPending}
+              style={{
+                padding: "0.5rem 1rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color)",
+                backgroundColor: "transparent",
+                color: "var(--foreground)",
+                fontSize: "0.875rem",
+                cursor: "pointer",
+                fontWeight: 600
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="edit-batch-form"
+              disabled={isPending}
+              style={{
+                padding: "0.5rem 1.25rem",
+                borderRadius: "8px",
+                border: "none",
+                backgroundColor: "var(--primary, #6366f1)",
+                color: "#ffffff",
+                fontSize: "0.875rem",
+                cursor: "pointer",
+                fontWeight: 700,
                 display: "flex",
-                justifyContent: "flex-end",
-                gap: "0.75rem",
-                marginTop: "0.5rem",
-                paddingTop: "1rem",
-                borderTop: "1px solid var(--border-color)"
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setDeletingBatch(null)}
-                  disabled={isPending}
+                alignItems: "center",
+                gap: "0.4rem"
+              }}
+            >
+              {isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Save Changes
+            </button>
+          </>
+        }
+      >
+        {editingBatch && (
+          <form id="edit-batch-form" onSubmit={handleSaveEditDates} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                Batch Name *
+              </label>
+              <input
+                type="text"
+                required
+                value={editBatchName}
+                onChange={(e) => setEditBatchName(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "0.55rem 0.75rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  backgroundColor: "transparent",
+                  color: "var(--foreground)",
+                  fontSize: "0.9375rem"
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                Academic Year Description
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 2026-2027 Academic Year"
+                value={editBatchAcademicYear}
+                onChange={(e) => setEditBatchAcademicYear(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "0.55rem 0.75rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  backgroundColor: "transparent",
+                  color: "var(--foreground)",
+                  fontSize: "0.875rem"
+                }}
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={editBatchStartDate}
+                  onChange={(e) => setEditBatchStartDate(e.target.value)}
                   style={{
-                    padding: "0.55rem 1.15rem",
+                    width: "100%",
+                    padding: "0.55rem",
                     borderRadius: "8px",
                     border: "1px solid var(--border-color)",
                     backgroundColor: "transparent",
                     color: "var(--foreground)",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                    fontWeight: 600
+                    fontSize: "0.875rem"
                   }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmDeleteBatch}
-                  disabled={isPending}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={editBatchEndDate}
+                  onChange={(e) => setEditBatchEndDate(e.target.value)}
                   style={{
-                    padding: "0.55rem 1.25rem",
+                    width: "100%",
+                    padding: "0.55rem",
                     borderRadius: "8px",
-                    border: "none",
-                    backgroundColor: "#ef4444",
-                    color: "#ffffff",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                    fontWeight: 700,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.4rem"
+                    border: "1px solid var(--border-color)",
+                    backgroundColor: "transparent",
+                    color: "var(--foreground)",
+                    fontSize: "0.875rem"
                   }}
-                >
-                  {isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} Delete Batch &amp; Year
-                </button>
+                />
               </div>
             </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* DELETE BATCH CONFIRMATION MODAL (PORTALED SHARED MODAL) */}
+      {/* ======================================================== */}
+      <Modal
+        isOpen={Boolean(deletingBatch)}
+        onClose={() => setDeletingBatch(null)}
+        title={deletingBatch ? `Delete Batch & Year (${deletingBatch.name})` : "Delete Batch"}
+        icon={<Trash2 size={20} color="#ef4444" />}
+        size="md"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setDeletingBatch(null)}
+              disabled={isPending}
+              style={{
+                padding: "0.55rem 1.15rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color)",
+                backgroundColor: "transparent",
+                color: "var(--foreground)",
+                fontSize: "0.875rem",
+                cursor: "pointer",
+                fontWeight: 600
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmDeleteBatch}
+              disabled={isPending}
+              style={{
+                padding: "0.55rem 1.25rem",
+                borderRadius: "8px",
+                border: "none",
+                backgroundColor: "#ef4444",
+                color: "#ffffff",
+                fontSize: "0.875rem",
+                cursor: "pointer",
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem"
+              }}
+            >
+              {isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} Delete Batch &amp; Year
+            </button>
+          </>
+        }
+      >
+        {deletingBatch && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <p style={{ margin: 0, fontSize: "0.9375rem", color: "var(--foreground)", lineHeight: 1.5 }}>
+              Are you sure you want to permanently delete <strong>Batch &apos;{deletingBatch.name}&apos;</strong> and its academic year data?
+            </p>
+            
+            <div style={{
+              padding: "0.85rem 1rem",
+              borderRadius: "10px",
+              backgroundColor: "rgba(239, 68, 68, 0.08)",
+              border: "1px solid rgba(239, 68, 68, 0.2)",
+              fontSize: "0.8125rem",
+              color: "var(--text-secondary)",
+              lineHeight: 1.5
+            }}>
+              ⚠️ <strong>Safety guarantee:</strong> Any classes linked to this batch ({deletingBatch.classes.length} class{deletingBatch.classes.length === 1 ? "" : "es"}) will be safely unassigned so that no classes, teacher assignments, or student accounts are lost.
+            </div>
+
+            {deletingBatch.isCurrent && (
+              <div style={{
+                padding: "0.75rem 1rem",
+                borderRadius: "8px",
+                backgroundColor: "rgba(245, 158, 11, 0.1)",
+                border: "1px solid rgba(245, 158, 11, 0.25)",
+                fontSize: "0.8125rem",
+                color: "#d97706"
+              }}>
+                Note: This is currently the active academic batch. A fallback batch will automatically be designated as active.
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

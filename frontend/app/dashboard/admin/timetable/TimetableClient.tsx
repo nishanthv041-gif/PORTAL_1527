@@ -51,6 +51,7 @@ import type {
 } from "@/backend/lib/timetable/timetableTypes";
 import TimetableScanModal from "./TimetableScanModal";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { Modal } from "@/frontend/components/ui";
 
 const DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 const SHORT_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -663,30 +664,30 @@ export default function TimetableClient({
 
       {/* Action / Error Alerts */}
       {actionError && (
-        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "0.85rem 1.15rem", borderRadius: "10px", border: "1px solid var(--border-color)", marginBottom: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-            <AlertCircle size={18} />
-            <span style={{ fontSize: "0.875rem" }}>{actionError}</span>
+        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "0.75rem 1rem", borderRadius: "10px", border: "1px solid var(--border-color)", marginBottom: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", wordBreak: "break-word" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flex: 1, minWidth: 0 }}>
+            <AlertCircle size={18} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: "0.85rem", wordBreak: "break-word" }}>{actionError}</span>
           </div>
-          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={16} /></button>
+          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", flexShrink: 0 }}><X size={16} /></button>
         </div>
       )}
 
       {actionSuccess && (
-        <div style={{ background: "rgba(16, 185, 129, 0.12)", color: "#10b981", padding: "0.85rem 1.15rem", borderRadius: "10px", border: "1px solid rgba(16, 185, 129, 0.25)", marginBottom: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-            <CheckCircle size={18} />
-            <span style={{ fontSize: "0.875rem" }}>{actionSuccess}</span>
+        <div style={{ background: "rgba(16, 185, 129, 0.12)", color: "#10b981", padding: "0.75rem 1rem", borderRadius: "10px", border: "1px solid rgba(16, 185, 129, 0.25)", marginBottom: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flex: 1, minWidth: 0 }}>
+            <CheckCircle size={18} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: "0.85rem" }}>{actionSuccess}</span>
           </div>
-          <button onClick={() => setActionSuccess(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={16} /></button>
+          <button onClick={() => setActionSuccess(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", flexShrink: 0 }}><X size={16} /></button>
         </div>
       )}
 
       {/* Control Bar: Class Selector, Week Navigator & Actions */}
-      <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", padding: "1rem 1.25rem", marginBottom: "1.25rem" }}>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+      <div className="timetable-control-bar" style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", padding: "0.85rem 1rem", marginBottom: "1.25rem" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          <div className="timetable-control-group" style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             {/* View Mode Toggle */}
             <div style={{ display: "inline-flex", background: "var(--input-bg)", padding: "0.2rem", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
               <button
@@ -725,7 +726,7 @@ export default function TimetableClient({
 
             {/* Class or Teacher Dropdown */}
             {viewMode === "CLASS" ? (
-              <div style={{ minWidth: "220px" }}>
+              <div className="timetable-select-wrapper" style={{ minWidth: "220px" }}>
                 <select
                   value={selectedClass}
                   onChange={handleClassChange}
@@ -739,7 +740,7 @@ export default function TimetableClient({
                 </select>
               </div>
             ) : (
-              <div style={{ minWidth: "240px" }}>
+              <div className="timetable-select-wrapper" style={{ minWidth: "240px" }}>
                 <select
                   value={selectedTeacherId}
                   onChange={(e) => setSelectedTeacherId(e.target.value)}
@@ -753,7 +754,7 @@ export default function TimetableClient({
             )}
 
             {/* Week Navigator with unambiguous date format: "26 Oct to 31 Oct 2026" */}
-            <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", background: "var(--input-bg)", padding: "0.25rem 0.5rem", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+            <div className="timetable-week-nav" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", background: "var(--input-bg)", padding: "0.25rem 0.5rem", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
               <button
                 type="button"
                 onClick={() => changeWeek(-1)}
@@ -1497,172 +1498,266 @@ export default function TimetableClient({
         </div>
       )}
 
-      {/* Copy Day Modal */}
-      {copyFromDay && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-          <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", width: "100%", maxWidth: "460px", padding: "1.5rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <Copy size={18} /> Copy {copyFromDay}&apos;s Schedule
-              </h3>
-              <button onClick={() => setCopyFromDay(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}>
-                <X size={18} />
+      {/* Copy Day Modal (Standardized via Modal) */}
+      <Modal
+        isOpen={!!copyFromDay}
+        onClose={() => setCopyFromDay(null)}
+        size="md"
+        title={`Copy ${copyFromDay || ""}'s Schedule`}
+        icon={<Copy size={18} />}
+        footer={
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", width: "100%" }}>
+            <button
+              type="button"
+              onClick={() => setCopyFromDay(null)}
+              style={{
+                padding: "0.5rem 1rem",
+                background: "transparent",
+                border: "1px solid var(--border-color)",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.85rem",
+                color: "inherit"
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleExecuteCopyDay}
+              disabled={isPending || copyTargetDays.length === 0}
+              style={{
+                padding: "0.5rem 1.25rem",
+                background: copyTargetDays.length > 0 ? "var(--primary)" : "rgba(107, 114, 128, 0.4)",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                cursor: copyTargetDays.length > 0 ? "pointer" : "not-allowed",
+                fontWeight: 600,
+                fontSize: "0.85rem"
+              }}
+            >
+              Copy to {copyTargetDays.length} Days
+            </button>
+          </div>
+        }
+      >
+        <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "1rem" }}>
+          Select target days to duplicate {copyFromDay}&apos;s period slots into {selectedClassName}:
+        </p>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+          {DAYS.filter(d => d !== copyFromDay).map(day => {
+            const isSelected = copyTargetDays.includes(day);
+            return (
+              <button
+                key={day}
+                type="button"
+                onClick={() => {
+                  if (isSelected) {
+                    setCopyTargetDays(copyTargetDays.filter(d => d !== day));
+                  } else {
+                    setCopyTargetDays([...copyTargetDays, day]);
+                  }
+                }}
+                style={{
+                  padding: "0.5rem 0.85rem",
+                  borderRadius: "8px",
+                  border: isSelected ? "1px solid var(--primary)" : "1px solid var(--border-color)",
+                  background: isSelected ? "rgba(79, 70, 229, 0.15)" : "var(--input-bg)",
+                  color: isSelected ? "var(--primary)" : "inherit",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  fontWeight: isSelected ? 700 : 500
+                }}
+              >
+                {isSelected ? "✓ " : ""}{day}
               </button>
-            </div>
-            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "1rem" }}>
-              Select target days to duplicate {copyFromDay}&apos;s period slots into {selectedClassName}:
-            </p>
+            );
+          })}
+        </div>
+      </Modal>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1.25rem" }}>
-              {DAYS.filter(d => d !== copyFromDay).map(day => {
-                const isSelected = copyTargetDays.includes(day);
-                return (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => {
-                      if (isSelected) {
-                        setCopyTargetDays(copyTargetDays.filter(d => d !== day));
-                      } else {
-                        setCopyTargetDays([...copyTargetDays, day]);
-                      }
-                    }}
-                    style={{
-                      padding: "0.5rem 0.85rem",
-                      borderRadius: "8px",
-                      border: isSelected ? "1px solid var(--primary)" : "1px solid var(--border-color)",
-                      background: isSelected ? "rgba(79, 70, 229, 0.15)" : "var(--input-bg)",
-                      color: isSelected ? "var(--primary)" : "inherit",
-                      cursor: "pointer",
-                      fontSize: "0.85rem",
-                      fontWeight: isSelected ? 700 : 500
-                    }}
-                  >
-                    {isSelected ? "✓ " : ""}{day}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+      {/* Period Slots Configuration Modal (Standardized via Modal) */}
+      <Modal
+        isOpen={showPeriodConfigModal}
+        onClose={() => setShowPeriodConfigModal(false)}
+        size="lg"
+        title="Period Times Configuration"
+        icon={<Settings size={20} />}
+        footer={
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => {
+                const nextOrder = editingPeriodSlots.length + 1;
+                setEditingPeriodSlots([
+                  ...editingPeriodSlots,
+                  {
+                    order: nextOrder,
+                    label: `Period ${nextOrder}`,
+                    startTime: "15:00",
+                    endTime: "15:45",
+                    type: "LESSON"
+                  }
+                ]);
+              }}
+              style={{
+                padding: "0.45rem 0.85rem",
+                background: "transparent",
+                border: "1px dashed var(--border-color)",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.82rem",
+                color: "inherit"
+              }}
+            >
+              + Add Period
+            </button>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
               <button
                 type="button"
-                onClick={() => setCopyFromDay(null)}
-                style={{ padding: "0.5rem 1rem", background: "transparent", border: "1px solid var(--border-color)", borderRadius: "6px", cursor: "pointer", fontSize: "0.85rem" }}
+                onClick={() => setShowPeriodConfigModal(false)}
+                style={{
+                  padding: "0.5rem 1rem",
+                  background: "transparent",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  color: "inherit"
+                }}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={handleExecuteCopyDay}
-                disabled={isPending || copyTargetDays.length === 0}
+                onClick={handleSavePeriodSlots}
+                disabled={isPending}
                 style={{
                   padding: "0.5rem 1.25rem",
-                  background: copyTargetDays.length > 0 ? "var(--primary)" : "rgba(107, 114, 128, 0.4)",
-                  color: "#fff",
+                  background: "var(--primary)",
+                  color: "var(--primary-fg)",
                   border: "none",
                   borderRadius: "6px",
-                  cursor: copyTargetDays.length > 0 ? "pointer" : "not-allowed",
+                  cursor: isPending ? "not-allowed" : "pointer",
                   fontWeight: 600,
-                  fontSize: "0.85rem"
+                  fontSize: "0.85rem",
+                  opacity: isPending ? 0.7 : 1
                 }}
               >
-                Copy to {copyTargetDays.length} Days
+                {isPending ? "Saving..." : "Save & Synchronize All"}
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Period Slots Configuration Modal */}
-      {showPeriodConfigModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 100, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "12px 0", overflowY: "auto" }}>
-          <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", width: "calc(100% - 24px)", maxWidth: "600px", maxHeight: "90vh", overflowY: "auto", padding: "1.25rem", margin: "auto 12px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          {/* Quick Generator Wizard Box */}
+          <div style={{ background: "rgba(99, 102, 241, 0.05)", border: "1px solid rgba(99, 102, 241, 0.2)", borderRadius: "10px", padding: "0.85rem" }}>
+            <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "var(--primary)", display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.6rem" }}>
+              <Sparkles size={16} /> Quick Setup Wizard
+            </div>
+            <div className="quick-setup-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(115px, 1fr))", gap: "0.6rem", fontSize: "0.8rem" }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <Settings size={20} /> Period Times Configuration
-                </h3>
+                <label style={{ display: "block", color: "var(--text-secondary)", marginBottom: "0.2rem", fontSize: "0.75rem" }}>Start Time</label>
+                <input type="time" value={quickGenStartTime} onChange={e => setQuickGenStartTime(e.target.value)} style={{ width: "100%", padding: "0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", boxSizing: "border-box" }} />
               </div>
-              <button onClick={() => setShowPeriodConfigModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}>
-                <X size={20} />
+              <div>
+                <label style={{ display: "block", color: "var(--text-secondary)", marginBottom: "0.2rem", fontSize: "0.75rem" }}>Lesson (mins)</label>
+                <input type="number" value={quickGenDuration} onChange={e => setQuickGenDuration(Number(e.target.value))} style={{ width: "100%", padding: "0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ display: "block", color: "var(--text-secondary)", marginBottom: "0.2rem", fontSize: "0.75rem" }}>Total Periods</label>
+                <input type="number" value={quickGenTotal} onChange={e => setQuickGenTotal(Number(e.target.value))} style={{ width: "100%", padding: "0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ display: "block", color: "var(--text-secondary)", marginBottom: "0.2rem", fontSize: "0.75rem" }}>Break After P#</label>
+                <input type="number" value={quickGenBreakPeriod} onChange={e => setQuickGenBreakPeriod(Number(e.target.value))} style={{ width: "100%", padding: "0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ display: "block", color: "var(--text-secondary)", marginBottom: "0.2rem", fontSize: "0.75rem" }}>Lunch After P#</label>
+                <input type="number" value={quickGenLunchPeriod} onChange={e => setQuickGenLunchPeriod(Number(e.target.value))} style={{ width: "100%", padding: "0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", boxSizing: "border-box" }} />
+              </div>
+            </div>
+            <div style={{ marginTop: "0.65rem", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={handleExecuteQuickGen}
+                disabled={isPending}
+                style={{ padding: "0.4rem 0.85rem", background: "var(--primary)", color: "var(--primary-fg)", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "0.8rem" }}
+              >
+                Generate &amp; Apply Schedule
               </button>
             </div>
+          </div>
 
-            {/* Quick Generator Wizard Box */}
-            <div style={{ background: "rgba(99, 102, 241, 0.05)", border: "1px solid rgba(99, 102, 241, 0.2)", borderRadius: "10px", padding: "1rem", marginBottom: "1.25rem" }}>
-              <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--primary)", display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.75rem" }}>
-                <Sparkles size={16} /> Quick Setup Wizard
-              </div>
-              <div className="quick-setup-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.75rem", fontSize: "0.8rem" }}>
-                <div>
-                  <label style={{ display: "block", color: "var(--text-secondary)", marginBottom: "0.2rem" }}>Start Time</label>
-                  <input type="time" value={quickGenStartTime} onChange={e => setQuickGenStartTime(e.target.value)} style={{ width: "100%", padding: "0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", color: "var(--text-secondary)", marginBottom: "0.2rem" }}>Lesson (mins)</label>
-                  <input type="number" value={quickGenDuration} onChange={e => setQuickGenDuration(Number(e.target.value))} style={{ width: "100%", padding: "0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", color: "var(--text-secondary)", marginBottom: "0.2rem" }}>Total Periods</label>
-                  <input type="number" value={quickGenTotal} onChange={e => setQuickGenTotal(Number(e.target.value))} style={{ width: "100%", padding: "0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", color: "var(--text-secondary)", marginBottom: "0.2rem" }}>Break After P#</label>
-                  <input type="number" value={quickGenBreakPeriod} onChange={e => setQuickGenBreakPeriod(Number(e.target.value))} style={{ width: "100%", padding: "0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", color: "var(--text-secondary)", marginBottom: "0.2rem" }}>Lunch After P#</label>
-                  <input type="number" value={quickGenLunchPeriod} onChange={e => setQuickGenLunchPeriod(Number(e.target.value))} style={{ width: "100%", padding: "0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit" }} />
-                </div>
-              </div>
-              <div style={{ marginTop: "0.75rem", display: "flex", justifyContent: "flex-end" }}>
-                <button
-                  type="button"
-                  onClick={handleExecuteQuickGen}
-                  disabled={isPending}
-                  style={{ padding: "0.4rem 0.85rem", background: "var(--primary)", color: "var(--primary-fg)", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "0.8rem" }}
-                >
-                  Generate &amp; Apply Schedule
-                </button>
-              </div>
-            </div>
-
-            {/* Manual Slot Customization List */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              {editingPeriodSlots.map((ps, idx) => (
-                <div key={idx} style={{ display: "grid", gridTemplateColumns: "50px 1fr 90px 90px 100px 28px", gap: "0.4rem", alignItems: "center", padding: "0.5rem", borderRadius: "6px", background: ps.type === "BREAK" || ps.type === "LUNCH" ? "rgba(245, 158, 11, 0.05)" : "rgba(0,0,0,0.02)", minWidth: 0 }}>
-                  <span style={{ fontWeight: 700, fontSize: "0.85rem" }}>#{ps.order}</span>
-                  <input
-                    type="text"
-                    value={ps.label}
-                    onChange={(e) => {
-                      const updated = [...editingPeriodSlots];
-                      updated[idx].label = e.target.value;
-                      setEditingPeriodSlots(updated);
+          {/* Responsive Slot Customization List */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {editingPeriodSlots.map((ps, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.35rem",
+                  padding: "0.55rem 0.75rem",
+                  borderRadius: "8px",
+                  background: ps.type === "BREAK" || ps.type === "LUNCH" ? "rgba(245, 158, 11, 0.08)" : "var(--background)",
+                  border: "1px solid var(--border-color)",
+                  boxSizing: "border-box"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flex: 1, minWidth: 0 }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.85rem", minWidth: "28px", color: "var(--primary)" }}>#{ps.order}</span>
+                    <input
+                      type="text"
+                      value={ps.label}
+                      onChange={(e) => {
+                        const updated = [...editingPeriodSlots];
+                        updated[idx].label = e.target.value;
+                        setEditingPeriodSlots(updated);
+                      }}
+                      placeholder="Period Label"
+                      style={{ flex: 1, minWidth: 0, padding: "0.35rem 0.55rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.82rem", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingPeriodSlots(editingPeriodSlots.filter((_, i) => i !== idx));
                     }}
-                    style={{ padding: "0.35rem", borderRadius: "4px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.8rem" }}
-                  />
-                  <input
-                    type="time"
-                    value={ps.startTime}
-                    onChange={(e) => {
-                      const updated = [...editingPeriodSlots];
-                      updated[idx].startTime = e.target.value;
-                      setEditingPeriodSlots(updated);
-                    }}
-                    style={{ padding: "0.35rem", borderRadius: "4px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.8rem" }}
-                  />
-                  <input
-                    type="time"
-                    value={ps.endTime}
-                    onChange={(e) => {
-                      const updated = [...editingPeriodSlots];
-                      updated[idx].endTime = e.target.value;
-                      setEditingPeriodSlots(updated);
-                    }}
-                    style={{ padding: "0.35rem", borderRadius: "4px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.8rem" }}
-                  />
+                    style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", padding: "4px", flexShrink: 0 }}
+                    title="Remove period"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", flex: "1 1 180px", minWidth: 0 }}>
+                    <input
+                      type="time"
+                      value={ps.startTime}
+                      onChange={(e) => {
+                        const updated = [...editingPeriodSlots];
+                        updated[idx].startTime = e.target.value;
+                        setEditingPeriodSlots(updated);
+                      }}
+                      style={{ flex: 1, minWidth: 0, padding: "0.3rem 0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.8rem", boxSizing: "border-box" }}
+                    />
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", flexShrink: 0 }}>to</span>
+                    <input
+                      type="time"
+                      value={ps.endTime}
+                      onChange={(e) => {
+                        const updated = [...editingPeriodSlots];
+                        updated[idx].endTime = e.target.value;
+                        setEditingPeriodSlots(updated);
+                      }}
+                      style={{ flex: 1, minWidth: 0, padding: "0.3rem 0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.8rem", boxSizing: "border-box" }}
+                    />
+                  </div>
                   <select
                     value={ps.type}
                     onChange={(e) => {
@@ -1670,68 +1765,19 @@ export default function TimetableClient({
                       updated[idx].type = e.target.value as PeriodType;
                       setEditingPeriodSlots(updated);
                     }}
-                    style={{ padding: "0.35rem", borderRadius: "4px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.75rem" }}
+                    style={{ flex: "1 1 95px", minWidth: "95px", padding: "0.3rem 0.45rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.8rem", fontWeight: 600, boxSizing: "border-box" }}
                   >
                     <option value="LESSON">Lesson</option>
                     <option value="BREAK">Break</option>
                     <option value="LUNCH">Lunch</option>
                     <option value="ASSEMBLY">Assembly</option>
                   </select>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingPeriodSlots(editingPeriodSlots.filter((_, i) => i !== idx));
-                    }}
-                    style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", padding: 0 }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
                 </div>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1.25rem" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  const nextOrder = editingPeriodSlots.length + 1;
-                  setEditingPeriodSlots([
-                    ...editingPeriodSlots,
-                    {
-                      order: nextOrder,
-                      label: `Period ${nextOrder}`,
-                      startTime: "15:00",
-                      endTime: "15:45",
-                      type: "LESSON"
-                    }
-                  ]);
-                }}
-                style={{ padding: "0.5rem 0.85rem", background: "transparent", border: "1px dashed var(--border-color)", borderRadius: "6px", cursor: "pointer", fontSize: "0.8rem" }}
-              >
-                + Add Period Slot
-              </button>
-
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button
-                  type="button"
-                  onClick={() => setShowPeriodConfigModal(false)}
-                  style={{ padding: "0.55rem 1rem", background: "transparent", border: "1px solid var(--border-color)", borderRadius: "6px", cursor: "pointer", fontSize: "0.85rem" }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSavePeriodSlots}
-                  disabled={isPending}
-                  style={{ padding: "0.55rem 1.25rem", background: "var(--primary)", color: "var(--primary-fg)", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "0.85rem" }}
-                >
-                  Save &amp; Synchronize All
-                </button>
               </div>
-            </div>
+            ))}
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Timetable Scan Modal */}
       {showScanModal && selectedClass && (
@@ -1756,31 +1802,42 @@ export default function TimetableClient({
           .timetable-mobile-container {
             display: block !important;
           }
-          /* Header action buttons: stack vertically, full width each */
+          /* Header action buttons: compact 2x2 grid on phones */
           .timetable-header-actions {
-            flex-direction: column !important;
-            align-items: stretch !important;
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 0.5rem !important;
             width: 100% !important;
           }
           .timetable-header-actions > * {
             width: 100% !important;
             justify-content: center !important;
             box-sizing: border-box !important;
+            padding: 0.55rem 0.5rem !important;
+            font-size: 0.8rem !important;
+            text-align: center !important;
           }
-          /* Control bar: stack vertically */
+          /* Control bar: stack cleanly on mobile */
           .timetable-control-bar {
-            flex-direction: column !important;
-            align-items: stretch !important;
+            padding: 0.75rem 0.85rem !important;
           }
-          /* Period config modal list: collapse columns to stacked */
-          .period-slot-row {
-            grid-template-columns: 36px 1fr !important;
-            gap: 0.35rem !important;
-          }
-          .period-slot-row input,
-          .period-slot-row select {
-            grid-column: 1 / -1 !important;
+          .timetable-control-group {
             width: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 0.5rem !important;
+          }
+          .timetable-select-wrapper {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+          .timetable-select-wrapper select {
+            width: 100% !important;
+            box-sizing: border-box !important;
+          }
+          .timetable-week-nav {
+            width: 100% !important;
+            justify-content: space-between !important;
             box-sizing: border-box !important;
           }
           /* Quick setup wizard grid: 2 columns on phones */
@@ -1796,6 +1853,10 @@ export default function TimetableClient({
             display: none !important;
           }
           .timetable-header-actions {
+            display: flex !important;
+            width: auto !important;
+          }
+          .timetable-header-actions > * {
             width: auto !important;
           }
         }

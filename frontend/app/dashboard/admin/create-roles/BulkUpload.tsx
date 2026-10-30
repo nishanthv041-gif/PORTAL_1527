@@ -18,6 +18,7 @@ import {
 } from "@/backend/api/actions/dashboard/admin/excel-import/actions";
 import { RowValidationResult, ExcelScanResult, ImportCommitResult } from "@/backend/lib/services/excelImportEngine";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { Modal } from "@/frontend/components/ui";
 
 type ClassItem = {
   id: string;
@@ -1714,97 +1715,58 @@ export default function BulkUpload({
             )}
 
             {/* Clear All Confirmation Modal */}
-            {showClearHistoryModal && (
-              <div style={{
-                position: "fixed",
-                inset: 0,
-                backgroundColor: "rgba(0, 0, 0, 0.6)",
-                backdropFilter: "blur(4px)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 99999,
-                padding: "1rem"
-              }}>
-                <div style={{
-                  backgroundColor: "var(--card-bg, #ffffff)",
-                  borderRadius: "16px",
-                  border: "1px solid var(--border-color, #e5e7eb)",
-                  width: "100%",
-                  maxWidth: "480px",
-                  padding: "1.75rem",
-                  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)"
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
-                    <div style={{
-                      width: "42px",
-                      height: "42px",
-                      borderRadius: "50%",
-                      backgroundColor: "rgba(239, 68, 68, 0.1)",
-                      color: "#ef4444",
+            <Modal
+              isOpen={showClearHistoryModal}
+              onClose={() => setShowClearHistoryModal(false)}
+              title="Clear All Import History"
+              icon={<Trash2 size={20} color="#ef4444" />}
+              size="md"
+              footer={
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowClearHistoryModal(false)}
+                    disabled={clearingHistory}
+                    style={{
+                      padding: "0.55rem 1.15rem",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border-color)",
+                      background: "transparent",
+                      color: "var(--foreground)",
+                      fontSize: "0.875rem",
+                      fontWeight: 600,
+                      cursor: "pointer"
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearAllHistory}
+                    disabled={clearingHistory}
+                    style={{
+                      padding: "0.55rem 1.25rem",
+                      borderRadius: "8px",
+                      border: "none",
+                      backgroundColor: "#ef4444",
+                      color: "#ffffff",
+                      fontSize: "0.875rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center"
-                    }}>
-                      <Trash2 size={22} />
-                    </div>
-                    <div>
-                      <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700, color: "var(--foreground)" }}>
-                        Clear All Import History
-                      </h3>
-                      <p style={{ margin: 0, fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
-                        Permanently erase current stored audit records
-                      </p>
-                    </div>
-                  </div>
-
-                  <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: "1.5rem" }}>
-                    Are you sure you want to erase all <strong>{history.length}</strong> stored import history and audit entries? This action will permanently remove these logs and cannot be undone.
-                  </p>
-
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "0.75rem" }}>
-                    <button
-                      type="button"
-                      onClick={() => setShowClearHistoryModal(false)}
-                      disabled={clearingHistory}
-                      style={{
-                        padding: "0.6rem 1.15rem",
-                        borderRadius: "8px",
-                        border: "1px solid var(--border-color)",
-                        background: "transparent",
-                        color: "var(--foreground)",
-                        fontSize: "0.875rem",
-                        fontWeight: 600,
-                        cursor: "pointer"
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleClearAllHistory}
-                      disabled={clearingHistory}
-                      style={{
-                        padding: "0.6rem 1.15rem",
-                        borderRadius: "8px",
-                        border: "none",
-                        backgroundColor: "#ef4444",
-                        color: "#ffffff",
-                        fontSize: "0.875rem",
-                        fontWeight: 700,
-                        cursor: clearingHistory ? "not-allowed" : "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.4rem"
-                      }}
-                    >
-                      {clearingHistory ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                      {clearingHistory ? "Erasing..." : "Erase All History"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+                      gap: "0.4rem"
+                    }}
+                  >
+                    {clearingHistory ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} Clear Everything
+                  </button>
+                </>
+              }
+            >
+              <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                Are you sure you want to erase all <strong>{history.length}</strong> stored import history and audit entries? This action will permanently remove these logs and cannot be undone.
+              </p>
+            </Modal>
           </div>
         )}
 
@@ -1814,54 +1776,54 @@ export default function BulkUpload({
       {/* INLINE ROW EDITING MODAL */}
       {/* ======================================================== */}
       {editingRow && (
-        <div style={{
-          position: "fixed",
-          inset: 0,
-          backgroundColor: "rgba(0, 0, 0, 0.6)",
-          backdropFilter: "blur(4px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 9999,
-          padding: "1rem"
-        }}>
-          <div style={{
-            backgroundColor: "var(--card-bg, #ffffff)",
-            borderRadius: "16px",
-            border: "1px solid var(--border-color, #e5e7eb)",
-            width: "100%",
-            maxWidth: "700px",
-            maxHeight: "90vh",
-            display: "flex",
-            flexDirection: "column",
-            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-            overflow: "hidden"
-          }}>
-            {/* Modal Header */}
-            <div style={{
-              padding: "1.25rem 1.5rem",
-              borderBottom: "1px solid var(--border-color)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              backgroundColor: "rgba(0,0,0,0.02)"
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Edit3 size={18} color="var(--primary)" />
-                <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700 }}>
-                  Correct Details: Excel Row #{editingRow.excelRowNumber}
-                </h3>
-              </div>
+        <Modal
+          isOpen={Boolean(editingRow)}
+          onClose={() => setEditingRow(null)}
+          title={`Correct Details: Excel Row #${editingRow.excelRowNumber}`}
+          icon={<Edit3 size={18} color="var(--primary)" />}
+          size="lg"
+          footer={
+            <>
               <button
+                type="button"
                 onClick={() => setEditingRow(null)}
-                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
+                style={{
+                  padding: "0.55rem 1.15rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  background: "transparent",
+                  color: "var(--foreground)",
+                  fontWeight: 600,
+                  fontSize: "0.875rem",
+                  cursor: "pointer"
+                }}
               >
-                <X size={20} />
+                Cancel
               </button>
-            </div>
-
-            {/* Modal Body: Form Fields */}
-            <div style={{ padding: "1.5rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              <button
+                type="button"
+                onClick={handleSaveRow}
+                disabled={isPending}
+                style={{
+                  padding: "0.55rem 1.35rem",
+                  borderRadius: "8px",
+                  border: "none",
+                  backgroundColor: "var(--primary, #6366f1)",
+                  color: "#ffffff",
+                  fontWeight: 700,
+                  fontSize: "0.875rem",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.4rem"
+                }}
+              >
+                {isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Save &amp; Revalidate Row
+              </button>
+            </>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               
               {type === "student" ? (
                 <>
@@ -2403,167 +2365,27 @@ export default function BulkUpload({
                   </div>
                 </>
               )}
-            </div>
-
-            {/* Modal Footer */}
-            <div style={{
-              padding: "1rem 1.5rem",
-              borderTop: "1px solid var(--border-color)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-end",
-              gap: "0.75rem",
-              backgroundColor: "rgba(0,0,0,0.02)"
-            }}>
-              <button
-                onClick={() => setEditingRow(null)}
-                style={{
-                  padding: "0.5rem 1rem",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color)",
-                  background: "transparent",
-                  color: "var(--foreground)",
-                  fontWeight: 600,
-                  fontSize: "0.875rem",
-                  cursor: "pointer"
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveRow}
-                disabled={isPending}
-                style={{
-                  padding: "0.5rem 1.25rem",
-                  borderRadius: "8px",
-                  border: "none",
-                  backgroundColor: "var(--primary, #6366f1)",
-                  color: "#ffffff",
-                  fontWeight: 600,
-                  fontSize: "0.875rem",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.4rem"
-                }}
-              >
-                {isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Save & Revalidate Row
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ======================================================== */}
       {/* CONFIRMATION BEFORE DATABASE INSERTION MODAL */}
       {/* ======================================================== */}
       {showConfirmModal && scanResult && (
-        <div style={{
-          position: "fixed",
-          inset: 0,
-          backgroundColor: "rgba(0, 0, 0, 0.6)",
-          backdropFilter: "blur(4px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 9999,
-          padding: "1rem"
-        }}>
-          <div style={{
-            backgroundColor: "var(--card-bg, #ffffff)",
-            borderRadius: "16px",
-            border: "1px solid var(--border-color, #e5e7eb)",
-            width: "100%",
-            maxWidth: "540px",
-            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-            overflow: "hidden"
-          }}>
-            <div style={{ padding: "1.5rem", borderBottom: "1px solid var(--border-color)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                <div style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "50%",
-                  backgroundColor: "rgba(16, 185, 129, 0.15)",
-                  color: "#10b981",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}>
-                  <CheckCircle2 size={24} />
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700 }}>
-                    Confirm Database Import
-                  </h3>
-                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
-                    Please review the import summary before writing to PostgreSQL.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ padding: "1.5rem" }}>
-              <div style={{
-                backgroundColor: "rgba(99, 102, 241, 0.05)",
-                border: "1px solid rgba(99, 102, 241, 0.2)",
-                borderRadius: "10px",
-                padding: "1rem",
-                marginBottom: "1.25rem"
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-                  <span style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>Account Role:</span>
-                  <span style={{ fontSize: "0.875rem", fontWeight: 700 }}>
-                    {type === "student" ? "STUDENT & PARENT" : (type === "teacher" ? "TEACHER" : "ADMINISTRATOR")}
-                  </span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-                  <span style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>Rows to Import:</span>
-                  <span style={{ fontSize: "0.875rem", fontWeight: 700, color: "#10b981" }}>
-                    {scanResult.readyToImportCount} Records
-                  </span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>Skipped / Excluded Rows:</span>
-                  <span style={{ fontSize: "0.875rem", fontWeight: 700, color: "#ef4444" }}>
-                    {scanResult.totalRows - scanResult.readyToImportCount} Rows
-                  </span>
-                </div>
-              </div>
-
-              <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                {type === "student" ? (
-                  <p style={{ margin: 0 }}>
-                    • Valid students will be enrolled and linked to their specified class.<br />
-                    • Sibling students sharing an existing parent email will be safely linked to that parent account without duplicating logins.<br />
-                    • Passwords will be cryptographically hashed with bcrypt before storage.
-                  </p>
-                ) : type === "teacher" ? (
-                  <p style={{ margin: 0 }}>
-                    • Valid teachers will receive official accounts with the <code>TEACHER</code> role.<br />
-                    • Credentials will be hashed with bcrypt. No plaintext credentials will be stored.
-                  </p>
-                ) : (
-                  <p style={{ margin: 0 }}>
-                    • Valid administrators will receive administrative accounts with the <code>ADMIN</code> role.<br />
-                    • Google OAuth SSO will be enabled for verified Gmail addresses.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div style={{
-              padding: "1rem 1.5rem",
-              borderTop: "1px solid var(--border-color)",
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: "0.75rem",
-              backgroundColor: "rgba(0,0,0,0.02)"
-            }}>
+        <Modal
+          isOpen={showConfirmModal}
+          onClose={() => setShowConfirmModal(false)}
+          title={`Confirm Import of ${scanResult.readyToImportCount} Records`}
+          icon={<CheckCircle2 size={20} color="#10b981" />}
+          size="md"
+          footer={
+            <>
               <button
+                type="button"
                 onClick={() => setShowConfirmModal(false)}
                 style={{
-                  padding: "0.5rem 1rem",
+                  padding: "0.55rem 1.15rem",
                   borderRadius: "8px",
                   border: "1px solid var(--border-color)",
                   background: "transparent",
@@ -2576,10 +2398,11 @@ export default function BulkUpload({
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleExecuteImport}
                 disabled={isPending}
                 style={{
-                  padding: "0.5rem 1.25rem",
+                  padding: "0.55rem 1.35rem",
                   borderRadius: "8px",
                   border: "none",
                   backgroundColor: "#10b981",
@@ -2589,15 +2412,48 @@ export default function BulkUpload({
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.4rem"
+                  gap: "0.45rem",
+                  boxShadow: "0 2px 8px rgba(16, 185, 129, 0.4)"
                 }}
               >
-                {isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                Confirm & Import Now
+                {isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Import Now
               </button>
+            </>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--foreground)", lineHeight: 1.5 }}>
+              You are about to insert <strong>{scanResult.readyToImportCount} valid {type} accounts</strong> into the live school database.
+            </p>
+
+            <div style={{
+              padding: "0.85rem 1rem",
+              borderRadius: "10px",
+              backgroundColor: "rgba(16, 185, 129, 0.08)",
+              border: "1px solid rgba(16, 185, 129, 0.2)",
+              fontSize: "0.8125rem",
+              color: "var(--text-secondary)",
+              lineHeight: 1.5
+            }}>
+              {type === "student" ? (
+                <p style={{ margin: 0 }}>
+                  • Students will be enrolled with active profiles and mapped to their class and section.<br />
+                  • Parent accounts will be created or linked using matching parent contact emails.
+                </p>
+              ) : type === "teacher" ? (
+                <p style={{ margin: 0 }}>
+                  • Valid teachers will receive official accounts with the <code>TEACHER</code> role.<br />
+                  • Credentials will be hashed with bcrypt. No plaintext credentials will be stored.
+                </p>
+              ) : (
+                <p style={{ margin: 0 }}>
+                  • Valid administrators will receive administrative accounts with the <code>ADMIN</code> role.<br />
+                  • Google OAuth SSO will be enabled for verified Gmail addresses.
+                </p>
+              )}
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
     </div>

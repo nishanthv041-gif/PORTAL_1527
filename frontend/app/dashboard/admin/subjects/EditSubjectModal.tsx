@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Modal } from "@/frontend/components/ui";
 import { BookOpen, X, Check, UserCheck, AlertCircle, Loader2 } from "lucide-react";
 import { updateSubjectGroupAction } from "@/backend/api/actions/dashboard/admin/subjects/actions";
 import { Class, Teacher, User, Subject, Student, Mark } from "@prisma/client";

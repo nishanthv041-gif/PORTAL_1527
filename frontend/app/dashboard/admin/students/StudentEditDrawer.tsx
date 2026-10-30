@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import {
   X, User, Mail, Phone, GraduationCap, Calendar, Shield, Key, Eye, EyeOff,
   Copy, Check, AlertTriangle, Trash2, CheckCircle2, XCircle, Sparkles, Loader2,
@@ -186,7 +187,23 @@ export default function StudentEditDrawer({
     }
   }, [isOpen, student, defaultClassId, allClasses]);
 
-  if (!isOpen) return null;
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
+
+  if (!isOpen || !mounted) return null;
 
   const generateStrongPassword = () => {
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
@@ -395,7 +412,7 @@ export default function StudentEditDrawer({
     }
   };
 
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed",
@@ -1291,6 +1308,7 @@ export default function StudentEditDrawer({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

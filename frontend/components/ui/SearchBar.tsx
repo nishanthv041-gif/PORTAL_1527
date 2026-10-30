@@ -47,7 +47,9 @@ export default function SearchBar({
   const [prevUrlQuery, setPrevUrlQuery] = useState(urlQuery);
 
   const onChangeRef = React.useRef(onChange);
-  onChangeRef.current = onChange;
+  React.useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   // Sync state if controlled prop changed
   if (value !== undefined && value !== prevValue) {

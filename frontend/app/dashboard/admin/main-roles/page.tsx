@@ -17,7 +17,7 @@ import { redirect } from "next/navigation";
 
 export default async function MainRolesPage() {
   const session = await getServerSession(getAuthOptions());
-  if (!session || session.user.role !== "ADMIN") redirect("/login");
+  if (!session || session.user?.role !== "ADMIN") redirect("/login");
 
   // Core School Roles & Operations
   const roleLinks = [

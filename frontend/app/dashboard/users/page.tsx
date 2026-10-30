@@ -3,7 +3,7 @@
 import { useState, useEffect, useTransition } from "react";
 import styles from "./users.module.css";
 import { Plus } from "lucide-react";
-import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
+import { SearchBar, ResultsContainer, Modal } from "@/frontend/components/ui";
 
 type User = {
   id: string;
@@ -165,43 +165,45 @@ export default function UsersPage() {
         </div>
       </ResultsContainer>
 
-      {isModalOpen && (
-        <div className={styles.modalOverlay}>
-          <div className={styles.modalContent}>
-            <div className={styles.modalHeader}>
-              <h3>Add New User</h3>
-              <button className={styles.closeBtn} onClick={() => setIsModalOpen(false)}>&times;</button>
-            </div>
-            <form onSubmit={handleAddUser}>
-              <div className={styles.formGroup}>
-                <label className={styles.formLabel}>Full Name</label>
-                <input required className={styles.formInput} value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
-              </div>
-              <div className={styles.formGroup}>
-                <label className={styles.formLabel}>Email</label>
-                <input type="email" required className={styles.formInput} value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
-              </div>
-              <div className={styles.formGroup}>
-                <label className={styles.formLabel}>Password</label>
-                <input type="password" required className={styles.formInput} value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} />
-              </div>
-              <div className={styles.formGroup}>
-                <label className={styles.formLabel}>Role</label>
-                <select className={styles.formInput} value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})}>
-                  <option value="TEACHER">Teacher</option>
-                  <option value="PARENT">Parent</option>
-                  <option value="ADMIN">Admin</option>
-                </select>
-              </div>
-              
-              <div className={styles.modalFooter}>
-                <button type="button" className={styles.cancelBtn} onClick={() => setIsModalOpen(false)}>Cancel</button>
-                <button type="submit" className={styles.primaryBtn}>Save User</button>
-              </div>
-            </form>
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Add New User"
+        size="form"
+        footer={
+          <>
+            <button type="button" className={styles.cancelBtn} onClick={() => setIsModalOpen(false)}>
+              Cancel
+            </button>
+            <button type="submit" form="add-user-form" className={styles.primaryBtn}>
+              Save User
+            </button>
+          </>
+        }
+      >
+        <form id="add-user-form" onSubmit={handleAddUser}>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Full Name</label>
+            <input required className={styles.formInput} value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
           </div>
-        </div>
-      )}
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Email</label>
+            <input type="email" required className={styles.formInput} value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Password</label>
+            <input type="password" required className={styles.formInput} value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Role</label>
+            <select className={styles.formInput} value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})}>
+              <option value="TEACHER">Teacher</option>
+              <option value="PARENT">Parent</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

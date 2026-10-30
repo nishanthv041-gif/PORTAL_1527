@@ -300,6 +300,33 @@ export async function bulkCreateTimetableSlotsAction(
 }
 
 /**
+ * Safe executor that retries on transient connection or transaction pool errors
+ */
+async function runWithPoolRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
+  let lastErr: any;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      const msg = err?.message || "";
+      const isPoolOrTxError =
+        msg.includes("Transaction not found") ||
+        msg.includes("Transaction API error") ||
+        msg.includes("closed transaction") ||
+        msg.includes("disconnecting") ||
+        msg.includes("Connection pool");
+      if (isPoolOrTxError && attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * PART 3: ONE button "Publish All".
  * Publishes every class timetable in a single action. Never blocked.
  */
@@ -312,9 +339,11 @@ export async function publishAllTimetablesAction() {
   }
 
   try {
-    const updated = await prisma.timetable.updateMany({
-      data: { status: "PUBLISHED" }
-    });
+    const updated = await runWithPoolRetry(() =>
+      prisma.timetable.updateMany({
+        data: { status: "PUBLISHED" }
+      })
+    );
 
     const now = new Date();
     await prisma.timetableAudit.create({
@@ -354,9 +383,11 @@ export async function unpublishAllTimetablesAction() {
   }
 
   try {
-    const updated = await prisma.timetable.updateMany({
-      data: { status: "DRAFT" }
-    });
+    const updated = await runWithPoolRetry(() =>
+      prisma.timetable.updateMany({
+        data: { status: "DRAFT" }
+      })
+    );
 
     await prisma.timetableAudit.create({
       data: {
@@ -389,10 +420,12 @@ export async function publishTimetableAction(classId: string) {
   if (!classId) return { success: false, error: "Class ID is required" };
 
   try {
-    const updated = await prisma.timetable.updateMany({
-      where: { classId },
-      data: { status: "PUBLISHED" }
-    });
+    const updated = await runWithPoolRetry(() =>
+      prisma.timetable.updateMany({
+        where: { classId },
+        data: { status: "PUBLISHED" }
+      })
+    );
 
     await prisma.timetableAudit.create({
       data: {

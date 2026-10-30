@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { MessageSquare, Send, Trash2, X, RefreshCw, BookOpen, GraduationCap } from "lucide-react";
 import { addHomeworkComment, getHomeworkComments, deleteHomeworkComment } from "@/backend/api/actions/dashboard/teacher/assignments/actions";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { Modal } from "@/frontend/components/ui";
 
 export type CommentItem = {
   id: string;
@@ -129,151 +130,80 @@ export default function WorkConversationModal({
 
   if (!isOpen) return null;
 
-  return (
-    <div
+  const footerInput = (
+    <form
+      onSubmit={handleSend}
       style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.6)",
-        backdropFilter: "blur(4px)",
+        width: "100%",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 9999,
-        padding: "1rem"
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        gap: "0.5rem",
+        alignItems: "flex-end"
       }}
     >
-      <div
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+        <textarea
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
+          rows={2}
+          placeholder={`Write a message as ${currentUser.name} (${currentUser.role.toLowerCase()})...`}
+          style={{
+            width: "100%",
+            padding: "0.55rem 0.75rem",
+            borderRadius: "8px",
+            border: "1px solid var(--border)",
+            backgroundColor: "var(--background)",
+            color: "var(--foreground)",
+            resize: "none",
+            fontSize: "0.875rem",
+            outline: "none"
+          }}
+        />
+        {errorMsg && (
+          <span style={{ color: "var(--danger)", fontSize: "0.75rem" }}>{errorMsg}</span>
+        )}
+      </div>
+
+      <button
+        type="submit"
+        disabled={sending || !inputText.trim()}
         style={{
-          width: "100%",
-          maxWidth: "680px",
-          height: "85vh",
-          maxHeight: "750px",
-          backgroundColor: "var(--card)",
-          borderRadius: "16px",
-          border: "1px solid var(--border)",
-          boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden"
+          padding: "0.55rem 1.15rem",
+          borderRadius: "8px",
+          backgroundColor: "var(--primary)",
+          color: "var(--primary-fg)",
+          border: "none",
+          fontWeight: 600,
+          fontSize: "0.875rem",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.4rem",
+          cursor: sending || !inputText.trim() ? "not-allowed" : "pointer",
+          opacity: sending || !inputText.trim() ? 0.6 : 1,
+          height: "40px"
         }}
       >
-        {/* Header */}
-        <div
-          style={{
-            padding: "1.25rem 1.5rem",
-            borderBottom: "1px solid var(--border)",
-            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.08))",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: "1rem"
-          }}
-        >
-          <div style={{ flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.4rem" }}>
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.3rem",
-                  padding: "3px 10px",
-                  borderRadius: "20px",
-                  backgroundColor: "rgba(99, 102, 241, 0.15)",
-                  color: "var(--primary)",
-                  fontSize: "0.75rem",
-                  fontWeight: 700
-                }}
-              >
-                <BookOpen size={13} />
-                {subjectName || "Subject Homework"}
-              </span>
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.3rem",
-                  padding: "3px 10px",
-                  borderRadius: "20px",
-                  backgroundColor: "rgba(16, 185, 129, 0.15)",
-                  color: "var(--success)",
-                  fontSize: "0.75rem",
-                  fontWeight: 700
-                }}
-              >
-                <GraduationCap size={13} />
-                {className}
-              </span>
-              {teacherName && (
-                <span
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "var(--text-secondary)",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.25rem"
-                  }}
-                >
-                  Assigned Staff: <strong>{teacherName}</strong>
-                </span>
-              )}
-            </div>
+        <Send size={15} />
+        {sending ? "Sending..." : "Send"}
+      </button>
+    </form>
+  );
 
-            <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700, color: "var(--foreground)" }}>
-              💬 Work Conversation: {assignmentTitle}
-            </h3>
-            <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.825rem", color: "var(--text-secondary)" }}>
-              Connected communication between assigned teacher, students, and parents for this homework.
-            </p>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <button
-              onClick={loadComments}
-              disabled={refreshing}
-              title="Refresh conversation"
-              style={{
-                background: "transparent",
-                border: "1px solid var(--border)",
-                borderRadius: "8px",
-                width: 34,
-                height: 34,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                color: "var(--foreground)"
-              }}
-            >
-              <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
-            </button>
-            <button
-              onClick={onClose}
-              title="Close"
-              style={{
-                background: "transparent",
-                border: "1px solid var(--border)",
-                borderRadius: "8px",
-                width: 34,
-                height: 34,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                color: "var(--foreground)"
-              }}
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={assignmentTitle}
+      subtitle={`${className} • ${subjectName || "Homework"}`}
+      icon={<BookOpen size={20} color="var(--primary)" />}
+      size="form"
+      footer={footerInput}
+    >
         {/* Message Feed */}
         <div
           style={{
@@ -404,72 +334,6 @@ export default function WorkConversationModal({
           )}
           <div ref={messagesEndRef} />
         </div>
-
-        {/* Composer */}
-        <form
-          onSubmit={handleSend}
-          style={{
-            padding: "1rem 1.25rem",
-            borderTop: "1px solid var(--border)",
-            backgroundColor: "var(--card)",
-            display: "flex",
-            gap: "0.75rem",
-            alignItems: "flex-end"
-          }}
-        >
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-            <textarea
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              rows={2}
-              placeholder={`Write a message as ${currentUser.name} (${currentUser.role.toLowerCase()})...`}
-              style={{
-                width: "100%",
-                padding: "0.65rem 0.85rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border)",
-                backgroundColor: "var(--background)",
-                color: "var(--foreground)",
-                resize: "none",
-                fontSize: "0.9rem",
-                outline: "none"
-              }}
-            />
-            {errorMsg && (
-              <span style={{ color: "var(--danger)", fontSize: "0.75rem" }}>{errorMsg}</span>
-            )}
-          </div>
-
-          <button
-            type="submit"
-            disabled={sending || !inputText.trim()}
-            style={{
-              padding: "0.7rem 1.25rem",
-              borderRadius: "8px",
-              backgroundColor: "var(--primary)",
-              color: "var(--primary-fg)",
-              border: "none",
-              fontWeight: 600,
-              fontSize: "0.9rem",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              cursor: sending || !inputText.trim() ? "not-allowed" : "pointer",
-              opacity: sending || !inputText.trim() ? 0.6 : 1,
-              height: "44px"
-            }}
-          >
-            <Send size={15} />
-            {sending ? "Sending..." : "Send"}
-          </button>
-        </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
+import { Modal } from "@/frontend/components/ui";
 import {
   Upload, FileText, Image as ImageIcon, FileSpreadsheet,
   FileCheck, AlertTriangle, X, Check, RefreshCw, Trash2, Plus,
@@ -537,75 +538,81 @@ export default function TimetableScanModal({
     return a.period - b.period;
   });
 
-  return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.65)",
-        backdropFilter: "blur(6px)",
-        zIndex: 1000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "1rem"
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget && !isScanning && !isSaving) onClose(); }}
-    >
-      <div
-        style={{
-          background: "var(--card-bg, #ffffff)",
-          borderRadius: "18px",
-          border: "1px solid var(--border-color)",
-          padding: "2rem",
-          maxWidth: "1100px",
-          width: "100%",
-          maxHeight: "92vh",
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: "0 25px 60px rgba(0,0,0,0.25)",
-          position: "relative"
-        }}
-      >
-        {/* Hidden File Input supporting Photo, PDF, Spreadsheet/Excel, Word doc */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".png,.jpg,.jpeg,.webp,.bmp,image/*,.pdf,application/pdf,.xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
-          onChange={handleFileSelect}
-          style={{ display: "none" }}
-        />
+  const footerContent = (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", flexWrap: "wrap", gap: "0.75rem" }}>
+      <div>
+        {scannedSlots.length > 0 && (
+          <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+            Showing <strong>{visibleSlots.length}</strong> of <strong>{scannedSlots.length}</strong> slots
+          </span>
+        )}
+      </div>
 
-        {/* Modal Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "1rem" }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-              <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "var(--primary-bg)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Sparkles size={20} />
-              </div>
-              <h2 style={{ margin: 0, fontSize: "1.35rem", fontWeight: 700 }}>
-                Scan &amp; Update Timetable
-              </h2>
-            </div>
-            <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.875rem", color: "var(--text-secondary)" }}>
-              Upload any file (<strong>Photo, PDF, Excel sheet, Spreadsheet, or Word doc</strong>) to scan, edit, and update the schedule for <strong>{selectedClassName}</strong>.
-            </p>
-          </div>
+      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={isSaving}
+          style={{
+            padding: "0.55rem 1.15rem",
+            borderRadius: "8px",
+            border: "1px solid var(--border-color)",
+            background: "transparent",
+            color: "inherit",
+            cursor: "pointer",
+            fontWeight: 600,
+            fontSize: "0.875rem"
+          }}
+        >
+          Cancel
+        </button>
 
+        {scannedSlots.length > 0 && (
           <button
-            onClick={onClose}
-            disabled={isScanning || isSaving}
-            style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)", padding: "0.35rem", borderRadius: "6px" }}
+            type="button"
+            onClick={handleSaveToTimetable}
+            disabled={isSaving}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.55rem 1.35rem",
+              borderRadius: "8px",
+              border: "none",
+              background: "var(--primary)",
+              color: "var(--primary-fg)",
+              cursor: isSaving ? "not-allowed" : "pointer",
+              fontWeight: 700,
+              fontSize: "0.875rem",
+              boxShadow: "0 2px 8px rgba(99, 102, 241, 0.25)"
+            }}
           >
-            <X size={22} />
+            {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+            {isSaving ? "Updating Timetable..." : "Update Timetable"}
           </button>
-        </div>
+        )}
+      </div>
+    </div>
+  );
 
-        {/* Modal Body */}
-        <div style={{ flex: 1, overflowY: "auto", minHeight: "260px" }}>
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`Scan & Update Timetable - ${selectedClassName}`}
+      icon={<Sparkles size={20} color="var(--primary)" />}
+      size="xl"
+      footer={footerContent}
+    >
+      {/* Hidden File Input supporting Photo, PDF, Spreadsheet/Excel, Word doc */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".png,.jpg,.jpeg,.webp,.bmp,image/*,.pdf,application/pdf,.xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+        onChange={handleFileSelect}
+        style={{ display: "none" }}
+      />
+      <div>
           {/* 1. INITIAL UPLOAD STATE */}
           {!selectedFile && !isScanning && scannedSlots.length === 0 && (
             <div>
@@ -1055,63 +1062,6 @@ export default function TimetableScanModal({
             </div>
           )}
         </div>
-
-        {/* Modal Footer */}
-        <div style={{ marginTop: "1.5rem", borderTop: "1px solid var(--border-color)", paddingTop: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-          <div>
-            {scannedSlots.length > 0 && (
-              <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-                Showing <strong>{visibleSlots.length}</strong> of <strong>{scannedSlots.length}</strong> slots
-              </span>
-            )}
-          </div>
-
-          <div style={{ display: "flex", gap: "0.75rem" }}>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSaving}
-              style={{
-                padding: "0.65rem 1.25rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color)",
-                background: "transparent",
-                color: "inherit",
-                cursor: "pointer",
-                fontWeight: 500,
-                fontSize: "0.875rem"
-              }}
-            >
-              Cancel
-            </button>
-
-            {scannedSlots.length > 0 && (
-              <button
-                type="button"
-                onClick={handleSaveToTimetable}
-                disabled={isSaving}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "0.65rem 1.75rem",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "var(--primary)",
-                  color: "var(--primary-fg)",
-                  cursor: isSaving ? "not-allowed" : "pointer",
-                  fontWeight: 600,
-                  fontSize: "0.875rem",
-                  boxShadow: "0 2px 8px rgba(99, 102, 241, 0.25)"
-                }}
-              >
-                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                {isSaving ? "Updating Timetable..." : "Update Timetable"}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

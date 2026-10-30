@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Modal } from "@/frontend/components/ui";
 import { 
   X, Check, AlertTriangle, ArrowRight, Loader2, Sparkles, 
   GraduationCap, Users, RefreshCw, ChevronDown, ChevronUp,
@@ -136,69 +137,129 @@ export default function PromotionWizardModal({
     return { promote, graduate, retain, transfer, total: simulation.totalStudents };
   })() : null;
 
-  return (
-    <div style={{
-      position: "fixed",
-      inset: 0,
-      backgroundColor: "rgba(0, 0, 0, 0.7)",
-      backdropFilter: "blur(6px)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 9999,
-      padding: "1.5rem"
-    }}>
-      <div style={{
-        backgroundColor: "var(--card-bg, #111827)",
-        borderRadius: "20px",
-        border: "1px solid var(--border-color, #374151)",
-        width: "100%",
-        maxWidth: "920px",
-        maxHeight: "92vh",
-        display: "flex",
-        flexDirection: "column",
-        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
-        overflow: "hidden"
-      }}>
-        {/* Modal Header */}
-        <div style={{
-          padding: "1.25rem 1.75rem",
-          borderBottom: "1px solid var(--border-color, #374151)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          background: "linear-gradient(to right, rgba(99, 102, 241, 0.1), transparent)"
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <div style={{
-              width: "38px",
-              height: "38px",
-              borderRadius: "10px",
-              backgroundColor: "rgba(99, 102, 241, 0.2)",
-              color: "#6366f1",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center"
-            }}>
-              <GraduationCap size={22} />
-            </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 700, color: "var(--foreground)" }}>
-                Batch Promotion & Rollover Wizard
-              </h3>
-              <p style={{ margin: "0.15rem 0 0", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                Advance classes, promote students, and graduate Class 12 alumni to the next batch
-              </p>
-            </div>
-          </div>
+  const footerContent = (
+    <div style={{ width: "100%", display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+      {step === 1 && (
+        <>
           <button
+            type="button"
             onClick={onClose}
             disabled={isPending}
-            style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
+            style={{
+              padding: "0.55rem 1.15rem",
+              borderRadius: "8px",
+              border: "1px solid var(--border-color)",
+              backgroundColor: "transparent",
+              color: "var(--foreground)",
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              cursor: "pointer"
+            }}
           >
-            <X size={20} />
+            Cancel
           </button>
-        </div>
+          <button
+            type="button"
+            onClick={handleSimulate}
+            disabled={isPending || !sourceBatchId || !targetBatchId}
+            style={{
+              padding: "0.55rem 1.35rem",
+              borderRadius: "8px",
+              border: "none",
+              backgroundColor: "var(--primary, #6366f1)",
+              color: "#ffffff",
+              fontWeight: 700,
+              fontSize: "0.875rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              boxShadow: "0 2px 6px rgba(99, 102, 241, 0.3)"
+            }}
+          >
+            {isPending ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
+            Generate Promotion Preview
+          </button>
+        </>
+      )}
+
+      {step === 2 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setStep(1)}
+            disabled={isPending}
+            style={{
+              padding: "0.55rem 1.15rem",
+              borderRadius: "8px",
+              border: "1px solid var(--border-color)",
+              backgroundColor: "transparent",
+              color: "var(--foreground)",
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              cursor: "pointer"
+            }}
+          >
+            Back to Selection
+          </button>
+          <button
+            type="button"
+            onClick={handleExecute}
+            disabled={isPending}
+            style={{
+              padding: "0.55rem 1.5rem",
+              borderRadius: "8px",
+              border: "none",
+              backgroundColor: "#10b981",
+              color: "#ffffff",
+              fontWeight: 800,
+              fontSize: "0.875rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              boxShadow: "0 2px 8px rgba(16, 185, 129, 0.4)"
+            }}
+          >
+            {isPending ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
+            Confirm &amp; Execute ({effectiveTotals?.total} Students)
+          </button>
+        </>
+      )}
+
+      {step === 3 && (
+        <button
+          type="button"
+          onClick={() => {
+            onSuccess();
+            onClose();
+          }}
+          style={{
+            padding: "0.55rem 1.35rem",
+            borderRadius: "8px",
+            border: "none",
+            backgroundColor: "var(--primary, #6366f1)",
+            color: "#ffffff",
+            fontWeight: 700,
+            fontSize: "0.875rem",
+            cursor: "pointer"
+          }}
+        >
+          Done &amp; Return to Batches
+        </button>
+      )}
+    </div>
+  );
+
+  return (
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title="Batch Promotion & Rollover Wizard"
+      icon={<GraduationCap size={22} color="#6366f1" />}
+      size="xl"
+      footer={footerContent}
+    >
 
         {/* Wizard Step Progress Indicator */}
         <div style={{
@@ -696,128 +757,6 @@ export default function PromotionWizardModal({
           </div>
         )}
 
-        {/* Modal Footer: Action Buttons */}
-        <div style={{
-          padding: "1.25rem 1.75rem",
-          borderTop: "1px solid var(--border-color, #374151)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          backgroundColor: "rgba(0, 0, 0, 0.15)"
-        }}>
-          {step === 1 && (
-            <>
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isPending}
-                style={{
-                  padding: "0.625rem 1.25rem",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color)",
-                  backgroundColor: "transparent",
-                  color: "var(--foreground)",
-                  fontWeight: 600,
-                  fontSize: "0.875rem",
-                  cursor: "pointer"
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSimulate}
-                disabled={isPending || !sourceBatchId || !targetBatchId}
-                style={{
-                  padding: "0.625rem 1.5rem",
-                  borderRadius: "8px",
-                  border: "none",
-                  backgroundColor: "var(--primary, #6366f1)",
-                  color: "#ffffff",
-                  fontWeight: 700,
-                  fontSize: "0.875rem",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.45rem",
-                  boxShadow: "0 2px 6px rgba(99, 102, 241, 0.3)"
-                }}
-              >
-                {isPending ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-                Generate Promotion Preview
-              </button>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                disabled={isPending}
-                style={{
-                  padding: "0.625rem 1.25rem",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color)",
-                  backgroundColor: "transparent",
-                  color: "var(--foreground)",
-                  fontWeight: 600,
-                  fontSize: "0.875rem",
-                  cursor: "pointer"
-                }}
-              >
-                Back to Selection
-              </button>
-              <button
-                type="button"
-                onClick={handleExecute}
-                disabled={isPending}
-                style={{
-                  padding: "0.625rem 1.75rem",
-                  borderRadius: "8px",
-                  border: "none",
-                  backgroundColor: "#10b981",
-                  color: "#ffffff",
-                  fontWeight: 800,
-                  fontSize: "0.9375rem",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  boxShadow: "0 2px 8px rgba(16, 185, 129, 0.4)"
-                }}
-              >
-                {isPending ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
-                Confirm & Execute Promotion ({effectiveTotals?.total} Students)
-              </button>
-            </>
-          )}
-
-          {step === 3 && (
-            <div style={{ width: "100%", display: "flex", justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  onSuccess();
-                  onClose();
-                }}
-                style={{
-                  padding: "0.625rem 1.5rem",
-                  borderRadius: "8px",
-                  border: "none",
-                  backgroundColor: "var(--primary, #6366f1)",
-                  color: "#ffffff",
-                  fontWeight: 700,
-                  fontSize: "0.875rem",
-                  cursor: "pointer"
-                }}
-              >
-                Done & Return to Batches
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

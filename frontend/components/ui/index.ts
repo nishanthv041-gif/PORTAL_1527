@@ -10,3 +10,6 @@ export type { ResultsContainerProps } from "./ResultsContainer";
 
 export { ConfirmDialogProvider, useConfirm } from "./ConfirmDialog";
 export type { ConfirmOptions, ConfirmVariant } from "./ConfirmDialog";
+
+export { default as Modal } from "./Modal";
+export type { ModalProps, ModalSize } from "./Modal";

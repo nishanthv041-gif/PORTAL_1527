@@ -7,7 +7,7 @@ import {
   XCircle, Clock, Calendar 
 } from "lucide-react";
 import styles from "./AttendanceSessionManager.module.css";
-import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
+import { SearchBar, ResultsContainer, Modal } from "@/frontend/components/ui";
 
 export type AttendancePersonItem = {
   id: string;
@@ -643,32 +643,31 @@ export default function AttendanceSessionManager({
         const liveModalStats = getLivePersonStats(selectedPersonForModal);
 
         return (
-          <div className={styles.modalBackdrop} onClick={() => setSelectedPersonForModal(null)}>
-            <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
-              {/* Modal Header */}
-              <div className={styles.modalHeader}>
-                <div className={styles.modalHeaderInfo}>
-                  <div className={styles.modalAvatar}>
-                    {selectedPersonForModal.name.charAt(0)}
-                  </div>
-                  <div>
-                    <h3 className={styles.modalPersonName}>
-                      {selectedPersonForModal.name}
-                    </h3>
-                    <span className={styles.modalPersonCode}>
-                      {selectedPersonForModal.codeOrRoll}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPersonForModal(null)}
-                  className={styles.modalCloseBtn}
-                  title="Close"
-                >
-                  <X size={20} />
-                </button>
-              </div>
+          <Modal
+            isOpen={Boolean(selectedPersonForModal)}
+            onClose={() => setSelectedPersonForModal(null)}
+            title={`${selectedPersonForModal.name} (${selectedPersonForModal.codeOrRoll})`}
+            icon={<Award size={20} color="var(--primary)" />}
+            size="lg"
+            footer={
+              <button
+                type="button"
+                onClick={() => setSelectedPersonForModal(null)}
+                style={{
+                  padding: "0.5rem 1.25rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  background: "transparent",
+                  color: "var(--foreground)",
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                Close
+              </button>
+            }
+          >
 
               {/* Hero Overall Attendance Card */}
               <div className={styles.modalHeroCard}>
@@ -822,8 +821,7 @@ export default function AttendanceSessionManager({
                   )}
                 </div>
               </div>
-            </div>
-          </div>
+          </Modal>
         );
       })()}
     </div>
