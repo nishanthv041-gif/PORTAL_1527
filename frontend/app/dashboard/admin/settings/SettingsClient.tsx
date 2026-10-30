@@ -631,15 +631,14 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
               Management Pages
             </h2>
             <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-secondary, #94a3b8)" }}>
-              Quick access to Teacher, Parent &amp; Student, and Timetable management.
+              Direct access to Teacher Management and Parent &amp; Student Management.
             </p>
           </div>
         </div>
         <div style={{ padding: "1.25rem 2rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "0.85rem" }}>
           {[
-            { href: "/dashboard/admin/teachers", label: "Teacher Management", desc: "Profiles, credentials & subjects", icon: <Users size={20} />, color: "#3b82f6" },
-            { href: "/dashboard/admin/students", label: "Parent & Student", desc: "Students, parents & classes", icon: <GraduationCap size={20} />, color: "#10b981" },
-            { href: "/dashboard/admin/timetable", label: "Timetable", desc: "Schedule, periods & substitution", icon: <Clock size={20} />, color: "#f59e0b" },
+            { href: "/dashboard/admin/teachers", label: "Teacher Management", desc: "Profiles, credentials, assigned subjects & Google SSO", icon: <Users size={20} />, color: "#3b82f6" },
+            { href: "/dashboard/admin/students", label: "Parent & Student", desc: "Students, parent contacts, classes & credentials", icon: <GraduationCap size={20} />, color: "#10b981" },
           ].map((item) => (
             <Link
               key={item.href}

@@ -3,6 +3,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import TeacherListClient from "./TeacherListClient";
+import SettingsNavSwitcher from "@/frontend/components/admin/SettingsNavSwitcher";
 
 export default async function AdminTeachersPage() {
   const session = await getServerSession(getAuthOptions());
@@ -31,14 +32,15 @@ export default async function AdminTeachersPage() {
 
   return (
     <div className={styles.dashboard}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h1 className={styles.title} style={{ margin: 0 }}>Teacher Management</h1>
-          <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
-            Manage teacher profiles, subject & class assignments, Google login credentials, and classroom access.
-          </p>
-        </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
+        <h1 className={styles.title} style={{ margin: 0 }}>Teacher Management</h1>
+        <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.9rem' }}>
+          Manage teacher profiles, subject &amp; class assignments, Google login credentials, and classroom access.
+        </p>
       </div>
+
+      {/* Switcher Option between Settings, Teacher Management, and Parent & Student */}
+      <SettingsNavSwitcher />
 
       <TeacherListClient teachers={teachers} allClasses={allClasses} allSubjects={allSubjects} />
     </div>
