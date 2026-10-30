@@ -49,6 +49,9 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
 
   const adminLinks = [
     { href: "/dashboard/admin", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
+    { href: "/dashboard/admin/teachers", label: "Teacher Management", icon: <Users size={20} /> },
+    { href: "/dashboard/admin/students", label: "Parent & Student", icon: <GraduationCap size={20} /> },
+    { href: "/dashboard/admin/timetable", label: "Timetable", icon: <Calendar size={20} /> },
     { href: "/dashboard/admin/batches", label: "Batches & Promotion", icon: <Layers size={20} /> },
     { href: "/dashboard/admin/main-roles", label: "Main Roles", icon: <Users size={20} /> },
     { href: "/dashboard/admin/teacher-attendance", label: "Teacher Attendance", icon: <UserCheck size={20} /> },

@@ -169,106 +169,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
 
   return (
     <div style={{ marginTop: "1.5rem", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* SECTION 1: CLASSES OVERVIEW GRID */}
-      <div style={{ marginBottom: "2rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
-          <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
-            Classes & Sections
-          </h2>
-          <span style={{ fontSize: "0.82rem", color: "var(--text-secondary, #94a3b8)" }}>
-            {classes.length} Classes • {students.length} Total Enrolled
-          </span>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))",
-            gap: "0.85rem",
-          }}
-        >
-          {/* "All Classes" Card */}
-          <div
-            onClick={() => setSelectedClassId("ALL")}
-            style={{
-              padding: "1rem",
-              borderRadius: "12px",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-              background: selectedClassId === "ALL" ? "rgba(59, 130, 246, 0.15)" : "var(--card-bg, #0f172a)",
-              border: selectedClassId === "ALL" ? "1.5px solid var(--primary, #3b82f6)" : "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.4rem" }}>
-              <div style={{ fontWeight: 700, fontSize: "0.95rem", color: selectedClassId === "ALL" ? "#60a5fa" : "inherit" }}>
-                All Students
-              </div>
-              <span
-                style={{
-                  fontSize: "0.75rem",
-                  padding: "0.15rem 0.5rem",
-                  borderRadius: "10px",
-                  background: "rgba(59, 130, 246, 0.2)",
-                  color: "#60a5fa",
-                  fontWeight: 700,
-                }}
-              >
-                {students.length}
-              </span>
-            </div>
-            <div style={{ fontSize: "0.78rem", color: "var(--text-secondary, #94a3b8)" }}>
-              Full school roster
-            </div>
-          </div>
-
-          {/* Individual Class Cards */}
-          {classes.map((c) => {
-            const count = classStudentCounts.get(c.id) || 0;
-            const isSelected = selectedClassId === c.id;
-            const teacherName = c.classTeacher?.user?.name || "Unassigned";
-
-            return (
-              <div
-                key={c.id}
-                onClick={() => setSelectedClassId(c.id)}
-                style={{
-                  padding: "1rem",
-                  borderRadius: "12px",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                  background: isSelected ? "rgba(59, 130, 246, 0.15)" : "var(--card-bg, #0f172a)",
-                  border: isSelected ? "1.5px solid var(--primary, #3b82f6)" : "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.4rem" }}>
-                  <div style={{ fontWeight: 700, fontSize: "0.95rem", color: isSelected ? "#60a5fa" : "inherit" }}>
-                    {c.name} - {c.section}
-                  </div>
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      padding: "0.15rem 0.5rem",
-                      borderRadius: "10px",
-                      background: count > 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(148, 163, 184, 0.12)",
-                      color: count > 0 ? "#34d399" : "#94a3b8",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {count}
-                  </span>
-                </div>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary, #94a3b8)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  Teacher: {teacherName}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* SECTION 2: TOP CONTROLS BAR */}
+      {/* SECTION 1: SEARCH & CONTROLS */}
       <div
         style={{
           background: "var(--card-bg, #0f172a)",
@@ -467,6 +368,105 @@ export default function StudentListClient({ students, classes }: StudentListClie
         </div>
       </div>
 
+      {/* SECTION 2: CLASSES OVERVIEW GRID (CLICK TO FILTER) */}
+      <div style={{ marginBottom: "2rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
+          <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
+            Classes & Sections
+          </h2>
+          <span style={{ fontSize: "0.82rem", color: "var(--text-secondary, #94a3b8)" }}>
+            {classes.length} Classes • {students.length} Total Enrolled
+          </span>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))",
+            gap: "0.85rem",
+          }}
+        >
+          {/* "All Classes" Card */}
+          <div
+            onClick={() => setSelectedClassId("ALL")}
+            style={{
+              padding: "1rem",
+              borderRadius: "12px",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              background: selectedClassId === "ALL" ? "rgba(59, 130, 246, 0.15)" : "var(--card-bg, #0f172a)",
+              border: selectedClassId === "ALL" ? "1.5px solid var(--primary, #3b82f6)" : "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.4rem" }}>
+              <div style={{ fontWeight: 700, fontSize: "0.95rem", color: selectedClassId === "ALL" ? "#60a5fa" : "inherit" }}>
+                All Students
+              </div>
+              <span
+                style={{
+                  fontSize: "0.75rem",
+                  padding: "0.15rem 0.5rem",
+                  borderRadius: "10px",
+                  background: "rgba(59, 130, 246, 0.2)",
+                  color: "#60a5fa",
+                  fontWeight: 700,
+                }}
+              >
+                {students.length}
+              </span>
+            </div>
+            <div style={{ fontSize: "0.78rem", color: "var(--text-secondary, #94a3b8)" }}>
+              Full school roster
+            </div>
+          </div>
+
+          {/* Individual Class Cards */}
+          {classes.map((c) => {
+            const count = classStudentCounts.get(c.id) || 0;
+            const isSelected = selectedClassId === c.id;
+            const teacherName = c.classTeacher?.user?.name || "Unassigned";
+
+            return (
+              <div
+                key={c.id}
+                onClick={() => setSelectedClassId(c.id)}
+                style={{
+                  padding: "1rem",
+                  borderRadius: "12px",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  background: isSelected ? "rgba(59, 130, 246, 0.15)" : "var(--card-bg, #0f172a)",
+                  border: isSelected ? "1.5px solid var(--primary, #3b82f6)" : "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.4rem" }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.95rem", color: isSelected ? "#60a5fa" : "inherit" }}>
+                    {c.name} - {c.section}
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      padding: "0.15rem 0.5rem",
+                      borderRadius: "10px",
+                      background: count > 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(148, 163, 184, 0.12)",
+                      color: count > 0 ? "#34d399" : "#94a3b8",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {count}
+                  </span>
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary, #94a3b8)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  Teacher: {teacherName}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* SECTION 3: CLASS VIEW HEADER */}
       <div
         style={{
@@ -582,7 +582,12 @@ export default function StudentListClient({ students, classes }: StudentListClie
                         <div>{parentName}</div>
                         {parent?.user?.email && (
                           <div style={{ fontSize: "0.72rem", color: "var(--text-secondary, #94a3b8)" }}>
-                            {parent.user.email}
+                            ID: {parent.user.email}
+                          </div>
+                        )}
+                        {parent?.user?.googleEmail && (
+                          <div style={{ fontSize: "0.70rem", color: "#38bdf8", marginTop: "2px" }}>
+                            Google: {parent.user.googleEmail}
                           </div>
                         )}
                       </td>
@@ -731,6 +736,16 @@ export default function StudentListClient({ students, classes }: StudentListClie
                   </div>
                   <div style={{ fontSize: "0.78rem", color: "var(--text-secondary, #94a3b8)", marginBottom: "0.4rem" }}>
                     <strong>Parent:</strong> {parent?.user?.name || "None linked"}
+                    {parent?.user?.email && (
+                      <span style={{ display: "block", fontSize: "0.72rem", color: "var(--text-secondary, #94a3b8)" }}>
+                        ID: {parent.user.email}
+                      </span>
+                    )}
+                    {parent?.user?.googleEmail && (
+                      <span style={{ display: "block", fontSize: "0.72rem", color: "#38bdf8" }}>
+                        Google: {parent.user.googleEmail}
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: "0.78rem", color: "var(--text-secondary, #94a3b8)", marginBottom: "0.85rem" }}>
                     <strong>Phone:</strong> {parent?.phone || "No phone"}

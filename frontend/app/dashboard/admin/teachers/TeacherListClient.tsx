@@ -451,8 +451,13 @@ export default function TeacherListClient({
                           {teacher.user.name}
                         </div>
                         <div style={{ fontSize: "0.78rem", color: "var(--text-secondary, #94a3b8)", opacity: 0.8 }}>
-                          {teacher.user.email}
+                          ID: {teacher.user.email}
                         </div>
+                        {teacher.user.googleEmail && (
+                          <div style={{ fontSize: "0.72rem", color: "#38bdf8", marginTop: "2px" }}>
+                            Google: {teacher.user.googleEmail}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -631,7 +636,18 @@ export default function TeacherListClient({
                 {filteredAndSortedTeachers.map((teacher) => (
                   <tr
                     key={teacher.id}
-                    style={{ borderBottom: "1px solid var(--border-color, rgba(255, 255, 255, 0.05))" }}
+                    onClick={() => handleOpenEdit(teacher)}
+                    style={{
+                      borderBottom: "1px solid var(--border-color, rgba(255, 255, 255, 0.05))",
+                      cursor: "pointer",
+                      transition: "background 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "rgba(59, 130, 246, 0.06)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "transparent";
+                    }}
                   >
                     <td style={{ padding: "0.85rem 1rem" }}>
                       <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{teacher.user.name}</div>
