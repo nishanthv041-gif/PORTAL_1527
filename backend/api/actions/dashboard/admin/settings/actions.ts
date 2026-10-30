@@ -146,3 +146,47 @@ export async function getSystemSetting(key: string, defaultValue: string = "") {
   const settings = await getSystemSettings();
   return settings[key] || defaultValue;
 }
+
+export const getSchoolInfo = unstable_cache(
+  async (includeLogo: boolean = false): Promise<Record<string, string>> => {
+    try {
+      const settings = await prisma.systemSetting.findMany({
+        where: {
+          category: "SCHOOL",
+          ...(includeLogo ? {} : { key: { not: "SCHOOL_LOGO" } })
+        },
+        select: { key: true, value: true }
+      });
+      const map: Record<string, string> = {
+        SCHOOL_NAME: DEFAULT_SYSTEM_SETTINGS.SCHOOL_NAME,
+        SCHOOL_ADDRESS: DEFAULT_SYSTEM_SETTINGS.SCHOOL_ADDRESS,
+        SCHOOL_CONTACT: DEFAULT_SYSTEM_SETTINGS.SCHOOL_CONTACT,
+        SCHOOL_EMAIL: DEFAULT_SYSTEM_SETTINGS.SCHOOL_EMAIL,
+        SCHOOL_WEBSITE: DEFAULT_SYSTEM_SETTINGS.SCHOOL_WEBSITE,
+        PRINCIPAL_NAME: DEFAULT_SYSTEM_SETTINGS.PRINCIPAL_NAME,
+        ACADEMIC_YEAR: DEFAULT_SYSTEM_SETTINGS.ACADEMIC_YEAR,
+        SCHOOL_LOGO: ""
+      };
+      settings.forEach(s => { map[s.key] = s.value; });
+      return map;
+    } catch (e) {
+      console.error("Failed to load school info:", e);
+      return DEFAULT_SYSTEM_SETTINGS;
+    }
+  },
+  ["school-info-cache"],
+  { revalidate: 300, tags: ["system-settings"] }
+);
+
+export async function getSchoolLogo(): Promise<string> {
+  try {
+    const setting = await prisma.systemSetting.findUnique({
+      where: { key: "SCHOOL_LOGO" },
+      select: { value: true }
+    });
+    return setting?.value || "";
+  } catch {
+    return "";
+  }
+}
+

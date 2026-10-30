@@ -45,7 +45,61 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
     setErrorMessage(null);
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressLogoImage = (imgFile: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      if (imgFile.type === "image/svg+xml") {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(imgFile);
+        return;
+      }
+
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(imgFile);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const maxDim = 256;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, width);
+        canvas.height = Math.max(1, height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(imgFile);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        try {
+          const webpData = canvas.toDataURL("image/webp", 0.8);
+          if (webpData.startsWith("data:image/webp")) {
+            resolve(webpData);
+            return;
+          }
+        } catch {}
+        resolve(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("Failed to load image for compression"));
+      };
+      img.src = objectUrl;
+    });
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -63,13 +117,13 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        handleChange("SCHOOL_LOGO", reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressedDataUrl = await compressLogoImage(file);
+      handleChange("SCHOOL_LOGO", compressedDataUrl);
+      setErrorMessage(null);
+    } catch {
+      setErrorMessage("Failed to process logo image. Please try another image.");
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
