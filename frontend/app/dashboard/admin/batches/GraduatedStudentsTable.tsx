@@ -1,5 +1,7 @@
 "use client";
 
+import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
+
 import { useState, useEffect } from "react";
 import { 
   GraduationCap, Search, Calendar, User, Phone, Mail, 
@@ -12,6 +14,7 @@ export default function GraduatedStudentsTable() {
   const [batches, setBatches] = useState<string[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [isPendingSearch, setIsPendingSearch] = useState(false);
   const [loading, setLoading] = useState<boolean>(true);
 
   const fetchGraduated = async () => {
@@ -31,7 +34,7 @@ export default function GraduatedStudentsTable() {
 
   useEffect(() => {
     fetchGraduated();
-  }, [selectedBatch]);
+  }, [selectedBatch, searchQuery]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,41 +98,17 @@ export default function GraduatedStudentsTable() {
         </div>
 
         {/* Search Input */}
-        <form onSubmit={handleSearchSubmit} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <div style={{ position: "relative" }}>
-            <Search size={15} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)" }} />
-            <input
-              type="text"
-              placeholder="Search by student name or roll..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                padding: "0.45rem 0.75rem 0.45rem 2rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color)",
-                backgroundColor: "var(--card-bg, #1f2937)",
-                color: "var(--foreground)",
-                fontSize: "0.8125rem",
-                width: "240px"
-              }}
-            />
-          </div>
-          <button
-            type="submit"
-            style={{
-              padding: "0.45rem 0.85rem",
-              borderRadius: "8px",
-              border: "none",
-              backgroundColor: "var(--primary, #6366f1)",
-              color: "#ffffff",
-              fontSize: "0.8125rem",
-              fontWeight: 600,
-              cursor: "pointer"
+        <div style={{ width: "260px", maxWidth: "100%" }}>
+          <SearchBar
+            placeholder="Search by student name or roll..."
+            value={searchQuery}
+            onChange={(val) => {
+              setSearchQuery(val);
             }}
-          >
-            Search
-          </button>
-        </form>
+            onPendingChange={(pending) => setIsPendingSearch(pending)}
+            style={{ maxWidth: "100%" }}
+          />
+        </div>
       </div>
 
       {/* Graduated Students List */}
@@ -153,10 +132,19 @@ export default function GraduatedStudentsTable() {
           </p>
         </div>
       ) : (
-        <div style={{
+        <ResultsContainer
+          isPending={isPendingSearch || loading}
+          isEmpty={graduatedStudents.length === 0}
+          emptyTitle="No Alumni Found"
+          emptyMessage="No graduated alumni records matched your search query."
+          onReset={() => setSearchQuery("")}
+          resetLabel="Clear Search"
+        >
+        <div className="table-responsive-container" style={{
           border: "1px solid var(--border-color)",
           borderRadius: "12px",
-          overflow: "hidden"
+          overflowX: "auto",
+          WebkitOverflowScrolling: "touch"
         }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem", textAlign: "left" }}>
             <thead>
@@ -233,6 +221,7 @@ export default function GraduatedStudentsTable() {
             </tbody>
           </table>
         </div>
+        </ResultsContainer>
       )}
     </div>
   );

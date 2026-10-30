@@ -117,6 +117,12 @@
 html {
   /* Prevent layout shift; colour transition is on body */
   color-scheme: light dark;
+  min-height: 100dvh;
+  margin: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  max-width: 100%;
+  width: 100%;
 }
 
 body {
@@ -124,6 +130,12 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   line-height: 1.5;
+  min-height: 100dvh;
+  margin: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  max-width: 100%;
+  width: 100%;
   /* Smooth theme transition — only colour properties, not layout */
   transition:
     background-color 0.2s ease,
@@ -168,8 +180,11 @@ label {
 }
 
 img,
-svg {
+svg,
+video,
+canvas {
   max-width: 100%;
+  height: auto;
 }
 
 /* Reusable touch-friendly table container */
@@ -275,4 +290,42 @@ select option:hover {
       width: 100%;
     }
   }
+}
+/* ============================================================
+   RESPONSIVE UTILITIES (AUTO SCREEN-FIT)
+   ============================================================ */
+.cards-grid-autofit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: clamp(0.75rem, 1.5vw, 1.5rem);
+  width: 100%;
+  max-width: 100%;
+}
+
+.table-responsive-container,
+.tableContainer,
+.table-scroll-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  display: block;
+  position: relative;
+}
+
+.modal-dialog,
+.modalContainer,
+.modalCard,
+.modalContent {
+  max-width: min(95vw, 700px);
+  max-height: 90dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+}
+
+.recharts-responsive-container {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
 }

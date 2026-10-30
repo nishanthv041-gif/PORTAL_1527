@@ -8,6 +8,7 @@ import { createSubjectAction, deleteSubjectGroupByName } from "@/backend/api/act
 import { Subject, Class, Teacher, User, Student, Mark } from "@prisma/client";
 import EditSubjectModal from "./EditSubjectModal";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 
 type TeacherWithUser = Teacher & { user: User };
 type SubjectWithRelations = Subject & {
@@ -36,6 +37,8 @@ export default function SubjectListClient({
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
   const [classStaffMap, setClassStaffMap] = useState<Record<string, string>>({});
   const [subjectName, setSubjectName] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isPendingSearch, setIsPendingSearch] = useState(false);
 
   // Sync state if props change
   useState(() => {
@@ -130,6 +133,18 @@ export default function SubjectListClient({
     acc[curr.name].push(curr);
     return acc;
   }, {} as Record<string, SubjectWithRelations[]>);
+
+  const filteredSubjectNames = Object.keys(groupedSubjects).filter((subjName) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    const matchesName = subjName.toLowerCase().includes(q);
+    const instances = groupedSubjects[subjName];
+    const matchesCodeOrTeacher = instances.some(inst => 
+      (inst.code && inst.code.toLowerCase().includes(q)) ||
+      (inst.teacher?.user?.name && inst.teacher.user.name.toLowerCase().includes(q))
+    );
+    return matchesName || matchesCodeOrTeacher;
+  });
 
   return (
     <div>
@@ -376,9 +391,33 @@ export default function SubjectListClient({
         </div>
       )}
 
+      {/* Search Bar */}
+      <div style={{ marginBottom: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+        <div style={{ width: "100%", maxWidth: "340px", minWidth: "220px" }}>
+          <SearchBar
+            placeholder="Search subject, code, teacher..."
+            value={searchQuery}
+            onChange={(val) => setSearchQuery(val)}
+            onPendingChange={(pending) => setIsPendingSearch(pending)}
+            style={{ maxWidth: "100%" }}
+          />
+        </div>
+        <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)", fontWeight: 600 }}>
+          Showing {filteredSubjectNames.length} of {Object.keys(groupedSubjects).length} subjects
+        </span>
+      </div>
+
       {/* Subject Cards Grid */}
+      <ResultsContainer
+        isPending={isPendingSearch}
+        isEmpty={filteredSubjectNames.length === 0}
+        emptyTitle="No Subjects Found"
+        emptyMessage="No subjects match your search query."
+        onReset={() => setSearchQuery("")}
+        resetLabel="Clear Search"
+      >
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: '1.25rem', width: '100%', minWidth: 0 }}>
-        {Object.keys(groupedSubjects).sort().map(subjectName => {
+        {filteredSubjectNames.sort().map(subjectName => {
           const instances = groupedSubjects[subjectName];
           const subjectCode = instances[0]?.code || "";
           
@@ -545,6 +584,7 @@ export default function SubjectListClient({
           </div>
         )}
       </div>
+      </ResultsContainer>
 
       {/* Edit Subject Modal */}
       {editingSubject && (

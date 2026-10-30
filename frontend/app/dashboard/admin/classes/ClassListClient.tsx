@@ -15,6 +15,7 @@ import {
 } from "@/backend/api/actions/dashboard/admin/classes/actions";
 import { Class, Teacher, User, Student, Attendance } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 
 const CLASS_OPTIONS = Array.from({ length: 12 }, (_, i) => `Class ${i + 1}`);
 const SECTION_OPTIONS = ["A", "B", "C", "D", "E"];
@@ -46,6 +47,8 @@ export default function ClassListClient({
   const [selectedSections, setSelectedSections] = useState<string[]>(["A"]);
   const [sectionStaffMap, setSectionStaffMap] = useState<Record<string, string>>({});
   const [createMaxStrength, setCreateMaxStrength] = useState(40);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isPendingSearch, setIsPendingSearch] = useState(false);
 
   // Edit Class State
   const [editingClassName, setEditingClassName] = useState<string | null>(null);
@@ -63,6 +66,18 @@ export default function ClassListClient({
     acc[curr.name].push(curr);
     return acc;
   }, {} as Record<string, ClassWithRelations[]>);
+
+  const filteredClassNames = Object.keys(groupedClasses).filter((className) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    const matchesClassName = className.toLowerCase().includes(q);
+    const sections = groupedClasses[className];
+    const matchesSection = sections.some(s => 
+      s.section.toLowerCase().includes(q) || 
+      (s.teacher?.user?.name && s.teacher.user.name.toLowerCase().includes(q))
+    );
+    return matchesClassName || matchesSection;
+  });
 
   const toggleSection = (section: string) => {
     if (selectedSections.includes(section)) {
@@ -556,9 +571,33 @@ export default function ClassListClient({
         </div>
       )}
 
+      {/* Search Bar */}
+      <div style={{ marginBottom: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+        <div style={{ width: "100%", maxWidth: "340px", minWidth: "220px" }}>
+          <SearchBar
+            placeholder="Search class, section, teacher..."
+            value={searchQuery}
+            onChange={(val) => setSearchQuery(val)}
+            onPendingChange={(pending) => setIsPendingSearch(pending)}
+            style={{ maxWidth: "100%" }}
+          />
+        </div>
+        <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)", fontWeight: 600 }}>
+          Showing {filteredClassNames.length} of {Object.keys(groupedClasses).length} classes
+        </span>
+      </div>
+
       {/* Classes Grid */}
+      <ResultsContainer
+        isPending={isPendingSearch}
+        isEmpty={filteredClassNames.length === 0}
+        emptyTitle="No Classes Found"
+        emptyMessage="No classes match your search query."
+        onReset={() => setSearchQuery("")}
+        resetLabel="Clear Search"
+      >
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: '1.25rem', width: '100%', minWidth: 0 }}>
-        {Object.keys(groupedClasses).sort((a, b) => {
+        {filteredClassNames.sort((a, b) => {
            const numA = parseInt(a.replace(/\D/g, '')) || 0;
            const numB = parseInt(b.replace(/\D/g, '')) || 0;
            return numA - numB;
@@ -745,6 +784,7 @@ export default function ClassListClient({
           );
         })}
       </div>
+      </ResultsContainer>
       
       {classList.length === 0 && (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)', background: 'var(--card-bg)', borderRadius: '12px', border: '1px dashed var(--border-color)' }}>

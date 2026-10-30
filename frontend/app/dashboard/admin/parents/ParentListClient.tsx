@@ -6,6 +6,7 @@ import Link from "next/link";
 import { deactivateParent, activateParent, deleteParent } from "@/backend/api/actions/dashboard/admin/parents/actions";
 import { Parent, User, ParentStudent, Student, Class } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 
 type ParentWithRelations = Parent & {
   user: User;
@@ -25,6 +26,7 @@ export default function ParentListClient({
   const [statusFilter, setStatusFilter] = useState("");
   const [classFilter, setClassFilter] = useState("");
   const [studentCountFilter, setStudentCountFilter] = useState("");
+  const [isPendingSearch, setIsPendingSearch] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
@@ -125,14 +127,16 @@ export default function ParentListClient({
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <div style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
-          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
-          <input 
-            type="text" 
-            placeholder="Search name, email, phone..." 
+        <div style={{ width: '100%', maxWidth: '320px', minWidth: '220px' }}>
+          <SearchBar
+            placeholder="Search name, email, phone..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
+            onChange={(val) => {
+              setSearchTerm(val);
+              setCurrentPage(1);
+            }}
+            onPendingChange={(pending) => setIsPendingSearch(pending)}
+            style={{ maxWidth: '100%' }}
           />
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -168,6 +172,20 @@ export default function ParentListClient({
         </div>
       </div>
 
+      <ResultsContainer
+        isPending={isPendingSearch}
+        isEmpty={filteredParents.length === 0}
+        emptyTitle="No parent accounts found"
+        emptyMessage="No parent records matched your search query or filters."
+        onReset={() => {
+          setSearchTerm("");
+          setStatusFilter("");
+          setClassFilter("");
+          setStudentCountFilter("");
+          setCurrentPage(1);
+        }}
+        resetLabel="Reset Filters"
+      >
       <div style={{ overflowX: 'auto', width: '100%', maxWidth: '100%', minWidth: 0, WebkitOverflowScrolling: 'touch' }}>
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "800px" }}>
           <thead>
@@ -388,6 +406,7 @@ export default function ParentListClient({
           </div>
         )}
       </div>
+      </ResultsContainer>
     </div>
   );
 }

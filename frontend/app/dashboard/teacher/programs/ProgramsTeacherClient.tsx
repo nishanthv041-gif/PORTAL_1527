@@ -1,5 +1,7 @@
 "use client";
 
+import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
+
 import { useState } from "react";
 import { 
   Calendar as CalendarIcon, MapPin, Clock, 
@@ -21,6 +23,7 @@ export default function ProgramsTeacherClient({
   teacherClasses?: TeacherClass[];
 }) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [isPendingSearch, setIsPendingSearch] = useState(false);
   const [activeTab, setActiveTab] = useState<"ALL" | "UPCOMING" | "PREVIOUS">("ALL");
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>("ALL");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -166,39 +169,13 @@ export default function ProgramsTeacherClient({
         }}
       >
         {/* Search Input */}
-        <div
-          style={{
-            position: "relative",
-            flex: "1 1 280px",
-            maxWidth: "480px"
-          }}
-        >
-          <Search
-            size={18}
-            style={{
-              position: "absolute",
-              left: "1rem",
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "var(--text-secondary)"
-            }}
-          />
-          <input
-            type="text"
+        <div style={{ flex: "1 1 280px", maxWidth: "480px", minWidth: "220px" }}>
+          <SearchBar
             placeholder="Search programs by title, venue, organizer..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "0.75rem 1rem 0.75rem 2.75rem",
-              borderRadius: "12px",
-              border: "1px solid var(--border-color, #e5e7eb)",
-              background: "var(--card-bg, #ffffff)",
-              color: "var(--foreground)",
-              fontSize: "0.92rem",
-              outline: "none",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
-            }}
+            onChange={(val) => setSearchQuery(val)}
+            onPendingChange={(pending) => setIsPendingSearch(pending)}
+            style={{ maxWidth: "100%" }}
           />
         </div>
 
@@ -270,6 +247,18 @@ export default function ProgramsTeacherClient({
       </div>
 
       {/* Programs List */}
+      <ResultsContainer
+        isPending={isPendingSearch}
+        isEmpty={displayedPrograms.length === 0}
+        emptyTitle="No Programs Found"
+        emptyMessage="No school programs match your search query or class filter."
+        onReset={() => {
+          setSearchQuery("");
+          setSelectedClassFilter("ALL");
+          setActiveTab("ALL");
+        }}
+        resetLabel="Reset Search"
+      >
       {displayedPrograms.length === 0 ? (
         <div
           style={{
@@ -546,6 +535,7 @@ export default function ProgramsTeacherClient({
           })}
         </div>
       )}
+      </ResultsContainer>
     </div>
   );
 }

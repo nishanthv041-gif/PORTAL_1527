@@ -7,6 +7,7 @@ import {
   XCircle, Clock, Calendar 
 } from "lucide-react";
 import styles from "./AttendanceSessionManager.module.css";
+import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 
 export type AttendancePersonItem = {
   id: string;
@@ -66,6 +67,7 @@ export default function AttendanceSessionManager({
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [session, setSession] = useState<"FORENOON" | "AFTERNOON">("FORENOON");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isPendingSearch, setIsPendingSearch] = useState(false);
   const [selectedPersonForModal, setSelectedPersonForModal] = useState<AttendancePersonItem | null>(null);
 
   // Maintain separate, independent local state for FORENOON and AFTERNOON
@@ -342,14 +344,13 @@ export default function AttendanceSessionManager({
           </div>
         )}
 
-        <div className={styles.searchWrapper}>
-          <Search size={16} className={styles.searchIcon} />
-          <input
-            type="text"
-            placeholder={title.toLowerCase().includes("teacher") ? "Search teachers..." : "Search students..."}
+        <div style={{ width: "100%", maxWidth: "340px", minWidth: "220px" }}>
+          <SearchBar
+            placeholder={title.toLowerCase().includes("teacher") ? "Search teachers by name/code..." : "Search students by name/roll..."}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className={styles.searchInput}
+            onChange={(val) => setSearchQuery(val)}
+            onPendingChange={(pending) => setIsPendingSearch(pending)}
+            style={{ maxWidth: "100%" }}
           />
         </div>
       </div>
@@ -464,6 +465,14 @@ export default function AttendanceSessionManager({
       </div>
 
       {/* 4. Table of Members (Clean 3-column table: #, Member, Status: P, A, L) */}
+      <ResultsContainer
+        isPending={isPendingSearch}
+        isEmpty={filteredPeople.length === 0}
+        emptyTitle={title.toLowerCase().includes("teacher") ? "No faculty members found" : "No students found"}
+        emptyMessage="Try adjusting your search query or class category."
+        onReset={() => setSearchQuery("")}
+        resetLabel="Clear Search"
+      >
       <div className={styles.tableCard}>
         <div className={styles.tableWrapper}>
           <table className={styles.table}>
@@ -561,6 +570,7 @@ export default function AttendanceSessionManager({
           </table>
         </div>
       </div>
+      </ResultsContainer>
 
       {/* 5. Session Overview Card (Bottom) */}
       <div className={styles.overviewCard}>

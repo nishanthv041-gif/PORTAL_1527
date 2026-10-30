@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import styles from "./users.module.css";
 import { Plus } from "lucide-react";
+import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 
 type User = {
   id: string;
@@ -19,6 +20,7 @@ export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPending, setIsPending] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -105,12 +107,12 @@ export default function UsersPage() {
       </div>
 
       <div className={styles.controls}>
-        <input
-          type="text"
+        <SearchBar
+          defaultValue={searchTerm}
           placeholder="Search by name or email..."
-          className={styles.searchInput}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(term) => setSearchTerm(term)}
+          onPendingChange={setIsPending}
+          syncWithUrl={false}
         />
         <select 
           className={styles.selectInput}
@@ -124,42 +126,44 @@ export default function UsersPage() {
         </select>
       </div>
 
-      <div className={styles.tableContainer}>
-        {loading ? (
-          <div style={{ padding: "2rem", textAlign: "center" }}>Loading users...</div>
-        ) : (
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th className={styles.th}>Name</th>
-                <th className={styles.th}>Email</th>
-                <th className={styles.th}>Role</th>
-                <th className={styles.th}>Status</th>
-                <th className={styles.th}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((user) => (
-                <tr key={user.id} className={styles.tr}>
-                  <td className={styles.td}>{user.name}</td>
-                  <td className={styles.td}>{user.email}</td>
-                  <td className={styles.td}>
-                    <span className={`${styles.roleBadge} ${styles[`role_${user.role}`]}`}>
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className={styles.td}>
-                    <span className={styles[`status_${user.status}`]}>{user.status}</span>
-                  </td>
-                  <td className={styles.td}>
-                    <button className={styles.actionBtn}>Edit</button>
-                  </td>
+      <ResultsContainer isPending={isPending || loading}>
+        <div className={styles.tableContainer}>
+          {loading ? (
+            <div style={{ padding: "2rem", textAlign: "center" }}>Loading users...</div>
+          ) : (
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.th}>Name</th>
+                  <th className={styles.th}>Email</th>
+                  <th className={styles.th}>Role</th>
+                  <th className={styles.th}>Status</th>
+                  <th className={styles.th}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {filteredUsers.map((user) => (
+                  <tr key={user.id} className={styles.tr}>
+                    <td className={styles.td}>{user.name}</td>
+                    <td className={styles.td}>{user.email}</td>
+                    <td className={styles.td}>
+                      <span className={`${styles.roleBadge} ${styles[`role_${user.role}`]}`}>
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className={styles.td}>
+                      <span className={styles[`status_${user.status}`]}>{user.status}</span>
+                    </td>
+                    <td className={styles.td}>
+                      <button className={styles.actionBtn}>Edit</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </ResultsContainer>
 
       {isModalOpen && (
         <div className={styles.modalOverlay}>

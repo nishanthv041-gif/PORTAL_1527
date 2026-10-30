@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { toggleStudentStatusAction } from "@/backend/api/actions/dashboard/admin/students/studentManagementActions";
 import StudentEditDrawer, { StudentData } from "./StudentEditDrawer";
+import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 
 interface ClassItem {
   id: string;
@@ -41,6 +42,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
   const [viewMode, setViewMode] = useState<"GRID" | "LIST">("LIST");
 
   // Drawer
+  const [isPendingSearch, setIsPendingSearch] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentData | null>(null);
 
@@ -185,31 +187,13 @@ export default function StudentListClient({ students, classes }: StudentListClie
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
           {/* Search Input */}
-          <div style={{ position: "relative", flex: "1 1 300px", minWidth: "220px" }}>
-            <Search
-              size={18}
-              style={{
-                position: "absolute",
-                left: "12px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                color: "var(--text-secondary, #94a3b8)",
-              }}
-            />
-            <input
-              type="text"
+          <div style={{ flex: "1 1 300px", minWidth: "220px", maxWidth: "100%" }}>
+            <SearchBar
               placeholder="Search name, roll no, admission no, parent, phone..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.65rem 1rem 0.65rem 2.4rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color, rgba(255, 255, 255, 0.12))",
-                background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                color: "inherit",
-                fontSize: "0.88rem",
-              }}
+              onChange={(val) => setSearchTerm(val)}
+              onPendingChange={(pending) => setIsPendingSearch(pending)}
+              style={{ maxWidth: "100%" }}
             />
           </div>
 
@@ -488,37 +472,20 @@ export default function StudentListClient({ students, classes }: StudentListClie
       </div>
 
       {/* SECTION 4: STUDENT ROSTER (LIST OR GRID) */}
-      {filteredStudents.length === 0 ? (
-        <div
-          style={{
-            padding: "4rem 2rem",
-            textAlign: "center",
-            background: "var(--card-bg, #0f172a)",
-            border: "1px dashed var(--border-color, rgba(255, 255, 255, 0.15))",
-            borderRadius: "14px",
-            color: "var(--text-secondary, #94a3b8)",
-          }}
-        >
-          <GraduationCap size={48} style={{ opacity: 0.3, marginBottom: "1rem" }} />
-          <h3 style={{ margin: 0, fontSize: "1.1rem", color: "var(--text-primary, #f8fafc)" }}>No students match criteria</h3>
-          <p style={{ margin: "0.5rem 0 1.5rem 0", fontSize: "0.85rem" }}>Try adjusting your search terms or class filter.</p>
-          <button
-            type="button"
-            onClick={handleOpenAdd}
-            style={{
-              padding: "0.6rem 1.25rem",
-              borderRadius: "8px",
-              background: "rgba(59, 130, 246, 0.15)",
-              border: "1px solid rgba(59, 130, 246, 0.3)",
-              color: "#60a5fa",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            + Enroll New Student
-          </button>
-        </div>
-      ) : viewMode === "LIST" ? (
+      <ResultsContainer
+        isPending={isPendingSearch}
+        isEmpty={filteredStudents.length === 0}
+        emptyTitle="No students match criteria"
+        emptyMessage="Try adjusting your search terms or class filter."
+        onReset={() => {
+          setSearchTerm("");
+          setSelectedClassId("ALL");
+          setStatusFilter("ALL");
+          setResidenceFilter("ALL");
+        }}
+        resetLabel="Reset Filters"
+      >
+      {viewMode === "LIST" ? (
         /* Roster Table List */
         <div
           style={{
@@ -824,6 +791,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
           })}
         </div>
       )}
+      </ResultsContainer>
 
       {/* Edit / Add Student Drawer */}
       <StudentEditDrawer

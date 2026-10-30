@@ -1,5 +1,7 @@
 "use client";
 
+import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
+
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -101,6 +103,7 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
 
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState("");
+  const [isPendingSearch, setIsPendingSearch] = useState(false);
 
   // Auto Refresh State
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -339,22 +342,13 @@ export default function LoginStatusClient({ records }: { records: LoginAttempt[]
       {/* Header Bar with Live Sync Controls */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
         {/* Search */}
-        <div style={{ position: "relative", width: "100%", maxWidth: "320px" }}>
-          <Search size={18} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", opacity: 0.5 }} />
-          <input
-            type="text"
+        <div style={{ width: "100%", maxWidth: "340px", minWidth: "220px" }}>
+          <SearchBar
             placeholder="Search email, IP address, device..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "0.7rem 1rem 0.7rem 2.5rem",
-              borderRadius: "8px",
-              border: "1px solid var(--border-color)",
-              backgroundColor: "transparent",
-              color: "inherit",
-              fontSize: "0.875rem",
-            }}
+            onChange={(val) => setSearchTerm(val)}
+            onPendingChange={(pending) => setIsPendingSearch(pending)}
+            style={{ maxWidth: "100%" }}
           />
         </div>
 

@@ -1,5 +1,7 @@
 "use client";
 
+import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
+
 import { useState } from "react";
 import { 
   Calendar as CalendarIcon, MapPin, Clock, 
@@ -9,6 +11,7 @@ import { CalendarEvent } from "@prisma/client";
 
 export default function ProgramsParentClient({ programs }: { programs: CalendarEvent[] }) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [isPendingSearch, setIsPendingSearch] = useState(false);
   const [activeTab, setActiveTab] = useState<"ALL" | "UPCOMING" | "PREVIOUS">("ALL");
   const [showPrevious, setShowPrevious] = useState(false);
 
@@ -188,23 +191,13 @@ export default function ProgramsParentClient({ programs }: { programs: CalendarE
         }}
       >
         {/* Search Input */}
-        <div style={{ position: "relative", minWidth: "280px", flex: 1, maxWidth: "450px" }}>
-          <Search size={17} style={{ position: "absolute", left: "1rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)" }} />
-          <input
-            type="text"
+        <div style={{ minWidth: "240px", flex: 1, maxWidth: "450px" }}>
+          <SearchBar
             placeholder="Search programs by name, venue, organizer..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "0.65rem 1rem 0.65rem 2.6rem",
-              borderRadius: "10px",
-              border: "1px solid var(--border-color, #e5e7eb)",
-              backgroundColor: "var(--card-bg, #ffffff)",
-              color: "var(--foreground)",
-              fontSize: "0.9rem",
-              outline: "none"
-            }}
+            onChange={(val) => setSearchQuery(val)}
+            onPendingChange={(pending) => setIsPendingSearch(pending)}
+            style={{ maxWidth: "100%" }}
           />
         </div>
 

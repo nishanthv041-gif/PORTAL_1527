@@ -77,8 +77,10 @@ export default async function DashboardLayout({
             <Topbar user={{ ...session.user, name: displayName }} />
           </div>
           <main className={styles.pageContent}>
-            <PortalBreadcrumb />
-            {children}
+            <div className={styles.contentWrapper}>
+              <PortalBreadcrumb />
+              {children}
+            </div>
           </main>
         </div>
       </div>

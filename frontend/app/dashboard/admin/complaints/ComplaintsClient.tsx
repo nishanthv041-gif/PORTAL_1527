@@ -27,6 +27,7 @@ import {
 } from "@/backend/api/actions/dashboard/admin/complaints/actions";
 import ComplaintConversationModal, { ComplaintMessageItem } from "@/frontend/components/complaints/ComplaintConversationModal";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 import styles from "../../dashboard.module.css";
 
 export type StudentLookupOption = {
@@ -122,6 +123,7 @@ export default function ComplaintsClient({
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
+  const [isPendingSearch, setIsPendingSearch] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "UNDER_REVIEW" | "RESOLVED">("ALL");
   const [severityFilter, setSeverityFilter] = useState<string>("ALL");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
@@ -357,23 +359,13 @@ export default function ComplaintsClient({
       >
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", flex: "1 1 300px" }}>
           {/* Search Box */}
-          <div style={{ position: "relative", flex: "1 1 220px", maxWidth: "340px" }}>
-            <Search size={15} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)" }} />
-            <input
-              type="text"
+          <div style={{ flex: "1 1 220px", maxWidth: "340px", minWidth: "180px" }}>
+            <SearchBar
               placeholder="Search student, title, description..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.45rem 0.75rem 0.45rem 2rem",
-                borderRadius: "6px",
-                border: "1px solid var(--border)",
-                backgroundColor: "var(--background)",
-                color: "var(--foreground)",
-                fontSize: "0.85rem",
-                outline: "none"
-              }}
+              onChange={(val) => setSearchQuery(val)}
+              onPendingChange={(pending) => setIsPendingSearch(pending)}
+              style={{ maxWidth: "100%" }}
             />
           </div>
 
@@ -449,6 +441,19 @@ export default function ComplaintsClient({
       {/* =========================================================
           COMPLAINTS GRID / CARDS
          ========================================================= */}
+      <ResultsContainer
+        isPending={isPendingSearch}
+        isEmpty={filteredComplaints.length === 0}
+        emptyTitle="No Complaints Found"
+        emptyMessage="No complaints match your search query or active filter criteria."
+        onReset={() => {
+          setSearchQuery("");
+          setStatusFilter("ALL");
+          setSeverityFilter("ALL");
+          setCategoryFilter("ALL");
+        }}
+        resetLabel="Reset Filters"
+      >
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 360px), 1fr))", gap: "1.25rem" }}>
         {filteredComplaints.map((item) => {
           const stColors = getStatusColor(item.status);
@@ -698,6 +703,7 @@ export default function ComplaintsClient({
           </div>
         )}
       </div>
+      </ResultsContainer>
 
       {/* =========================================================
           MODAL 1: LOG / DESCRIBE COMPLAINT FOR ANY STUDENT

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { deactivateUser, activateUser, activateAllUsers, deleteUser } from "@/backend/api/actions/dashboard/admin/users/actions";
 import { User, Teacher, Parent } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 
 import { MoreVertical, Eye, Trash2 } from "lucide-react";
 
@@ -21,6 +22,7 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [isActivating, setIsActivating] = useState(false);
+  const [isPendingSearch, setIsPendingSearch] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const router = useRouter();
   const confirm = useConfirm();
@@ -103,14 +105,13 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
   return (
     <div style={{ marginTop: '2rem', background: 'var(--card-bg)', borderRadius: '12px', padding: '1.5rem', border: '1px solid var(--border-color)', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <div style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
-          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
-          <input 
-            type="text" 
-            placeholder="Search name, email, phone..." 
+        <div style={{ width: '100%', maxWidth: '320px', minWidth: '220px' }}>
+          <SearchBar
+            placeholder="Search name, email, phone..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
+            onChange={(val) => setSearchTerm(val)}
+            onPendingChange={(pending) => setIsPendingSearch(pending)}
+            style={{ maxWidth: '100%' }}
           />
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -144,6 +145,18 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
       </div>
 
 
+      <ResultsContainer
+        isPending={isPendingSearch}
+        isEmpty={filteredUsers.length === 0}
+        emptyTitle="No users found"
+        emptyMessage="No accounts matched your search terms or role filters."
+        onReset={() => {
+          setSearchTerm("");
+          setRoleFilter("");
+          setStatusFilter("");
+        }}
+        resetLabel="Reset Filters"
+      >
       <div style={{ overflowX: 'auto', width: '100%', maxWidth: '100%', minWidth: 0, WebkitOverflowScrolling: 'touch' }}>
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "750px" }}>
           <thead>
@@ -323,10 +336,8 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
           </tbody>
         </table>
         
-        {filteredUsers.length === 0 && (
-          <p style={{ textAlign: 'center', opacity: 0.7, padding: '2rem' }}>No users found matching your filters.</p>
-        )}
       </div>
+      </ResultsContainer>
     </div>
   );
 }
