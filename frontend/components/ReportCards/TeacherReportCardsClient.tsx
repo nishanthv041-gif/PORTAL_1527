@@ -451,9 +451,6 @@ export default function TeacherReportCardsClient({
             <Award size={13} /> Teacher Academic Suite
           </span>
           <h1 className={styles.mainTitle}>Student Report Cards</h1>
-          <p className={styles.subtitle}>
-            Create, calculate, and dispatch official academic report cards directly to parents.
-          </p>
         </div>
 
         {/* Tab Switcher & Scan Action */}

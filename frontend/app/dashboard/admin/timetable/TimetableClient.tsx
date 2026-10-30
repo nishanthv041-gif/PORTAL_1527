@@ -543,9 +543,6 @@ export default function TimetableClient({
           <h1 style={{ fontSize: "clamp(1.3rem, 5vw, 1.75rem)", fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
             Timetable Management
           </h1>
-          <p style={{ color: "var(--text-secondary)", margin: "0.25rem 0 0 0", fontSize: "0.85rem" }}>
-            School schedule, period timings, and pick-and-assign substitution.
-          </p>
         </div>
 
         <div className="timetable-header-actions" style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", width: "100%" }}>
@@ -1586,9 +1583,6 @@ export default function TimetableClient({
                 <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.5rem" }}>
                   <Settings size={20} /> Period Times Configuration
                 </h3>
-                <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
-                  Times set here define the period header row across every day and synchronize with teacher &amp; parent dashboards.
-                </p>
               </div>
               <button onClick={() => setShowPeriodConfigModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}>
                 <X size={20} />

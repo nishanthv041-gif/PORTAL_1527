@@ -32,12 +32,7 @@ export default async function AdminTeachersPage() {
 
   return (
     <div className={styles.dashboard}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
-        <h1 className={styles.title} style={{ margin: 0 }}>Teacher Management</h1>
-        <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.9rem' }}>
-          Manage teacher profiles, subject &amp; class assignments, Google login credentials, and classroom access.
-        </p>
-      </div>
+      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1.25rem' }}>Teacher Management</h1>
 
       {/* Switcher Option between Settings, Teacher Management, and Parent & Student */}
       <SettingsNavSwitcher />

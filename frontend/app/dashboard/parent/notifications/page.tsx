@@ -25,8 +25,7 @@ export default async function ParentNotificationsPage() {
   return (
     <div className={styles.dashboard}>
       <div style={{ marginBottom: '1.5rem' }}>
-        <h1 className={styles.title} style={{ margin: 0, marginBottom: '0.5rem' }}>Notifications</h1>
-        <p style={{ color: 'var(--text-secondary)', margin: 0 }}>Stay updated with your latest alerts and messages regarding your children.</p>
+        <h1 className={styles.title} style={{ margin: 0 }}>Notifications</h1>
       </div>
 
       <ToggleNotifications 

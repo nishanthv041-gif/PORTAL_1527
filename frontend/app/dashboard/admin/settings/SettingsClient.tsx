@@ -215,9 +215,6 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
             <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
               School Information
             </h2>
-            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary, #94a3b8)" }}>
-              Official school details displayed across report cards, headers, emails, and student records.
-            </p>
           </div>
         </div>
 
@@ -630,9 +627,6 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
             <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
               Management Pages
             </h2>
-            <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-secondary, #94a3b8)" }}>
-              Direct access to Teacher Management and Parent &amp; Student Management.
-            </p>
           </div>
         </div>
         <div style={{ padding: "1.25rem 2rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "0.85rem" }}>

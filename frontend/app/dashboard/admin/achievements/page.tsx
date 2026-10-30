@@ -17,8 +17,7 @@ export default async function AdminAchievementsPage() {
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1rem' }}>Student Achievements</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Review and verify student achievements and awards.</p>
+      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1.5rem' }}>Student Achievements</h1>
 
       <AchievementsClient achievements={achievements} />
     </div>

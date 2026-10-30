@@ -30,8 +30,7 @@ export default async function TeacherAnnouncementsPage() {
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1rem' }}>Announcements</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Stay updated with the latest news and post announcements for your classes.</p>
+      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1.5rem' }}>Announcements</h1>
 
       <TeacherAnnouncementsClient announcements={announcements} classes={teacher.classes} currentUserId={session.user.id} />
     </div>

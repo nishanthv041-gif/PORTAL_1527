@@ -29,8 +29,7 @@ export default async function AdminNotificationsPage() {
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1rem' }}>Notifications</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Manage, create, and view notifications and alerts.</p>
+      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1.5rem' }}>Notifications</h1>
 
       <NotificationsClient 
         notifications={notifications} 

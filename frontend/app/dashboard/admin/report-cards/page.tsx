@@ -58,8 +58,7 @@ export default async function AdminReportCardsPage({
 
   return (
     <div style={{ padding: '2rem' }}>
-      <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>Report Cards</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>View and generate consolidated report cards for students.</p>
+      <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '1.5rem' }}>Report Cards</h1>
 
       <ClassSelector classes={classes} />
 

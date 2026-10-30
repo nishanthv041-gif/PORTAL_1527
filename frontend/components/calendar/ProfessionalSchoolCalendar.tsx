@@ -308,11 +308,6 @@ export default function ProfessionalSchoolCalendar({
             <CalendarIcon size={28} color="#2563eb" />
             School Academic Calendar
           </h1>
-          <p className={styles.subTitle}>
-            {isAdmin
-              ? "Official school schedule. Mark working days and holidays with all-class or specific-class selection."
-              : "Official school schedule with working days, holidays, exams, and class schedules."}
-          </p>
         </div>
 
         {isAdmin && (
@@ -619,11 +614,6 @@ export default function ProfessionalSchoolCalendar({
                     year: "numeric",
                   })}
                 </h3>
-                <p className={styles.modalDateSubtitle}>
-                  {isAdmin
-                    ? "Set working or leave status anytime. Choose all classes or specific individual classes for working days."
-                    : "School Academic Calendar schedule."}
-                </p>
               </div>
 
               <button
@@ -1033,9 +1023,6 @@ export default function ProfessionalSchoolCalendar({
             <div className={styles.modalHeader}>
               <div>
                 <h3 className={styles.modalDateTitle}>Quick Set School Days</h3>
-                <p className={styles.modalDateSubtitle}>
-                  Bulk configure calendar working days and holiday schedules in one click.
-                </p>
               </div>
               <button
                 type="button"
@@ -1168,9 +1155,6 @@ export default function ProfessionalSchoolCalendar({
             <div className={styles.modalHeader}>
               <div>
                 <h3 className={styles.modalDateTitle}>Create School Event</h3>
-                <p className={styles.modalDateSubtitle}>
-                  Publish school events, exams, programs, and holiday notices.
-                </p>
               </div>
               <button
                 type="button"

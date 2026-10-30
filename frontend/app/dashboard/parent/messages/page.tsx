@@ -60,20 +60,14 @@ export default async function ParentMessagesPage() {
   return (
     <div className={styles.dashboard}>
       <div style={{ marginBottom: "1.5rem" }}>
-        <h1 className={styles.title} style={{ margin: "0 0 0.5rem" }}>Messages &amp; Communication</h1>
-        <p style={{ color: "var(--text-secondary)", margin: 0 }}>
-          Reach out directly to your children&apos;s teachers or the School Administration office.
-        </p>
+        <h1 className={styles.title} style={{ margin: 0 }}>Messages &amp; Communication</h1>
       </div>
 
       {/* School Administration Option */}
       <div className={styles.chartCard} style={{ marginBottom: "1.5rem" }}>
-        <h3 className={styles.chartHeader} style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "#6366f1" }}>
+        <h3 className={styles.chartHeader} style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "#6366f1", marginBottom: "1rem" }}>
           <ShieldCheck size={18} /> School Administration
         </h3>
-        <p style={{ opacity: 0.7, marginBottom: "1rem", fontSize: "0.875rem" }}>
-          Direct communication with the school admin office, principal, and administrative desk.
-        </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '1rem', width: '100%', minWidth: 0 }}>
           {adminUsers.map(admin => (

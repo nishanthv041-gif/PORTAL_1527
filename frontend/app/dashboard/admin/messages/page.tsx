@@ -85,11 +85,8 @@ export default async function AdminMessagesPage() {
 
   return (
     <div className={styles.dashboard}>
-      <div style={{ marginBottom: "1.75rem" }}>
-        <h1 className={styles.title} style={{ margin: "0 0 0.5rem" }}>Messages &amp; Communication Center</h1>
-        <p style={{ color: "var(--text-secondary)", margin: 0 }}>
-          Direct administrative communication channels with faculty teachers and student parents across the institution.
-        </p>
+      <div style={{ marginBottom: "1.5rem" }}>
+        <h1 className={styles.title} style={{ margin: 0 }}>Messages &amp; Communication Center</h1>
       </div>
 
       <AdminMessagesClient

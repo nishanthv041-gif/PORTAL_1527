@@ -105,7 +105,6 @@ export default function TeacherAttendanceClient({
   return (
     <AttendanceSessionManager
       title="Teacher Attendance"
-      subtitle="Record session & daily attendance status"
       initialDate={initialDate}
       onDateChange={handleDateChange}
       people={people}

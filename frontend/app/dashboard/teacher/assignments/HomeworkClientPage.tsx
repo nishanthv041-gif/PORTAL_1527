@@ -311,9 +311,6 @@ export default function HomeworkClientPage({
               Staff & Class Portal
             </span>
           </h1>
-          <p style={{ margin: "0.25rem 0 0 0", color: "var(--text-secondary)", fontSize: "0.875rem" }}>
-            Assign subject tasks, view today&apos;s class homework, and converse directly with parents.
-          </p>
         </div>
 
         {/* Top 3 Tab Switchers */}

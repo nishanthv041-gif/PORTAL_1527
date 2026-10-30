@@ -29,11 +29,8 @@ export default async function TeacherProgramsPage() {
 
   return (
     <div className={styles.dashboard}>
-      <div style={{ marginBottom: "2rem" }}>
-        <h1 className={styles.title} style={{ margin: 0, marginBottom: "0.5rem" }}>School Programs</h1>
-        <p style={{ color: "var(--text-secondary)", margin: 0 }}>
-          View school programs, ceremonies, functions, and events targeted to your classes or school-wide.
-        </p>
+      <div style={{ marginBottom: "1.5rem" }}>
+        <h1 className={styles.title} style={{ margin: 0 }}>School Programs</h1>
       </div>
 
       <ProgramsTeacherClient 

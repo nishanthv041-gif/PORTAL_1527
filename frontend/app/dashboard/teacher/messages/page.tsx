@@ -63,12 +63,7 @@ export default async function TeacherMessagesPage() {
 
   return (
     <div className={styles.dashboard}>
-      <div style={{ marginBottom: "1.5rem" }}>
-        <h1 className={styles.title} style={{ margin: "0 0 0.5rem" }}>Messages &amp; Communication</h1>
-        <p style={{ color: "var(--text-secondary)", margin: 0 }}>
-          Communicate directly with School Administration and parents of your students.
-        </p>
-      </div>
+      <h1 className={styles.title} style={{ margin: "0 0 1.5rem" }}>Messages &amp; Communication</h1>
 
       {/* School Administration Option */}
       <div className={styles.chartCard} style={{ marginBottom: "1.5rem" }}>

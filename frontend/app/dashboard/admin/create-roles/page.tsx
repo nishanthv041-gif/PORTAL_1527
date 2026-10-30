@@ -10,8 +10,7 @@ export default async function CreateRolesPage() {
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title}>Create New Roles</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Select the type of user you want to create in the system.</p>
+      <h1 className={styles.title} style={{ marginBottom: '1.5rem' }}>Create New Roles</h1>
       
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
         <Link href="/dashboard/admin/create-roles/teacher" style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -19,8 +18,7 @@ export default async function CreateRolesPage() {
             <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--primary-bg)', color: "var(--primary)", display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
               <GraduationCap size={40} />
             </div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>Teacher</h2>
-            <p style={{ color: 'var(--text-secondary)' }}>Create a new teacher account and assign them to classes and subjects.</p>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>Teacher</h2>
           </div>
         </Link>
         
@@ -29,8 +27,7 @@ export default async function CreateRolesPage() {
             <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--success-bg)', color: "var(--success)", display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
               <Users size={40} />
             </div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>Parent & Student</h2>
-            <p style={{ color: 'var(--text-secondary)' }}>Register a new student and automatically create their linked parent account.</p>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>Parent & Student</h2>
           </div>
         </Link>
 
@@ -39,8 +36,7 @@ export default async function CreateRolesPage() {
             <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(245, 158, 11, 0.1)', color: "var(--warning)", display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
               <Users size={40} />
             </div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>Non-Teaching Staff</h2>
-            <p style={{ color: 'var(--text-secondary)' }}>Register administrative, support, and non-teaching personnel.</p>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>Non-Teaching Staff</h2>
           </div>
         </Link>
 
@@ -49,8 +45,7 @@ export default async function CreateRolesPage() {
             <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.1)', color: "var(--danger)", display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
               <Users size={40} />
             </div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>Admin</h2>
-            <p style={{ color: 'var(--text-secondary)' }}>Add another Admin using their Gmail ID for Google OAuth access.</p>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>Admin</h2>
           </div>
         </Link>
       </div>

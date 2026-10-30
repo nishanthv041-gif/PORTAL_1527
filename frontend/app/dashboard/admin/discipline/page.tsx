@@ -23,8 +23,7 @@ export default async function AdminDisciplinePage() {
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1rem' }}>Discipline Records</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Manage disciplinary incidents and actions taken against students.</p>
+      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1.5rem' }}>Discipline Records</h1>
 
       <DisciplineClient records={records} students={students} />
     </div>

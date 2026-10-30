@@ -222,9 +222,6 @@ export default function ParentComplaintsClient({
               Parent Portal
             </span>
           </h1>
-          <p style={{ margin: "0.25rem 0 0 0", color: "var(--text-secondary)", fontSize: "0.875rem" }}>
-            Submit concerns regarding your children, track progress, and converse with school administration.
-          </p>
         </div>
 
         {/* Tab Buttons */}

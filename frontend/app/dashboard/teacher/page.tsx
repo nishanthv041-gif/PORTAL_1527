@@ -140,9 +140,6 @@ export default async function TeacherDashboard() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 className={styles.title} style={{ margin: 0 }}>Teacher Dashboard</h1>
-          <p style={{ color: "var(--text-secondary)", margin: "0.25rem 0 0 0", fontSize: "0.9rem" }}>
-            Welcome back, {session.user.name || "Teacher"}.
-          </p>
         </div>
 
         <div style={{ display: "flex", gap: "0.5rem" }}>

@@ -38,7 +38,7 @@ export type AttendancePersonItem = {
 
 export type AttendanceSessionManagerProps = {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   categories?: { id: string; label: string; count?: number }[];
   activeCategoryId?: string;
   onCategoryChange?: (id: string) => void;
@@ -319,7 +319,7 @@ export default function AttendanceSessionManager({
       {/* 1. Top Header */}
       <div className={styles.headerSection}>
         <h1 className={styles.pageTitle}>{title}</h1>
-        <p className={styles.pageSubtitle}>{subtitle}</p>
+        {subtitle ? <p className={styles.pageSubtitle}>{subtitle}</p> : null}
       </div>
 
       {/* 2. Scope Card: Search Bar (and Category Tabs only if multiple classes exist) */}

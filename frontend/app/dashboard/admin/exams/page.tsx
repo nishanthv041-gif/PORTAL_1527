@@ -34,8 +34,7 @@ export default async function AdminExamsPage() {
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1rem' }}>Exams & Marks</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Manage school-wide exams, track marks entry status, and publish results.</p>
+      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1.5rem' }}>Exams & Marks</h1>
       
       <ExamsClient exams={exams} examRequests={examRequests} />
     </div>

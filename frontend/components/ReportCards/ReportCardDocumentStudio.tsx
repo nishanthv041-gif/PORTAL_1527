@@ -974,9 +974,6 @@ export default function ReportCardDocumentStudio({
             <h2 style={{ margin: 0, fontSize: "clamp(1rem, 2.8vw, 1.15rem)", fontWeight: 800 }}>
               Report Card Document &amp; OCR Scanner
             </h2>
-            <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-              Upload photos, mark sheets, PDFs, or spreadsheets to extract student grades
-            </p>
           </div>
         </div>
 
@@ -1042,9 +1039,7 @@ export default function ReportCardDocumentStudio({
               Exam Details &amp; Base Criteria
             </span>
           </div>
-          <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
-            Applied automatically when documents are scanned &amp; extracted
-          </span>
+
         </div>
 
         <div className={styles.criteriaGrid}>

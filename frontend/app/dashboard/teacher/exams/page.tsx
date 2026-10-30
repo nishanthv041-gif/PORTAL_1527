@@ -56,10 +56,7 @@ export default async function TeacherExamsPage() {
     <div className={styles.container}>
       <div className={styles.headerRow}>
         <div>
-          <h1 className={styles.title}>Exams &amp; Marks Management</h1>
-          <p style={{ color: "var(--text-secondary)", margin: "0.25rem 0 0 0", fontSize: "0.9rem" }}>
-            Schedule class exams, manage submitted requests, and track grade entry.
-          </p>
+          <h1 className={styles.title} style={{ margin: 0 }}>Exams &amp; Marks Management</h1>
         </div>
       </div>
 

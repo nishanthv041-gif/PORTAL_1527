@@ -15,14 +15,11 @@ export default function ExcelImportHubClient({ classes }: { classes: ClassItem[]
 
   return (
     <div>
-      {/* Page Title & Intro */}
-      <div style={{ marginBottom: "2rem" }}>
-        <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--foreground)", margin: "0 0 0.5rem" }}>
+      {/* Page Title */}
+      <div style={{ marginBottom: "1.5rem" }}>
+        <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--foreground)", margin: 0 }}>
           Intelligent Excel Import System
         </h1>
-        <p style={{ color: "var(--text-secondary)", fontSize: "0.9375rem", margin: 0 }}>
-          Manage bulk account provisioning for Parent, Student, and Teacher roles with real-time schema validation, in-memory duplicate checking, and safe transactional database writes.
-        </p>
       </div>
 
       {/* Workflow Selection Cards */}

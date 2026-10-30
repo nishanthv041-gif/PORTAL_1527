@@ -285,9 +285,6 @@ export default function ComplaintsClient({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
         <div>
           <h1 className={styles.title} style={{ margin: 0 }}>Complaints & Feedback</h1>
-          <p style={{ color: "var(--text-secondary)", margin: "0.25rem 0 0 0", fontSize: "0.9rem" }}>
-            Review complaints, converse with parents and teachers in real-time, and log complaints for any student.
-          </p>
         </div>
 
         <button

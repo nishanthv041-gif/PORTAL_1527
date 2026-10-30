@@ -103,9 +103,6 @@ export default function ProgramsTeacherClient({
             <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 800, color: "var(--foreground)" }}>
               Teacher School Programs Hub
             </h2>
-            <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.875rem", color: "var(--text-secondary)" }}>
-              Stay updated on upcoming functions, celebrations, competitions, and special school events.
-            </p>
           </div>
         </div>
 

@@ -380,9 +380,6 @@ export default function MeetingsClient({
             <h1 style={{ margin: 0, fontSize: "1.875rem", fontWeight: 800, color: "var(--foreground)", letterSpacing: "-0.02em" }}>
               Meeting Management Centre
             </h1>
-            <p style={{ margin: "0.35rem 0 0", color: "var(--text-secondary)", fontSize: "0.9375rem" }}>
-              Dedicated management for Parents Meetings &amp; Teachers Meetings with real-time notification pop-up delivery.
-            </p>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -1108,9 +1105,6 @@ export default function MeetingsClient({
                 <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 800, color: "var(--foreground)" }}>
                   Schedule New Meeting
                 </h2>
-                <p style={{ margin: "0.2rem 0 0", fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
-                  Create and dispatch meetings directly into attendees&apos; notification pop-ups and school calendar.
-                </p>
               </div>
               <button
                 type="button"

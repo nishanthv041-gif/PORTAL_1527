@@ -54,10 +54,7 @@ export default async function TeacherLeavesPage() {
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title}>Leave Applications</h1>
-      <p style={{ color: "var(--text-secondary)", marginTop: "-0.5rem", marginBottom: "1.5rem" }}>
-        Review, accept, and manage student leave applications for {teacher.classTeacherOf.name} - {teacher.classTeacherOf.section}.
-      </p>
+      <h1 className={styles.title} style={{ marginBottom: "1.5rem" }}>Leave Applications</h1>
 
       <TeacherLeavesClient initialLeaves={leaves} />
     </div>

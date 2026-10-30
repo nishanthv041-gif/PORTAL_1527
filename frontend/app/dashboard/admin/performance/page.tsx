@@ -129,8 +129,7 @@ export default async function AdminPerformancePage({
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1rem' }}>School Performance</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Aggregated pass/fail statistics and top performing students.</p>
+      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1.5rem' }}>School Performance</h1>
 
       <PerformanceClient 
         pieData={pieData} 

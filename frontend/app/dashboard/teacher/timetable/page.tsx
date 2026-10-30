@@ -118,9 +118,6 @@ export default async function TeacherTimetablePage({
           <CalendarIcon className="text-primary" size={28} />
           Timetable &amp; Class Schedule
         </h1>
-        <p style={{ color: "var(--text-secondary)", marginTop: "0.25rem", marginBottom: 0, fontSize: "0.9rem" }}>
-          View live on-time schedules for your classes, teaching periods, and assigned substitution duties.
-        </p>
       </div>
 
       <TeacherTimetableClient

@@ -19,8 +19,7 @@ export default async function AdminAnnouncementsPage() {
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1rem' }}>Announcements</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Broadcast messages to the entire school, specific classes, parents, or teachers.</p>
+      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1.5rem' }}>Announcements</h1>
 
       <AnnouncementsClient announcements={announcements} classes={classes} />
     </div>

@@ -41,8 +41,7 @@ export default async function ParentAnnouncementsPage() {
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1rem' }}>Announcements</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Stay updated with the latest news and notices regarding your children.</p>
+      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1.5rem' }}>Announcements</h1>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {announcements.map(announcement => {

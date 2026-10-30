@@ -37,9 +37,6 @@ export default async function MainRolesPage() {
     <div className={styles.container}>
       <div className={styles.header}>
         <h1 className={styles.title}>Main Roles &amp; Operations</h1>
-        <p className={styles.subtitle}>
-          Central hub for timetable scheduling, academic roles, and school operations.
-        </p>
       </div>
 
       {/* Featured Timetable Operation (Shifted to Main Roles) */}
@@ -59,9 +56,6 @@ export default async function MainRolesPage() {
           <div className={styles.featuredInfo}>
             <div className={styles.featuredLabel} style={{ fontSize: "1.15rem" }}>
               Timetable Management
-            </div>
-            <div className={styles.featuredDesc}>
-              Configure school schedule, period timings, upload schedules, and assign substitute teachers.
             </div>
           </div>
           <ArrowRight size={20} style={{ color: "var(--text-secondary)", flexShrink: 0, opacity: 0.6 }} />

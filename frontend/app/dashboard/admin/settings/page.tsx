@@ -15,12 +15,7 @@ export default async function AdminSettingsPage() {
 
   return (
     <div className={styles.dashboard}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
-        <h1 className={styles.title} style={{ margin: 0 }}>System Settings</h1>
-        <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.9rem' }}>
-          Configure school details, staff credentials, and student &amp; parent accounts.
-        </p>
-      </div>
+      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1.25rem' }}>System Settings</h1>
 
       {/* Switcher Option to navigate between Settings, Teacher Management, and Parent & Student */}
       <SettingsNavSwitcher />

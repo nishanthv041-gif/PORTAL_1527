@@ -111,7 +111,6 @@ export default function AttendanceClient({
   return (
     <AttendanceSessionManager
       title="Student Attendance"
-      subtitle="Record session & daily attendance status"
       categories={categories}
       activeCategoryId={selectedClassId}
       onCategoryChange={handleCategoryChange}
