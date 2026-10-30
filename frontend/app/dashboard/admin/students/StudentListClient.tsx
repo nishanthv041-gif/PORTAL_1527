@@ -3,9 +3,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Search, Plus, LayoutGrid, List, User, GraduationCap, Phone,
-  Users, CheckCircle2, XCircle, Edit2, ArrowRight, BookOpen,
-  ArrowUpDown, Filter, ChevronRight, FileText, ArrowLeftRight
+  Plus, LayoutGrid, List,
+  CheckCircle2, XCircle, Edit2,
+  ArrowUpDown, FileText
 } from "lucide-react";
 import Link from "next/link";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
@@ -35,7 +35,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedClassId, setSelectedClassId] = useState<string>("ALL");
+  const [selectedClassId, setSelectedClassId] = useState<string>(() => classes[0]?.id || "");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [residenceFilter, setResidenceFilter] = useState<string>("ALL");
   const [sortBy, setSortBy] = useState<"ROLL" | "NAME" | "ADM">("ROLL");
@@ -64,6 +64,28 @@ export default function StudentListClient({ students, classes }: StudentListClie
     });
     return map;
   }, [students]);
+
+  // Compute search matches per class when searching
+  const classSearchMatches = useMemo(() => {
+    if (!debouncedSearch.trim()) return null;
+    const q = debouncedSearch.toLowerCase().trim();
+    const map = new Map<string, number>();
+    students.forEach((student) => {
+      if (!student.classId) return;
+      const fullName = `${student.firstName} ${student.lastName}`.toLowerCase();
+      const rollMatch = student.rollNumber.toLowerCase().includes(q);
+      const admMatch = student.admissionNo.toLowerCase().includes(q);
+      const nameMatch = fullName.includes(q);
+      const parentNameMatch = student.parents?.some(p => p.parent.user?.name?.toLowerCase().includes(q));
+      const parentPhoneMatch = student.parents?.some(p => p.parent.phone?.toLowerCase().includes(q));
+      const parentEmailMatch = student.parents?.some(p => p.parent.user?.email?.toLowerCase().includes(q));
+
+      if (rollMatch || admMatch || nameMatch || parentNameMatch || parentPhoneMatch || parentEmailMatch) {
+        map.set(student.classId, (map.get(student.classId) || 0) + 1);
+      }
+    });
+    return map;
+  }, [students, debouncedSearch]);
 
   // Existing parents for sibling linking
   const existingParents = useMemo(() => {
@@ -98,16 +120,14 @@ export default function StudentListClient({ students, classes }: StudentListClie
           const parentNameMatch = student.parents?.some(p => p.parent.user?.name?.toLowerCase().includes(q));
           const parentPhoneMatch = student.parents?.some(p => p.parent.phone?.toLowerCase().includes(q));
           const parentEmailMatch = student.parents?.some(p => p.parent.user?.email?.toLowerCase().includes(q));
-          const className = `${student.class?.name || ""} ${student.class?.section || ""}`.toLowerCase();
-          const classMatch = className.includes(q);
 
-          if (!rollMatch && !admMatch && !nameMatch && !parentNameMatch && !parentPhoneMatch && !parentEmailMatch && !classMatch) {
+          if (!rollMatch && !admMatch && !nameMatch && !parentNameMatch && !parentPhoneMatch && !parentEmailMatch) {
             return false;
           }
         }
 
-        // Class Filter
-        if (selectedClassId !== "ALL" && student.classId !== selectedClassId) {
+        // Class Filter: strictly class-wise
+        if (!selectedClassId || student.classId !== selectedClassId) {
           return false;
         }
 
@@ -285,10 +305,10 @@ export default function StudentListClient({ students, classes }: StudentListClie
               fontSize: "0.85rem",
             }}
           >
-            <option value="ALL">All Classes ({students.length})</option>
+            {classes.length === 0 && <option value="">No Classes Available</option>}
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name} - {c.section} ({classStudentCounts.get(c.id) || 0})
+                Class: {c.name} - {c.section} ({classStudentCounts.get(c.id) || 0} students)
               </option>
             ))}
           </select>
@@ -352,103 +372,114 @@ export default function StudentListClient({ students, classes }: StudentListClie
         </div>
       </div>
 
-      {/* SECTION 2: CLASSES OVERVIEW GRID (CLICK TO FILTER) */}
+      {/* SECTION 2: CLASSES OVERVIEW GRID (CLICK TO SWITCH CLASS) */}
       <div style={{ marginBottom: "2rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
-          <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
-            Classes & Sections
-          </h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
+              Classes &amp; Sections
+            </h2>
+            <div style={{ fontSize: "0.8rem", color: "var(--text-secondary, #94a3b8)", marginTop: "0.2rem" }}>
+              Select a class below to view its students roster
+            </div>
+          </div>
           <span style={{ fontSize: "0.82rem", color: "var(--text-secondary, #94a3b8)" }}>
-            {classes.length} Classes • {students.length} Total Enrolled
+            {classes.length} Classes Available
           </span>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))",
-            gap: "0.85rem",
-          }}
-        >
-          {/* "All Classes" Card */}
+        {classes.length === 0 ? (
           <div
-            onClick={() => setSelectedClassId("ALL")}
             style={{
-              padding: "1rem",
+              padding: "1.5rem",
               borderRadius: "12px",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-              background: selectedClassId === "ALL" ? "rgba(59, 130, 246, 0.15)" : "var(--card-bg, #0f172a)",
-              border: selectedClassId === "ALL" ? "1.5px solid var(--primary, #3b82f6)" : "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+              background: "var(--card-bg, #0f172a)",
+              border: "1px dashed var(--border-color, rgba(255, 255, 255, 0.15))",
+              color: "var(--text-secondary, #94a3b8)",
+              textAlign: "center",
+              fontSize: "0.9rem",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.4rem" }}>
-              <div style={{ fontWeight: 700, fontSize: "0.95rem", color: selectedClassId === "ALL" ? "#60a5fa" : "inherit" }}>
-                All Students
-              </div>
-              <span
-                style={{
-                  fontSize: "0.75rem",
-                  padding: "0.15rem 0.5rem",
-                  borderRadius: "10px",
-                  background: "rgba(59, 130, 246, 0.2)",
-                  color: "#60a5fa",
-                  fontWeight: 700,
-                }}
-              >
-                {students.length}
-              </span>
-            </div>
-            <div style={{ fontSize: "0.78rem", color: "var(--text-secondary, #94a3b8)" }}>
-              Full school roster
-            </div>
+            No active classes found. Please create a class in Class Management first.
           </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+              gap: "0.85rem",
+            }}
+          >
+            {/* Individual Class Cards - No 'All Classes' card */}
+            {classes.map((c) => {
+              const count = classStudentCounts.get(c.id) || 0;
+              const isSelected = selectedClassId === c.id;
+              const teacherName = c.classTeacher?.user?.name || "Unassigned";
+              const searchMatchCount = classSearchMatches?.get(c.id);
 
-          {/* Individual Class Cards */}
-          {classes.map((c) => {
-            const count = classStudentCounts.get(c.id) || 0;
-            const isSelected = selectedClassId === c.id;
-            const teacherName = c.classTeacher?.user?.name || "Unassigned";
-
-            return (
-              <div
-                key={c.id}
-                onClick={() => setSelectedClassId(c.id)}
-                style={{
-                  padding: "1rem",
-                  borderRadius: "12px",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                  background: isSelected ? "rgba(59, 130, 246, 0.15)" : "var(--card-bg, #0f172a)",
-                  border: isSelected ? "1.5px solid var(--primary, #3b82f6)" : "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.4rem" }}>
-                  <div style={{ fontWeight: 700, fontSize: "0.95rem", color: isSelected ? "#60a5fa" : "inherit" }}>
-                    {c.name} - {c.section}
+              return (
+                <div
+                  key={c.id}
+                  onClick={() => setSelectedClassId(c.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedClassId(c.id);
+                    }
+                  }}
+                  style={{
+                    padding: "1rem",
+                    borderRadius: "12px",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    background: isSelected ? "rgba(59, 130, 246, 0.16)" : "var(--card-bg, #0f172a)",
+                    border: isSelected
+                      ? "2px solid var(--primary, #3b82f6)"
+                      : searchMatchCount && searchMatchCount > 0
+                      ? "1.5px solid rgba(245, 158, 11, 0.6)"
+                      : "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                    boxShadow: isSelected ? "0 0 16px rgba(59, 130, 246, 0.35)" : "0 4px 12px rgba(0,0,0,0.2)",
+                    position: "relative",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.4rem" }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: "1rem", color: isSelected ? "#60a5fa" : "inherit" }}>
+                        {c.name} - {c.section}
+                      </div>
+                      {isSelected ? (
+                        <div style={{ fontSize: "0.72rem", color: "#38bdf8", fontWeight: 600, marginTop: "0.15rem" }}>
+                          ● Active Class View
+                        </div>
+                      ) : searchMatchCount && searchMatchCount > 0 ? (
+                        <div style={{ fontSize: "0.72rem", color: "#fbbf24", fontWeight: 600, marginTop: "0.15rem" }}>
+                          ★ {searchMatchCount} search match{searchMatchCount === 1 ? "" : "es"}
+                        </div>
+                      ) : null}
+                    </div>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        padding: "0.18rem 0.55rem",
+                        borderRadius: "10px",
+                        background: count > 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(148, 163, 184, 0.12)",
+                        color: count > 0 ? "#34d399" : "#94a3b8",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {count} {count === 1 ? "student" : "students"}
+                    </span>
                   </div>
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      padding: "0.15rem 0.5rem",
-                      borderRadius: "10px",
-                      background: count > 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(148, 163, 184, 0.12)",
-                      color: count > 0 ? "#34d399" : "#94a3b8",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {count}
-                  </span>
+                  <div style={{ fontSize: "0.78rem", color: "var(--text-secondary, #94a3b8)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: "0.3rem" }}>
+                    Teacher: {teacherName}
+                  </div>
                 </div>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary, #94a3b8)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  Teacher: {teacherName}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* SECTION 3: CLASS VIEW HEADER */}
@@ -459,14 +490,29 @@ export default function StudentListClient({ students, classes }: StudentListClie
           alignItems: "center",
           marginBottom: "1rem",
           padding: "0.5rem 0",
+          flexWrap: "wrap",
+          gap: "0.5rem",
         }}
       >
-        <div>
-          <span style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
-            {selectedClassObj ? `${selectedClassObj.name} - ${selectedClassObj.section}` : "All School Students"}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
+            {selectedClassObj ? `Class ${selectedClassObj.name} - ${selectedClassObj.section} Roster` : "No Class Selected"}
           </span>
-          <span style={{ fontSize: "0.85rem", color: "var(--text-secondary, #94a3b8)", marginLeft: "0.75rem" }}>
-            Showing {filteredStudents.length} student{filteredStudents.length === 1 ? "" : "s"}
+          {selectedClassObj?.classTeacher?.user?.name && (
+            <span
+              style={{
+                fontSize: "0.8rem",
+                padding: "0.2rem 0.6rem",
+                borderRadius: "8px",
+                background: "rgba(255, 255, 255, 0.06)",
+                color: "var(--text-secondary, #94a3b8)",
+              }}
+            >
+              Class Teacher: <strong style={{ color: "var(--text-primary, #f8fafc)" }}>{selectedClassObj.classTeacher.user.name}</strong>
+            </span>
+          )}
+          <span style={{ fontSize: "0.85rem", color: "var(--text-secondary, #94a3b8)" }}>
+            • Showing {filteredStudents.length} student{filteredStudents.length === 1 ? "" : "s"}
           </span>
         </div>
       </div>
@@ -475,15 +521,24 @@ export default function StudentListClient({ students, classes }: StudentListClie
       <ResultsContainer
         isPending={isPendingSearch}
         isEmpty={filteredStudents.length === 0}
-        emptyTitle="No students match criteria"
-        emptyMessage="Try adjusting your search terms or class filter."
+        emptyTitle={
+          selectedClassObj
+            ? `No students found in Class ${selectedClassObj.name} - ${selectedClassObj.section}`
+            : "No class selected"
+        }
+        emptyMessage={
+          selectedClassObj
+            ? debouncedSearch || statusFilter !== "ALL" || residenceFilter !== "ALL"
+              ? "No students in this class match your search or filter criteria."
+              : "No students are currently enrolled in this class. Click '+ Add Student' above to enroll students."
+            : "Please select a class from the list above to view students."
+        }
         onReset={() => {
           setSearchTerm("");
-          setSelectedClassId("ALL");
           setStatusFilter("ALL");
           setResidenceFilter("ALL");
         }}
-        resetLabel="Reset Filters"
+        resetLabel="Reset Search & Filters"
       >
       {viewMode === "LIST" ? (
         /* Roster Table List */
@@ -800,7 +855,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
         student={editingStudent}
         allClasses={classes}
         existingParents={existingParents}
-        defaultClassId={selectedClassId !== "ALL" ? selectedClassId : undefined}
+        defaultClassId={selectedClassId || classes[0]?.id || undefined}
         onSuccess={() => {
           router.refresh();
         }}

@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import { redirect } from "next/navigation";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import SettingsClient from "./SettingsClient";
@@ -7,7 +8,7 @@ import SettingsNavSwitcher from "@/frontend/components/admin/SettingsNavSwitcher
 
 export default async function AdminSettingsPage() {
   const session = await getServerSession(getAuthOptions());
-  if (!session || session.user.role !== 'ADMIN') return null;
+  if (!session || session.user?.role !== 'ADMIN') redirect("/login");
 
   const settings = await prisma.systemSetting.findMany({
     orderBy: { category: 'asc' }
