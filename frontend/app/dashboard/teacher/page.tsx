@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../dashboard.module.css";
-import { GraduationCap, Users, Clock, MessageSquare, Calendar as CalendarIcon, MapPin, Star, ArrowRight } from "lucide-react";
+import { GraduationCap, Users, Clock, MessageSquare, Calendar as CalendarIcon, MapPin, Star, ArrowRight, ShieldAlert, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 const DAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
@@ -11,7 +11,7 @@ import { getTeacherByUserId } from "./teacherHelper";
 
 export default async function TeacherDashboard() {
   const session = await getServerSession(getAuthOptions());
-  
+
   if (!session) return null;
 
   const teacher = await getTeacherByUserId(session.user.id);
@@ -29,11 +29,15 @@ export default async function TeacherDashboard() {
   const studentCount = teacher.classes.reduce((sum, cls) => sum + cls._count.students, 0);
 
   const todayDayName = DAYS[new Date().getDay()];
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
 
   const [
     activeHomeworks,
     unreadMessages,
-    todaysSchedule,
+    rawSchedule,
+    assignedSubstitutions,
+    teacherAbsenceToday,
     upcomingEvents,
     upcomingMeetings
   ] = await Promise.all([
@@ -52,11 +56,36 @@ export default async function TeacherDashboard() {
     prisma.timetable.findMany({
       where: {
         dayOfWeek: todayDayName,
-        subject: { teacherId: teacher.id },
-        isBreak: false
+        isBreak: false,
+        OR: [
+          { teacherId: teacher.id },
+          { subject: { teacherId: teacher.id } }
+        ]
       },
       include: { class: true, subject: true },
       orderBy: { period: 'asc' }
+    }),
+    prisma.substitution.findMany({
+      where: {
+        date: todayDate,
+        substituteTeacherId: teacher.id,
+        status: "ASSIGNED"
+      },
+      include: {
+        timetableEntry: {
+          include: { class: true, subject: true }
+        },
+        absentTeacher: {
+          include: { user: true }
+        }
+      }
+    }),
+    prisma.teacherAbsence.findFirst({
+      where: {
+        teacherId: teacher.id,
+        date: todayDate,
+        status: "ACTIVE"
+      }
     }),
     prisma.calendarEvent.findMany({
       where: {
@@ -67,7 +96,7 @@ export default async function TeacherDashboard() {
       take: 4
     }),
     prisma.meeting.findMany({
-      where: { 
+      where: {
         teachers: { some: { id: teacher.id } },
         date: { gte: new Date() }
       },
@@ -76,6 +105,55 @@ export default async function TeacherDashboard() {
       take: 3
     })
   ]);
+
+  // Combine regular schedule and assigned substitution duties
+  const todaysSchedule: Array<{
+    id: string;
+    period: number;
+    startTime: string;
+    endTime: string;
+    subjectName: string;
+    className: string;
+    classroom?: string | null;
+    isSubstitution?: boolean;
+    absentTeacherName?: string;
+    isCoveredByOther?: boolean;
+  }> = [];
+
+  // Add regular slots (unless teacher is absent full day)
+  for (const s of rawSchedule) {
+    if (teacherAbsenceToday && teacherAbsenceToday.fullDay) {
+      // Teacher is absent today
+      continue;
+    }
+    todaysSchedule.push({
+      id: s.id,
+      period: s.period,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      subjectName: s.subject?.name || "Subject",
+      className: `${s.class.name} - ${s.class.section}`,
+      classroom: s.classroom
+    });
+  }
+
+  // Add assigned substitutions with duty badges
+  for (const sub of assignedSubstitutions) {
+    todaysSchedule.push({
+      id: `sub-${sub.id}`,
+      period: sub.timetableEntry.period,
+      startTime: sub.timetableEntry.startTime,
+      endTime: sub.timetableEntry.endTime,
+      subjectName: sub.timetableEntry.subject?.name || "Subject",
+      className: `${sub.timetableEntry.class.name} - ${sub.timetableEntry.class.section}`,
+      classroom: sub.timetableEntry.classroom,
+      isSubstitution: true,
+      absentTeacherName: sub.absentTeacher?.user?.name || "Absent Colleague"
+    });
+  }
+
+  // Sort schedule chronologically by period
+  todaysSchedule.sort((a, b) => a.period - b.period);
 
   const recentActivities = [...upcomingEvents.map(e => ({
     id: `e-${e.id}`,
@@ -94,36 +172,42 @@ export default async function TeacherDashboard() {
   return (
     <div className={styles.dashboard}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <h1 className={styles.title} style={{ margin: 0 }}>Teacher Dashboard</h1>
-        <Link 
-          href="/dashboard/teacher/programs" 
-          prefetch={true}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.6rem 1.1rem',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15))',
-            border: '1px solid rgba(99, 102, 241, 0.3)',
-            color: 'var(--primary)',
-            fontWeight: 700,
-            fontSize: '0.875rem',
-            textDecoration: 'none',
-            boxShadow: '0 2px 8px rgba(99, 102, 241, 0.08)'
-          }}
-        >
-          <Star size={18} />
-          <span>School Programs</span>
-          <ArrowRight size={16} />
-        </Link>
+        <div>
+          <h1 className={styles.title} style={{ margin: 0 }}>Teacher Dashboard</h1>
+          <p style={{ color: "var(--text-secondary)", margin: "0.25rem 0 0 0", fontSize: "0.9rem" }}>
+            Welcome back, {session.user.name || "Teacher"}.
+          </p>
+        </div>
+
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <Link
+            href="/dashboard/teacher/timetable"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 1rem", borderRadius: "8px", background: "var(--primary)", color: "var(--primary-fg)", textDecoration: "none", fontSize: "0.85rem", fontWeight: 600 }}
+          >
+            <CalendarIcon size={16} /> View Full Timetable
+          </Link>
+        </div>
       </div>
-      
+
+      {/* Teacher on leave alert banner */}
+      {teacherAbsenceToday && (
+        <div style={{ background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)", borderRadius: "10px", padding: "1rem 1.25rem", marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.75rem", color: "var(--danger)" }}>
+          <ShieldAlert size={20} />
+          <div>
+            <div style={{ fontWeight: 700 }}>You are marked on leave / absent today ({todayDayName})</div>
+            <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+              Reason: {teacherAbsenceToday.reason || "Approved absence"}. Your teaching periods are covered by scheduled substitutes.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Metrics Row */}
       <div className={styles.statsGrid}>
         <div className={styles.statCard}>
           <div className={styles.statIcon}><GraduationCap size={24} /></div>
           <div className={styles.statInfo}>
-            <span className={styles.statLabel}>My Classes</span>
+            <span className={styles.statLabel}>Assigned Classes</span>
             <span className={styles.statValue}>{classCount}</span>
           </div>
         </div>
@@ -151,26 +235,85 @@ export default async function TeacherDashboard() {
       </div>
 
       <div className={styles.chartsContainer}>
+        {/* Today's Schedule with Substitution Highlights */}
         <div className={styles.chartCard}>
-          <h3 className={styles.chartHeader}>Today&apos;s Schedule</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3 className={styles.chartHeader} style={{ margin: 0 }}>Today&apos;s Schedule ({todayDayName})</h3>
+            <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{todaysSchedule.length} periods</span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginTop: '1rem' }}>
             {todaysSchedule.length > 0 ? (
               todaysSchedule.map(slot => (
-                <div key={slot.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: 'var(--background)', borderRadius: '8px', border: '1px solid var(--border)', flexWrap: 'wrap', minWidth: 0 }}>
-                  <div style={{ background: "var(--primary)", color: "var(--primary-fg)", padding: '0.45rem 0.85rem', borderRadius: '6px', fontWeight: 600, minWidth: '60px', textAlign: 'center', flexShrink: 0 }}>
+                <div
+                  key={slot.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '1rem',
+                    padding: '0.85rem 1rem',
+                    background: slot.isSubstitution ? 'rgba(245, 158, 11, 0.06)' : 'var(--background)',
+                    borderRadius: '8px',
+                    border: `1px solid ${slot.isSubstitution ? 'rgba(245, 158, 11, 0.3)' : 'var(--border)'}`,
+                    flexWrap: 'wrap',
+                    minWidth: 0
+                  }}
+                >
+                  <div
+                    style={{
+                      background: slot.isSubstitution ? '#d97706' : 'var(--primary)',
+                      color: '#fff',
+                      padding: '0.45rem 0.85rem',
+                      borderRadius: '6px',
+                      fontWeight: 700,
+                      minWidth: '55px',
+                      textAlign: 'center',
+                      flexShrink: 0,
+                      fontSize: '0.9rem'
+                    }}
+                  >
                     P{slot.period}
                   </div>
+
                   <div style={{ flex: '1 1 180px', minWidth: 0 }}>
-                    <h4 style={{ margin: '0 0 0.25rem 0', color: 'var(--foreground)', overflowWrap: 'anywhere' }}>{slot.subject?.name}</h4>
-                    <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)', overflowWrap: 'anywhere' }}>Class {slot.class.name} - {slot.class.section}</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <h4 style={{ margin: 0, color: 'var(--foreground)', overflowWrap: 'anywhere', fontSize: "0.95rem" }}>
+                        {slot.subjectName}
+                      </h4>
+                      {slot.isSubstitution && (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.25rem",
+                            padding: "0.15rem 0.5rem",
+                            borderRadius: "999px",
+                            background: "rgba(245, 158, 11, 0.15)",
+                            color: "#d97706",
+                            fontSize: "0.72rem",
+                            fontWeight: 700
+                          }}
+                        >
+                          <Sparkles size={11} /> Substitution Duty
+                        </span>
+                      )}
+                    </div>
+
+                    <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)', overflowWrap: 'anywhere' }}>
+                      Class: <strong>{slot.className}</strong>
+                      {slot.isSubstitution && (
+                        <span> • Covering for: <strong style={{ color: "var(--foreground)" }}>{slot.absentTeacherName}</strong></span>
+                      )}
+                    </p>
                   </div>
-                  <div style={{ textAlign: 'right', fontSize: '0.85rem', color: 'var(--text-secondary)', marginLeft: 'auto', flexShrink: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'flex-end', marginBottom: '0.25rem' }}>
-                      <Clock size={14} style={{ flexShrink: 0 }} /> {slot.startTime} - {slot.endTime}
+
+                  <div style={{ textAlign: 'right', fontSize: '0.82rem', color: 'var(--text-secondary)', marginLeft: 'auto', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'flex-end', marginBottom: '0.2rem' }}>
+                      <Clock size={13} style={{ flexShrink: 0 }} /> {slot.startTime} - {slot.endTime}
                     </div>
                     {slot.classroom && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'flex-end' }}>
-                        <MapPin size={14} style={{ flexShrink: 0 }} /> {slot.classroom}
+                        <MapPin size={13} style={{ flexShrink: 0 }} /> {slot.classroom}
                       </div>
                     )}
                   </div>
@@ -179,7 +322,7 @@ export default async function TeacherDashboard() {
             ) : (
               <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--background)', borderRadius: '8px', border: '1px dashed var(--border)' }}>
                 <CalendarIcon size={48} style={{ opacity: 0.2, margin: '0 auto 1rem' }} />
-                <p>No classes scheduled for today.</p>
+                <p style={{ margin: 0 }}>No classes scheduled for today.</p>
               </div>
             )}
           </div>

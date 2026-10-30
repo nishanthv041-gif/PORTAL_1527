@@ -89,16 +89,22 @@ model Teacher {
   joinDate      DateTime?
   resumeUrl     String?
   isActive      Boolean   @default(true)
+  maxPeriodsPerDay  Int   @default(6)
+  maxPeriodsPerWeek Int   @default(30)
 
   // Relationships
-  classes        Class[]
-  subjects       Subject[]
-  assignments    Assignment[]
-  complaints     Complaint[]
-  meetings       Meeting[]
-  classTeacherOf Class?        @relation("ClassTeacher")
-  examRequests   ExamRequest[]
-  attendances    TeacherAttendance[]
+  classes               Class[]
+  subjects              Subject[]
+  assignments           Assignment[]
+  complaints            Complaint[]
+  meetings              Meeting[]
+  classTeacherOf        Class?              @relation("ClassTeacher")
+  examRequests          ExamRequest[]
+  attendances           TeacherAttendance[]
+  timetableSlots        Timetable[]
+  absences              TeacherAbsence[]
+  absentSubstitutions   Substitution[]      @relation("AbsentTeacher")
+  assignedSubstitutions Substitution[]      @relation("SubstituteTeacher")
 }
 
 model Staff {
@@ -166,12 +172,13 @@ model Class {
 }
 
 model Subject {
-  id        String  @id @default(cuid())
-  name      String
-  code      String
-  maxMarks  Int     @default(100)
-  passMarks Int     @default(35)
-  isActive  Boolean @default(true)
+  id                     String  @id @default(cuid())
+  name                   String
+  code                   String
+  maxMarks               Int     @default(100)
+  passMarks              Int     @default(35)
+  isActive               Boolean @default(true)
+  requiredPeriodsPerWeek Int     @default(5)
 
   // Relationships
   classId      String
@@ -295,23 +302,106 @@ model ReportCard {
 }
 
 model Timetable {
-  id           String  @id @default(cuid())
-  dayOfWeek    String // MONDAY, TUESDAY, etc.
-  startTime    String // e.g., "09:00"
-  endTime      String // e.g., "09:45"
-  period       Int
-  classroom    String?
-  academicYear String?
-  isBreak      Boolean @default(false)
+  id            String    @id @default(cuid())
+  dayOfWeek     String // MONDAY, TUESDAY, etc.
+  startTime     String // e.g., "09:00"
+  endTime       String // e.g., "09:45"
+  period        Int
+  classroom     String?
+  academicYear  String?
+  isBreak       Boolean   @default(false)
+  status        String    @default("PUBLISHED") // DRAFT, PUBLISHED
+  slotType      String    @default("LESSON") // LESSON, BREAK, LUNCH, ASSEMBLY, FREE
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
 
   // Relationships
-  classId   String
-  class     Class    @relation(fields: [classId], references: [id])
-  subjectId String?
-  subject   Subject? @relation(fields: [subjectId], references: [id])
+  classId       String
+  class         Class          @relation(fields: [classId], references: [id])
+  subjectId     String?
+  subject       Subject?       @relation(fields: [subjectId], references: [id])
+  teacherId     String?
+  teacher       Teacher?       @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  substitutions Substitution[]
 
   @@index([classId, dayOfWeek])
   @@index([subjectId])
+  @@index([teacherId, dayOfWeek])
+  @@index([status])
+}
+
+model PeriodSlot {
+  id        String   @id @default(cuid())
+  classId   String?  // null indicates school-wide default slot
+  order     Int      // 1, 2, 3...
+  label     String   // "Period 1", "Morning Break", "Lunch"
+  startTime String   // "08:00"
+  endTime   String   // "08:45"
+  type      String   @default("LESSON") // LESSON, BREAK, LUNCH, ASSEMBLY, FREE
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([classId, order])
+}
+
+model TeacherAbsence {
+  id            String         @id @default(cuid())
+  teacherId     String
+  teacher       Teacher        @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  date          DateTime
+  fullDay       Boolean        @default(true)
+  periodNumbers String?        // comma-separated periods e.g. "1,2,3"
+  reason        String?
+  source        String         @default("ADMIN_MARKED") // LEAVE_APPROVED, ADMIN_MARKED
+  status        String         @default("ACTIVE") // ACTIVE, CANCELLED
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  substitutions Substitution[]
+
+  @@index([teacherId, date])
+  @@index([date, status])
+}
+
+model Substitution {
+  id                  String          @id @default(cuid())
+  date                DateTime
+  timetableEntryId    String
+  timetableEntry      Timetable       @relation(fields: [timetableEntryId], references: [id], onDelete: Cascade)
+  absentTeacherId     String
+  absentTeacher       Teacher         @relation("AbsentTeacher", fields: [absentTeacherId], references: [id], onDelete: Cascade)
+  substituteTeacherId String?
+  substituteTeacher   Teacher?        @relation("SubstituteTeacher", fields: [substituteTeacherId], references: [id], onDelete: SetNull)
+  absenceId           String?
+  absence             TeacherAbsence? @relation(fields: [absenceId], references: [id], onDelete: Cascade)
+  status              String          @default("SUGGESTED") // SUGGESTED, ASSIGNED, ACCEPTED, UNASSIGNED
+  note                String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@unique([date, timetableEntryId])
+  @@index([date])
+  @@index([substituteTeacherId, date])
+  @@index([absentTeacherId, date])
+}
+
+model Room {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  capacity  Int?
+  building  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model TimetableAudit {
+  id        String   @id @default(cuid())
+  action    String   // CREATE, UPDATE, DELETE, PUBLISH, IMPORT, SUBSTITUTE
+  classId   String?
+  userId    String
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@index([classId, createdAt])
 }
 
 model Assignment {

@@ -35,8 +35,11 @@ export default async function TeacherTimetablePage({
   // 2. Fetch the teacher's personal teaching schedule slots
   const teacherSchedule = await prisma.timetable.findMany({
     where: {
-      subject: { teacherId: teacher.id },
-      isBreak: false
+      isBreak: false,
+      OR: [
+        { teacherId: teacher.id },
+        { subject: { teacherId: teacher.id } }
+      ]
     },
     include: {
       class: {
@@ -56,7 +59,28 @@ export default async function TeacherTimetablePage({
     ]
   });
 
-  // 3. Fetch all timetable slots for all classes so teacher can view any class timetable
+  // 3. Fetch substitutions assigned to this teacher for today
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+
+  const assignedSubstitutions = await prisma.substitution.findMany({
+    where: {
+      date: todayDate,
+      substituteTeacherId: teacher.id,
+      status: "ASSIGNED"
+    },
+    include: {
+      timetableEntry: {
+        include: {
+          class: { select: { id: true, name: true, section: true } },
+          subject: { include: { teacher: { include: { user: { select: { name: true } } } } } }
+        }
+      },
+      absentTeacher: { include: { user: true } }
+    }
+  });
+
+  // 4. Fetch all timetable slots for all classes so teacher can view any class timetable
   const allClassesTimetable = await prisma.timetable.findMany({
     include: {
       class: {
@@ -95,7 +119,7 @@ export default async function TeacherTimetablePage({
           Timetable &amp; Class Schedule
         </h1>
         <p style={{ color: "var(--text-secondary)", marginTop: "0.25rem", marginBottom: 0, fontSize: "0.9rem" }}>
-          View live on-time schedules for your classes and personal teaching periods.
+          View live on-time schedules for your classes, teaching periods, and assigned substitution duties.
         </p>
       </div>
 
@@ -103,6 +127,17 @@ export default async function TeacherTimetablePage({
         classes={classes}
         initialClassId={initialClassId}
         teacherSchedule={teacherSchedule as any}
+        assignedSubstitutions={assignedSubstitutions.map(s => ({
+          id: s.id,
+          period: s.timetableEntry.period,
+          startTime: s.timetableEntry.startTime,
+          endTime: s.timetableEntry.endTime,
+          className: `${s.timetableEntry.class.name} - ${s.timetableEntry.class.section}`,
+          subjectName: s.timetableEntry.subject?.name || "Subject",
+          classroom: s.timetableEntry.classroom,
+          absentTeacherName: s.absentTeacher?.user?.name || "Original Teacher",
+          note: s.note
+        }))}
         classTimetableMap={classTimetableMap as any}
         teacherName={teacher.user.name}
       />

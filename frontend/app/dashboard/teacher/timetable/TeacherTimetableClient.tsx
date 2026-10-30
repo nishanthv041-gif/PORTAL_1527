@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { 
-  Calendar as CalendarIcon, Clock, MapPin, User, 
-  BookOpen, Sparkles, CheckCircle2, PlayCircle, 
+import {
+  Calendar as CalendarIcon, Clock, MapPin, User,
+  BookOpen, Sparkles, CheckCircle2, PlayCircle,
   CalendarDays, ChevronRight, GraduationCap
 } from "lucide-react";
 
@@ -45,12 +45,24 @@ export default function TeacherTimetableClient({
   classes,
   initialClassId,
   teacherSchedule,
+  assignedSubstitutions = [],
   classTimetableMap,
   teacherName
 }: {
   classes: ClassType[];
   initialClassId: string;
   teacherSchedule: TimetableSlot[];
+  assignedSubstitutions?: Array<{
+    id: string;
+    period: number;
+    startTime: string;
+    endTime: string;
+    className: string;
+    subjectName: string;
+    classroom?: string | null;
+    absentTeacherName: string;
+    note?: string | null;
+  }>;
   classTimetableMap: Record<string, TimetableSlot[]>;
   teacherName: string;
 }) {
@@ -190,16 +202,16 @@ export default function TeacherTimetableClient({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <span style={{ 
-                display: "inline-flex", 
-                alignItems: "center", 
-                gap: "0.35rem", 
-                background: currentOngoingSlot ? "#10b981" : "var(--primary)", 
-                color: "#ffffff", 
-                fontSize: "0.75rem", 
-                fontWeight: 700, 
-                padding: "0.25rem 0.65rem", 
-                borderRadius: "20px" 
+              <span style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                background: currentOngoingSlot ? "#10b981" : "var(--primary)",
+                color: "#ffffff",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                padding: "0.25rem 0.65rem",
+                borderRadius: "20px"
               }}>
                 <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#ffffff", animation: "pulse 2s infinite" }} />
                 ON-TIME CLASS SCHEDULE
@@ -227,7 +239,7 @@ export default function TeacherTimetableClient({
             </h2>
 
             <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--text-secondary)" }}>
-              {viewMode === "class" 
+              {viewMode === "class"
                 ? `Viewing full timetable & live on-time schedule for ${selectedClassObj?.name || ""} - ${selectedClassObj?.section || ""}`
                 : `Teaching schedule for ${teacherName}`
               }
@@ -269,6 +281,31 @@ export default function TeacherTimetableClient({
         </div>
       </div>
 
+      {/* Today's Assigned Substitution Duties Banner */}
+      {assignedSubstitutions && assignedSubstitutions.length > 0 && (
+        <div style={{ background: "rgba(245, 158, 11, 0.08)", border: "1px solid rgba(245, 158, 11, 0.3)", borderRadius: "14px", padding: "1.25rem", marginBottom: "1.75rem" }}>
+          <div style={{ fontWeight: 700, fontSize: "1rem", color: "#d97706", display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+            <Sparkles size={18} /> Today&apos;s Substitution Duty Assignments ({assignedSubstitutions.length})
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "0.75rem" }}>
+            {assignedSubstitutions.map(sub => (
+              <div key={sub.id} style={{ background: "var(--card-bg)", padding: "0.85rem 1rem", borderRadius: "10px", border: "1px solid var(--border-color)", display: "flex", gap: "0.75rem", alignItems: "center" }}>
+                <div style={{ background: "#d97706", color: "#fff", fontWeight: 700, padding: "0.4rem 0.65rem", borderRadius: "6px", fontSize: "0.85rem" }}>
+                  P{sub.period}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: "0.92rem" }}>{sub.subjectName} • <span style={{ color: "var(--primary)" }}>{sub.className}</span></div>
+                  <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.15rem" }}>
+                    Covering for: <strong style={{ color: "var(--text-primary)" }}>{sub.absentTeacherName}</strong> • {sub.startTime} - {sub.endTime}
+                    {sub.classroom && ` • Room ${sub.classroom}`}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* TIMETABLE CONTENT */}
       {activeSlots.length === 0 ? (
         <div style={{ background: "var(--card-bg)", border: "1px dashed var(--border-color)", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
@@ -277,7 +314,7 @@ export default function TeacherTimetableClient({
             {viewMode === "class" ? "No Timetable Published for this Class" : "You have no teaching slots assigned yet"}
           </h3>
           <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", maxWidth: "420px", margin: "0.5rem auto 0" }}>
-            {viewMode === "class" 
+            {viewMode === "class"
               ? "The school administrator has not published a timetable for this class yet."
               : "Check with the school administrator to assign your teaching subjects and periods."}
           </p>
@@ -326,11 +363,11 @@ export default function TeacherTimetableClient({
                         key={slot.id}
                         style={{
                           padding: "1rem",
-                          backgroundColor: slot.isBreak 
-                            ? "rgba(0,0,0,0.02)" 
-                            : isOngoing 
-                            ? "rgba(16, 185, 129, 0.08)" 
-                            : "var(--background)",
+                          backgroundColor: slot.isBreak
+                            ? "rgba(0,0,0,0.02)"
+                            : isOngoing
+                              ? "rgba(16, 185, 129, 0.08)"
+                              : "var(--background)",
                           border: `1px solid ${isOngoing ? "#10b981" : slot.isBreak ? "var(--border-color)" : "rgba(99, 102, 241, 0.15)"}`,
                           borderRadius: "10px",
                           display: "flex",
@@ -342,16 +379,16 @@ export default function TeacherTimetableClient({
                         <div style={{
                           padding: "0.35rem 0.65rem",
                           borderRadius: "6px",
-                          backgroundColor: slot.isBreak 
-                            ? "rgba(0,0,0,0.06)" 
-                            : isOngoing 
-                            ? "#10b981" 
-                            : "rgba(99, 102, 241, 0.1)",
-                          color: slot.isBreak 
-                            ? "var(--text-secondary)" 
-                            : isOngoing 
-                            ? "#ffffff" 
-                            : "var(--primary)",
+                          backgroundColor: slot.isBreak
+                            ? "rgba(0,0,0,0.06)"
+                            : isOngoing
+                              ? "#10b981"
+                              : "rgba(99, 102, 241, 0.1)",
+                          color: slot.isBreak
+                            ? "var(--text-secondary)"
+                            : isOngoing
+                              ? "#ffffff"
+                              : "var(--primary)",
                           fontWeight: 700,
                           fontSize: "0.75rem",
                           minWidth: "48px",

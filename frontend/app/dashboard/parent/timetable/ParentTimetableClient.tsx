@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { 
-  Calendar as CalendarIcon, Clock, MapPin, User, 
-  Sparkles, CheckCircle2, PlayCircle, AlertCircle, 
+import {
+  Calendar as CalendarIcon, Clock, MapPin, User,
+  Sparkles, CheckCircle2, PlayCircle, AlertCircle,
   CalendarDays, ChevronRight
 } from "lucide-react";
 
@@ -29,10 +29,16 @@ export default function ParentTimetableClient({
   childName,
   className,
   scheduleSlots,
+  activeSubstitutions = {},
 }: {
   childName: string;
   className: string;
   scheduleSlots: SlotType[];
+  activeSubstitutions?: Record<string, {
+    substituteTeacherName: string;
+    absentTeacherName: string;
+    note?: string | null;
+  }>;
 }) {
   const [activeTab, setActiveTab] = useState<"today" | "week">("today");
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
@@ -103,16 +109,16 @@ export default function ParentTimetableClient({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <span style={{ 
-                display: "inline-flex", 
-                alignItems: "center", 
-                gap: "0.35rem", 
-                background: currentOngoingSlot ? "#10b981" : "var(--primary)", 
-                color: "#ffffff", 
-                fontSize: "0.75rem", 
-                fontWeight: 700, 
-                padding: "0.25rem 0.65rem", 
-                borderRadius: "20px" 
+              <span style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                background: currentOngoingSlot ? "#10b981" : "var(--primary)",
+                color: "#ffffff",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                padding: "0.25rem 0.65rem",
+                borderRadius: "20px"
               }}>
                 <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#ffffff", animation: "pulse 2s infinite" }} />
                 LIVE ON-TIME TRACKER
@@ -247,8 +253,8 @@ export default function ParentTimetableClient({
                   <div
                     key={slot.id}
                     style={{
-                      background: isOngoing 
-                        ? "linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, var(--card-bg) 100%)" 
+                      background: isOngoing
+                        ? "linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, var(--card-bg) 100%)"
                         : "var(--card-bg)",
                       border: `1px solid ${isOngoing ? "#10b981" : "var(--border-color)"}`,
                       borderRadius: "12px",
@@ -265,16 +271,16 @@ export default function ParentTimetableClient({
                       style={{
                         padding: "0.6rem 0.85rem",
                         borderRadius: "10px",
-                        background: slot.isBreak 
-                          ? "rgba(0,0,0,0.06)" 
-                          : isOngoing 
-                          ? "#10b981" 
-                          : "rgba(99, 102, 241, 0.12)",
-                        color: slot.isBreak 
-                          ? "var(--text-secondary)" 
-                          : isOngoing 
-                          ? "#ffffff" 
-                          : "var(--primary)",
+                        background: slot.isBreak
+                          ? "rgba(0,0,0,0.06)"
+                          : isOngoing
+                            ? "#10b981"
+                            : "rgba(99, 102, 241, 0.12)",
+                        color: slot.isBreak
+                          ? "var(--text-secondary)"
+                          : isOngoing
+                            ? "#ffffff"
+                            : "var(--primary)",
                         fontWeight: 700,
                         fontSize: "0.85rem",
                         textAlign: "center",
@@ -312,11 +318,15 @@ export default function ParentTimetableClient({
                           <Clock size={13} /> {slot.startTime} - {slot.endTime}
                         </span>
 
-                        {slot.subject?.teacher && (
+                        {activeSubstitutions[slot.id] ? (
+                          <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", color: "#d97706", fontWeight: 600 }}>
+                            <User size={13} /> Substitute: <strong>{activeSubstitutions[slot.id].substituteTeacherName}</strong> (covering for {activeSubstitutions[slot.id].absentTeacherName})
+                          </span>
+                        ) : slot.subject?.teacher ? (
                           <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                             <User size={13} /> Teacher: <strong>{slot.subject.teacher.user.name}</strong>
                           </span>
-                        )}
+                        ) : null}
 
                         {slot.classroom && (
                           <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
@@ -401,12 +411,17 @@ export default function ParentTimetableClient({
                           <span>{slot.startTime} - {slot.endTime}</span>
                         </div>
 
-                        {slot.subject?.teacher && (
+                        {isToday && activeSubstitutions[slot.id] ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "#d97706", fontSize: "0.8rem", marginTop: "0.2rem", fontWeight: 600 }}>
+                            <User size={13} />
+                            <span>Substitute: {activeSubstitutions[slot.id].substituteTeacherName} (covering for {activeSubstitutions[slot.id].absentTeacherName})</span>
+                          </div>
+                        ) : slot.subject?.teacher ? (
                           <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--text-secondary)", fontSize: "0.8rem", marginTop: "0.2rem" }}>
                             <User size={13} />
                             <span>{slot.subject.teacher.user.name}</span>
                           </div>
-                        )}
+                        ) : null}
 
                         {slot.classroom && (
                           <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--text-secondary)", fontSize: "0.8rem", marginTop: "0.2rem" }}>

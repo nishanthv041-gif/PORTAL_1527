@@ -7,6 +7,8 @@ import * as XLSX from "xlsx";
 import mammoth from "mammoth";
 import { extractText, getDocumentProxy } from "unpdf";
 import type { ScannedSlot, ScanResult } from "./scanTimetableTypes";
+import type { PeriodSlotData, PeriodType } from "@/backend/lib/timetable/timetableTypes";
+import { extractTimetableWithGemini, type GeminiTimetableOutput } from "./extractTimetableGemini";
 
 const DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 const DAY_ALIASES: Record<string, string> = {
@@ -30,29 +32,30 @@ const DAY_ALIASES: Record<string, string> = {
 const DEFAULT_TIMES: Record<number, { start: string; end: string }> = {
   1: { start: "08:00", end: "08:45" },
   2: { start: "08:45", end: "09:30" },
-  3: { start: "09:30", end: "10:15" },
-  4: { start: "10:30", end: "11:15" },
-  5: { start: "11:15", end: "12:00" },
-  6: { start: "12:45", end: "13:30" },
-  7: { start: "13:30", end: "14:15" },
-  8: { start: "14:15", end: "15:00" },
+  3: { start: "09:30", end: "09:45" }, // break
+  4: { start: "09:45", end: "10:30" },
+  5: { start: "10:30", end: "11:15" },
+  6: { start: "11:15", end: "12:00" },
+  7: { start: "12:00", end: "12:45" }, // lunch
+  8: { start: "12:45", end: "13:30" },
+  9: { start: "13:30", end: "14:15" },
+  10: { start: "14:15", end: "15:00" }
 };
 
 const COMMON_SUBJECT_SYNONYMS: Record<string, string[]> = {
-  "mathematics": ["math", "maths", "algebra", "geometry", "calc", "arithmetic"],
-  "english": ["eng", "grammar", "literature", "reading"],
-  "science": ["sci", "general science", "basic science"],
-  "physics": ["phy", "ps"],
+  "mathematics": ["math", "maths", "algebra", "geometry", "calc", "arithmetic", "quant", "standard maths"],
+  "english": ["eng", "grammar", "literature", "reading", "general english", "eng lit"],
+  "science": ["sci", "general science", "basic science", "sci & tech", "natural science"],
+  "physics": ["phy", "ps", "phys"],
   "chemistry": ["chem"],
   "biology": ["bio", "botany", "zoology"],
-  "social studies": ["social", "sst", "history", "civics", "geography", "evs"],
-  "computer science": ["computer", "comp", "cs", "it", "informatics", "coding"],
+  "social studies": ["social", "sst", "history", "civics", "geography", "evs", "social science", "soc sci"],
+  "computer science": ["computer", "comp", "cs", "it", "informatics", "coding", "ict"],
   "physical education": ["pe", "pet", "sports", "games", "pt"],
   "hindi": ["hin"],
-  "tamil": ["tam"],
+  "tamil": ["tam", "regional language"],
   "arts": ["art", "drawing", "craft", "music"],
 };
-
 
 function normalizeDay(rawDay: string): string | null {
   if (!rawDay) return null;
@@ -65,27 +68,40 @@ function normalizeDay(rawDay: string): string | null {
   return null;
 }
 
-function normalizeBreak(val: string): boolean {
-  if (!val) return false;
+function normalizeBreak(val: string): { isBreak: boolean; type: PeriodType } {
+  if (!val) return { isBreak: false, type: "LESSON" };
   const lower = val.toLowerCase().trim();
-  return (
+  if (lower.includes("lunch") || lower.includes("tiffin") || lower.includes("dinner")) {
+    return { isBreak: true, type: "LUNCH" };
+  }
+  if (
     lower === "break" ||
-    lower === "lunch" ||
     lower === "recess" ||
     lower === "interval" ||
-    lower === "tiffin" ||
     lower === "snack" ||
-    lower === "free" ||
-    lower.includes("lunch") ||
+    lower.includes("break") ||
     lower.includes("recess") ||
     lower.includes("interval")
-  );
+  ) {
+    return { isBreak: true, type: "BREAK" };
+  }
+  if (lower === "assembly" || lower.includes("prayer")) {
+    return { isBreak: true, type: "ASSEMBLY" };
+  }
+  if (lower === "free" || lower === "library" || lower === "study") {
+    return { isBreak: false, type: "FREE" };
+  }
+  return { isBreak: false, type: "LESSON" };
+}
+
+function cleanString(str: string): string {
+  return (str || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 function matchSubject(
   rawName: string,
-  availableSubjects: Array<{ id: string; name: string }>
-): { subjectId: string; subjectName: string; isMatched: boolean } {
+  availableSubjects: Array<{ id: string; name: string; teacherId?: string | null; teacher?: { user: { name: string } } | null }>
+): { subjectId: string; subjectName: string; isMatched: boolean; defaultTeacherId?: string | null; defaultTeacherName?: string | null } {
   const clean = rawName.trim().toLowerCase();
   if (!clean) return { subjectId: "", subjectName: "", isMatched: false };
 
@@ -93,7 +109,13 @@ function matchSubject(
   for (const s of availableSubjects) {
     const sName = s.name.trim().toLowerCase();
     if (sName === clean || clean.includes(sName) || sName.includes(clean)) {
-      return { subjectId: s.id, subjectName: s.name, isMatched: true };
+      return {
+        subjectId: s.id,
+        subjectName: s.name,
+        isMatched: true,
+        defaultTeacherId: s.teacherId,
+        defaultTeacherName: s.teacher?.user?.name
+      };
     }
   }
 
@@ -105,247 +127,271 @@ function matchSubject(
         return sName === canonical || synonyms.some(syn => sName.includes(syn));
       });
       if (found) {
-        return { subjectId: found.id, subjectName: found.name, isMatched: true };
+        return {
+          subjectId: found.id,
+          subjectName: found.name,
+          isMatched: true,
+          defaultTeacherId: found.teacherId,
+          defaultTeacherName: found.teacher?.user?.name
+        };
       }
     }
   }
 
-  // 3. Fallback: if availableSubjects has at least one subject, suggest raw name
+  // 3. Fallback: flag as unmapped subject so user can map it
   return {
-    subjectId: availableSubjects[0]?.id || "",
+    subjectId: "",
     subjectName: rawName.trim(),
     isMatched: false
+  };
+}
+
+function matchTeacher(
+  rawTeacherName: string | null | undefined,
+  allTeachers: Array<{ id: string; name: string }>,
+  defaultTeacherId?: string | null,
+  defaultTeacherName?: string | null
+): { teacherId?: string; teacherName?: string; isMismatch: boolean } {
+  if (!rawTeacherName || !rawTeacherName.trim()) {
+    // AUTO-FILL assigned teacher if no teacher was provided in the file! (Solves "No Teacher")
+    if (defaultTeacherId && defaultTeacherName) {
+      return {
+        teacherId: defaultTeacherId,
+        teacherName: defaultTeacherName,
+        isMismatch: false
+      };
+    }
+    return { isMismatch: false };
+  }
+
+  const clean = cleanString(rawTeacherName);
+
+  // Exact or contains match
+  for (const t of allTeachers) {
+    const tClean = cleanString(t.name);
+    if (tClean === clean || tClean.includes(clean) || clean.includes(tClean)) {
+      const isMismatch = Boolean(defaultTeacherId && defaultTeacherId !== t.id);
+      return {
+        teacherId: t.id,
+        teacherName: t.name,
+        isMismatch
+      };
+    }
+  }
+
+  // If no match found among school teachers, use assigned teacher if available, else preserve raw name
+  if (defaultTeacherId && defaultTeacherName) {
+    return {
+      teacherId: defaultTeacherId,
+      teacherName: defaultTeacherName,
+      isMismatch: false
+    };
+  }
+
+  return {
+    teacherName: rawTeacherName.trim(),
+    isMismatch: false
   };
 }
 
 export async function scanTimetableAction(formData: FormData): Promise<ScanResult> {
   try {
     const session = await getServerSession(getAuthOptions());
-    if (!session || session.user.role !== "ADMIN") return { error: "Unauthorized" };
+    if (!session || session.user.role !== "ADMIN") return { error: "Unauthorized: Admin access required." };
 
     const classId = formData.get("classId") as string;
-    const file = formData.get("file") as File;
+    const file = formData.get("file") as File | null;
+    const clientJsonPayload = formData.get("clientJson") as string | null;
 
     if (!classId) return { error: "Please select a class first." };
-    if (!file) return { error: "Please select a file to scan." };
 
+    // Fetch class subjects with assigned teacher
     const availableSubjects = await prisma.subject.findMany({
       where: { classId, isActive: true },
-      select: { id: true, name: true }
+      include: {
+        teacher: { include: { user: true } }
+      }
     });
 
-    const fileName = file.name || "uploaded-file";
-    const extension = fileName.split(".").pop()?.toLowerCase() || "";
-    const mimeType = file.type || "";
+    // Fetch all teachers in school for auto-matching
+    const teachersList = await prisma.teacher.findMany({
+      where: { isActive: true },
+      include: { user: true }
+    });
+    const allTeachers = teachersList.map(t => ({ id: t.id, name: t.user.name }));
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // Fetch school period slots
+    const existingPeriodSlots = await prisma.periodSlot.findMany({
+      where: { OR: [{ classId }, { classId: null }] },
+      orderBy: { order: "asc" }
+    });
 
-    let fileType = "Document";
     const scannedSlots: ScannedSlot[] = [];
+    const detectedPeriods: PeriodSlotData[] = [];
     const warnings: string[] = [];
+    let fileType = "Document";
+    let fileName = file?.name || "timetable-import.json";
 
     // ────────────────────────────────────────────────────────────────
-    // 1. EXCEL / SPREADSHEET (.xlsx, .xls, .csv)
+    // SCENARIO A: Direct client JSON payload (e.g. from SheetJS browser parser)
     // ────────────────────────────────────────────────────────────────
-    if (
-      ["xlsx", "xls", "csv"].includes(extension) ||
-      mimeType.includes("spreadsheet") ||
-      mimeType.includes("excel") ||
-      mimeType.includes("csv")
-    ) {
-      fileType = "Excel Spreadsheet";
-      const wb = XLSX.read(buffer, { type: "buffer" });
-      const wsName = wb.SheetNames[0];
-      const ws = wb.Sheets[wsName];
-
-      const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
-      if (!rows || rows.length === 0) {
-        return { error: "The uploaded spreadsheet is empty." };
+    if (clientJsonPayload) {
+      fileType = "Structured JSON";
+      try {
+        const parsedJson = JSON.parse(clientJsonPayload);
+        mapStructuredJsonToSlots({
+          data: parsedJson,
+          availableSubjects,
+          allTeachers,
+          existingPeriodSlots,
+          scannedSlots,
+          detectedPeriods,
+          warnings
+        });
+      } catch (jsonErr: any) {
+        return { error: `Failed to parse structured JSON: ${jsonErr.message}` };
       }
+    }
+    else if (file) {
+      fileName = file.name;
+      const extension = fileName.split(".").pop()?.toLowerCase() || "";
+      const mimeType = file.type || "";
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
 
-      // Check if it has header row with "Day", "Period", "Subject" (List format)
-      const headerIndex = rows.findIndex(r => 
-        r.some((c: any) => String(c).toLowerCase().includes("day")) &&
-        r.some((c: any) => String(c).toLowerCase().includes("period") || String(c).toLowerCase().includes("subject"))
-      );
+      // ────────────────────────────────────────────────────────────────
+      // SCENARIO B: Images / Photos (Gemini Vision + In-Memory fallback)
+      // ────────────────────────────────────────────────────────────────
+      if (mimeType.startsWith("image/") || /\.(jpg|jpeg|png|webp|bmp)$/i.test(extension)) {
+        fileType = "Image / Photo";
+        const isGeminiConfigured = Boolean(process.env.GEMINI_API_KEY);
 
-      if (headerIndex !== -1 && rows.length > headerIndex + 1) {
-        // List format
-        const headerRow = rows[headerIndex].map((c: any) => String(c || "").trim().toLowerCase());
-        const dayCol = headerRow.findIndex((c: string) => c.includes("day"));
-        const periodCol = headerRow.findIndex((c: string) => c.includes("period"));
-        const subjectCol = headerRow.findIndex((c: string) => c.includes("subject"));
-        const startCol = headerRow.findIndex((c: string) => c.includes("start"));
-        const endCol = headerRow.findIndex((c: string) => c.includes("end"));
-        const roomCol = headerRow.findIndex((c: string) => c.includes("room") || c.includes("class"));
-        const breakCol = headerRow.findIndex((c: string) => c.includes("break"));
-
-        for (let r = headerIndex + 1; r < rows.length; r++) {
-          const row = rows[r];
-          if (!row || row.length === 0) continue;
-
-          const rawDay = String(row[dayCol] || "");
-          const normDay = normalizeDay(rawDay);
-          const rawPeriod = parseInt(String(row[periodCol] || ""), 10);
-          const rawSubject = String(row[subjectCol] || "").trim();
-          const isBreak = breakCol !== -1 ? normalizeBreak(String(row[breakCol])) : normalizeBreak(rawSubject);
-
-          if (!normDay || isNaN(rawPeriod) || rawPeriod < 1 || rawPeriod > 8) {
-            continue;
-          }
-
-          const matched = isBreak ? { subjectId: "", subjectName: "Break / Recess", isMatched: true } : matchSubject(rawSubject, availableSubjects);
-          if (!isBreak && !matched.isMatched && rawSubject) {
-            warnings.push(`Row ${r + 1}: Subject "${rawSubject}" was not an exact match. Assigned to "${matched.subjectName}".`);
-          }
-
-          scannedSlots.push({
-            id: `slot-${normDay}-${rawPeriod}-${Date.now()}-${Math.random()}`,
-            dayOfWeek: normDay,
-            period: rawPeriod,
-            subjectId: isBreak ? "" : matched.subjectId,
-            subjectName: isBreak ? "Break" : matched.subjectName,
-            startTime: String(row[startCol] || "").trim() || DEFAULT_TIMES[rawPeriod]?.start || "08:00",
-            endTime: String(row[endCol] || "").trim() || DEFAULT_TIMES[rawPeriod]?.end || "08:45",
-            classroom: String(row[roomCol] || "").trim(),
-            isBreak
+        let geminiOutput: GeminiTimetableOutput | null = null;
+        if (isGeminiConfigured) {
+          geminiOutput = await extractTimetableWithGemini({
+            buffer,
+            mimeType: mimeType || "image/jpeg"
           });
         }
-      } else {
-        // Matrix format: Rows are Days, Columns are Periods (or vice-versa)
-        for (let r = 0; r < rows.length; r++) {
-          const row = rows[r];
-          if (!row || row.length === 0) continue;
 
-          const firstCell = String(row[0] || "");
-          const normDay = normalizeDay(firstCell);
-          if (!normDay) continue;
-
-          // Columns 1 to 8 correspond to Period 1 to 8
-          for (let p = 1; p <= 8 && p < row.length; p++) {
-            const rawCell = String(row[p] || "").trim();
-            if (!rawCell) continue;
-
-            const isBreak = normalizeBreak(rawCell);
-            const matched = isBreak ? { subjectId: "", subjectName: "Break", isMatched: true } : matchSubject(rawCell, availableSubjects);
-
-            if (!isBreak && !matched.isMatched && rawCell) {
-              warnings.push(`${normDay} Period ${p}: Subject "${rawCell}" suggested as "${matched.subjectName}".`);
+        if (geminiOutput && geminiOutput.classes && geminiOutput.classes.length > 0) {
+          mapStructuredJsonToSlots({
+            data: geminiOutput,
+            availableSubjects,
+            allTeachers,
+            existingPeriodSlots,
+            scannedSlots,
+            detectedPeriods,
+            warnings
+          });
+        } else {
+          // Fallback in-memory Tesseract recognition
+          try {
+            const { createWorker } = await import("tesseract.js");
+            const worker = await createWorker("eng");
+            const ret = await worker.recognize(buffer);
+            await worker.terminate();
+            const text = ret?.data?.text || "";
+            if (text.trim().length > 10) {
+              parseRawTextToSlots({
+                text,
+                availableSubjects,
+                allTeachers,
+                existingPeriodSlots,
+                scannedSlots,
+                detectedPeriods
+              });
             }
-
-            scannedSlots.push({
-              id: `slot-${normDay}-${p}-${Date.now()}-${Math.random()}`,
-              dayOfWeek: normDay,
-              period: p,
-              subjectId: isBreak ? "" : matched.subjectId,
-              subjectName: isBreak ? "Break" : matched.subjectName,
-              startTime: DEFAULT_TIMES[p]?.start || "08:00",
-              endTime: DEFAULT_TIMES[p]?.end || "08:45",
-              classroom: "",
-              isBreak
-            });
+          } catch (tessErr) {
+            console.warn("Tesseract fallback notice:", tessErr);
           }
         }
       }
-    }
 
-    // ────────────────────────────────────────────────────────────────
-    // 2. WORD DOCUMENT (.docx)
-    // ────────────────────────────────────────────────────────────────
-    else if (
-      extension === "docx" ||
-      extension === "doc" ||
-      mimeType.includes("word") ||
-      mimeType.includes("officedocument.wordprocessingml")
-    ) {
-      fileType = "Word Document";
-      const htmlResult = await mammoth.convertToHtml({ buffer });
-      const html = htmlResult.value;
+      // ────────────────────────────────────────────────────────────────
+      // SCENARIO C: Excel / Spreadsheet (.xlsx, .xls, .csv)
+      // ────────────────────────────────────────────────────────────────
+      else if (extension === "xlsx" || extension === "xls" || extension === "csv") {
+        fileType = "Spreadsheet";
+        const workbook = XLSX.read(buffer, { type: "buffer" });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-      // Extract tables from HTML: <tr>...<td>...
-      const tableRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-      let trMatch;
-      const parsedRows: string[][] = [];
-
-      while ((trMatch = tableRegex.exec(html)) !== null) {
-        const rowContent = trMatch[1];
-        const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>|<th[^>]*>([\s\S]*?)<\/th>/gi;
-        let tdMatch;
-        const cells: string[] = [];
-        while ((tdMatch = cellRegex.exec(rowContent)) !== null) {
-          const cleanText = (tdMatch[1] || tdMatch[2] || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").trim();
-          cells.push(cleanText);
-        }
-        if (cells.length > 0) {
-          parsedRows.push(cells);
-        }
+        parseTableRowsToSlots({
+          rows,
+          availableSubjects,
+          allTeachers,
+          existingPeriodSlots,
+          scannedSlots,
+          detectedPeriods
+        });
       }
 
-      if (parsedRows.length > 0) {
-        // Iterate table rows to find days and period cells
-        for (const cells of parsedRows) {
-          const normDay = normalizeDay(cells[0]);
-          if (!normDay) continue;
+      // ────────────────────────────────────────────────────────────────
+      // SCENARIO D: Word Document (.docx)
+      // ────────────────────────────────────────────────────────────────
+      else if (extension === "docx" || extension === "doc") {
+        fileType = "Word Document";
+        const htmlResult = await mammoth.convertToHtml({ buffer });
+        const html = htmlResult.value;
 
-          for (let p = 1; p <= 8 && p < cells.length; p++) {
-            const rawCell = cells[p].trim();
-            if (!rawCell) continue;
+        const tableRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+        let trMatch;
+        const parsedRows: string[][] = [];
 
-            const isBreak = normalizeBreak(rawCell);
-            const matched = isBreak ? { subjectId: "", subjectName: "Break", isMatched: true } : matchSubject(rawCell, availableSubjects);
-
-            scannedSlots.push({
-              id: `slot-${normDay}-${p}-${Date.now()}-${Math.random()}`,
-              dayOfWeek: normDay,
-              period: p,
-              subjectId: isBreak ? "" : matched.subjectId,
-              subjectName: isBreak ? "Break" : matched.subjectName,
-              startTime: DEFAULT_TIMES[p]?.start || "08:00",
-              endTime: DEFAULT_TIMES[p]?.end || "08:45",
-              classroom: "",
-              isBreak
-            });
+        while ((trMatch = tableRegex.exec(html)) !== null) {
+          const rowContent = trMatch[1];
+          const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>|<th[^>]*>([\s\S]*?)<\/th>/gi;
+          let tdMatch;
+          const cells: string[] = [];
+          while ((tdMatch = cellRegex.exec(rowContent)) !== null) {
+            const cleanText = (tdMatch[1] || tdMatch[2] || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").trim();
+            cells.push(cleanText);
           }
+          if (cells.length > 0) parsedRows.push(cells);
         }
-      } else {
-        // Fallback to raw text parsing
-        const textResult = await mammoth.extractRawText({ buffer });
-        const wordSlots = parseUniversalTimetable(textResult.value, availableSubjects);
-        scannedSlots.push(...wordSlots);
+
+        if (parsedRows.length > 0) {
+          parseTableRowsToSlots({
+            rows: parsedRows,
+            availableSubjects,
+            allTeachers,
+            existingPeriodSlots,
+            scannedSlots,
+            detectedPeriods
+          });
+        }
+      }
+
+      // ────────────────────────────────────────────────────────────────
+      // SCENARIO E: PDF Document (.pdf)
+      // ────────────────────────────────────────────────────────────────
+      else if (extension === "pdf") {
+        fileType = "PDF Document";
+        try {
+          const uint8 = new Uint8Array(buffer);
+          const pdf = await getDocumentProxy(uint8);
+          const { text } = await extractText(pdf, { mergePages: true });
+          parseRawTextToSlots({
+            text: text || "",
+            availableSubjects,
+            allTeachers,
+            existingPeriodSlots,
+            scannedSlots,
+            detectedPeriods
+          });
+        } catch (pdfErr) {
+          console.warn("PDF parse error:", pdfErr);
+        }
       }
     }
 
-    // 3. PDF DOCUMENT (.pdf) using unpdf
-    else if (extension === "pdf" || mimeType.includes("pdf")) {
-      fileType = "PDF Document";
-      try {
-        const uint8 = new Uint8Array(buffer);
-        const pdf = await getDocumentProxy(uint8);
-        const { text } = await extractText(pdf, { mergePages: true });
-        const pdfSlots = parseUniversalTimetable(text || "", availableSubjects);
-        scannedSlots.push(...pdfSlots);
-      } catch (pdfErr) {
-        console.warn("PDF parse fallback:", pdfErr);
-        const textFallback = buffer.toString("utf-8");
-        const fallbackSlots = parseUniversalTimetable(textFallback, availableSubjects);
-        scannedSlots.push(...fallbackSlots);
-      }
-    }
-
-    // 4. PHOTO / IMAGE / OTHER
-    else {
-      fileType = "Image / Document";
-      const textContent = buffer.toString("utf-8");
-      const docSlots = parseUniversalTimetable(textContent, availableSubjects);
-      scannedSlots.push(...docSlots);
-    }
-
-    // Deduplicate slots strictly by (dayOfWeek, period)
+    // Deduplicate slots by (dayOfWeek, period)
     const uniqueMap = new Map<string, ScannedSlot>();
     for (const slot of scannedSlots) {
       const normDay = normalizeDay(slot.dayOfWeek);
-      if (!normDay || slot.period < 1 || slot.period > 8) continue;
+      if (!normDay || slot.period < 1 || slot.period > 10) continue;
       uniqueMap.set(`${normDay}-${slot.period}`, {
         ...slot,
         dayOfWeek: normDay
@@ -362,9 +408,10 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
 
     if (finalSlots.length === 0) {
       return {
-        error: `Could not detect timetable data from "${fileName}". Please ensure the file contains Days (e.g., Monday to Saturday) and Periods with Subject names, or enter them manually.`,
+        error: `Could not extract timetable data from "${fileName}". Please ensure the file contains day rows/columns and period subjects, or enter them manually.`,
         fileName,
-        fileType
+        fileType,
+        scannerConfigured: Boolean(process.env.GEMINI_API_KEY)
       };
     }
 
@@ -372,155 +419,264 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
       success: true,
       fileName,
       fileType,
+      periods: detectedPeriods.length > 0 ? detectedPeriods : undefined,
       scannedSlots: finalSlots,
       warnings,
-      totalScanned: finalSlots.length
+      totalScanned: finalSlots.length,
+      scannerConfigured: Boolean(process.env.GEMINI_API_KEY)
     };
-  } catch (error: unknown) {
-    console.error("Error scanning timetable document:", error);
+  } catch (error: any) {
+    console.error("Timetable scan action error:", error);
     return {
-      error: error instanceof Error ? error.message : "Failed to parse timetable document."
+      error: error.message || "An unexpected error occurred during timetable extraction."
     };
   }
 }
 
-function tokenizeSubjects(text: string, availableSubjects: Array<{ id: string; name: string }>): string[] {
-  if (text.includes("\t") || text.includes("|") || text.includes(",") || text.includes(";")) {
-    return text.split(/[\t|,;]+/).map(c => c.trim()).filter(Boolean);
+/**
+ * Helper to map standard JSON shape:
+ * { periods: [...], classes: [{ className: "...", days: [{ day: "MONDAY", slots: [...] }] }] }
+ */
+function mapStructuredJsonToSlots(opts: {
+  data: any;
+  availableSubjects: any[];
+  allTeachers: any[];
+  existingPeriodSlots: any[];
+  scannedSlots: ScannedSlot[];
+  detectedPeriods: PeriodSlotData[];
+  warnings: string[];
+}) {
+  const { data, availableSubjects, allTeachers, existingPeriodSlots, scannedSlots, detectedPeriods, warnings } = opts;
+
+  // Extract periods header if present
+  if (data.periods && Array.isArray(data.periods)) {
+    for (const p of data.periods) {
+      detectedPeriods.push({
+        order: Number(p.order) || detectedPeriods.length + 1,
+        label: p.label || `Period ${p.order}`,
+        startTime: p.start || DEFAULT_TIMES[p.order]?.start || "08:00",
+        endTime: p.end || DEFAULT_TIMES[p.order]?.end || "08:45",
+        type: p.type || (p.label?.toLowerCase().includes("break") ? "BREAK" : "LESSON")
+      });
+    }
   }
-  if (/\s{2,}/.test(text)) {
-    return text.split(/\s{2,}/).map(c => c.trim()).filter(Boolean);
-  }
 
-  const sortedNames = [
-    ...availableSubjects.map(s => s.name),
-    "Tamil", "English", "Maths", "Mathematics", "Science", "Social", "Social Studies",
-    "Computer Science", "Physics", "Chemistry", "Biology", "Hindi", "Break", "Recess", "Lunch"
-  ].sort((a, b) => b.length - a.length);
+  const classes = data.classes || (data.days ? [{ className: "Target Class", days: data.days }] : []);
+  for (const cls of classes) {
+    for (const dayObj of (cls.days || [])) {
+      const normDay = normalizeDay(dayObj.day);
+      if (!normDay) continue;
 
-  let remaining = text.trim();
-  const tokens: string[] = [];
+      for (const slot of (dayObj.slots || [])) {
+        const periodNum = Number(slot.period);
+        if (isNaN(periodNum) || periodNum < 1) continue;
 
-  while (remaining.length > 0) {
-    remaining = remaining.trim();
-    let matched = false;
-    for (const sub of sortedNames) {
-      if (remaining.toLowerCase().startsWith(sub.toLowerCase())) {
-        const nextChar = remaining.charAt(sub.length);
-        if (!nextChar || /[\s,;|\-]/.test(nextChar)) {
-          tokens.push(sub);
-          remaining = remaining.slice(sub.length).replace(/^[\s,;|\-]+/, "");
-          matched = true;
-          break;
+        const rawSubject = (slot.subject || "").trim();
+        const breakInfo = normalizeBreak(rawSubject);
+
+        let subjectId = "";
+        let subjectName = rawSubject;
+        let isUnknownSubject = false;
+        let defaultTeacherId: string | null = null;
+        let defaultTeacherName: string | null = null;
+
+        if (breakInfo.isBreak) {
+          subjectName = breakInfo.type === "LUNCH" ? "Lunch Break" : "Break";
+        } else {
+          const matched = matchSubject(rawSubject, availableSubjects);
+          subjectId = matched.subjectId;
+          subjectName = matched.subjectName;
+          isUnknownSubject = !matched.isMatched;
+          defaultTeacherId = matched.defaultTeacherId || null;
+          defaultTeacherName = matched.defaultTeacherName || null;
         }
-      }
-    }
-    if (!matched) {
-      const spaceIdx = remaining.indexOf(" ");
-      if (spaceIdx === -1) {
-        tokens.push(remaining);
-        break;
-      } else {
-        tokens.push(remaining.slice(0, spaceIdx));
-        remaining = remaining.slice(spaceIdx + 1);
+
+        // Match Teacher with auto-fill fallback
+        const teacherMatch = breakInfo.isBreak
+          ? { teacherId: undefined, teacherName: undefined, isMismatch: false }
+          : matchTeacher(slot.teacher, allTeachers, defaultTeacherId, defaultTeacherName);
+
+        const psObj = detectedPeriods.find(p => p.order === periodNum) || existingPeriodSlots.find(p => p.order === periodNum);
+        const startTime = slot.start || psObj?.startTime || DEFAULT_TIMES[periodNum]?.start || "08:00";
+        const endTime = slot.end || psObj?.endTime || DEFAULT_TIMES[periodNum]?.end || "08:45";
+
+        scannedSlots.push({
+          id: `scan-${normDay}-${periodNum}-${Math.random().toString(36).substring(2, 7)}`,
+          dayOfWeek: normDay,
+          period: periodNum,
+          subjectId,
+          subjectName,
+          teacherId: teacherMatch.teacherId,
+          teacherName: teacherMatch.teacherName,
+          assignedTeacherId: defaultTeacherId || undefined,
+          assignedTeacherName: defaultTeacherName || undefined,
+          isTeacherMismatch: teacherMatch.isMismatch,
+          startTime,
+          endTime,
+          classroom: slot.room || "",
+          isBreak: breakInfo.isBreak,
+          slotType: breakInfo.type,
+          isUnknownSubject
+        });
       }
     }
   }
-
-  return tokens.filter(Boolean);
 }
 
-function parseUniversalTimetable(
-  rawText: string,
-  availableSubjects: Array<{ id: string; name: string }>
-): ScannedSlot[] {
-  const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  const slotsMap = new Map<string, ScannedSlot>();
+/**
+ * Helper to parse tabular 2D array of cells (from Excel or Word table)
+ */
+function parseTableRowsToSlots(opts: {
+  rows: any[][];
+  availableSubjects: any[];
+  allTeachers: any[];
+  existingPeriodSlots: any[];
+  scannedSlots: ScannedSlot[];
+  detectedPeriods: PeriodSlotData[];
+}) {
+  const { rows, availableSubjects, allTeachers, existingPeriodSlots, scannedSlots, detectedPeriods } = opts;
+  if (!rows || rows.length === 0) return;
 
-  const addSlot = (day: string, period: number, rawSubject: string, startTime?: string, endTime?: string, room?: string) => {
-    if (period < 1 || period > 8) return;
-    const normDay = normalizeDay(day);
-    if (!normDay) return;
+  // Inspect first 2 rows for period header times
+  let headerRowIndex = -1;
+  for (let r = 0; r < Math.min(3, rows.length); r++) {
+    const rowStr = rows[r].map(c => String(c || "")).join(" ").toLowerCase();
+    if (rowStr.includes("period") || rowStr.includes("p1") || rowStr.includes("08:") || rowStr.includes("09:")) {
+      headerRowIndex = r;
+      break;
+    }
+  }
 
-    const isBreak = normalizeBreak(rawSubject);
-    const matched = isBreak ? { subjectId: "", subjectName: "Break", isMatched: true } : matchSubject(rawSubject, availableSubjects);
+  if (headerRowIndex !== -1) {
+    const headerRow = rows[headerRowIndex];
+    for (let c = 1; c < headerRow.length; c++) {
+      const cellVal = String(headerRow[c] || "").trim();
+      const timeMatch = cellVal.match(/(\d{1,2}:\d{2})\s*[-–to ]+\s*(\d{1,2}:\d{2})/i);
+      const isBreak = normalizeBreak(cellVal).isBreak;
 
-    slotsMap.set(`${normDay}-${period}`, {
-      id: `slot-${normDay}-${period}-${Date.now()}-${Math.random()}`,
-      dayOfWeek: normDay,
-      period,
-      subjectId: isBreak ? "" : matched.subjectId,
-      subjectName: isBreak ? "Break" : matched.subjectName,
-      startTime: startTime || DEFAULT_TIMES[period]?.start || "08:00",
-      endTime: endTime || DEFAULT_TIMES[period]?.end || "08:45",
-      classroom: room || "",
-      isBreak
-    });
-  };
+      detectedPeriods.push({
+        order: c,
+        label: cellVal.split("\n")[0] || `Period ${c}`,
+        startTime: timeMatch ? timeMatch[1] : DEFAULT_TIMES[c]?.start || "08:00",
+        endTime: timeMatch ? timeMatch[2] : DEFAULT_TIMES[c]?.end || "08:45",
+        type: isBreak ? "BREAK" : "LESSON"
+      });
+    }
+  }
 
-  let currentDay: string | null = null;
-  let autoPeriod = 1;
+  // Iterate day rows
+  for (let r = 0; r < rows.length; r++) {
+    if (r === headerRowIndex) continue;
+    const row = rows[r];
+    if (!row || row.length === 0) continue;
+
+    const firstCell = String(row[0] || "").trim();
+    const normDay = normalizeDay(firstCell);
+    if (!normDay) continue;
+
+    for (let c = 1; c < row.length; c++) {
+      const rawCell = String(row[c] || "").trim();
+      if (!rawCell) continue;
+
+      const breakInfo = normalizeBreak(rawCell);
+      let subjectId = "";
+      let subjectName = rawCell;
+      let isUnknownSubject = false;
+      let defaultTeacherId: string | null = null;
+      let defaultTeacherName: string | null = null;
+
+      if (breakInfo.isBreak) {
+        subjectName = breakInfo.type === "LUNCH" ? "Lunch Break" : "Break";
+      } else {
+        const matched = matchSubject(rawCell, availableSubjects);
+        subjectId = matched.subjectId;
+        subjectName = matched.subjectName;
+        isUnknownSubject = !matched.isMatched;
+        defaultTeacherId = matched.defaultTeacherId || null;
+        defaultTeacherName = matched.defaultTeacherName || null;
+      }
+
+      // Check if cell mentions teacher in parentheses e.g. "Maths (Mr. Sharma)"
+      let teacherInCell: string | null = null;
+      const parenMatch = rawCell.match(/\(([^)]+)\)/);
+      if (parenMatch) {
+        teacherInCell = parenMatch[1];
+      }
+
+      const teacherMatch = breakInfo.isBreak
+        ? { teacherId: undefined, teacherName: undefined, isMismatch: false }
+        : matchTeacher(teacherInCell, allTeachers, defaultTeacherId, defaultTeacherName);
+
+      const psObj = detectedPeriods.find(p => p.order === c) || existingPeriodSlots.find(p => p.order === c);
+      const startTime = psObj?.startTime || DEFAULT_TIMES[c]?.start || "08:00";
+      const endTime = psObj?.endTime || DEFAULT_TIMES[c]?.end || "08:45";
+
+      scannedSlots.push({
+        id: `row-${normDay}-${c}-${Math.random().toString(36).substring(2, 7)}`,
+        dayOfWeek: normDay,
+        period: c,
+        subjectId,
+        subjectName,
+        teacherId: teacherMatch.teacherId,
+        teacherName: teacherMatch.teacherName,
+        assignedTeacherId: defaultTeacherId || undefined,
+        assignedTeacherName: defaultTeacherName || undefined,
+        isTeacherMismatch: teacherMatch.isMismatch,
+        startTime,
+        endTime,
+        classroom: "",
+        isBreak: breakInfo.isBreak,
+        slotType: breakInfo.type,
+        isUnknownSubject
+      });
+    }
+  }
+}
+
+/**
+ * Fallback parser for unstructured text
+ */
+function parseRawTextToSlots(opts: {
+  text: string;
+  availableSubjects: any[];
+  allTeachers: any[];
+  existingPeriodSlots: any[];
+  scannedSlots: ScannedSlot[];
+  detectedPeriods: PeriodSlotData[];
+}) {
+  const { text, availableSubjects, allTeachers, existingPeriodSlots, scannedSlots, detectedPeriods } = opts;
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
 
   for (const line of lines) {
-    // 1. Check if line starts with a Day (e.g. "Monday Tamil English Maths Science Social" or "Saturday Tamil Maths English Science Social")
-    const dayPrefixMatch = line.match(/^(MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|MON|TUE|TUES|WED|THU|THUR|THURS|FRI|SAT)\b[\s:|\-,]*(.*)$/i);
-    if (dayPrefixMatch) {
-      const detectedDay = normalizeDay(dayPrefixMatch[1]);
-      const restOfLine = dayPrefixMatch[2].trim();
+    const tokens = line.split(/[\t|,;]+/).map(t => t.trim()).filter(Boolean);
+    if (tokens.length < 2) continue;
 
-      if (detectedDay) {
-        currentDay = detectedDay;
-        autoPeriod = 1;
+    const normDay = normalizeDay(tokens[0]);
+    if (!normDay) continue;
 
-        if (restOfLine) {
-          const cells = tokenizeSubjects(restOfLine, availableSubjects);
-          let pNum = 1;
-          for (const cell of cells) {
-            if (pNum > 8) break;
-            const cellPeriodMatch = cell.match(/^(?:p|period)?\s*([1-8])[\s:.\-\)](.*)/i);
-            if (cellPeriodMatch) {
-              const cp = parseInt(cellPeriodMatch[1], 10);
-              const sub = cellPeriodMatch[2].trim() || cell;
-              addSlot(currentDay, cp, sub);
-              pNum = cp + 1;
-            } else {
-              addSlot(currentDay, pNum, cell);
-              pNum++;
-            }
-          }
-          continue;
-        }
-        continue;
-      }
-    }
+    for (let i = 1; i < tokens.length; i++) {
+      const raw = tokens[i];
+      const breakInfo = normalizeBreak(raw);
+      const matched = breakInfo.isBreak ? { subjectId: "", subjectName: "Break", isMatched: true, defaultTeacherId: null, defaultTeacherName: null } : matchSubject(raw, availableSubjects);
+      const teacherMatch = matchTeacher(null, allTeachers, matched.defaultTeacherId, matched.defaultTeacherName);
 
-    // 2. If current day is set:
-    if (currentDay) {
-      // Period format: "Period 1: Tamil" or "1. English" or "P1 Tamil"
-      const periodMatch = line.match(/^(?:period|p)?\s*([1-8])[\s:.\-\)\/]+(.*)/i);
-      if (periodMatch) {
-        const period = parseInt(periodMatch[1], 10);
-        const rest = periodMatch[2].trim();
-        const timeMatch = rest.match(/(\d{1,2}:\d{2})\s*(?:-|to)\s*(\d{1,2}:\d{2})/i);
-        const startTime = timeMatch ? timeMatch[1] : undefined;
-        const endTime = timeMatch ? timeMatch[2] : undefined;
-        let cleanSub = rest.replace(/(\d{1,2}:\d{2})\s*(?:-|to)\s*(\d{1,2}:\d{2})/i, "").trim();
-        cleanSub = cleanSub.replace(/(?:room|classroom|rm)[\s:]*([a-zA-Z0-9\-]+)/i, "").trim();
-
-        addSlot(currentDay, period, cleanSub, startTime, endTime);
-        autoPeriod = period + 1;
-        continue;
-      }
-
-      // Check if line is a subject name directly under day heading
-      const subjectCheck = matchSubject(line, availableSubjects);
-      if (subjectCheck.isMatched && autoPeriod <= 8) {
-        addSlot(currentDay, autoPeriod, line);
-        autoPeriod++;
-        continue;
-      }
+      scannedSlots.push({
+        id: `raw-${normDay}-${i}-${Math.random().toString(36).substring(2, 7)}`,
+        dayOfWeek: normDay,
+        period: i,
+        subjectId: breakInfo.isBreak ? "" : matched.subjectId,
+        subjectName: breakInfo.isBreak ? "Break" : matched.subjectName,
+        teacherId: teacherMatch.teacherId,
+        teacherName: teacherMatch.teacherName,
+        assignedTeacherId: matched.defaultTeacherId || undefined,
+        assignedTeacherName: matched.defaultTeacherName || undefined,
+        startTime: DEFAULT_TIMES[i]?.start || "08:00",
+        endTime: DEFAULT_TIMES[i]?.end || "08:45",
+        classroom: "",
+        isBreak: breakInfo.isBreak,
+        slotType: breakInfo.type,
+        isUnknownSubject: !matched.isMatched && !breakInfo.isBreak
+      });
     }
   }
-
-  return Array.from(slotsMap.values());
 }

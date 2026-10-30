@@ -56,8 +56,12 @@ export default async function ParentDashboard({
     });
   };
 
-  // 1. Fetch attendance, latest exam, and calendar statistics concurrently
-  const [attendanceRecords, lastExamWithMarks, calendarStats] = await Promise.all([
+  const todayDayName = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"][new Date().getDay()];
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+
+  // 1. Fetch attendance, latest exam, calendar statistics, and today's schedule concurrently
+  const [attendanceRecords, lastExamWithMarks, calendarStats, todaysScheduleSlots, todaysSubs] = await Promise.all([
     prisma.attendance.findMany({
       where: { studentId: selectedChild.id },
       orderBy: { date: 'desc' },
@@ -65,8 +69,27 @@ export default async function ParentDashboard({
       select: { id: true, status: true, date: true, remarks: true }
     }),
     selectedChild.classId ? fetchLatestExam(selectedChild.classId) : Promise.resolve(null),
-    getSchoolCalendarStats(new Date(), selectedChild.classId)
+    getSchoolCalendarStats(new Date(), selectedChild.classId),
+    selectedChild.classId ? prisma.timetable.findMany({
+      where: { classId: selectedChild.classId, dayOfWeek: todayDayName },
+      include: { subject: { include: { teacher: { include: { user: true } } } } },
+      orderBy: { period: "asc" }
+    }) : Promise.resolve([]),
+    selectedChild.classId ? prisma.substitution.findMany({
+      where: { date: todayDate, status: "ASSIGNED", timetableEntry: { classId: selectedChild.classId } },
+      include: { substituteTeacher: { include: { user: true } }, absentTeacher: { include: { user: true } } }
+    }) : Promise.resolve([])
   ]);
+
+  const activeParentSubsMap = new Map<string, { subTeacher: string; origTeacher: string }>();
+  for (const s of todaysSubs) {
+    if (s.substituteTeacher?.user?.name) {
+      activeParentSubsMap.set(s.timetableEntryId, {
+        subTeacher: s.substituteTeacher.user.name,
+        origTeacher: s.absentTeacher?.user?.name || "Teacher"
+      });
+    }
+  }
 
   const childClass = selectedChild.class;
   const presentedDays = attendanceRecords.filter((a) => a.status === "PRESENT").length;
@@ -300,6 +323,83 @@ export default async function ParentDashboard({
         childId={selectedChild.id}
         subjectBreakdown={subjectBreakdown}
       />
+
+      {/* Today's Schedule Card */}
+      <div style={{ background: "var(--card-bg)", border: "1px solid var(--border-color)", borderRadius: "14px", padding: "1.25rem 1.5rem", marginBottom: "1.5rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <CalendarDays size={20} color="var(--primary)" />
+              Today&apos;s Class Schedule ({todayDayName})
+            </h3>
+            <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+              Live periods for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong> ({childClass ? `${childClass.name} - ${childClass.section}` : ""})
+            </p>
+          </div>
+          <Link
+            href={`/dashboard/parent/timetable?childId=${selectedChild.id}`}
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.85rem", color: "var(--primary)", textDecoration: "none", fontWeight: 600 }}
+          >
+            <span>Full Weekly Timetable</span>
+            <ArrowRight size={14} />
+          </Link>
+        </div>
+
+        {todaysScheduleSlots.length > 0 ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "0.75rem" }}>
+            {todaysScheduleSlots.map(s => {
+              const subInfo = activeParentSubsMap.get(s.id);
+              return (
+                <div
+                  key={s.id}
+                  style={{
+                    padding: "0.85rem",
+                    borderRadius: "10px",
+                    background: subInfo ? "rgba(245, 158, 11, 0.05)" : "var(--background)",
+                    border: `1px solid ${subInfo ? "rgba(245, 158, 11, 0.3)" : "var(--border-color)"}`,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.35rem"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.85rem", color: s.isBreak ? "#d97706" : "var(--primary)" }}>
+                      {s.isBreak ? "Break" : `Period ${s.period}`}
+                    </span>
+                    <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>
+                      {s.startTime} - {s.endTime}
+                    </span>
+                  </div>
+
+                  <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>
+                    {s.isBreak ? "Break / Recess" : s.subject?.name}
+                  </div>
+
+                  {subInfo ? (
+                    <div style={{ fontSize: "0.75rem", color: "#d97706", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem", marginTop: "0.15rem" }}>
+                      <span>⚡ Covered by <strong>{subInfo.subTeacher}</strong> (substitute for {subInfo.origTeacher})</span>
+                    </div>
+                  ) : s.subject?.teacher ? (
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                      Teacher: {s.subject.teacher.user.name}
+                    </div>
+                  ) : null}
+
+                  {s.classroom && (
+                    <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>
+                      Room: {s.classroom}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ padding: "1.5rem", textAlign: "center", color: "var(--text-secondary)", fontSize: "0.875rem" }}>
+            No classes scheduled for today.
+          </div>
+        )}
+      </div>
 
       {/* Recent Attendance Section with direct View Attendance action */}
       <div className={styles.recentAttendanceCard}>

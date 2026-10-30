@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
-import { 
-  Upload, FileText, Image as ImageIcon, FileSpreadsheet, 
-  FileCheck, AlertTriangle, X, Check, RefreshCw, Trash2, Plus, 
+import {
+  Upload, FileText, Image as ImageIcon, FileSpreadsheet,
+  FileCheck, AlertTriangle, X, Check, RefreshCw, Trash2, Plus,
   Clock, MapPin, Loader2, Sparkles, AlertCircle, Zap
 } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -76,7 +76,7 @@ export default function TimetableScanModal({
       const slots: ScannedSlot[] = [];
 
       // Check for List format (header row)
-      const headerIndex = rows.findIndex(r => 
+      const headerIndex = rows.findIndex(r =>
         r && r.some((c: any) => String(c).toLowerCase().includes("day")) &&
         r.some((c: any) => String(c).toLowerCase().includes("period") || String(c).toLowerCase().includes("subject"))
       );
@@ -99,14 +99,14 @@ export default function TimetableScanModal({
           const normDay = DAYS.find(d => rawDay.startsWith(d.slice(0, 3))) || (DAYS.includes(rawDay) ? rawDay : null);
           const rawPeriod = parseInt(String(row[periodCol] || ""), 10);
           const rawSubject = String(row[subjectCol] || "").trim();
-          const isBreak = breakCol !== -1 
+          const isBreak = breakCol !== -1
             ? String(row[breakCol] || "").toLowerCase().includes("true") || String(row[breakCol] || "").toLowerCase().includes("yes")
             : rawSubject.toLowerCase().includes("break") || rawSubject.toLowerCase().includes("lunch");
 
           if (!normDay || isNaN(rawPeriod) || rawPeriod < 1 || rawPeriod > 8) continue;
 
-          const matchedSub = availableSubjects.find(s => s.name.toLowerCase() === rawSubject.toLowerCase()) 
-            || availableSubjects.find(s => rawSubject.toLowerCase().includes(s.name.toLowerCase())) 
+          const matchedSub = availableSubjects.find(s => s.name.toLowerCase() === rawSubject.toLowerCase())
+            || availableSubjects.find(s => rawSubject.toLowerCase().includes(s.name.toLowerCase()))
             || availableSubjects[0];
 
           slots.push({
@@ -118,7 +118,8 @@ export default function TimetableScanModal({
             startTime: String(row[startCol] || "").trim() || DEFAULT_TIMES[rawPeriod]?.start || "08:00",
             endTime: String(row[endCol] || "").trim() || DEFAULT_TIMES[rawPeriod]?.end || "08:45",
             classroom: String(row[roomCol] || "").trim(),
-            isBreak
+            isBreak,
+            slotType: isBreak ? "BREAK" : "LESSON"
           });
         }
       } else {
@@ -135,8 +136,8 @@ export default function TimetableScanModal({
             if (!rawCell) continue;
 
             const isBreak = rawCell.toLowerCase().includes("break") || rawCell.toLowerCase().includes("lunch");
-            const matchedSub = availableSubjects.find(s => s.name.toLowerCase() === rawCell.toLowerCase()) 
-              || availableSubjects.find(s => rawCell.toLowerCase().includes(s.name.toLowerCase())) 
+            const matchedSub = availableSubjects.find(s => s.name.toLowerCase() === rawCell.toLowerCase())
+              || availableSubjects.find(s => rawCell.toLowerCase().includes(s.name.toLowerCase()))
               || availableSubjects[0];
 
             slots.push({
@@ -148,7 +149,8 @@ export default function TimetableScanModal({
               startTime: DEFAULT_TIMES[p]?.start || "08:00",
               endTime: DEFAULT_TIMES[p]?.end || "08:45",
               classroom: "",
-              isBreak
+              isBreak,
+              slotType: isBreak ? "BREAK" : "LESSON"
             });
           }
         }
@@ -215,8 +217,8 @@ export default function TimetableScanModal({
       if (!normDay) return;
 
       const isBreak = rawSub.toLowerCase().includes("break") || rawSub.toLowerCase().includes("lunch") || rawSub.toLowerCase().includes("recess");
-      const matchedSub = availableSubjects.find(s => s.name.toLowerCase() === rawSub.toLowerCase()) 
-        || availableSubjects.find(s => rawSub.toLowerCase().includes(s.name.toLowerCase())) 
+      const matchedSub = availableSubjects.find(s => s.name.toLowerCase() === rawSub.toLowerCase())
+        || availableSubjects.find(s => rawSub.toLowerCase().includes(s.name.toLowerCase()))
         || availableSubjects[0];
 
       slotsMap.set(`${normDay}-${period}`, {
@@ -228,7 +230,8 @@ export default function TimetableScanModal({
         startTime: start || DEFAULT_TIMES[period]?.start || "08:00",
         endTime: end || DEFAULT_TIMES[period]?.end || "08:45",
         classroom: "",
-        isBreak
+        isBreak,
+        slotType: isBreak ? "BREAK" : "LESSON"
       });
     };
 
@@ -393,16 +396,17 @@ export default function TimetableScanModal({
           startTime: DEFAULT_TIMES[period]?.start || "08:00",
           endTime: DEFAULT_TIMES[period]?.end || "08:45",
           classroom: `Room ${period}01`,
-          isBreak
+          isBreak,
+          slotType: isBreak ? "BREAK" : "LESSON"
         });
       });
     });
 
     setScannedSlots(slots);
     setScanError(null);
-    setFileDetails({ 
-      name: `Standard ${periodCount}-Period Template (${includeSaturday ? "Mon - Sat" : "Mon - Fri"})`, 
-      type: "Ready-to-Edit Template" 
+    setFileDetails({
+      name: `Standard ${periodCount}-Period Template (${includeSaturday ? "Mon - Sat" : "Mon - Fri"})`,
+      type: "Ready-to-Edit Template"
     });
   };
 
@@ -468,7 +472,8 @@ export default function TimetableScanModal({
       startTime: DEFAULT_TIMES[nextPeriod]?.start || "08:00",
       endTime: DEFAULT_TIMES[nextPeriod]?.end || "08:45",
       classroom: "",
-      isBreak: false
+      isBreak: false,
+      slotType: "LESSON"
     };
 
     setScannedSlots(prev => [...prev, newSlot]);
@@ -501,10 +506,12 @@ export default function TimetableScanModal({
       dayOfWeek: s.dayOfWeek,
       period: s.period,
       subjectId: s.isBreak ? null : (s.subjectId || null),
+      teacherId: s.teacherId || null,
       startTime: s.startTime || DEFAULT_TIMES[s.period]?.start || "08:00",
       endTime: s.endTime || DEFAULT_TIMES[s.period]?.end || "08:45",
       classroom: s.classroom || "",
-      isBreak: Boolean(s.isBreak)
+      isBreak: Boolean(s.isBreak),
+      slotType: s.slotType || (s.isBreak ? "BREAK" : "LESSON")
     }));
 
     startSaveTransition(async () => {
@@ -519,8 +526,8 @@ export default function TimetableScanModal({
     });
   };
 
-  const visibleSlots = activeDayFilter === "ALL" 
-    ? scannedSlots 
+  const visibleSlots = activeDayFilter === "ALL"
+    ? scannedSlots
     : scannedSlots.filter(s => s.dayOfWeek?.toUpperCase() === activeDayFilter.toUpperCase());
 
   visibleSlots.sort((a, b) => {
@@ -934,9 +941,9 @@ export default function TimetableScanModal({
                   </thead>
                   <tbody>
                     {visibleSlots.map((slot) => (
-                      <tr 
-                        key={slot.id} 
-                        style={{ 
+                      <tr
+                        key={slot.id}
+                        style={{
                           borderBottom: "1px solid var(--border-color)",
                           backgroundColor: slot.isBreak ? "rgba(0,0,0,0.02)" : "transparent"
                         }}
