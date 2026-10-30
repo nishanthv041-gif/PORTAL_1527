@@ -1,0 +1,140 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.header {
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  padding-bottom: 0.75rem;
+}
+
+.title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--foreground, #f8fafc);
+  margin: 0;
+}
+
+.subtitle {
+  margin: 0.35rem 0 0 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.sectionTitle {
+  font-size: 0.82rem;
+  color: var(--text-secondary, #94a3b8);
+  margin: 0 0 0.85rem 0;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Featured Section */
+.featuredGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.featuredCard {
+  background: var(--card, #0f172a);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.featuredCard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.featuredIcon {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.featuredInfo {
+  min-width: 0;
+  flex: 1;
+}
+
+.featuredLabel {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text-primary, #f8fafc);
+  margin-bottom: 0.25rem;
+}
+
+.featuredDesc {
+  font-size: 0.82rem;
+  color: var(--text-secondary, #94a3b8);
+  line-height: 1.4;
+}
+
+/* Operations Grid */
+.rolesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.roleCard {
+  background: var(--card, #0f172a);
+  padding: 1.25rem;
+  border-radius: 12px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  box-sizing: border-box;
+}
+
+.roleCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.roleIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.roleLabel {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--foreground, #f8fafc);
+}
