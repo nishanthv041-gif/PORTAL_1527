@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Link from "next/link";
 import { saveSystemSettingsBatchAction } from "@/backend/api/actions/dashboard/admin/settings/actions";
 import { SystemSetting } from "@prisma/client";
 import {
   Building2, Save, Loader2, CheckCircle2, Upload, AlertCircle, Image as ImageIcon,
-  Phone, Mail, Globe, User, Calendar, MapPin
+  Phone, Mail, Globe, User, Calendar, MapPin, Users, GraduationCap, Clock, ArrowRight
 } from "lucide-react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import styles from "./settings.module.css";
@@ -588,6 +589,100 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
             </button>
           </div>
         </form>
+      </div>
+
+      {/* ── Management Shortcuts ───────────────────────────────────────────── */}
+      <div
+        style={{
+          marginTop: "1.5rem",
+          background: "var(--card-bg, #0f172a)",
+          border: "1px solid var(--border-color, rgba(255,255,255,0.1))",
+          borderRadius: "16px",
+          overflow: "hidden",
+          boxShadow: "0 10px 30px -10px rgba(0,0,0,0.5)",
+        }}
+      >
+        <div
+          style={{
+            padding: "1.25rem 2rem",
+            borderBottom: "1px solid var(--border-color, rgba(255,255,255,0.1))",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            background: "rgba(99,102,241,0.05)",
+          }}
+        >
+          <div
+            style={{
+              width: "40px",
+              height: "40px",
+              borderRadius: "10px",
+              background: "rgba(99,102,241,0.15)",
+              color: "#6366f1",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Users size={22} />
+          </div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
+              Management Pages
+            </h2>
+            <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-secondary, #94a3b8)" }}>
+              Quick access to Teacher, Parent &amp; Student, and Timetable management.
+            </p>
+          </div>
+        </div>
+        <div style={{ padding: "1.25rem 2rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "0.85rem" }}>
+          {[
+            { href: "/dashboard/admin/teachers", label: "Teacher Management", desc: "Profiles, credentials & subjects", icon: <Users size={20} />, color: "#3b82f6" },
+            { href: "/dashboard/admin/students", label: "Parent & Student", desc: "Students, parents & classes", icon: <GraduationCap size={20} />, color: "#10b981" },
+            { href: "/dashboard/admin/timetable", label: "Timetable", desc: "Schedule, periods & substitution", icon: <Clock size={20} />, color: "#f59e0b" },
+          ].map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              style={{ textDecoration: "none", color: "inherit" }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.85rem",
+                  padding: "0.9rem 1rem",
+                  borderRadius: "10px",
+                  border: `1px solid ${item.color}33`,
+                  background: `${item.color}0d`,
+                  cursor: "pointer",
+                  transition: "background 0.15s",
+                }}
+              >
+                <div
+                  style={{
+                    width: "38px",
+                    height: "38px",
+                    borderRadius: "9px",
+                    background: `${item.color}22`,
+                    color: item.color,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  {item.icon}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-primary)" }}>{item.label}</div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.1rem" }}>{item.desc}</div>
+                </div>
+                <ArrowRight size={16} style={{ color: "var(--text-secondary)", flexShrink: 0 }} />
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );
