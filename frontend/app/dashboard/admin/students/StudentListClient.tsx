@@ -551,7 +551,18 @@ export default function StudentListClient({ students, classes }: StudentListClie
                   return (
                     <tr
                       key={student.id}
-                      style={{ borderBottom: "1px solid var(--border-color, rgba(255, 255, 255, 0.05))" }}
+                      onClick={() => handleOpenEdit(student)}
+                      style={{
+                        borderBottom: "1px solid var(--border-color, rgba(255, 255, 255, 0.05))",
+                        cursor: "pointer",
+                        transition: "background 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "rgba(59, 130, 246, 0.06)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "transparent";
+                      }}
                     >
                       <td style={{ padding: "0.85rem 1rem", fontSize: "0.85rem", fontWeight: 700, color: "var(--primary, #3b82f6)" }}>
                         {student.rollNumber}
@@ -650,6 +661,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
             return (
               <div
                 key={student.id}
+                onClick={() => handleOpenEdit(student)}
                 style={{
                   background: "var(--card-bg, #0f172a)",
                   border: "1px solid var(--border-color, rgba(255, 255, 255, 0.08))",
@@ -659,6 +671,16 @@ export default function StudentListClient({ students, classes }: StudentListClie
                   flexDirection: "column",
                   justifyContent: "space-between",
                   boxShadow: "0 4px 14px rgba(0, 0, 0, 0.2)",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--primary, #3b82f6)";
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border-color, rgba(255, 255, 255, 0.08))";
+                  e.currentTarget.style.transform = "translateY(0)";
                 }}
               >
                 <div>

@@ -404,6 +404,7 @@ export default function TeacherListClient({
             return (
               <div
                 key={teacher.id}
+                onClick={() => handleOpenEdit(teacher)}
                 style={{
                   background: "var(--card-bg, #0f172a)",
                   border: "1px solid var(--border-color, rgba(255, 255, 255, 0.08))",
@@ -412,8 +413,17 @@ export default function TeacherListClient({
                   display: "flex",
                   flexDirection: "column",
                   justifyContent: "space-between",
-                  transition: "transform 0.2s ease, border-color 0.2s ease",
+                  transition: "all 0.2s ease",
                   boxShadow: "0 4px 14px rgba(0, 0, 0, 0.2)",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--primary, #3b82f6)";
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border-color, rgba(255, 255, 255, 0.08))";
+                  e.currentTarget.style.transform = "translateY(0)";
                 }}
               >
                 <div>
@@ -550,6 +560,7 @@ export default function TeacherListClient({
 
                   <Link
                     href={`/dashboard/admin/timetable?weekOf=${new Date().toISOString().split("T")[0]}`}
+                    onClick={(e) => e.stopPropagation()}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -569,7 +580,10 @@ export default function TeacherListClient({
 
                   <button
                     type="button"
-                    onClick={() => handleQuickToggleStatus(teacher)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleQuickToggleStatus(teacher);
+                    }}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
