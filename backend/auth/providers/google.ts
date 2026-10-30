@@ -114,6 +114,7 @@ export async function populateGoogleJwt(token: any, user: any, account: any) {
           role: true,
           theme: true,
           notificationsEnabled: true,
+          sessionVersion: true,
         },
       });
 
@@ -123,6 +124,7 @@ export async function populateGoogleJwt(token: any, user: any, account: any) {
         token.role = dbUser.role;
         token.theme = dbUser.theme;
         token.notificationsEnabled = dbUser.notificationsEnabled;
+        token.sessionVersion = dbUser.sessionVersion || 1;
       }
     } catch (error) {
       console.error("[GoogleAuth JWT] Prisma error:", error);

@@ -1,330 +1,714 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Download, Eye, CheckCircle2, XCircle, Trash2 } from "lucide-react";
+import {
+  Search, Plus, LayoutGrid, List, User, Mail, Phone, BookOpen,
+  Calendar, CheckCircle2, XCircle, MoreVertical, Edit2, ShieldAlert,
+  ArrowUpDown, ExternalLink, Download, Eye, Sparkles
+} from "lucide-react";
 import Link from "next/link";
-import { deactivateTeacher, assignClassTeacher, deleteTeacher } from "@/backend/api/actions/dashboard/admin/teachers/actions";
-import { Teacher, User, Class, Subject } from "@prisma/client";
-import { MoreVertical } from "lucide-react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { toggleTeacherStatusAction } from "@/backend/api/actions/dashboard/admin/teachers/teacherManagementActions";
+import TeacherEditDrawer, { TeacherData } from "./TeacherEditDrawer";
 
-type TeacherWithRelations = Teacher & {
-  user: User;
-  classes: Class[];
-  subjects: Subject[];
-  classTeacherOf?: Class | null;
-};
+interface ClassItem {
+  id: string;
+  name: string;
+  section: string;
+}
 
-export default function TeacherListClient({ teachers, allClasses, allSubjects }: { teachers: TeacherWithRelations[], allClasses: Class[], allSubjects: Subject[] }) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [subjectFilter, setSubjectFilter] = useState("");
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 25;
+interface SubjectItem {
+  id: string;
+  name: string;
+  code: string;
+}
+
+interface TeacherListClientProps {
+  teachers: TeacherData[];
+  allClasses: ClassItem[];
+  allSubjects: SubjectItem[];
+}
+
+export default function TeacherListClient({
+  teachers,
+  allClasses,
+  allSubjects,
+}: TeacherListClientProps) {
   const router = useRouter();
   const confirm = useConfirm();
 
-  // Close action menu when clicking outside anywhere on the page or pressing Escape
+  // Controls & State
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [subjectFilter, setSubjectFilter] = useState<string>("ALL");
+  const [classFilter, setClassFilter] = useState<string>("ALL");
+  const [sortBy, setSortBy] = useState<"NAME_ASC" | "NAME_DESC" | "DATE_DESC" | "DATE_ASC" | "STATUS">("NAME_ASC");
+  const [viewMode, setViewMode] = useState<"GRID" | "LIST">("GRID");
+
+  // Drawer State
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [editingTeacher, setEditingTeacher] = useState<TeacherData | null>(null);
+
+  // Debounce search by 300ms
   useEffect(() => {
-    if (!openMenuId) return;
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
-    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target?.closest('[data-action-menu-container]')) {
-        return;
-      }
-      setOpenMenuId(null);
-    };
+  // Filtering & Sorting
+  const filteredAndSortedTeachers = useMemo(() => {
+    return teachers
+      .filter((teacher) => {
+        // Search
+        if (debouncedSearch.trim()) {
+          const q = debouncedSearch.toLowerCase().trim();
+          const nameMatch = (teacher.user.name || "").toLowerCase().includes(q);
+          const emailMatch = (teacher.user.email || "").toLowerCase().includes(q);
+          const googleMatch = (teacher.user.googleEmail || "").toLowerCase().includes(q);
+          const phoneMatch = (teacher.phone || "").toLowerCase().includes(q);
+          const idMatch = teacher.id.toLowerCase().includes(q);
+          const subjectMatch = teacher.subjects.some(s => s.name.toLowerCase().includes(q));
+          if (!nameMatch && !emailMatch && !googleMatch && !phoneMatch && !idMatch && !subjectMatch) {
+            return false;
+          }
+        }
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpenMenuId(null);
-      }
-    };
+        // Status Filter
+        if (statusFilter === "ACTIVE" && !teacher.isActive) return false;
+        if (statusFilter === "INACTIVE" && teacher.isActive) return false;
 
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('touchstart', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
+        // Subject Filter
+        if (subjectFilter !== "ALL") {
+          const hasSubject = teacher.subjects.some(s => s.id === subjectFilter || s.name === subjectFilter);
+          if (!hasSubject) return false;
+        }
 
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('touchstart', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [openMenuId]);
+        // Class Filter
+        if (classFilter !== "ALL") {
+          const hasClass = teacher.classes.some(c => c.id === classFilter);
+          if (!hasClass) return false;
+        }
 
-  const filteredTeachers = teachers.filter((teacher) => {
-    const fullName = teacher.user.name.toLowerCase();
-    
-    const matchesSearch = fullName.includes(searchTerm.toLowerCase()) || 
-                          teacher.user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (teacher.phone || "").includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter ? (statusFilter === "ACTIVE" ? teacher.isActive : !teacher.isActive) : true;
-    
-    // Check if teacher teaches the selected subject name
-    const matchesSubject = subjectFilter ? teacher.subjects.some(s => s.name === subjectFilter) : true;
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortBy === "NAME_ASC") {
+          return (a.user.name || "").localeCompare(b.user.name || "");
+        }
+        if (sortBy === "NAME_DESC") {
+          return (b.user.name || "").localeCompare(a.user.name || "");
+        }
+        if (sortBy === "DATE_DESC") {
+          const dateA = a.joinDate ? new Date(a.joinDate).getTime() : 0;
+          const dateB = b.joinDate ? new Date(b.joinDate).getTime() : 0;
+          return dateB - dateA;
+        }
+        if (sortBy === "DATE_ASC") {
+          const dateA = a.joinDate ? new Date(a.joinDate).getTime() : 0;
+          const dateB = b.joinDate ? new Date(b.joinDate).getTime() : 0;
+          return dateA - dateB;
+        }
+        if (sortBy === "STATUS") {
+          return (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0);
+        }
+        return 0;
+      });
+  }, [teachers, debouncedSearch, statusFilter, subjectFilter, classFilter, sortBy]);
 
-    return matchesSearch && matchesStatus && matchesSubject;
-  }).sort((a, b) => a.user.name.trim().localeCompare(b.user.name.trim()));
+  const handleOpenAdd = () => {
+    setEditingTeacher(null);
+    setIsDrawerOpen(true);
+  };
 
-  const totalPages = Math.max(1, Math.ceil(filteredTeachers.length / pageSize));
-  const startIndex = (currentPage - 1) * pageSize;
-  const paginatedTeachers = filteredTeachers.slice(startIndex, startIndex + pageSize);
+  const handleOpenEdit = (t: TeacherData) => {
+    setEditingTeacher(t);
+    setIsDrawerOpen(true);
+  };
 
-  const handleDeactivate = async (id: string) => {
-    const ok = await confirm({
-      title: "Deactivate Teacher?",
-      message: "Are you sure you want to deactivate this teacher? They will not be able to log in, but historical class records and assignments are preserved.",
-      confirmText: "Deactivate",
+  const handleQuickToggleStatus = async (teacher: TeacherData) => {
+    const actionLabel = teacher.isActive ? "Deactivate" : "Activate";
+    const confirmed = await confirm({
+      title: `${actionLabel} ${teacher.user.name}?`,
+      message: teacher.isActive
+        ? "Deactivating this teacher will immediately revoke login access. Their historical attendance and report-card records will remain intact."
+        : "Activating this teacher will restore their login access.",
+      confirmText: actionLabel,
       cancelText: "Cancel",
-      variant: "warning"
+      variant: teacher.isActive ? "warning" : "primary",
     });
-    if (!ok) return;
 
-    await deactivateTeacher(id);
-    setOpenMenuId(null);
+    if (!confirmed) return;
+
+    await toggleTeacherStatusAction(teacher.id);
     router.refresh();
   };
 
-  const handleAssignClassTeacher = async (teacherId: string, classId: string) => {
-    const res = await assignClassTeacher(teacherId, classId);
-    if (res.error) {
-      alert(res.error);
-    }
-  };
-
   return (
-    <div style={{ marginTop: '2rem', background: 'var(--card-bg)', borderRadius: '12px', padding: '1.5rem', border: '1px solid var(--border-color)', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <div style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
-          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
-          <input 
-            type="text" 
-            placeholder="Search name, phone..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
-          />
+    <div style={{ marginTop: "1.5rem", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* Top Controls Bar */}
+      <div
+        style={{
+          background: "var(--card-bg, #0f172a)",
+          border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+          borderRadius: "14px",
+          padding: "1.25rem",
+          display: "flex",
+          flexDirection: "column",
+          gap: "1rem",
+          marginBottom: "1.5rem",
+          boxShadow: "0 4px 20px -5px rgba(0,0,0,0.3)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+          {/* Search Input */}
+          <div style={{ position: "relative", flex: "1 1 280px", minWidth: "220px" }}>
+            <Search
+              size={18}
+              style={{
+                position: "absolute",
+                left: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "var(--text-secondary, #94a3b8)",
+              }}
+            />
+            <input
+              type="text"
+              placeholder="Search by name, email, phone, ID, subject..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.65rem 1rem 0.65rem 2.4rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color, rgba(255, 255, 255, 0.12))",
+                background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                color: "inherit",
+                fontSize: "0.88rem",
+              }}
+            />
+          </div>
+
+          {/* Action & View Toggles */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            {/* View Mode Switcher */}
+            <div
+              style={{
+                display: "flex",
+                background: "rgba(0, 0, 0, 0.2)",
+                borderRadius: "8px",
+                padding: "2px",
+                border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setViewMode("GRID")}
+                style={{
+                  padding: "0.45rem 0.65rem",
+                  borderRadius: "6px",
+                  border: "none",
+                  background: viewMode === "GRID" ? "var(--primary, #3b82f6)" : "transparent",
+                  color: viewMode === "GRID" ? "#ffffff" : "var(--text-secondary, #94a3b8)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                }}
+                title="Grid View"
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("LIST")}
+                style={{
+                  padding: "0.45rem 0.65rem",
+                  borderRadius: "6px",
+                  border: "none",
+                  background: viewMode === "LIST" ? "var(--primary, #3b82f6)" : "transparent",
+                  color: viewMode === "LIST" ? "#ffffff" : "var(--text-secondary, #94a3b8)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                }}
+                title="List View"
+              >
+                <List size={16} />
+              </button>
+            </div>
+
+            {/* + Add Teacher Button */}
+            <button
+              type="button"
+              onClick={handleOpenAdd}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.45rem",
+                padding: "0.65rem 1.25rem",
+                borderRadius: "8px",
+                border: "none",
+                background: "var(--primary, #3b82f6)",
+                color: "#ffffff",
+                fontSize: "0.88rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                boxShadow: "0 2px 10px rgba(59, 130, 246, 0.35)",
+              }}
+            >
+              <Plus size={17} />
+              <span>Add Teacher</span>
+            </button>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <select 
-            value={subjectFilter}
-            onChange={(e) => setSubjectFilter(e.target.value)}
-            style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
-          >
-            <option value="">All Subjects</option>
-            {allSubjects.map(s => (
-              <option key={s.id} value={s.name}>{s.name}</option>
-            ))}
-          </select>
-          <select 
+
+        {/* Filters and Sorters Row */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
+          {/* Status Filter */}
+          <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'inherit' }}
+            style={{
+              padding: "0.55rem 0.85rem",
+              borderRadius: "8px",
+              border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+              background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+              color: "inherit",
+              fontSize: "0.85rem",
+            }}
           >
-            <option value="">All Statuses</option>
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
+            <option value="ALL">All Statuses</option>
+            <option value="ACTIVE">Active Only</option>
+            <option value="INACTIVE">Inactive Only</option>
           </select>
+
+          {/* Subject Filter */}
+          <select
+            value={subjectFilter}
+            onChange={(e) => setSubjectFilter(e.target.value)}
+            style={{
+              padding: "0.55rem 0.85rem",
+              borderRadius: "8px",
+              border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+              background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+              color: "inherit",
+              fontSize: "0.85rem",
+            }}
+          >
+            <option value="ALL">All Subjects</option>
+            {allSubjects.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Class Filter */}
+          <select
+            value={classFilter}
+            onChange={(e) => setClassFilter(e.target.value)}
+            style={{
+              padding: "0.55rem 0.85rem",
+              borderRadius: "8px",
+              border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+              background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+              color: "inherit",
+              fontSize: "0.85rem",
+            }}
+          >
+            <option value="ALL">All Classes</option>
+            {allClasses.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} - {c.section}
+              </option>
+            ))}
+          </select>
+
+          {/* Sorter */}
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+            <ArrowUpDown size={15} style={{ color: "var(--text-secondary, #94a3b8)" }} />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              style={{
+                padding: "0.55rem 0.85rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                color: "inherit",
+                fontSize: "0.85rem",
+              }}
+            >
+              <option value="NAME_ASC">Name (A → Z)</option>
+              <option value="NAME_DESC">Name (Z → A)</option>
+              <option value="DATE_DESC">Newest Joined</option>
+              <option value="DATE_ASC">Oldest Joined</option>
+              <option value="STATUS">Active First</option>
+            </select>
+          </div>
         </div>
       </div>
 
+      {/* Teachers Content View */}
+      {filteredAndSortedTeachers.length === 0 ? (
+        <div
+          style={{
+            padding: "4rem 2rem",
+            textAlign: "center",
+            background: "var(--card-bg, #0f172a)",
+            border: "1px dashed var(--border-color, rgba(255, 255, 255, 0.15))",
+            borderRadius: "14px",
+            color: "var(--text-secondary, #94a3b8)",
+          }}
+        >
+          <User size={48} style={{ opacity: 0.3, marginBottom: "1rem" }} />
+          <h3 style={{ margin: 0, fontSize: "1.1rem", color: "var(--text-primary, #f8fafc)" }}>No teachers match criteria</h3>
+          <p style={{ margin: "0.5rem 0 1.5rem 0", fontSize: "0.85rem" }}>Try adjusting your search terms or filters.</p>
+          <button
+            type="button"
+            onClick={handleOpenAdd}
+            style={{
+              padding: "0.6rem 1.25rem",
+              borderRadius: "8px",
+              background: "rgba(59, 130, 246, 0.15)",
+              border: "1px solid rgba(59, 130, 246, 0.3)",
+              color: "#60a5fa",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            + Add New Teacher
+          </button>
+        </div>
+      ) : viewMode === "GRID" ? (
+        /* Responsive Card Grid: 1 col mobile, 2 col tablet, 3-4 col desktop */
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))",
+            gap: "1.25rem",
+          }}
+        >
+          {filteredAndSortedTeachers.map((teacher) => {
+            const initials = (teacher.user.name || "T")
+              .split(" ")
+              .map((n) => n[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase();
 
-      <div style={{ overflowX: 'auto', width: '100%', maxWidth: '100%', minWidth: 0, WebkitOverflowScrolling: 'touch' }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "750px" }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid var(--border-color)", backgroundColor: 'rgba(0,0,0,0.02)' }}>
-              <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Name</th>
-              <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Email & Google SSO</th>
-              <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Phone</th>
-              <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Subjects</th>
-              <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Classes</th>
-              <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem' }}>Status</th>
-              <th style={{ padding: "1rem", fontWeight: 600, fontSize: '0.875rem', textAlign: 'right' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedTeachers.map((teacher) => {
-              const subjectNames = Array.from(new Set(teacher.subjects.map((s) => s.name))).join(", ");
-              const classNames = teacher.classes.map((c) => `${c.name}-${c.section}`).join(", ");
-              const classTeacherRole = teacher.classTeacherOf ? `${teacher.classTeacherOf.name}-${teacher.classTeacherOf.section}` : null;
-
-              return (
-                <tr key={teacher.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
-                  <td style={{ padding: "1rem", fontSize: '0.875rem', fontWeight: 500 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <div style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: 'var(--primary-bg)', color: "var(--primary)", display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 600 }}>
-                        {teacher.user.name.charAt(0).toUpperCase()}
+            return (
+              <div
+                key={teacher.id}
+                style={{
+                  background: "var(--card-bg, #0f172a)",
+                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.08))",
+                  borderRadius: "14px",
+                  padding: "1.25rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  transition: "transform 0.2s ease, border-color 0.2s ease",
+                  boxShadow: "0 4px 14px rgba(0, 0, 0, 0.2)",
+                }}
+              >
+                <div>
+                  {/* Card Header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.85rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                      <div
+                        style={{
+                          width: "44px",
+                          height: "44px",
+                          borderRadius: "12px",
+                          background: teacher.isActive ? "rgba(59, 130, 246, 0.15)" : "rgba(148, 163, 184, 0.12)",
+                          color: teacher.isActive ? "#60a5fa" : "#94a3b8",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: 700,
+                          fontSize: "1rem",
+                        }}
+                      >
+                        {initials}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span>{teacher.user.name}</span>
-                        {classTeacherRole && (
-                          <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>
-                            Class Teacher: {classTeacherRole}
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: "0.98rem", color: "var(--text-primary, #f8fafc)" }}>
+                          {teacher.user.name}
+                        </div>
+                        <div style={{ fontSize: "0.78rem", color: "var(--text-secondary, #94a3b8)", opacity: 0.8 }}>
+                          {teacher.user.email}
+                        </div>
+                      </div>
+                    </div>
+
+                    <span
+                      style={{
+                        padding: "0.2rem 0.6rem",
+                        borderRadius: "12px",
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        background: teacher.isActive ? "rgba(16, 185, 129, 0.15)" : "rgba(148, 163, 184, 0.12)",
+                        color: teacher.isActive ? "#34d399" : "#94a3b8",
+                        border: teacher.isActive ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(148, 163, 184, 0.2)",
+                      }}
+                    >
+                      {teacher.isActive ? "ACTIVE" : "INACTIVE"}
+                    </span>
+                  </div>
+
+                  {/* Class Teacher Badge if assigned */}
+                  {teacher.classTeacherOf && (
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.3rem",
+                        padding: "0.25rem 0.6rem",
+                        background: "rgba(168, 85, 247, 0.15)",
+                        border: "1px solid rgba(168, 85, 247, 0.3)",
+                        color: "#c084fc",
+                        borderRadius: "6px",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        marginBottom: "0.75rem",
+                      }}
+                    >
+                      Class Teacher: {teacher.classTeacherOf.name}-{teacher.classTeacherOf.section}
+                    </div>
+                  )}
+
+                  {/* Subject Pills */}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: "0.85rem" }}>
+                    {teacher.subjects.length > 0 ? (
+                      teacher.subjects.map((s) => (
+                        <span
+                          key={s.id}
+                          style={{
+                            padding: "0.15rem 0.5rem",
+                            borderRadius: "12px",
+                            fontSize: "0.72rem",
+                            background: "rgba(59, 130, 246, 0.08)",
+                            border: "1px solid rgba(59, 130, 246, 0.2)",
+                            color: "#93c5fd",
+                          }}
+                        >
+                          {s.name}
+                        </span>
+                      ))
+                    ) : (
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-secondary, #94a3b8)", fontStyle: "italic" }}>
+                        No subjects assigned
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Contact / Phone */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", color: "var(--text-secondary, #94a3b8)", marginBottom: "0.5rem" }}>
+                    <Phone size={13} />
+                    <span>{teacher.phone || "No phone listed"}</span>
+                  </div>
+                </div>
+
+                {/* Card Actions Bottom Bar */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    paddingTop: "0.85rem",
+                    borderTop: "1px solid var(--border-color, rgba(255, 255, 255, 0.08))",
+                    marginTop: "0.5rem",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEdit(teacher)}
+                    style={{
+                      flex: 1,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "0.35rem",
+                      padding: "0.45rem 0.75rem",
+                      borderRadius: "6px",
+                      border: "1px solid var(--border-color, rgba(255, 255, 255, 0.15))",
+                      background: "rgba(255, 255, 255, 0.04)",
+                      color: "inherit",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Edit2 size={13} />
+                    <span>Edit Profile</span>
+                  </button>
+
+                  <Link
+                    href={`/dashboard/admin/timetable?weekOf=${new Date().toISOString().split("T")[0]}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "0.45rem 0.65rem",
+                      borderRadius: "6px",
+                      border: "1px solid rgba(59, 130, 246, 0.2)",
+                      background: "rgba(59, 130, 246, 0.08)",
+                      color: "#60a5fa",
+                      fontSize: "0.8rem",
+                      textDecoration: "none",
+                    }}
+                    title="View Timetable"
+                  >
+                    <Calendar size={14} />
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => handleQuickToggleStatus(teacher)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "0.45rem 0.65rem",
+                      borderRadius: "6px",
+                      border: teacher.isActive ? "1px solid rgba(239, 68, 68, 0.2)" : "1px solid rgba(16, 185, 129, 0.2)",
+                      background: teacher.isActive ? "rgba(239, 68, 68, 0.08)" : "rgba(16, 185, 129, 0.08)",
+                      color: teacher.isActive ? "#f87171" : "#34d399",
+                      cursor: "pointer",
+                    }}
+                    title={teacher.isActive ? "Deactivate Account" : "Activate Account"}
+                  >
+                    {teacher.isActive ? <XCircle size={14} /> : <CheckCircle2 size={14} />}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* Table List View */
+        <div
+          style={{
+            background: "var(--card-bg, #0f172a)",
+            border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+            borderRadius: "14px",
+            overflow: "hidden",
+            boxShadow: "0 4px 20px -5px rgba(0,0,0,0.3)",
+          }}
+        >
+          <div style={{ overflowX: "auto", width: "100%", WebkitOverflowScrolling: "touch" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "750px" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))", background: "rgba(0, 0, 0, 0.15)" }}>
+                  <th style={{ padding: "0.85rem 1rem", fontSize: "0.82rem", fontWeight: 700 }}>Teacher Name</th>
+                  <th style={{ padding: "0.85rem 1rem", fontSize: "0.82rem", fontWeight: 700 }}>Email & SSO</th>
+                  <th style={{ padding: "0.85rem 1rem", fontSize: "0.82rem", fontWeight: 700 }}>Phone</th>
+                  <th style={{ padding: "0.85rem 1rem", fontSize: "0.82rem", fontWeight: 700 }}>Subjects</th>
+                  <th style={{ padding: "0.85rem 1rem", fontSize: "0.82rem", fontWeight: 700 }}>Status</th>
+                  <th style={{ padding: "0.85rem 1rem", fontSize: "0.82rem", fontWeight: 700, textAlign: "right" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAndSortedTeachers.map((teacher) => (
+                  <tr
+                    key={teacher.id}
+                    style={{ borderBottom: "1px solid var(--border-color, rgba(255, 255, 255, 0.05))" }}
+                  >
+                    <td style={{ padding: "0.85rem 1rem" }}>
+                      <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{teacher.user.name}</div>
+                      {teacher.classTeacherOf && (
+                        <span style={{ fontSize: "0.72rem", color: "#c084fc", fontWeight: 600 }}>
+                          Class Teacher: {teacher.classTeacherOf.name}-{teacher.classTeacherOf.section}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: "0.85rem 1rem", fontSize: "0.85rem" }}>
+                      <div>{teacher.user.email}</div>
+                      {teacher.user.googleEmail && (
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-secondary, #94a3b8)" }}>
+                          Google: {teacher.user.googleEmail}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: "0.85rem 1rem", fontSize: "0.85rem" }}>{teacher.phone || "-"}</td>
+                    <td style={{ padding: "0.85rem 1rem" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+                        {teacher.subjects.slice(0, 3).map((s) => (
+                          <span
+                            key={s.id}
+                            style={{
+                              fontSize: "0.72rem",
+                              padding: "0.1rem 0.4rem",
+                              borderRadius: "10px",
+                              background: "rgba(59, 130, 246, 0.1)",
+                              color: "#60a5fa",
+                            }}
+                          >
+                            {s.name}
+                          </span>
+                        ))}
+                        {teacher.subjects.length > 3 && (
+                          <span style={{ fontSize: "0.72rem", color: "var(--text-secondary, #94a3b8)" }}>
+                            +{teacher.subjects.length - 3} more
                           </span>
                         )}
                       </div>
-                    </div>
-                  </td>
-                  <td style={{ padding: "1rem", fontSize: '0.875rem' }}>
-                    <div style={{ opacity: 0.8 }}>{teacher.user.email}</div>
-                    {teacher.user.googleEmail && (
-                      <div style={{ opacity: 0.6, fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                        {teacher.user.googleEmailVerified ? <CheckCircle2 size={12} color="var(--success)"/> : <XCircle size={12} color="var(--danger)"/>}
-                        {teacher.user.googleEmail}
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ padding: "1rem", fontSize: '0.875rem' }}>
-                    {teacher.phone || '-'}
-                  </td>
-                  <td style={{ padding: "1rem", fontSize: '0.875rem' }}>
-                    {subjectNames || '-'}
-                  </td>
-                  <td style={{ padding: "1rem", fontSize: '0.875rem' }}>
-                    {classNames || '-'}
-                  </td>
-                  <td style={{ padding: "1rem" }}>
-                    {teacher.isActive ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: "var(--success)", fontSize: '0.875rem', background: 'var(--success-bg)', padding: '0.25rem 0.5rem', borderRadius: '999px' }}>
-                        <CheckCircle2 size={14} /> Active
+                    </td>
+                    <td style={{ padding: "0.85rem 1rem" }}>
+                      <span
+                        style={{
+                          padding: "0.2rem 0.55rem",
+                          borderRadius: "10px",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          background: teacher.isActive ? "rgba(16, 185, 129, 0.15)" : "rgba(148, 163, 184, 0.12)",
+                          color: teacher.isActive ? "#34d399" : "#94a3b8",
+                        }}
+                      >
+                        {teacher.isActive ? "Active" : "Inactive"}
                       </span>
-                    ) : (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: "var(--danger)", fontSize: '0.875rem', background: 'var(--danger-bg)', padding: '0.25rem 0.5rem', borderRadius: '999px' }}>
-                        <XCircle size={14} /> Inactive
-                      </span>
-                    )}
-                  </td>
-                  <td data-action-menu-container={teacher.id} style={{ padding: "1rem", textAlign: 'right', position: 'relative' }}>
-                    <button 
-                      onClick={() => setOpenMenuId(openMenuId === teacher.id ? null : teacher.id)}
-                      aria-label="Actions"
-                      title="Actions"
-                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem' }}
-                    >
-                      <MoreVertical size={20} color="var(--text-secondary)" />
-                    </button>
-                    {openMenuId === teacher.id && (
-                      <div style={{ 
-                        position: 'absolute', right: '100%', top: '50%', transform: 'translateY(-50%)', 
-                        background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '8px', 
-                        boxShadow: '0 4px 6px rgba(0,0,0,0.1)', zIndex: 10, minWidth: '150px',
-                        display: 'flex', flexDirection: 'column', padding: '0.5rem', textAlign: 'left'
-                      }}>
-                        <Link 
-                          href={`/dashboard/admin/teachers/${teacher.id}`} 
-                          onClick={() => setOpenMenuId(null)}
-                          style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}
-                        >
-                          <Eye size={16} /> View Details
-                        </Link>
-                        <a 
-                          href={`/api/pdf/teacher/${teacher.id}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          onClick={() => setOpenMenuId(null)}
-                          style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}
-                        >
-                          <Download size={16} /> Download PDF
-                        </a>
-                        <div style={{ padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', borderTop: '1px solid var(--border-color)', marginTop: '0.25rem', paddingTop: '0.25rem' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Set Class Teacher:</span>
-                          <select 
-                            onChange={(e) => handleAssignClassTeacher(teacher.id, e.target.value)}
-                            value={teacher.classTeacherOf?.id || ""}
-                            style={{ padding: '0.25rem', fontSize: '0.875rem', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'transparent' }}
-                          >
-                            <option value="">None</option>
-                            {allClasses.map(c => (
-                              <option key={c.id} value={c.id}>{c.name}-{c.section}</option>
-                            ))}
-                          </select>
-                        </div>
-                        {teacher.isActive && (
-                          <button onClick={() => handleDeactivate(teacher.id)} style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--warning)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}>
-                            <XCircle size={16} /> Deactivate
-                          </button>
-                        )}
-                        <button 
-                          onClick={async () => {
-                            const ok = await confirm({
-                              title: `Delete Teacher "${teacher.user.name}"?`,
-                              message: "WARNING: This will permanently delete this teacher record and credentials. This action cannot be undone.",
-                              confirmText: "Delete Teacher",
-                              cancelText: "Cancel",
-                              variant: "danger"
-                            });
-                            if (!ok) return;
-
-                            const res = await deleteTeacher(teacher.id);
-                            if (res?.error) alert(res.error);
-                            else router.refresh();
-                            setOpenMenuId(null);
-                          }}
-                          style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--danger)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
-                        >
-                          <Trash2 size={16} /> Delete
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        
-        {filteredTeachers.length === 0 && (
-          <p style={{ textAlign: 'center', opacity: 0.7, padding: '2rem' }}>No teachers found.</p>
-        )}
-
-        {filteredTeachers.length > pageSize && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderTop: '1px solid var(--border-color)', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.875rem' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>
-              Showing {startIndex + 1} to {Math.min(startIndex + pageSize, filteredTeachers.length)} of {filteredTeachers.length} teachers
-            </span>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <button
-                type="button"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                style={{
-                  padding: '0.4rem 0.8rem',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border-color)',
-                  background: 'transparent',
-                  color: 'inherit',
-                  cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
-                  opacity: currentPage <= 1 ? 0.4 : 1
-                }}
-              >
-                Previous
-              </button>
-              <span style={{ padding: '0.4rem 0.7rem', fontWeight: 600 }}>
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                type="button"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                style={{
-                  padding: '0.4rem 0.8rem',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border-color)',
-                  background: 'transparent',
-                  color: 'inherit',
-                  cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
-                  opacity: currentPage >= totalPages ? 0.4 : 1
-                }}
-              >
-                Next
-              </button>
-            </div>
+                    </td>
+                    <td style={{ padding: "0.85rem 1rem", textAlign: "right" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEdit(teacher)}
+                        style={{
+                          padding: "0.4rem 0.75rem",
+                          borderRadius: "6px",
+                          border: "1px solid var(--border-color, rgba(255, 255, 255, 0.15))",
+                          background: "rgba(255, 255, 255, 0.05)",
+                          color: "inherit",
+                          fontSize: "0.8rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Edit / Add Drawer */}
+      <TeacherEditDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        teacher={editingTeacher}
+        allClasses={allClasses}
+        allSubjects={allSubjects}
+        onSuccess={() => {
+          router.refresh();
+        }}
+      />
     </div>
   );
 }

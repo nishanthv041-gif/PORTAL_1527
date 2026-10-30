@@ -83,6 +83,46 @@ export async function deleteSystemSettingAction(key: string) {
   }
 }
 
+const DEFAULT_SYSTEM_SETTINGS: Record<string, string> = {
+  ALLOW_ADMIN_REGISTRATION: "false",
+  ALLOW_TEACHER_REGISTRATION: "true",
+  ALLOW_PARENT_REGISTRATION: "true",
+  ALLOW_STUDENT_REGISTRATION: "true",
+  REQUIRE_APPROVAL_NEW_USERS: "true",
+  TEACHER_MANAGE_ATTENDANCE: "true",
+  TEACHER_MANAGE_MARKS: "true",
+  PARENT_VIEW_ANALYTICS: "false",
+  PARENT_ADMIN_PERMISSIONS: "false",
+  ACADEMIC_YEAR: "2026-2027",
+  TERMS_SEMESTERS: "2",
+  DEFAULT_PASSING_MARKS: "40",
+  ATTENDANCE_TYPE: "Daily",
+  PARENT_ATTENDANCE_VISIBILITY: "true",
+  ATTENDANCE_NOTIFICATIONS: "true",
+  EMAIL_NOTIFICATIONS: "true",
+  SMS_NOTIFICATIONS: "false",
+  APP_NOTIFICATIONS: "true",
+  EXAM_RESULT_ALERTS: "true",
+  GRADE_SYSTEM: "Percentage (0-100)",
+  RESULT_VISIBILITY: "false",
+  PASSWORD_POLICY: "true",
+  SESSION_TIMEOUT: "120",
+  TWO_FACTOR_AUTH: "false",
+  LANGUAGE: "English",
+  TIME_ZONE: "UTC",
+  DATE_FORMAT: "DD/MM/YYYY",
+  THEME_MODE: "System",
+  MAINTENANCE_MODE: "false",
+  SYSTEM_LOGS: "false",
+  SCHOOL_NAME: "Modern School Portal",
+  SCHOOL_LOGO: "",
+  SCHOOL_ADDRESS: "123 Education Lane, Knowledge Park",
+  SCHOOL_CONTACT: "+1 (555) 019-2834",
+  SCHOOL_EMAIL: "admin@schoolportal.edu",
+  SCHOOL_WEBSITE: "https://schoolportal.edu",
+  PRINCIPAL_NAME: "Dr. Eleanor Vance"
+};
+
 // 0ms cached query across serverless requests with 5 min TTL
 export const getSystemSettings = unstable_cache(
   async (): Promise<Record<string, string>> => {
@@ -90,12 +130,12 @@ export const getSystemSettings = unstable_cache(
       const settings = await prisma.systemSetting.findMany({
         select: { key: true, value: true }
       });
-      const settingsMap: Record<string, string> = {};
+      const settingsMap: Record<string, string> = { ...DEFAULT_SYSTEM_SETTINGS };
       settings.forEach(s => { settingsMap[s.key] = s.value; });
       return settingsMap;
     } catch (e) {
       console.error("Failed to load system settings:", e);
-      return {};
+      return DEFAULT_SYSTEM_SETTINGS;
     }
   },
   ["system-settings-map"],

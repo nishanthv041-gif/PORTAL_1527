@@ -26,10 +26,56 @@ export async function createTimetableSlotAction(formData: FormData) {
   }
 
   try {
+    let finalSubjectId: string | null = isBreak ? null : subjectId;
+
+    if (finalSubjectId) {
+      if (finalSubjectId.startsWith("fallback-")) {
+        const subName = finalSubjectId.replace("fallback-", "").toUpperCase();
+        let sub = await prisma.subject.findFirst({
+          where: { classId, name: { equals: subName, mode: "insensitive" } }
+        });
+        if (!sub) {
+          sub = await prisma.subject.create({
+            data: {
+              name: subName,
+              code: subName.slice(0, 3) + "001",
+              classId,
+              isActive: true
+            }
+          });
+        }
+        finalSubjectId = sub.id;
+      } else {
+        const sub = await prisma.subject.findUnique({
+          where: { id: finalSubjectId },
+          select: { id: true, teacherId: true, name: true, code: true, classId: true }
+        });
+        if (!sub) {
+          const fallbackSub = await prisma.subject.findFirst({ where: { classId } });
+          finalSubjectId = fallbackSub ? fallbackSub.id : null;
+        } else if (sub.classId !== classId) {
+          let classSub = await prisma.subject.findFirst({
+            where: { classId, name: { equals: sub.name, mode: "insensitive" } }
+          });
+          if (!classSub) {
+            classSub = await prisma.subject.create({
+              data: {
+                name: sub.name,
+                code: sub.code || (sub.name.slice(0, 3) + "001"),
+                classId,
+                isActive: true
+              }
+            });
+          }
+          finalSubjectId = classSub.id;
+        }
+      }
+    }
+
     // If teacherId is not passed, auto-populate from subject's assigned teacher
-    if (!teacherId && subjectId && !isBreak) {
+    if (!teacherId && finalSubjectId && !isBreak) {
       const subject = await prisma.subject.findUnique({
-        where: { id: subjectId },
+        where: { id: finalSubjectId },
         select: { teacherId: true }
       });
       if (subject?.teacherId) {
@@ -45,7 +91,7 @@ export async function createTimetableSlotAction(formData: FormData) {
       await prisma.timetable.update({
         where: { id: existing.id },
         data: {
-          subjectId: isBreak ? null : subjectId,
+          subjectId: isBreak ? null : finalSubjectId,
           teacherId: isBreak ? null : (teacherId || null),
           startTime,
           endTime,
@@ -61,7 +107,7 @@ export async function createTimetableSlotAction(formData: FormData) {
           classId,
           dayOfWeek,
           period,
-          subjectId: isBreak ? null : subjectId,
+          subjectId: isBreak ? null : finalSubjectId,
           teacherId: isBreak ? null : (teacherId || null),
           startTime,
           endTime,

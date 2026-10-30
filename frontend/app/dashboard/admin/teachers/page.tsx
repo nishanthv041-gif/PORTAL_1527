@@ -32,8 +32,12 @@ export default async function AdminTeachersPage() {
   return (
     <div className={styles.dashboard}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-        <h1 className={styles.title} style={{ margin: 0 }}>Teachers</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>To create new teachers, please use the &quot;Create New Roles&quot; section in the sidebar.</p>
+        <div>
+          <h1 className={styles.title} style={{ margin: 0 }}>Teacher Management</h1>
+          <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
+            Manage teacher profiles, subject & class assignments, Google login credentials, and classroom access.
+          </p>
+        </div>
       </div>
 
       <TeacherListClient teachers={teachers} allClasses={allClasses} allSubjects={allSubjects} />

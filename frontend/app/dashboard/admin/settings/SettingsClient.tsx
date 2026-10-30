@@ -1,388 +1,539 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { saveSystemSettingsBatchAction } from "@/backend/api/actions/dashboard/admin/settings/actions";
 import { SystemSetting } from "@prisma/client";
 import {
-  Building2, Users, Shield, GraduationCap, CalendarCheck,
-  Wallet, Bell, FileSpreadsheet, Lock, Globe, Database,
-  Server, Save, Loader2, CheckCircle2
+  Building2, Save, Loader2, CheckCircle2, Upload, AlertCircle, Image as ImageIcon,
+  Phone, Mail, Globe, User, Calendar, MapPin
 } from "lucide-react";
-import styles from "./settings.module.css";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import styles from "./settings.module.css";
 
-const SETTINGS_CATEGORIES = [
-  {
-    id: "SCHOOL",
-    label: "School Information",
-    icon: <Building2 size={18} />,
-    fields: [
-      { key: "SCHOOL_NAME", label: "School Name", type: "text", default: "My School" },
-      { key: "SCHOOL_LOGO", label: "School Logo", type: "image", default: "" },
-      { key: "SCHOOL_ADDRESS", label: "Address", type: "textarea", default: "" },
-      { key: "SCHOOL_CONTACT", label: "Contact Number", type: "text", default: "" },
-      { key: "SCHOOL_EMAIL", label: "Email", type: "email", default: "" }
-    ]
-  },
-  {
-    id: "USERS",
-    label: "User Management",
-    icon: <Users size={18} />,
-    fields: [
-      { key: "ALLOW_ADMIN_REGISTRATION", label: "Admin Registration", type: "boolean", default: "false" },
-      { key: "ALLOW_TEACHER_REGISTRATION", label: "Teacher Accounts Creation", type: "boolean", default: "true" },
-      { key: "ALLOW_PARENT_REGISTRATION", label: "Parent Accounts Creation", type: "boolean", default: "true" },
-      { key: "ALLOW_STUDENT_REGISTRATION", label: "Student Accounts Creation", type: "boolean", default: "true" },
-      { key: "REQUIRE_APPROVAL_NEW_USERS", label: "Require Approval for New Users", type: "boolean", default: "true" }
-    ]
-  },
-  {
-    id: "ROLES",
-    label: "Role & Permissions",
-    icon: <Shield size={18} />,
-    fields: [
-      { key: "TEACHER_MANAGE_ATTENDANCE", label: "Teachers can manage Attendance", type: "boolean", default: "true" },
-      { key: "TEACHER_MANAGE_MARKS", label: "Teachers can manage Marks", type: "boolean", default: "true" },
-      { key: "PARENT_VIEW_ANALYTICS", label: "Parents can view Class Analytics", type: "boolean", default: "false" },
-      { key: "PARENT_ADMIN_PERMISSIONS", label: "Enable Parent Admin (PTA) roles", type: "boolean", default: "false" }
-    ]
-  },
-  {
-    id: "ACADEMIC",
-    label: "Academic Settings",
-    icon: <GraduationCap size={18} />,
-    fields: [
-      { key: "ACADEMIC_YEAR", label: "Current Academic Year", type: "text", default: "2023-2024" },
-      { key: "TERMS_SEMESTERS", label: "Number of Terms/Semesters", type: "select", options: ["1", "2", "3", "4"], default: "2" },
-      { key: "DEFAULT_PASSING_MARKS", label: "Default Passing Marks (%)", type: "number", default: "40" }
-    ]
-  },
-  {
-    id: "ATTENDANCE",
-    label: "Attendance Settings",
-    icon: <CalendarCheck size={18} />,
-    fields: [
-      { key: "ATTENDANCE_TYPE", label: "Attendance Type", type: "select", options: ["Daily", "Subject-wise"], default: "Daily" },
-      { key: "PARENT_ATTENDANCE_VISIBILITY", label: "Parent Attendance Visibility", type: "boolean", default: "true" },
-      { key: "ATTENDANCE_NOTIFICATIONS", label: "Send Automated Absent Notifications", type: "boolean", default: "true" }
-    ]
-  },
-  {
-    id: "NOTIFICATIONS",
-    label: "Notification Settings",
-    icon: <Bell size={18} />,
-    fields: [
-      { key: "EMAIL_NOTIFICATIONS", label: "Enable Email Notifications", type: "boolean", default: "true" },
-      { key: "SMS_NOTIFICATIONS", label: "Enable SMS Notifications", type: "boolean", default: "false" },
-      { key: "APP_NOTIFICATIONS", label: "Enable In-App Alerts", type: "boolean", default: "true" },
-      { key: "EXAM_RESULT_ALERTS", label: "Exam Result Publications", type: "boolean", default: "true" }
-    ]
-  },
-  {
-    id: "EXAMS",
-    label: "Exam & Result Settings",
-    icon: <FileSpreadsheet size={18} />,
-    fields: [
-      { key: "GRADE_SYSTEM", label: "Grading System", type: "select", options: ["GPA (0-4.0)", "Percentage (0-100)", "Letters (A-F)"], default: "Percentage (0-100)" },
-      { key: "RESULT_VISIBILITY", label: "Publish Results Automatically", type: "boolean", default: "false" }
-    ]
-  },
-  {
-    id: "SECURITY",
-    label: "Security Settings",
-    icon: <Lock size={18} />,
-    fields: [
-      { key: "PASSWORD_POLICY", label: "Enforce Strong Passwords", type: "boolean", default: "true" },
-      { key: "SESSION_TIMEOUT", label: "Session Timeout (minutes)", type: "number", default: "120" },
-      { key: "TWO_FACTOR_AUTH", label: "Require 2FA for Admins", type: "boolean", default: "false" }
-    ]
-  },
-  {
-    id: "GENERAL",
-    label: "General Settings",
-    icon: <Globe size={18} />,
-    fields: [
-      { key: "LANGUAGE", label: "Default Language", type: "select", options: ["English", "Spanish", "French", "German"], default: "English" },
-      { key: "TIME_ZONE", label: "Time Zone", type: "text", default: "UTC" },
-      { key: "DATE_FORMAT", label: "Date Format", type: "select", options: ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"], default: "MM/DD/YYYY" },
-      { key: "THEME_MODE", label: "Default Theme Mode", type: "select", options: ["Light", "Dark", "System"], default: "System" }
-    ]
-  },
-  {
-    id: "SYSTEM",
-    label: "System",
-    icon: <Server size={18} />,
-    fields: [
-      { key: "MAINTENANCE_MODE", label: "Maintenance Mode", type: "boolean", default: "false" },
-      { key: "SYSTEM_LOGS", label: "Enable Verbose System Logging", type: "boolean", default: "false" }
-    ]
-  }
-];
+interface SettingsClientProps {
+  initialSettings: SystemSetting[];
+}
 
-export default function SettingsClient({ initialSettings }: { initialSettings: SystemSetting[] }) {
-  const [activeTab, setActiveTab] = useState(SETTINGS_CATEGORIES[0].id);
+export default function SettingsClient({ initialSettings }: SettingsClientProps) {
   const confirm = useConfirm();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [settingsValues, setSettingsValues] = useState<Record<string, string>>(() => {
-    const initial: Record<string, string> = {};
-    initialSettings.forEach(s => { initial[s.key] = s.value; });
+    const initial: Record<string, string> = {
+      SCHOOL_NAME: "Modern School Portal",
+      SCHOOL_LOGO: "",
+      SCHOOL_ADDRESS: "123 Education Lane, Knowledge Park",
+      SCHOOL_CONTACT: "+1 (555) 019-2834",
+      SCHOOL_EMAIL: "admin@schoolportal.edu",
+      SCHOOL_WEBSITE: "https://schoolportal.edu",
+      PRINCIPAL_NAME: "Dr. Eleanor Vance",
+      ACADEMIC_YEAR: "2026-2027",
+    };
+    initialSettings.forEach((s) => {
+      initial[s.key] = s.value;
+    });
     return initial;
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-
-  const activeCategory = SETTINGS_CATEGORIES.find(c => c.id === activeTab)!;
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleChange = (key: string, value: string) => {
-    setSettingsValues(prev => ({ ...prev, [key]: value }));
+    setSettingsValues((prev) => ({ ...prev, [key]: value }));
     setSaveSuccess(false);
+    setErrorMessage(null);
   };
 
-  const handleActivateAll = async () => {
-    const ok = await confirm({
-      title: "Activate All System Features?",
-      message: "IMPORTANT: Activating all system options enables open registrations and global permissions under your administrative responsibility. Do you want to proceed?",
-      confirmText: "Activate All",
-      cancelText: "Cancel",
-      variant: "warning"
-    });
-    if (!ok) return;
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    const nextValues = { ...settingsValues };
-      const batch: any[] = [];
-      
-      SETTINGS_CATEGORIES.forEach(category => {
-        category.fields.forEach(field => {
-          if (field.type === 'boolean') {
-            nextValues[field.key] = 'true';
-          }
-          batch.push({
-            key: field.key,
-            value: nextValues[field.key] !== undefined ? nextValues[field.key] : field.default,
-            category: category.id
-          });
-        });
-      });
-      
-      setSettingsValues(nextValues);
-      setIsSubmitting(true);
-      setSaveSuccess(false);
-      
-      const res = await saveSystemSettingsBatchAction(batch);
-      if (res.error) {
-        alert("Failed to save settings: " + res.error);
-      } else {
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+    // Validate size (< 2MB)
+    const MAX_SIZE = 2 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      setErrorMessage("Logo image must be smaller than 2MB.");
+      return;
+    }
+
+    // Validate type (PNG, JPG, SVG, WebP)
+    const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+      setErrorMessage("Only PNG, JPG, SVG, and WebP image formats are supported.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        handleChange("SCHOOL_LOGO", reader.result);
       }
-      setIsSubmitting(false);
+    };
+    reader.readAsDataURL(file);
   };
 
-  const handleSaveAll = async () => {
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    if (!settingsValues.SCHOOL_NAME?.trim()) {
+      setErrorMessage("School Name cannot be empty.");
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: "Save School Information?",
+      message: "These changes will update school details across the entire portal immediately.",
+      confirmText: "Save Changes",
+      cancelText: "Cancel",
+      variant: "primary",
+    });
+
+    if (!confirmed) return;
+
     setIsSubmitting(true);
     setSaveSuccess(false);
 
-    const batch = [];
-    for (const category of SETTINGS_CATEGORIES) {
-      for (const field of category.fields) {
-        batch.push({
-          key: field.key,
-          value: settingsValues[field.key] !== undefined ? settingsValues[field.key] : field.default,
-          category: category.id
-        });
-      }
-    }
+    try {
+      const batch = [
+        { key: "SCHOOL_NAME", value: settingsValues.SCHOOL_NAME || "", category: "SCHOOL" },
+        { key: "SCHOOL_LOGO", value: settingsValues.SCHOOL_LOGO || "", category: "SCHOOL" },
+        { key: "SCHOOL_ADDRESS", value: settingsValues.SCHOOL_ADDRESS || "", category: "SCHOOL" },
+        { key: "SCHOOL_CONTACT", value: settingsValues.SCHOOL_CONTACT || "", category: "SCHOOL" },
+        { key: "SCHOOL_EMAIL", value: settingsValues.SCHOOL_EMAIL || "", category: "SCHOOL" },
+        { key: "SCHOOL_WEBSITE", value: settingsValues.SCHOOL_WEBSITE || "", category: "SCHOOL" },
+        { key: "PRINCIPAL_NAME", value: settingsValues.PRINCIPAL_NAME || "", category: "SCHOOL" },
+        { key: "ACADEMIC_YEAR", value: settingsValues.ACADEMIC_YEAR || "", category: "SCHOOL" },
+      ];
 
-    const res = await saveSystemSettingsBatchAction(batch);
-    if (res.error) {
-      alert("Failed to save settings: " + res.error);
-    } else {
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      const res = await saveSystemSettingsBatchAction(batch);
+      if (res?.error) {
+        setErrorMessage(res.error);
+      } else {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 4000);
+      }
+    } catch {
+      setErrorMessage("Failed to save settings. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   return (
-    <div className={styles.container}>
-
-      {/* Sidebar Navigation */}
-      <div className={styles.sidebar}>
-        <div style={{ padding: '1.25rem', borderBottom: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.02)' }}>
-          <h2 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>System Settings</h2>
+    <div style={{ maxWidth: "860px", width: "100%", margin: "0 auto" }}>
+      <div
+        style={{
+          background: "var(--card-bg, #0f172a)",
+          border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+          borderRadius: "16px",
+          overflow: "hidden",
+          boxShadow: "0 10px 30px -10px rgba(0,0,0,0.5)",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            padding: "1.5rem 2rem",
+            borderBottom: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            background: "rgba(59, 130, 246, 0.05)",
+          }}
+        >
+          <div
+            style={{
+              width: "40px",
+              height: "40px",
+              borderRadius: "10px",
+              background: "rgba(59, 130, 246, 0.15)",
+              color: "#3b82f6",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Building2 size={22} />
+          </div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
+              School Information
+            </h2>
+            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary, #94a3b8)" }}>
+              Official school details displayed across report cards, headers, emails, and student records.
+            </p>
+          </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', padding: '0.5rem' }}>
-          {SETTINGS_CATEGORIES.map(category => (
-            <button
-              key={category.id}
-              onClick={() => setActiveTab(category.id)}
+
+        {/* Feedback Messages */}
+        <div style={{ padding: "0 2rem", marginTop: errorMessage || saveSuccess ? "1.5rem" : 0 }}>
+          {errorMessage && (
+            <div
               style={{
-                display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem',
-                border: 'none', background: activeTab === category.id ? 'var(--primary-bg)' : 'transparent',
-                color: activeTab === category.id ? 'var(--primary)' : 'var(--text-primary)',
-                textAlign: 'left', borderRadius: '8px', cursor: 'pointer', fontWeight: activeTab === category.id ? 600 : 400,
-                transition: 'all 0.2s ease'
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                padding: "0.85rem 1rem",
+                borderRadius: "8px",
+                background: "rgba(239, 68, 68, 0.12)",
+                border: "1px solid rgba(239, 68, 68, 0.3)",
+                color: "#f87171",
+                fontSize: "0.9rem",
               }}
             >
-              {category.icon}
-              {category.label}
-            </button>
-          ))}
-        </div>
-      </div>
+              <AlertCircle size={18} />
+              <span>{errorMessage}</span>
+            </div>
+          )}
 
-      {/* Main Content Area */}
-      <div className={styles.mainContent}>
-
-        {/* Header */}
-        <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div style={{ color: 'var(--primary)' }}>{activeCategory.icon}</div>
-            <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>{activeCategory.label}</h2>
-          </div>
-
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <button
-              onClick={handleActivateAll}
-              disabled={isSubmitting}
+          {saveSuccess && (
+            <div
               style={{
-                display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem',
-                backgroundColor: 'transparent',
-                color: '#ef4444',
-                border: '1px solid #ef4444', borderRadius: '8px', fontWeight: 500, cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s ease', whiteSpace: 'nowrap'
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                padding: "0.85rem 1rem",
+                borderRadius: "8px",
+                background: "rgba(16, 185, 129, 0.12)",
+                border: "1px solid rgba(16, 185, 129, 0.3)",
+                color: "#34d399",
+                fontSize: "0.9rem",
               }}
-              title="Activate all boolean options"
             >
               <CheckCircle2 size={18} />
-              Activate All Options
-            </button>
-            <button
-              onClick={handleSaveAll}
-              disabled={isSubmitting}
+              <span>School information successfully updated and cached across the portal!</span>
+            </div>
+          )}
+        </div>
+
+        {/* Form Body */}
+        <form onSubmit={handleSave} style={{ padding: "2rem" }}>
+          {/* Logo Section */}
+          <div
+            style={{
+              padding: "1.5rem",
+              background: "rgba(255, 255, 255, 0.02)",
+              borderRadius: "12px",
+              border: "1px dashed var(--border-color, rgba(255, 255, 255, 0.15))",
+              marginBottom: "2rem",
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "1.5rem",
+            }}
+          >
+            <div
               style={{
-                display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem',
-                backgroundColor: saveSuccess ? 'var(--success)' : 'var(--primary)',
-                color: saveSuccess ? 'var(--success-fg)' : 'var(--primary-fg)',
-                border: 'none', borderRadius: '8px', fontWeight: 500, cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s ease', whiteSpace: 'nowrap'
+                width: "90px",
+                height: "90px",
+                borderRadius: "12px",
+                background: "rgba(0, 0, 0, 0.3)",
+                border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+                position: "relative",
               }}
             >
-              {isSubmitting ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> :
-                saveSuccess ? <CheckCircle2 size={18} /> : <Save size={18} />}
-              {isSubmitting ? 'Saving...' : saveSuccess ? 'Saved All!' : 'Save Changes'}
+              {settingsValues.SCHOOL_LOGO ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={settingsValues.SCHOOL_LOGO}
+                  alt="School Logo"
+                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                />
+              ) : (
+                <ImageIcon size={36} style={{ color: "var(--text-secondary, #64748b)" }} />
+              )}
+            </div>
+
+            <div style={{ flex: 1, minWidth: "240px" }}>
+              <div style={{ fontWeight: 600, fontSize: "0.95rem", color: "var(--text-primary, #f8fafc)", marginBottom: "0.25rem" }}>
+                School Logo
+              </div>
+              <div style={{ fontSize: "0.8rem", color: "var(--text-secondary, #94a3b8)", marginBottom: "0.75rem" }}>
+                Upload PNG, JPG, SVG, or WebP (max 2MB), or paste an image URL below.
+              </div>
+
+              <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/png, image/jpeg, image/jpg, image/svg+xml, image/webp"
+                  onChange={handleLogoUpload}
+                  style={{ display: "none" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    padding: "0.5rem 1rem",
+                    background: "rgba(59, 130, 246, 0.15)",
+                    border: "1px solid rgba(59, 130, 246, 0.3)",
+                    color: "#60a5fa",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  <Upload size={16} />
+                  <span>Upload Logo Image</span>
+                </button>
+
+                {settingsValues.SCHOOL_LOGO && (
+                  <button
+                    type="button"
+                    onClick={() => handleChange("SCHOOL_LOGO", "")}
+                    style={{
+                      padding: "0.5rem 0.85rem",
+                      background: "rgba(239, 68, 68, 0.1)",
+                      border: "1px solid rgba(239, 68, 68, 0.2)",
+                      color: "#f87171",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    Remove Logo
+                  </button>
+                )}
+              </div>
+
+              <div style={{ marginTop: "0.75rem" }}>
+                <input
+                  type="text"
+                  placeholder="Or enter logo image URL (e.g., https://...)"
+                  value={settingsValues.SCHOOL_LOGO || ""}
+                  onChange={(e) => handleChange("SCHOOL_LOGO", e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.45rem 0.75rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                    background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                    color: "inherit",
+                    fontSize: "0.82rem",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Form Fields Grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem" }}>
+            {/* School Name */}
+            <div>
+              <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
+                School Name <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={settingsValues.SCHOOL_NAME || ""}
+                onChange={(e) => handleChange("SCHOOL_NAME", e.target.value)}
+                placeholder="e.g. Modern School"
+                style={{
+                  width: "100%",
+                  padding: "0.65rem 0.85rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                  background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                  color: "inherit",
+                  fontSize: "0.9rem",
+                }}
+              />
+            </div>
+
+            {/* Principal Name */}
+            <div>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
+                <User size={15} style={{ color: "#3b82f6" }} />
+                <span>Principal Name</span>
+              </label>
+              <input
+                type="text"
+                value={settingsValues.PRINCIPAL_NAME || ""}
+                onChange={(e) => handleChange("PRINCIPAL_NAME", e.target.value)}
+                placeholder="e.g. Dr. Eleanor Vance"
+                style={{
+                  width: "100%",
+                  padding: "0.65rem 0.85rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                  background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                  color: "inherit",
+                  fontSize: "0.9rem",
+                }}
+              />
+            </div>
+
+            {/* Contact / Phone */}
+            <div>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
+                <Phone size={15} style={{ color: "#3b82f6" }} />
+                <span>Contact Phone</span>
+              </label>
+              <input
+                type="text"
+                value={settingsValues.SCHOOL_CONTACT || ""}
+                onChange={(e) => handleChange("SCHOOL_CONTACT", e.target.value)}
+                placeholder="e.g. +1 (555) 019-2834"
+                style={{
+                  width: "100%",
+                  padding: "0.65rem 0.85rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                  background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                  color: "inherit",
+                  fontSize: "0.9rem",
+                }}
+              />
+            </div>
+
+            {/* Email */}
+            <div>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
+                <Mail size={15} style={{ color: "#3b82f6" }} />
+                <span>School Email</span>
+              </label>
+              <input
+                type="email"
+                value={settingsValues.SCHOOL_EMAIL || ""}
+                onChange={(e) => handleChange("SCHOOL_EMAIL", e.target.value)}
+                placeholder="e.g. admin@schoolportal.edu"
+                style={{
+                  width: "100%",
+                  padding: "0.65rem 0.85rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                  background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                  color: "inherit",
+                  fontSize: "0.9rem",
+                }}
+              />
+            </div>
+
+            {/* Website */}
+            <div>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
+                <Globe size={15} style={{ color: "#3b82f6" }} />
+                <span>School Website</span>
+              </label>
+              <input
+                type="url"
+                value={settingsValues.SCHOOL_WEBSITE || ""}
+                onChange={(e) => handleChange("SCHOOL_WEBSITE", e.target.value)}
+                placeholder="e.g. https://schoolportal.edu"
+                style={{
+                  width: "100%",
+                  padding: "0.65rem 0.85rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                  background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                  color: "inherit",
+                  fontSize: "0.9rem",
+                }}
+              />
+            </div>
+
+            {/* Academic Year */}
+            <div>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
+                <Calendar size={15} style={{ color: "#3b82f6" }} />
+                <span>Academic Year Label</span>
+              </label>
+              <input
+                type="text"
+                value={settingsValues.ACADEMIC_YEAR || ""}
+                onChange={(e) => handleChange("ACADEMIC_YEAR", e.target.value)}
+                placeholder="e.g. 2026-2027"
+                style={{
+                  width: "100%",
+                  padding: "0.65rem 0.85rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                  background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                  color: "inherit",
+                  fontSize: "0.9rem",
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Address */}
+          <div style={{ marginTop: "1.5rem" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
+              <MapPin size={15} style={{ color: "#3b82f6" }} />
+              <span>School Address</span>
+            </label>
+            <textarea
+              rows={3}
+              value={settingsValues.SCHOOL_ADDRESS || ""}
+              onChange={(e) => handleChange("SCHOOL_ADDRESS", e.target.value)}
+              placeholder="e.g. 123 Education Lane, Knowledge Park, District 5"
+              style={{
+                width: "100%",
+                padding: "0.65rem 0.85rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                color: "inherit",
+                fontSize: "0.9rem",
+                resize: "vertical",
+              }}
+            />
+          </div>
+
+          {/* Action Bar */}
+          <div
+            style={{
+              marginTop: "2.5rem",
+              paddingTop: "1.5rem",
+              borderTop: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "1rem",
+            }}
+          >
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.6rem",
+                padding: "0.75rem 1.75rem",
+                borderRadius: "10px",
+                background: "var(--primary, #3b82f6)",
+                color: "#ffffff",
+                border: "none",
+                fontWeight: 600,
+                fontSize: "0.95rem",
+                cursor: isSubmitting ? "not-allowed" : "pointer",
+                boxShadow: "0 4px 14px 0 rgba(59, 130, 246, 0.39)",
+                opacity: isSubmitting ? 0.7 : 1,
+              }}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Save size={18} />
+                  <span>Save School Information</span>
+                </>
+              )}
             </button>
           </div>
-        </div>
-
-        {/* Fields */}
-        <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          {activeCategory.fields.map(field => {
-            const currentValue = settingsValues[field.key] !== undefined ? settingsValues[field.key] : field.default;
-
-            return (
-              <div key={field.key} className={`${styles.fieldRow} ${field.type === 'textarea' ? styles.textareaRow : ''}`}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
-                    {field.label}
-                  </label>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{field.key}</span>
-                  {field.key === "SCHOOL_LOGO" && (
-                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#ef4444', fontWeight: 600 }}>
-                      * IMPORTANT: Setting this logo is on your own responsibility.
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ width: '100%', maxWidth: '400px' }}>
-                  {field.type === 'boolean' ? (
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.5rem 0' }}>
-                      <div style={{
-                        width: '44px', height: '24px', borderRadius: '12px',
-                        background: currentValue === 'true' ? 'var(--primary)' : 'var(--border-color)',
-                        position: 'relative', transition: 'all 0.2s', pointerEvents: 'none'
-                      }}>
-                        <div style={{
-                          width: '20px', height: '20px', borderRadius: '50%', background: 'white',
-                          position: 'absolute', top: '2px', left: currentValue === 'true' ? '22px' : '2px',
-                          transition: 'all 0.2s', boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                        }} />
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={currentValue === 'true'}
-                        onChange={(e) => handleChange(field.key, e.target.checked ? 'true' : 'false')}
-                        style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
-                      />
-                      <span style={{ fontSize: '0.875rem', fontWeight: 500, color: currentValue === 'true' ? 'var(--success)' : 'var(--text-secondary)' }}>
-                        {currentValue === 'true' ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </label>
-                  ) : field.type === 'select' ? (
-                    <select
-                      value={currentValue}
-                      onChange={(e) => handleChange(field.key, e.target.value)}
-                      style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.9rem' }}
-                    >
-                      {field.options?.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                  ) : field.type === 'image' ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                      <div style={{ 
-                        width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden', 
-                        padding: '3px',
-                        background: 'linear-gradient(135deg, #3b82f6, #ec4899)',
-                        boxShadow: '0 4px 12px rgba(236, 72, 153, 0.2)',
-                        display: 'flex', justifyContent: 'center', alignItems: 'center',
-                        flexShrink: 0
-                      }}>
-                        {currentValue ? (
-                          <img src={currentValue} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                        ) : (
-                          <div style={{ width: '100%', height: '100%', borderRadius: '50%', backgroundColor: 'var(--primary-bg)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                            <Building2 size={32} style={{ color: 'var(--text-secondary)' }} />
-                          </div>
-                        )}
-                      </div>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (event) => {
-                              handleChange(field.key, event.target?.result as string);
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }}
-                        style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.9rem' }}
-                      />
-                    </div>
-                  ) : field.type === 'textarea' ? (
-                    <textarea
-                      value={currentValue}
-                      onChange={(e) => handleChange(field.key, e.target.value)}
-                      rows={4}
-                      style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.9rem', resize: 'vertical' }}
-                    />
-                  ) : (
-                    <input
-                      type={field.type}
-                      value={currentValue}
-                      onChange={(e) => handleChange(field.key, e.target.value)}
-                      style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', fontSize: '0.9rem' }}
-                    />
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
+        </form>
       </div>
     </div>
   );

@@ -80,6 +80,7 @@ export function getAuthOptions(): NextAuthOptions {
             role: user.role,
             theme: user.theme,
             notificationsEnabled: user.notificationsEnabled,
+            sessionVersion: user.sessionVersion || 1,
           };
         }
 
@@ -105,10 +106,28 @@ export function getAuthOptions(): NextAuthOptions {
         token.name = user.name ? user.name.trim() : token.name;
         token.theme = user.theme;
         token.notificationsEnabled = user.notificationsEnabled;
+        token.sessionVersion = (user as any).sessionVersion || 1;
+      } else if (token.id) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: { status: true, sessionVersion: true, role: true }
+          });
+          if (!dbUser || dbUser.status === "INACTIVE" || (token.sessionVersion && dbUser.sessionVersion !== token.sessionVersion)) {
+            token.isRevoked = true;
+          } else {
+            token.role = dbUser.role;
+          }
+        } catch (err) {
+          console.warn("[Auth JWT] Session verification error:", err);
+        }
       }
       return token;
     },
     async session({ session, token }) {
+      if (token.isRevoked || !token.id) {
+        return null as any;
+      }
       if (session.user) {
         session.user.role = token.role as string;
         session.user.id = token.id as string;
