@@ -94,6 +94,16 @@ export interface TimetableClientProps {
     id: string;
     name: string;
     code: string;
+    classId?: string | null;
+    requiredPeriodsPerWeek?: number | null;
+    teacherId?: string | null;
+    teacher?: { id: string; user?: { name: string } | null } | null;
+  }>;
+  allSubjects?: Array<{
+    id: string;
+    name: string;
+    code: string;
+    classId?: string | null;
     requiredPeriodsPerWeek?: number | null;
     teacherId?: string | null;
     teacher?: { id: string; user?: { name: string } | null } | null;
@@ -121,6 +131,7 @@ export default function TimetableClient({
   timetableData,
   allSchoolSlots,
   availableSubjects,
+  allSubjects = [],
   allTeachers,
   periodSlots: initialPeriodSlots,
   pendingSubstitutionsCount,
@@ -186,14 +197,44 @@ export default function TimetableClient({
   const selectedClassObj = classes.find(c => c.id === selectedClass);
   const selectedClassName = selectedClassObj ? `${selectedClassObj.name} - ${selectedClassObj.section}` : "";
 
+  // Dynamically resolve subjects for currently selected class, falling back to all subjects
+  const currentClassSubjects = useMemo(() => {
+    // 1. If allSubjects is provided, check for subjects matching selectedClass
+    if (allSubjects && allSubjects.length > 0) {
+      const classSpecific = allSubjects.filter(s => s.classId === selectedClass);
+      if (classSpecific.length > 0) return classSpecific;
+    }
+
+    // 2. Check availableSubjects
+    if (availableSubjects && availableSubjects.length > 0) {
+      const classSpecific = availableSubjects.filter(s => !s.classId || s.classId === selectedClass);
+      if (classSpecific.length > 0) return classSpecific;
+      return availableSubjects;
+    }
+
+    // 3. Fallback to distinct subjects across the school so the dropdown is NEVER empty
+    if (allSubjects && allSubjects.length > 0) {
+      const seen = new Set<string>();
+      return allSubjects.filter(s => {
+        const key = s.name.trim().toUpperCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+
+    return [];
+  }, [allSubjects, availableSubjects, selectedClass]);
+
   // Assign consistent colors to subjects
   const subjectColorMap = useMemo(() => {
     const map = new Map<string, typeof SUBJECT_COLOR_PALETTE[0]>();
-    availableSubjects.forEach((sub, idx) => {
+    const pool = (allSubjects && allSubjects.length > 0) ? allSubjects : currentClassSubjects;
+    pool.forEach((sub, idx) => {
       map.set(sub.id, SUBJECT_COLOR_PALETTE[idx % SUBJECT_COLOR_PALETTE.length]);
     });
     return map;
-  }, [availableSubjects]);
+  }, [allSubjects, currentClassSubjects]);
 
   // Navigate weeks
   const changeWeek = (direction: -1 | 1) => {
@@ -223,7 +264,8 @@ export default function TimetableClient({
     setEditingSlot({ day, period });
 
     const pSlot = periodSlots.find(p => p.order === period);
-    const matchedSubject = availableSubjects.find(s => s.id === slotData?.subjectId);
+    const pool = [...currentClassSubjects, ...(allSubjects || []), ...availableSubjects];
+    const matchedSubject = pool.find(s => s.id === slotData?.subjectId);
     const assignedTeacherId = slotData?.teacherId || matchedSubject?.teacherId || "";
 
     setEditData({
@@ -948,7 +990,8 @@ export default function TimetableClient({
                             value={editData.subjectId}
                             onChange={(e) => {
                               const sId = e.target.value;
-                              const matched = availableSubjects.find(s => s.id === sId);
+                              const pool = [...currentClassSubjects, ...(allSubjects || []), ...availableSubjects];
+                              const matched = pool.find(s => s.id === sId);
                               setEditData({
                                 ...editData,
                                 subjectId: sId,
@@ -958,8 +1001,8 @@ export default function TimetableClient({
                             style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.85rem" }}
                           >
                             <option value="">-- Select Subject --</option>
-                            {availableSubjects.map(s => (
-                              <option key={s.id} value={s.id}>{s.name} ({s.teacher?.user?.name || "Unassigned"})</option>
+                            {currentClassSubjects.map(s => (
+                              <option key={s.id} value={s.id}>{s.name} {s.code ? `(${s.code})` : ""}</option>
                             ))}
                           </select>
 
@@ -1206,18 +1249,19 @@ export default function TimetableClient({
                                     value={editData.subjectId}
                                     onChange={(e) => {
                                       const sId = e.target.value;
-                                      const matched = availableSubjects.find(s => s.id === sId);
+                                      const pool = [...currentClassSubjects, ...(allSubjects || []), ...availableSubjects];
+                                      const matched = pool.find(s => s.id === sId);
                                       setEditData({
                                         ...editData,
                                         subjectId: sId,
                                         teacherId: matched?.teacherId || editData.teacherId
                                       });
                                     }}
-                                    style={{ width: "100%", padding: "0.2rem", fontSize: "0.72rem", borderRadius: "4px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit" }}
+                                    style={{ width: "100%", padding: "0.25rem", fontSize: "0.74rem", borderRadius: "4px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontWeight: 600 }}
                                   >
                                     <option value="">Select Subject</option>
-                                    {availableSubjects.map(s => (
-                                      <option key={s.id} value={s.id}>{s.name}</option>
+                                    {currentClassSubjects.map(s => (
+                                      <option key={s.id} value={s.id}>{s.name} {s.code ? `(${s.code})` : ""}</option>
                                     ))}
                                   </select>
 
@@ -1654,7 +1698,7 @@ export default function TimetableClient({
           isOpen={showScanModal}
           selectedClassId={selectedClass}
           selectedClassName={selectedClassName}
-          availableSubjects={availableSubjects}
+          availableSubjects={currentClassSubjects}
           onClose={() => setShowScanModal(false)}
           onSaveSuccess={() => {
             router.refresh();

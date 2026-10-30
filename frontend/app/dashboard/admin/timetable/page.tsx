@@ -108,18 +108,31 @@ export default async function AdminTimetablePage({
     });
   }
 
-  let classTimetable: TimetableWithRelations[] = [];
-  let availableSubjects: SubjectWithTeacher[] = [];
+  const activeClassId = classId || (classes[0]?.id || "");
 
-  if (classId) {
-    classTimetable = allTimetables.filter(t => t.classId === classId);
-    availableSubjects = await prisma.subject.findMany({
-      where: { classId, isActive: true },
-      include: { teacher: { include: { user: true } } }
+  const allSubjects = await prisma.subject.findMany({
+    where: { isActive: true },
+    include: {
+      teacher: { include: { user: true } },
+      class: { select: { id: true, name: true, section: true } }
+    },
+    orderBy: { name: 'asc' }
+  });
+
+  const classTimetable = allTimetables.filter(t => t.classId === activeClassId);
+  let availableSubjects = allSubjects.filter(s => s.classId === activeClassId);
+
+  // If this class has no subjects assigned yet, fallback to all active subjects so admin can always schedule
+  if (availableSubjects.length === 0) {
+    const seen = new Set<string>();
+    availableSubjects = allSubjects.filter(s => {
+      if (seen.has(s.name.toUpperCase())) return false;
+      seen.add(s.name.toUpperCase());
+      return true;
     });
   }
 
-  const selectedClassObj = classes.find(c => c.id === classId);
+  const selectedClassObj = classes.find(c => c.id === activeClassId);
   const selectedClassName = selectedClassObj ? `${selectedClassObj.name} - ${selectedClassObj.section}` : "";
   const selectedClassGrade = selectedClassObj ? selectedClassObj.name : "";
 
@@ -190,10 +203,11 @@ export default async function AdminTimetablePage({
     <div className={styles.dashboard}>
       <TimetableClient
         classes={classes}
-        initialClassId={classId || (classes[0]?.id || "")}
+        initialClassId={activeClassId}
         timetableData={classTimetable}
         allSchoolSlots={allTimetables as any}
         availableSubjects={availableSubjects}
+        allSubjects={allSubjects as any}
         allTeachers={allTeachers.map(t => ({
           id: t.id,
           name: t.user.name || "Teacher",
