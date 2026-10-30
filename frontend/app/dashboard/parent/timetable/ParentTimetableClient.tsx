@@ -37,6 +37,7 @@ export default function ParentTimetableClient({
   activeSubstitutions?: Record<string, {
     substituteTeacherName: string;
     absentTeacherName: string;
+    isFreePeriod?: boolean;
     note?: string | null;
   }>;
 }) {
@@ -319,9 +320,15 @@ export default function ParentTimetableClient({
                         </span>
 
                         {activeSubstitutions[slot.id] ? (
-                          <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", color: "#d97706", fontWeight: 600 }}>
-                            <User size={13} /> Substitute: <strong>{activeSubstitutions[slot.id].substituteTeacherName}</strong> (covering for {activeSubstitutions[slot.id].absentTeacherName})
-                          </span>
+                          activeSubstitutions[slot.id].isFreePeriod ? (
+                            <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", color: "var(--danger)", fontWeight: 600 }}>
+                              <User size={13} /> Teacher absent, free period
+                            </span>
+                          ) : (
+                            <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", color: "#d97706", fontWeight: 600 }}>
+                              <User size={13} /> Substitute: <strong>{activeSubstitutions[slot.id].substituteTeacherName}</strong> (covering for {activeSubstitutions[slot.id].absentTeacherName})
+                            </span>
+                          )
                         ) : slot.subject?.teacher ? (
                           <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                             <User size={13} /> Teacher: <strong>{slot.subject.teacher.user.name}</strong>
@@ -412,10 +419,17 @@ export default function ParentTimetableClient({
                         </div>
 
                         {isToday && activeSubstitutions[slot.id] ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "#d97706", fontSize: "0.8rem", marginTop: "0.2rem", fontWeight: 600 }}>
-                            <User size={13} />
-                            <span>Substitute: {activeSubstitutions[slot.id].substituteTeacherName} (covering for {activeSubstitutions[slot.id].absentTeacherName})</span>
-                          </div>
+                          activeSubstitutions[slot.id].isFreePeriod ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--danger)", fontSize: "0.8rem", marginTop: "0.2rem", fontWeight: 600 }}>
+                              <User size={13} />
+                              <span>Teacher absent, free period</span>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "#d97706", fontSize: "0.8rem", marginTop: "0.2rem", fontWeight: 600 }}>
+                              <User size={13} />
+                              <span>Substitute: {activeSubstitutions[slot.id].substituteTeacherName} (covering for {activeSubstitutions[slot.id].absentTeacherName})</span>
+                            </div>
+                          )
                         ) : slot.subject?.teacher ? (
                           <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "var(--text-secondary)", fontSize: "0.8rem", marginTop: "0.2rem" }}>
                             <User size={13} />

@@ -1,34 +1,37 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Calendar as CalendarIcon,
   UserX,
   UserCheck,
   Clock,
-  Sparkles,
   AlertCircle,
   CheckCircle,
-  Plus,
-  RefreshCw,
   X,
   Loader2,
-  FileSpreadsheet,
   MapPin,
   ChevronRight,
-  ShieldAlert
+  ShieldAlert,
+  Search,
+  Undo2,
+  Trash2,
+  CheckSquare,
+  Square
 } from "lucide-react";
 import {
   markTeacherAbsenceAction,
-  assignSubstituteAction,
+  getAbsentTeacherPeriodsAction,
+  getFreeTeachersForPeriodsAction,
+  assignSubstitutesBatchAction,
+  undoSubstitutionAssignmentAction,
   cancelAbsenceAction,
-  autoAssignAllSubstitutionsAction,
-  getCandidatesForSubstitutionAction,
   getSubstitutionDataForDateAction,
-  type CandidateSubstitute,
-  type SubstitutionDataResult
+  type FreeTeacherItem,
+  type AbsentPeriodSlot
 } from "@/backend/api/actions/dashboard/admin/substitution/substitutionActions";
+import { formatSchoolDate } from "@/backend/lib/timetable/getEffectiveTimetable";
 
 interface TeacherItem {
   id: string;
@@ -39,36 +42,127 @@ interface TeacherItem {
 
 interface SubstitutionClientProps {
   initialDate: string;
-  initialData: SubstitutionDataResult;
+  initialTeacherId: string;
+  initialData: any;
+  initialTeacherPeriods: any;
   allTeachers: TeacherItem[];
 }
 
 export default function SubstitutionClient({
   initialDate,
+  initialTeacherId,
   initialData,
+  initialTeacherPeriods,
   allTeachers
 }: SubstitutionClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
   const [selectedDate, setSelectedDate] = useState(initialDate);
-  const [data, setData] = useState<SubstitutionDataResult>(initialData);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [data, setData] = useState(initialData);
 
-  // Mark Absence modal state
+  // Selected absent teacher to inspect/assign
+  const [activeTeacherId, setActiveTeacherId] = useState<string>(
+    initialTeacherId || (initialData?.absences?.[0]?.teacherId || "")
+  );
+  const [teacherPeriods, setTeacherPeriods] = useState<AbsentPeriodSlot[]>(
+    initialTeacherPeriods?.periods || []
+  );
+  const [loadingPeriods, setLoadingPeriods] = useState(false);
+
+  // Period selection state (ticked periods)
+  const [selectedPeriodIds, setSelectedPeriodIds] = useState<string[]>([]);
+
+  // Free teachers side-panel / bottom-sheet state
+  const [freeTeachers, setFreeTeachers] = useState<FreeTeacherItem[]>([]);
+  const [loadingFreeTeachers, setLoadingFreeTeachers] = useState(false);
+  const [matchAllPeriods, setMatchAllPeriods] = useState(true);
+  const [teacherSearch, setTeacherSearch] = useState("");
+  const [selectedSubstituteId, setSelectedSubstituteId] = useState<string | null>(null);
+  const [isFreePeriodChoice, setIsFreePeriodChoice] = useState(false);
+
+  // Per-period individual teacher picker map: { timetableEntryId -> substituteTeacherId }
+  const [individualAssignments, setIndividualAssignments] = useState<Record<string, string>>({});
+
+  // Confirm dialog and toasts
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [lastAssignedBatch, setLastAssignedBatch] = useState<string[] | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // STEP A: Mark Teacher Absent Modal
   const [showMarkModal, setShowMarkModal] = useState(false);
-  const [absentTeacherId, setAbsentTeacherId] = useState("");
-  const [absenceReason, setAbsenceReason] = useState("Medical Leave");
-  const [isFullDay, setIsFullDay] = useState(true);
-  const [selectedPeriods, setSelectedPeriods] = useState<number[]>([]);
+  const [modalTeacherId, setModalTeacherId] = useState("");
+  const [modalDate, setModalDate] = useState(selectedDate);
+  const [modalReason, setModalReason] = useState("Medical Leave");
+  const [modalFullDay, setModalFullDay] = useState(true);
+  const [modalSelectedPeriods, setModalSelectedPeriods] = useState<number[]>([]);
+  const [modalTeacherSearch, setModalTeacherSearch] = useState("");
+  const [modalPeriodsAvailable, setModalPeriodsAvailable] = useState<number[]>([]);
+  const [loadingModalPeriods, setLoadingModalPeriods] = useState(false);
 
-  // Candidate drawer state for a substitution
-  const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
-  const [candidateList, setCandidateList] = useState<CandidateSubstitute[]>([]);
-  const [loadingCandidates, setLoadingCandidates] = useState(false);
-  const [candidateError, setCandidateError] = useState<string | null>(null);
+  // Active absence record for current teacher
+  const currentAbsence = useMemo(() => {
+    return data?.absences?.find((a: any) => a.teacherId === activeTeacherId) || null;
+  }, [data, activeTeacherId]);
 
-  // Sync date changes
+  // Load periods when activeTeacherId or selectedDate changes
+  useEffect(() => {
+    if (!activeTeacherId) {
+      setTeacherPeriods([]);
+      return;
+    }
+    let isCancelled = false;
+    setLoadingPeriods(true);
+    getAbsentTeacherPeriodsAction(activeTeacherId, selectedDate).then(res => {
+      if (!isCancelled) {
+        if (res.success) {
+          setTeacherPeriods(res.periods);
+        } else {
+          setTeacherPeriods([]);
+        }
+        setSelectedPeriodIds([]);
+        setSelectedSubstituteId(null);
+        setIsFreePeriodChoice(false);
+        setLoadingPeriods(false);
+      }
+    });
+    return () => { isCancelled = true; };
+  }, [activeTeacherId, selectedDate]);
+
+  // Load free teachers whenever selected periods or matchAllPeriods changes
+  const selectedPeriodNumbers = useMemo(() => {
+    return teacherPeriods
+      .filter(p => selectedPeriodIds.includes(p.timetableEntryId))
+      .map(p => p.period);
+  }, [teacherPeriods, selectedPeriodIds]);
+
+  useEffect(() => {
+    if (selectedPeriodNumbers.length === 0 || !activeTeacherId) {
+      setFreeTeachers([]);
+      return;
+    }
+    let isCancelled = false;
+    setLoadingFreeTeachers(true);
+    getFreeTeachersForPeriodsAction({
+      dateStr: selectedDate,
+      periodNumbers: selectedPeriodNumbers,
+      absentTeacherId: activeTeacherId,
+      matchAllPeriods
+    }).then(res => {
+      if (!isCancelled) {
+        if (res.success) {
+          setFreeTeachers(res.freeTeachers);
+        } else {
+          setFreeTeachers([]);
+        }
+        setLoadingFreeTeachers(false);
+      }
+    });
+    return () => { isCancelled = true; };
+  }, [selectedPeriodNumbers, activeTeacherId, selectedDate, matchAllPeriods]);
+
+  // Handle date change
   const handleDateChange = (newDate: string) => {
     setSelectedDate(newDate);
     startTransition(async () => {
@@ -85,556 +179,663 @@ export default function SubstitutionClient({
     if (res.success) {
       setData(res);
     }
-  };
-
-  // Open candidate selection for a specific slot
-  const handleOpenCandidates = async (slotId: string) => {
-    setActiveSlotId(slotId);
-    setLoadingCandidates(true);
-    setCandidateError(null);
-    try {
-      const targetSub = data.substitutions.find(s => s.id === slotId);
-      if (!targetSub) return;
-
-      // Find original timetable slot id or pass targetSub.id
-      // getCandidatesForSubstitutionAction accepts timetableEntryId, let's call action
-      // We can pass targetSub.id because we know the substitution record
-      const res = await getCandidatesForSubstitutionAction(targetSub.id, selectedDate);
-      if (res.success) {
-        setCandidateList(res.candidates);
-      } else {
-        setCandidateError(res.error || "Failed to load candidates");
-      }
-    } catch (err: any) {
-      setCandidateError(err.message || "Failed to fetch candidates");
-    } finally {
-      setLoadingCandidates(false);
+    if (activeTeacherId) {
+      const pRes = await getAbsentTeacherPeriodsAction(activeTeacherId, selectedDate);
+      if (pRes.success) setTeacherPeriods(pRes.periods);
     }
   };
 
-  // Mark absence handler
-  const handleMarkAbsence = () => {
-    if (!absentTeacherId) {
-      setErrorMsg("Please select a teacher to mark absent.");
+  // Toggle selection for a period checkbox
+  const togglePeriodSelection = (entrySlotId: string) => {
+    setSelectedPeriodIds(prev =>
+      prev.includes(entrySlotId) ? prev.filter(id => id !== entrySlotId) : [...prev, entrySlotId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    setSelectedPeriodIds(teacherPeriods.map(p => p.timetableEntryId));
+  };
+
+  const handleClearAll = () => {
+    setSelectedPeriodIds([]);
+    setSelectedSubstituteId(null);
+    setIsFreePeriodChoice(false);
+  };
+
+  // When modalTeacherId changes, load their scheduled periods for that day
+  useEffect(() => {
+    if (!modalTeacherId || modalFullDay) {
+      setModalPeriodsAvailable([]);
       return;
     }
-    setErrorMsg(null);
+    setLoadingModalPeriods(true);
+    getAbsentTeacherPeriodsAction(modalTeacherId, modalDate).then(res => {
+      if (res.success && res.periods.length > 0) {
+        const pNums = res.periods.map(p => p.period);
+        setModalPeriodsAvailable(pNums);
+        setModalSelectedPeriods(pNums);
+      } else {
+        setModalPeriodsAvailable([]);
+        setModalSelectedPeriods([]);
+      }
+      setLoadingModalPeriods(false);
+    });
+  }, [modalTeacherId, modalDate, modalFullDay]);
+
+  // STEP A: Submit Mark Absent
+  const handleSaveAbsence = async () => {
+    if (!modalTeacherId) {
+      setErrorMessage("Please select a teacher to mark absent.");
+      return;
+    }
+    setErrorMessage(null);
     startTransition(async () => {
       const res = await markTeacherAbsenceAction({
-        teacherId: absentTeacherId,
-        dateStr: selectedDate,
-        fullDay: isFullDay,
-        periodNumbers: isFullDay ? undefined : selectedPeriods,
-        reason: absenceReason
+        teacherId: modalTeacherId,
+        dateStr: modalDate,
+        fullDay: modalFullDay,
+        periodNumbers: !modalFullDay ? modalSelectedPeriods : undefined,
+        reason: modalReason
       });
 
       if (!res.success) {
-        setErrorMsg(res.error || "Failed to mark absence");
+        setErrorMessage(res.error || "Failed to mark absence.");
       } else {
-        setSuccessMsg(`Teacher marked absent. Generated ${res.createdCount} substitution requirement(s).`);
         setShowMarkModal(false);
-        setAbsentTeacherId("");
+        setActiveTeacherId(modalTeacherId);
+        setSelectedDate(modalDate);
+        setToastMessage(`Teacher marked absent. Now select periods and assign substitutes.`);
         await refreshData();
       }
     });
   };
 
-  // Assign substitute handler
-  const handleAssignCandidate = (subId: string, candTeacherId: string, note?: string) => {
-    setErrorMsg(null);
+  // STEP D: Execute Assignment
+  const handleExecuteAssign = () => {
+    if (selectedPeriodIds.length === 0) return;
+    if (!selectedSubstituteId && !isFreePeriodChoice) return;
+
+    setErrorMessage(null);
     startTransition(async () => {
-      const res = await assignSubstituteAction({
-        substitutionId: subId,
-        substituteTeacherId: candTeacherId,
-        note
+      const assignmentsPayload = selectedPeriodIds.map(slotId => ({
+        timetableEntryId: slotId,
+        substituteTeacherId: isFreePeriodChoice ? null : (individualAssignments[slotId] || selectedSubstituteId),
+        isFreePeriod: isFreePeriodChoice
+      }));
+
+      const res = await assignSubstitutesBatchAction({
+        dateStr: selectedDate,
+        absentTeacherId: activeTeacherId,
+        assignments: assignmentsPayload
       });
 
       if (!res.success) {
-        setErrorMsg(res.error || "Failed to assign substitute.");
+        setErrorMessage(res.error || "Failed to assign substitutes.");
       } else {
-        setSuccessMsg("Substitute assigned successfully!");
-        setActiveSlotId(null);
+        setShowConfirmModal(false);
+        const subName = isFreePeriodChoice
+          ? "Free Period (No substitute)"
+          : allTeachers.find(t => t.id === selectedSubstituteId)?.name || "Substitute Teacher";
+        setToastMessage(`Successfully assigned ${subName} to ${selectedPeriodIds.length} period(s)!`);
+        setLastAssignedBatch(selectedPeriodIds);
+        setSelectedPeriodIds([]);
+        setSelectedSubstituteId(null);
+        setIsFreePeriodChoice(false);
         await refreshData();
       }
     });
   };
 
-  // Auto assign all handler
-  const handleAutoAssignAll = () => {
-    setErrorMsg(null);
+  // Handle Undo Last Assignment
+  const handleUndoAssignment = async () => {
+    if (!lastAssignedBatch || lastAssignedBatch.length === 0) return;
     startTransition(async () => {
-      const res = await autoAssignAllSubstitutionsAction(selectedDate);
-      if (!res.success) {
-        setErrorMsg(res.error || "Auto-assign failed.");
-      } else {
-        setSuccessMsg(`Smart Scheduler auto-assigned ${res.count} substitution(s)!`);
+      const res = await undoSubstitutionAssignmentAction(lastAssignedBatch);
+      if (res.success) {
+        setToastMessage("Last substitution assignment undone.");
+        setLastAssignedBatch(null);
         await refreshData();
       }
     });
   };
 
-  // Cancel absence handler
-  const handleCancelAbsence = (absenceId: string) => {
-    if (!confirm("Are you sure you want to cancel this teacher absence? All associated substitutions will be reverted to the regular timetable.")) {
+  // Cancel Absence
+  const handleCancelCurrentAbsence = async (absenceId: string) => {
+    if (!confirm("Cancel this teacher absence? All associated substitutions will be reverted to the normal schedule.")) {
       return;
     }
     startTransition(async () => {
       const res = await cancelAbsenceAction(absenceId);
       if (!res.success) {
-        setErrorMsg(res.error || "Failed to cancel absence");
+        setErrorMessage(res.error || "Failed to cancel absence.");
       } else {
-        setSuccessMsg("Absence cancelled. Timetable slots reverted.");
+        setToastMessage("Absence cancelled. All schedule overlays reverted.");
         await refreshData();
       }
     });
   };
 
-  const absences = data.absences || [];
-  const substitutions = data.substitutions || [];
-  const unassignedCount = substitutions.filter(s => s.status !== "ASSIGNED" || !s.substituteTeacherId).length;
-  const assignedCount = substitutions.filter(s => s.status === "ASSIGNED" && s.substituteTeacherId).length;
+  // Filtered free teachers for search
+  const filteredFreeTeachers = useMemo(() => {
+    if (!teacherSearch.trim()) return freeTeachers;
+    const q = teacherSearch.toLowerCase();
+    return freeTeachers.filter(t =>
+      t.name.toLowerCase().includes(q) ||
+      t.subjects.some(s => s.toLowerCase().includes(q))
+    );
+  }, [freeTeachers, teacherSearch]);
+
+  const activeAbsentTeacherObj = allTeachers.find(t => t.id === activeTeacherId);
+  const selectedSubTeacherObj = allTeachers.find(t => t.id === selectedSubstituteId);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
-      {/* Alert / Notification banners */}
-      {errorMsg && (
-        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "0.875rem 1.25rem", borderRadius: "8px", border: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <AlertCircle size={18} />
-            <span>{errorMsg}</span>
-          </div>
-          <button onClick={() => setErrorMsg(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={16} /></button>
-        </div>
-      )}
-
-      {successMsg && (
-        <div style={{ background: "rgba(16, 185, 129, 0.1)", color: "#10b981", padding: "0.875rem 1.25rem", borderRadius: "8px", border: "1px solid rgba(16, 185, 129, 0.25)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+    <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* Toast Notification Alert */}
+      {toastMessage && (
+        <div style={{ background: "rgba(16, 185, 129, 0.12)", color: "#10b981", border: "1px solid rgba(16, 185, 129, 0.3)", borderRadius: "10px", padding: "0.85rem 1.25rem", marginBottom: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
             <CheckCircle size={18} />
-            <span>{successMsg}</span>
+            <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>{toastMessage}</span>
           </div>
-          <button onClick={() => setSuccessMsg(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={16} /></button>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            {lastAssignedBatch && (
+              <button
+                type="button"
+                onClick={handleUndoAssignment}
+                style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.3rem 0.65rem", borderRadius: "6px", border: "1px solid #10b981", background: "transparent", color: "#10b981", cursor: "pointer", fontSize: "0.78rem", fontWeight: 700 }}
+              >
+                <Undo2 size={13} /> Undo
+              </button>
+            )}
+            <button onClick={() => setToastMessage(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={16} /></button>
+          </div>
         </div>
       )}
 
-      {/* Top Controls: Date Selection & Action Buttons */}
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem", background: "var(--card-bg)", padding: "1.25rem", borderRadius: "12px", border: "1px solid var(--border-color)" }}>
+      {errorMessage && (
+        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", border: "1px solid var(--border-color)", borderRadius: "10px", padding: "0.85rem 1.25rem", marginBottom: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <AlertCircle size={18} />
+            <span style={{ fontSize: "0.9rem" }}>{errorMessage}</span>
+          </div>
+          <button onClick={() => setErrorMessage(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={16} /></button>
+        </div>
+      )}
+
+      {/* TOP CONTROLS: Date Selection & Mark Absent Button */}
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem", background: "var(--card-bg)", padding: "1.25rem", borderRadius: "12px", border: "1px solid var(--border-color)", marginBottom: "1.5rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-          <label style={{ fontSize: "0.875rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <CalendarIcon size={16} /> Select Date:
-          </label>
+          <span style={{ fontSize: "0.85rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem" }}>
+            <CalendarIcon size={16} /> Date:
+          </span>
           <input
             type="date"
             value={selectedDate}
             onChange={(e) => handleDateChange(e.target.value)}
             disabled={isPending}
-            style={{ padding: "0.6rem 0.85rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit" }}
+            style={{ padding: "0.55rem 0.85rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontWeight: 600 }}
           />
-          <button
-            type="button"
-            onClick={refreshData}
-            disabled={isPending}
-            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.6rem 0.85rem", background: "transparent", border: "1px solid var(--border-color)", borderRadius: "8px", cursor: "pointer", color: "inherit", fontSize: "0.85rem" }}
-          >
-            <RefreshCw size={14} className={isPending ? "animate-spin" : ""} /> Refresh
-          </button>
+          <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)", fontWeight: 600 }}>
+            ({formatSchoolDate(selectedDate)})
+          </span>
         </div>
 
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => setShowMarkModal(true)}
-            disabled={isPending}
-            style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.65rem 1.15rem", background: "var(--danger)", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem" }}
-          >
-            <UserX size={16} /> Mark Teacher Absent
-          </button>
-
-          {unassignedCount > 0 && (
-            <button
-              type="button"
-              onClick={handleAutoAssignAll}
-              disabled={isPending}
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.65rem 1.15rem", background: "var(--primary)", color: "var(--primary-fg)", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem" }}
-            >
-              <Sparkles size={16} /> Auto-Assign All ({unassignedCount})
-            </button>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setModalDate(selectedDate);
+            setModalTeacherId("");
+            setModalReason("Medical Leave");
+            setModalFullDay(true);
+            setErrorMessage(null);
+            setShowMarkModal(true);
+          }}
+          disabled={isPending}
+          style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", padding: "0.65rem 1.15rem", borderRadius: "8px", background: "var(--danger)", color: "#fff", border: "none", cursor: "pointer", fontWeight: 700, fontSize: "0.875rem" }}
+        >
+          <UserX size={16} /> Mark Teacher Absent
+        </button>
       </div>
 
-      {/* KPI Stats Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
-        <div style={{ background: "var(--card-bg)", padding: "1.25rem", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
-          <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 600 }}>Absent Teachers</div>
-          <div style={{ fontSize: "1.75rem", fontWeight: 700, marginTop: "0.25rem", color: absences.length > 0 ? "var(--danger)" : "var(--text-primary)" }}>
-            {absences.length}
-          </div>
-          <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
-            {absences.length === 0 ? "All faculty available" : "Requires duty coverage"}
-          </div>
-        </div>
+      {/* MAIN TWO-COLUMN WORKFLOW AREA (Periods on Left, Free Teachers on Right) */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: "1.5rem", alignItems: "start" }}>
 
-        <div style={{ background: "var(--card-bg)", padding: "1.25rem", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
-          <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 600 }}>Affected Periods</div>
-          <div style={{ fontSize: "1.75rem", fontWeight: 700, marginTop: "0.25rem" }}>
-            {substitutions.length}
-          </div>
-          <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
-            Class sessions needing coverage
-          </div>
-        </div>
+        {/* LEFT COLUMN: Absent Teacher's Periods Checklist */}
+        <div style={{ background: "var(--card-bg)", borderRadius: "14px", border: "1px solid var(--border-color)", padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
 
-        <div style={{ background: "var(--card-bg)", padding: "1.25rem", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
-          <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 600 }}>Pending Assignment</div>
-          <div style={{ fontSize: "1.75rem", fontWeight: 700, marginTop: "0.25rem", color: unassignedCount > 0 ? "#f59e0b" : "var(--success)" }}>
-            {unassignedCount}
-          </div>
-          <div style={{ fontSize: "0.75rem", color: unassignedCount > 0 ? "#f59e0b" : "var(--text-secondary)", marginTop: "0.25rem" }}>
-            {unassignedCount > 0 ? "Action required" : "All slots covered!"}
-          </div>
-        </div>
-
-        <div style={{ background: "var(--card-bg)", padding: "1.25rem", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
-          <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 600 }}>Substitutions Assigned</div>
-          <div style={{ fontSize: "1.75rem", fontWeight: 700, marginTop: "0.25rem", color: "var(--success)" }}>
-            {assignedCount}
-          </div>
-          <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
-            Active duty assignments
-          </div>
-        </div>
-      </div>
-
-      {/* Absent Teachers List */}
-      {absences.length > 0 && (
-        <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", padding: "1.25rem" }}>
-          <h3 style={{ fontSize: "1rem", fontWeight: 600, margin: 0, marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <UserX size={18} style={{ color: "var(--danger)" }} />
-            Absent Teachers on {selectedDate}
-          </h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {absences.map(abs => (
-              <div
-                key={abs.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  flexWrap: "wrap",
-                  gap: "0.75rem",
-                  padding: "0.85rem 1rem",
-                  borderRadius: "8px",
-                  background: "rgba(239, 68, 68, 0.05)",
-                  border: "1px solid rgba(239, 68, 68, 0.2)"
-                }}
+          {/* Header & Absent Teacher Selector */}
+          <div>
+            <label style={{ display: "block", fontSize: "0.8rem", color: "var(--text-secondary)", fontWeight: 600, marginBottom: "0.35rem" }}>
+              Viewing Absent Teacher:
+            </label>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+              <select
+                value={activeTeacherId}
+                onChange={(e) => setActiveTeacherId(e.target.value)}
+                style={{ flex: 1, minWidth: "220px", padding: "0.6rem 0.85rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontWeight: 700, fontSize: "0.92rem" }}
               >
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: "0.95rem" }}>{abs.teacherName}</div>
-                  <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.2rem" }}>
-                    Reason: <span style={{ color: "var(--text-primary)" }}>{abs.reason || "Not specified"}</span>
-                    {" • "}
-                    Duration: <span style={{ fontWeight: 500 }}>{abs.fullDay ? "Full Day" : `Periods: ${abs.periodNumbers || "Partial"}`}</span>
-                  </div>
-                </div>
+                <option value="">-- Choose Absent Teacher --</option>
+                {allTeachers.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} {data?.absences?.some((a: any) => a.teacherId === t.id) ? "⚠️ (Marked Absent)" : ""}
+                  </option>
+                ))}
+              </select>
+
+              {currentAbsence && (
                 <button
                   type="button"
-                  onClick={() => handleCancelAbsence(abs.id)}
+                  onClick={() => handleCancelCurrentAbsence(currentAbsence.id)}
                   disabled={isPending}
-                  style={{
-                    padding: "0.4rem 0.85rem",
-                    background: "transparent",
-                    color: "var(--danger)",
-                    border: "1px solid var(--danger)",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "0.78rem",
-                    fontWeight: 600
-                  }}
+                  style={{ padding: "0.55rem 0.85rem", borderRadius: "8px", border: "1px solid var(--danger)", background: "transparent", color: "var(--danger)", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600 }}
+                  title="Cancel absence and restore timetable"
                 >
-                  Cancel Absence (Revert Slots)
+                  Cancel Absence
                 </button>
+              )}
+            </div>
+
+            {currentAbsence && (
+              <div style={{ marginTop: "0.6rem", padding: "0.6rem 0.85rem", borderRadius: "8px", background: "rgba(239, 68, 68, 0.08)", border: "1px solid rgba(239, 68, 68, 0.2)", fontSize: "0.8rem" }}>
+                <div><strong>Reason:</strong> {currentAbsence.reason || "Not specified"}</div>
+                <div><strong>Scope:</strong> {currentAbsence.fullDay ? "Full Day" : `Periods: ${currentAbsence.periodNumbers || "Partial"}`}</div>
               </div>
-            ))}
+            )}
+          </div>
+
+          {/* Periods List & Checklist Controls */}
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+              <div style={{ fontSize: "0.95rem", fontWeight: 700 }}>
+                Periods on {formatSchoolDate(selectedDate)}
+                {teacherPeriods.length > 0 && ` (${teacherPeriods.length})`}
+              </div>
+
+              {teacherPeriods.length > 0 && (
+                <div style={{ display: "flex", gap: "0.4rem" }}>
+                  <button
+                    type="button"
+                    onClick={handleSelectAll}
+                    style={{ padding: "0.3rem 0.65rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "transparent", color: "inherit", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600 }}
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearAll}
+                    style={{ padding: "0.3rem 0.65rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "transparent", color: "inherit", cursor: "pointer", fontSize: "0.75rem" }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Selection Counter */}
+            {selectedPeriodIds.length > 0 && (
+              <div style={{ background: "rgba(99, 102, 241, 0.1)", border: "1px solid rgba(99, 102, 241, 0.25)", color: "var(--primary)", padding: "0.45rem 0.75rem", borderRadius: "8px", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.75rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>✓ {selectedPeriodIds.length} period(s) selected for coverage</span>
+                <span>Select a free teacher on the right →</span>
+              </div>
+            )}
+
+            {/* Period Cards */}
+            {loadingPeriods ? (
+              <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+                <Loader2 size={20} className="animate-spin" style={{ margin: "0 auto 0.5rem" }} />
+                Loading periods...
+              </div>
+            ) : !activeTeacherId ? (
+              <div style={{ padding: "2.5rem 1rem", textAlign: "center", color: "var(--text-secondary)", border: "1px dashed var(--border-color)", borderRadius: "10px" }}>
+                <UserX size={32} style={{ opacity: 0.3, margin: "0 auto 0.5rem" }} />
+                <p style={{ margin: 0 }}>Please select an absent teacher above.</p>
+              </div>
+            ) : teacherPeriods.length === 0 ? (
+              <div style={{ padding: "2.5rem 1rem", textAlign: "center", color: "var(--text-secondary)", border: "1px dashed var(--border-color)", borderRadius: "10px" }}>
+                <CheckCircle size={32} style={{ opacity: 0.3, margin: "0 auto 0.5rem", color: "var(--success)" }} />
+                <p style={{ margin: 0, fontWeight: 600, color: "var(--text-primary)" }}>No classes on this day</p>
+                <p style={{ fontSize: "0.8rem", margin: "0.25rem 0 0 0" }}>This teacher has no scheduled periods on this day of the week.</p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                {teacherPeriods.map(p => {
+                  const isChecked = selectedPeriodIds.includes(p.timetableEntryId);
+                  const isAssigned = p.status === "ASSIGNED" && p.substituteTeacherName;
+                  const isFree = p.status === "FREE_PERIOD";
+
+                  return (
+                    <div
+                      key={p.timetableEntryId}
+                      onClick={() => togglePeriodSelection(p.timetableEntryId)}
+                      style={{
+                        padding: "0.85rem",
+                        borderRadius: "10px",
+                        border: isChecked ? "2px solid var(--primary)" : "1px solid var(--border-color)",
+                        background: isChecked ? "rgba(99, 102, 241, 0.05)" : "var(--background)",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.85rem",
+                        transition: "all 0.15s ease"
+                      }}
+                    >
+                      {/* Big touch target checkbox */}
+                      <div style={{ width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", color: isChecked ? "var(--primary)" : "var(--text-secondary)" }}>
+                        {isChecked ? <CheckSquare size={22} /> : <Square size={22} />}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 700, fontSize: "0.95rem" }}>
+                            Period {p.period}: {p.subjectName}
+                          </span>
+                          <span style={{ fontSize: "0.75rem", padding: "0.15rem 0.5rem", borderRadius: "999px", background: "var(--card-bg)", border: "1px solid var(--border-color)", color: "var(--primary)", fontWeight: 600 }}>
+                            {p.className}
+                          </span>
+                        </div>
+
+                        <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.2rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                            <Clock size={12} /> {p.startTime} - {p.endTime}
+                          </span>
+                          {p.classroom && (
+                            <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                              <MapPin size={12} /> {p.classroom}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Status Label */}
+                        <div style={{ marginTop: "0.35rem" }}>
+                          {isAssigned ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.2rem 0.55rem", borderRadius: "6px", background: "rgba(16, 185, 129, 0.12)", color: "#10b981", fontSize: "0.75rem", fontWeight: 700 }}>
+                              <UserCheck size={12} /> Assigned to {p.substituteTeacherName}
+                            </span>
+                          ) : isFree ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.2rem 0.55rem", borderRadius: "6px", background: "rgba(107, 114, 128, 0.15)", color: "var(--text-secondary)", fontSize: "0.75rem", fontWeight: 600 }}>
+                              No substitute (Free Period)
+                            </span>
+                          ) : (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.2rem 0.55rem", borderRadius: "6px", background: "rgba(245, 158, 11, 0.12)", color: "#d97706", fontSize: "0.75rem", fontWeight: 600 }}>
+                              <AlertCircle size={12} /> Not assigned
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Free Teachers Pick & Assign Panel */}
+        <div style={{ background: "var(--card-bg)", borderRadius: "14px", border: "1px solid var(--border-color)", padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700 }}>
+              Available Free Teachers
+            </h3>
+            <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+              {selectedPeriodIds.length === 0
+                ? "Tick one or more periods on the left to see free teachers."
+                : `Showing teachers free during Period(s): ${selectedPeriodNumbers.join(", ")}`}
+            </p>
+          </div>
+
+          {/* Search & Toggle: Free in ALL vs ANY period */}
+          {selectedPeriodIds.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+              <div style={{ position: "relative" }}>
+                <Search size={15} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)" }} />
+                <input
+                  type="text"
+                  placeholder="Search free teachers by name or subject..."
+                  value={teacherSearch}
+                  onChange={(e) => setTeacherSearch(e.target.value)}
+                  style={{ width: "100%", padding: "0.55rem 0.85rem 0.55rem 2.2rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.85rem" }}
+                />
+              </div>
+
+              {selectedPeriodIds.length > 1 && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--input-bg)", padding: "0.45rem 0.75rem", borderRadius: "8px" }}>
+                  <span style={{ fontSize: "0.78rem", fontWeight: 600 }}>
+                    {matchAllPeriods ? "Showing teachers free in ALL selected periods" : "Showing teachers free in ANY selected period"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setMatchAllPeriods(!matchAllPeriods)}
+                    style={{ background: "none", border: "none", color: "var(--primary)", cursor: "pointer", fontSize: "0.78rem", fontWeight: 700, textDecoration: "underline" }}
+                  >
+                    {matchAllPeriods ? "Show partial matches" : "Require all periods"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Option: No Substitute (Free Period) */}
+          {selectedPeriodIds.length > 0 && (
+            <div
+              onClick={() => {
+                setIsFreePeriodChoice(true);
+                setSelectedSubstituteId(null);
+              }}
+              style={{
+                padding: "0.75rem 1rem",
+                borderRadius: "8px",
+                border: isFreePeriodChoice ? "2px solid var(--primary)" : "1px dashed var(--border-color)",
+                background: isFreePeriodChoice ? "rgba(99, 102, 241, 0.08)" : "transparent",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between"
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>Mark as Free Period</div>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>No teacher will be assigned to cover these period(s)</div>
+              </div>
+              <div style={{ width: "20px", height: "20px", borderRadius: "50%", border: isFreePeriodChoice ? "5px solid var(--primary)" : "2px solid var(--border-color)" }} />
+            </div>
+          )}
+
+          {/* Teacher List */}
+          {selectedPeriodIds.length === 0 ? (
+            <div style={{ padding: "3rem 1rem", textAlign: "center", color: "var(--text-secondary)" }}>
+              <Clock size={36} style={{ opacity: 0.25, margin: "0 auto 0.75rem" }} />
+              <p style={{ margin: 0, fontWeight: 600 }}>No periods selected yet</p>
+              <p style={{ fontSize: "0.8rem", margin: "0.25rem 0 0 0" }}>Check one or more period cards on the left to reveal available free teachers.</p>
+            </div>
+          ) : loadingFreeTeachers ? (
+            <div style={{ padding: "2.5rem", textAlign: "center", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+              <Loader2 size={20} className="animate-spin" style={{ margin: "0 auto 0.5rem" }} />
+              Checking teacher schedules and absences...
+            </div>
+          ) : filteredFreeTeachers.length === 0 ? (
+            <div style={{ padding: "2.5rem 1rem", textAlign: "center", color: "var(--text-secondary)", border: "1px dashed var(--border-color)", borderRadius: "10px" }}>
+              <p style={{ margin: 0, fontWeight: 600, color: "var(--text-primary)" }}>No free teachers found</p>
+              <p style={{ fontSize: "0.8rem", margin: "0.25rem 0 0 0" }}>
+                All faculty are either teaching their own classes or on leave during these period(s). You can mark as Free Period above.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "420px", overflowY: "auto" }}>
+              {filteredFreeTeachers.map(teacher => {
+                const isSelected = selectedSubstituteId === teacher.id && !isFreePeriodChoice;
+
+                return (
+                  <div
+                    key={teacher.id}
+                    onClick={() => {
+                      setSelectedSubstituteId(teacher.id);
+                      setIsFreePeriodChoice(false);
+                    }}
+                    style={{
+                      padding: "0.75rem 1rem",
+                      borderRadius: "8px",
+                      border: isSelected ? "2px solid var(--primary)" : "1px solid var(--border-color)",
+                      background: isSelected ? "rgba(99, 102, 241, 0.08)" : "var(--background)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      transition: "all 0.15s ease"
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                      <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "var(--primary)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "0.85rem", flexShrink: 0 }}>
+                        {teacher.name.charAt(0)}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{teacher.name}</div>
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                          {teacher.subjects.join(", ") || "Faculty"}
+                        </div>
+                        <div style={{ fontSize: "0.7rem", color: "#10b981", fontWeight: 600, marginTop: "0.1rem" }}>
+                          ✓ Free in Period: {teacher.freeInPeriods.join(", ")}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ width: "20px", height: "20px", borderRadius: "50%", border: isSelected ? "5px solid var(--primary)" : "2px solid var(--border-color)", flexShrink: 0 }} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* STEP D: Final Assign Button */}
+          <div style={{ marginTop: "auto", paddingTop: "1rem", borderTop: "1px solid var(--border-color)" }}>
+            <button
+              type="button"
+              onClick={() => setShowConfirmModal(true)}
+              disabled={isPending || selectedPeriodIds.length === 0 || (!selectedSubstituteId && !isFreePeriodChoice)}
+              style={{
+                width: "100%",
+                padding: "0.75rem",
+                borderRadius: "8px",
+                border: "none",
+                background: selectedPeriodIds.length > 0 && (selectedSubstituteId || isFreePeriodChoice) ? "var(--primary)" : "rgba(107, 114, 128, 0.3)",
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: "0.92rem",
+                cursor: selectedPeriodIds.length > 0 && (selectedSubstituteId || isFreePeriodChoice) ? "pointer" : "not-allowed",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.5rem"
+              }}
+            >
+              {isPending ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />}
+              Assign Substitute ({selectedPeriodIds.length} Period{selectedPeriodIds.length === 1 ? "" : "s"})
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* CONFIRMATION SUMMARY DIALOG */}
+      {showConfirmModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "var(--card-bg)", borderRadius: "14px", border: "1px solid var(--border-color)", width: "100%", maxWidth: "480px", padding: "1.5rem", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700 }}>
+                Confirm Substitution Assignment
+              </h3>
+              <button onClick={() => setShowConfirmModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={18} /></button>
+            </div>
+
+            <div style={{ fontSize: "0.9rem", color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: "1.25rem" }}>
+              Are you sure you want to assign{" "}
+              <strong style={{ color: "var(--text-primary)" }}>
+                {isFreePeriodChoice ? "Free Period (No substitute)" : selectedSubTeacherObj?.name}
+              </strong>{" "}
+              to cover the following periods on{" "}
+              <strong style={{ color: "var(--text-primary)" }}>{formatSchoolDate(selectedDate)}</strong>?
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", background: "var(--input-bg)", padding: "0.75rem", borderRadius: "8px", maxHeight: "160px", overflowY: "auto", marginBottom: "1.25rem" }}>
+              {teacherPeriods.filter(p => selectedPeriodIds.includes(p.timetableEntryId)).map(p => (
+                <div key={p.timetableEntryId} style={{ fontSize: "0.82rem", fontWeight: 600 }}>
+                  • Period {p.period} ({p.startTime} - {p.endTime}): {p.subjectName} ({p.className})
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                style={{ padding: "0.55rem 1rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "transparent", color: "inherit", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteAssign}
+                disabled={isPending}
+                style={{ padding: "0.55rem 1.25rem", borderRadius: "8px", border: "none", background: "var(--primary)", color: "var(--primary-fg)", fontWeight: 700, cursor: "pointer" }}
+              >
+                {isPending ? "Assigning..." : "Confirm & Save"}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Substitution Grid / Cards */}
-      <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", overflow: "hidden" }}>
-        <div style={{ padding: "1.25rem", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 600 }}>Affected Periods & Substitutions</h3>
-            <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)", marginTop: "0.2rem" }}>
-              Every assigned substitute immediately receives schedule updates on their dashboard and parent portal.
-            </p>
-          </div>
-        </div>
-
-        {substitutions.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "4rem 1rem", color: "var(--text-secondary)" }}>
-            <CheckCircle size={48} style={{ opacity: 0.3, margin: "0 auto 1rem", color: "var(--success)" }} />
-            <p style={{ fontWeight: 600, fontSize: "1.1rem", marginBottom: "0.5rem", color: "var(--text-primary)" }}>
-              No substitutions needed for this date
-            </p>
-            <p style={{ fontSize: "0.875rem" }}>
-              All teachers are scheduled normally or no teachers have been marked absent.
-            </p>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            {substitutions.map(sub => {
-              const isAssigned = sub.status === "ASSIGNED" && sub.substituteTeacherId;
-
-              return (
-                <div
-                  key={sub.id}
-                  style={{
-                    padding: "1.25rem",
-                    borderBottom: "1px solid var(--border-color)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.75rem",
-                    background: isAssigned ? "transparent" : "rgba(245, 158, 11, 0.03)"
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.75rem" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                      <div
-                        style={{
-                          width: "44px",
-                          height: "44px",
-                          borderRadius: "10px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontWeight: 700,
-                          fontSize: "1rem",
-                          background: isAssigned ? "rgba(16, 185, 129, 0.12)" : "rgba(245, 158, 11, 0.15)",
-                          color: isAssigned ? "var(--success)" : "#d97706"
-                        }}
-                      >
-                        P{sub.period}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: "1rem" }}>
-                          {sub.subjectName} • <span style={{ color: "var(--primary)" }}>{sub.className}</span>
-                        </div>
-                        <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "0.3rem", marginTop: "0.15rem" }}>
-                          <Clock size={12} /> {sub.startTime} - {sub.endTime}
-                          {" • "}
-                          <span>Original: <strong style={{ color: "var(--text-primary)" }}>{sub.absentTeacherName}</strong></span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                      {isAssigned ? (
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.35rem 0.75rem", borderRadius: "999px", background: "rgba(16, 185, 129, 0.12)", color: "var(--success)", fontSize: "0.8rem", fontWeight: 600 }}>
-                          <UserCheck size={14} /> Assigned: {sub.substituteTeacherName}
-                        </div>
-                      ) : (
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.35rem 0.75rem", borderRadius: "999px", background: "rgba(245, 158, 11, 0.15)", color: "#d97706", fontSize: "0.8rem", fontWeight: 600 }}>
-                          <AlertCircle size={14} /> Unassigned
-                        </div>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => handleOpenCandidates(sub.id)}
-                        disabled={isPending}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.4rem",
-                          padding: "0.45rem 0.85rem",
-                          borderRadius: "6px",
-                          border: "1px solid var(--border-color)",
-                          background: "var(--card-bg)",
-                          color: "inherit",
-                          cursor: "pointer",
-                          fontSize: "0.82rem",
-                          fontWeight: 500
-                        }}
-                      >
-                        {isAssigned ? "Change Substitute" : "Assign Substitute"} <ChevronRight size={14} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {sub.note && (
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontStyle: "italic", paddingLeft: "3.5rem" }}>
-                      Note: {sub.note}
-                    </div>
-                  )}
-
-                  {/* Inline Candidate Selection Box if active */}
-                  {activeSlotId === sub.id && (
-                    <div style={{ marginTop: "0.5rem", padding: "1rem", borderRadius: "8px", background: "rgba(0,0,0,0.03)", border: "1px dashed var(--border-color)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-                        <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>
-                          Smart Candidate Recommendations for Period {sub.period} ({sub.subjectName}):
-                        </span>
-                        <button onClick={() => setActiveSlotId(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}>
-                          <X size={16} />
-                        </button>
-                      </div>
-
-                      {loadingCandidates ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--text-secondary)", fontSize: "0.85rem", padding: "1rem" }}>
-                          <Loader2 size={16} className="animate-spin" /> Calculating free teachers and match scores...
-                        </div>
-                      ) : candidateError ? (
-                        <div style={{ color: "var(--danger)", fontSize: "0.85rem" }}>{candidateError}</div>
-                      ) : candidateList.length === 0 ? (
-                        <div style={{ color: "var(--text-secondary)", fontSize: "0.85rem" }}>
-                          No free teachers found for this period. You can manually assign any teacher below.
-                        </div>
-                      ) : (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "0.75rem" }}>
-                          {candidateList.slice(0, 6).map(cand => (
-                            <div
-                              key={cand.teacherId}
-                              style={{
-                                padding: "0.85rem",
-                                borderRadius: "8px",
-                                background: "var(--card-bg)",
-                                border: "1px solid var(--border-color)",
-                                display: "flex",
-                                flexDirection: "column",
-                                justifyContent: "space-between",
-                                gap: "0.5rem"
-                              }}
-                            >
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                                <div>
-                                  <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{cand.teacherName}</div>
-                                  <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                                    {cand.subjectsTaught.join(", ") || "General Faculty"}
-                                  </div>
-                                </div>
-                                <span
-                                  style={{
-                                    fontSize: "0.7rem",
-                                    fontWeight: 700,
-                                    padding: "0.2rem 0.5rem",
-                                    borderRadius: "4px",
-                                    background:
-                                      cand.matchBadge === "Best Match"
-                                        ? "rgba(16, 185, 129, 0.15)"
-                                        : cand.matchBadge === "Subject Specialist"
-                                          ? "rgba(99, 102, 241, 0.15)"
-                                          : "rgba(107, 114, 128, 0.15)",
-                                    color:
-                                      cand.matchBadge === "Best Match"
-                                        ? "var(--success)"
-                                        : cand.matchBadge === "Subject Specialist"
-                                          ? "var(--primary)"
-                                          : "var(--text-secondary)"
-                                  }}
-                                >
-                                  {cand.matchBadge}
-                                </span>
-                              </div>
-
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.25rem", paddingTop: "0.5rem", borderTop: "1px solid var(--border-color)" }}>
-                                <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                                  Today: {cand.periodsToday} periods
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleAssignCandidate(sub.id, cand.teacherId, `Covering for ${sub.absentTeacherName}`)}
-                                  disabled={isPending}
-                                  style={{
-                                    padding: "0.35rem 0.75rem",
-                                    background: "var(--primary)",
-                                    color: "var(--primary-fg)",
-                                    border: "none",
-                                    borderRadius: "5px",
-                                    cursor: "pointer",
-                                    fontSize: "0.78rem",
-                                    fontWeight: 600
-                                  }}
-                                >
-                                  Assign
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Manual Teacher Fallback Selector */}
-                      <div style={{ marginTop: "1rem", paddingTop: "0.75rem", borderTop: "1px solid var(--border-color)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>Or choose manually:</span>
-                        <select
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              handleAssignCandidate(sub.id, e.target.value, `Covering for ${sub.absentTeacherName}`);
-                            }
-                          }}
-                          defaultValue=""
-                          style={{ padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.8rem" }}
-                        >
-                          <option value="">-- Select Any Teacher --</option>
-                          {allTeachers.filter(t => t.id !== sub.absentTeacherId).map(t => (
-                            <option key={t.id} value={t.id}>{t.name} ({t.subjects.join(", ") || "Teacher"})</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Mark Teacher Absent Dialog */}
+      {/* STEP A: MARK TEACHER ABSENT DIALOG */}
       {showMarkModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-          <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", width: "100%", maxWidth: "500px", padding: "1.5rem", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)" }}>
+          <div style={{ background: "var(--card-bg)", borderRadius: "14px", border: "1px solid var(--border-color)", width: "100%", maxWidth: "500px", maxHeight: "90vh", overflowY: "auto", padding: "1.5rem", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
               <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <UserX size={20} style={{ color: "var(--danger)" }} /> Mark Teacher Absent
               </h3>
-              <button onClick={() => setShowMarkModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}>
-                <X size={20} />
-              </button>
+              <button onClick={() => setShowMarkModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={18} /></button>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {/* Teacher Selector with Search */}
               <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.35rem" }}>Select Absent Teacher *</label>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.35rem" }}>
+                  Absent Teacher *
+                </label>
                 <select
-                  value={absentTeacherId}
-                  onChange={(e) => setAbsentTeacherId(e.target.value)}
-                  style={{ width: "100%", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.9rem" }}
+                  value={modalTeacherId}
+                  onChange={(e) => setModalTeacherId(e.target.value)}
+                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontWeight: 600, fontSize: "0.9rem" }}
                 >
-                  <option value="">-- Choose Teacher --</option>
+                  <option value="">-- Choose Absent Teacher --</option>
                   {allTeachers.map(t => (
-                    <option key={t.id} value={t.id}>{t.name} ({t.subjects.join(", ") || "Faculty"})</option>
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.subjects.join(", ") || "Faculty"})
+                    </option>
                   ))}
                 </select>
               </div>
 
+              {/* Absence Date */}
               <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.35rem" }}>Absence Date</label>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.35rem" }}>
+                  Absence Date: <span style={{ color: "var(--primary)" }}>{formatSchoolDate(modalDate)}</span>
+                </label>
                 <input
                   type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  style={{ width: "100%", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.9rem" }}
+                  value={modalDate}
+                  onChange={(e) => setModalDate(e.target.value)}
+                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.9rem" }}
                 />
               </div>
 
+              {/* Reason */}
               <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.35rem" }}>Reason for Absence</label>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.35rem" }}>
+                  Reason for Absence
+                </label>
                 <select
-                  value={absenceReason}
-                  onChange={(e) => setAbsenceReason(e.target.value)}
-                  style={{ width: "100%", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.9rem" }}
+                  value={modalReason}
+                  onChange={(e) => setModalReason(e.target.value)}
+                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.9rem" }}
                 >
                   <option value="Medical Leave">Medical Leave / Sick Leave</option>
                   <option value="Personal Emergency">Personal Emergency</option>
@@ -644,79 +845,93 @@ export default function SubstitutionClient({
                 </select>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              {/* Full Day Checkbox */}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
                 <input
                   type="checkbox"
-                  id="fullDayCb"
-                  checked={isFullDay}
-                  onChange={(e) => setIsFullDay(e.target.checked)}
+                  id="modalFullDayCb"
+                  checked={modalFullDay}
+                  onChange={(e) => setModalFullDay(e.target.checked)}
+                  style={{ width: "16px", height: "16px" }}
                 />
-                <label htmlFor="fullDayCb" style={{ fontSize: "0.875rem", cursor: "pointer", fontWeight: 500 }}>
-                  Full day absence (All periods on this date)
+                <label htmlFor="modalFullDayCb" style={{ fontSize: "0.875rem", fontWeight: 600, cursor: "pointer" }}>
+                  Full day absence (all scheduled periods on this day)
                 </label>
               </div>
 
-              {!isFullDay && (
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>Select Affected Periods:</label>
-                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map(p => {
-                      const isSel = selectedPeriods.includes(p);
-                      return (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => {
-                            if (isSel) setSelectedPeriods(prev => prev.filter(x => x !== p));
-                            else setSelectedPeriods(prev => [...prev, p]);
-                          }}
-                          style={{
-                            padding: "0.4rem 0.75rem",
-                            borderRadius: "6px",
-                            border: "1px solid var(--border-color)",
-                            background: isSel ? "var(--primary)" : "var(--card-bg)",
-                            color: isSel ? "var(--primary-fg)" : "inherit",
-                            cursor: "pointer",
-                            fontSize: "0.8rem",
-                            fontWeight: 600
-                          }}
-                        >
-                          P{p}
-                        </button>
-                      );
-                    })}
-                  </div>
+              {/* If Full Day is Unchecked: Show Teacher's Periods as Checkboxes */}
+              {!modalFullDay && (
+                <div style={{ background: "var(--input-bg)", padding: "0.85rem", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, marginBottom: "0.4rem" }}>
+                    Select Affected Periods for this date:
+                  </label>
+                  {loadingModalPeriods ? (
+                    <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Loading scheduled periods...</div>
+                  ) : modalPeriodsAvailable.length === 0 ? (
+                    <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                      {modalTeacherId ? "No classes scheduled for this teacher on this day." : "Select a teacher first."}
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                      {modalPeriodsAvailable.map(p => {
+                        const isChecked = modalSelectedPeriods.includes(p);
+                        return (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => {
+                              setModalSelectedPeriods(prev =>
+                                prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
+                              );
+                            }}
+                            style={{
+                              padding: "0.4rem 0.75rem",
+                              borderRadius: "6px",
+                              border: isChecked ? "1px solid var(--primary)" : "1px solid var(--border-color)",
+                              background: isChecked ? "var(--primary)" : "var(--card-bg)",
+                              color: isChecked ? "var(--primary-fg)" : "inherit",
+                              cursor: "pointer",
+                              fontSize: "0.82rem",
+                              fontWeight: 700
+                            }}
+                          >
+                            Period {p}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
-              <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end", marginTop: "1rem" }}>
+              {/* Action Buttons */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.6rem", marginTop: "0.5rem" }}>
                 <button
                   type="button"
                   onClick={() => setShowMarkModal(false)}
-                  disabled={isPending}
-                  style={{ padding: "0.65rem 1.15rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "transparent", color: "inherit", cursor: "pointer" }}
+                  style={{ padding: "0.65rem 1rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "transparent", color: "inherit", cursor: "pointer" }}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={handleMarkAbsence}
-                  disabled={isPending || !absentTeacherId}
+                  onClick={handleSaveAbsence}
+                  disabled={isPending || !modalTeacherId}
                   style={{
                     padding: "0.65rem 1.25rem",
                     borderRadius: "8px",
                     border: "none",
                     background: "var(--danger)",
                     color: "#fff",
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
-                    gap: "0.5rem"
+                    gap: "0.45rem"
                   }}
                 >
                   {isPending ? <Loader2 size={16} className="animate-spin" /> : <UserX size={16} />}
-                  Mark Absent & Compute Duties
+                  Mark Absent &amp; Continue
                 </button>
               </div>
             </div>

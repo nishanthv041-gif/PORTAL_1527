@@ -4,10 +4,6 @@ import { prisma } from "@/backend/db/prisma";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { revalidatePath } from "next/cache";
-import { analyzeTimetableConflicts } from "@/backend/lib/timetable/timetableConflictEngine";
-import { solveTimetableSlots } from "@/backend/lib/timetable/timetableSolver";
-import { calculateTeacherLoads, calculateSubjectSummaries } from "@/backend/lib/timetable/timetableCalculations";
-import type { TimetableSlotEntry, PeriodSlotData } from "@/backend/lib/timetable/timetableTypes";
 
 export async function createTimetableSlotAction(formData: FormData) {
   const session = await getServerSession(getAuthOptions());
@@ -23,7 +19,7 @@ export async function createTimetableSlotAction(formData: FormData) {
   const classroom = formData.get("classroom") as string;
   const isBreak = formData.get("isBreak") === "true";
   const slotType = (formData.get("slotType") as string) || (isBreak ? "BREAK" : "LESSON");
-  const status = (formData.get("status") as string) || "PUBLISHED";
+  const status = (formData.get("status") as string) || "DRAFT";
 
   if (!classId || !dayOfWeek || isNaN(period) || (!isBreak && !subjectId)) {
     return { error: "Missing required fields." };
@@ -126,6 +122,8 @@ export async function deleteTimetableSlotAction(id: string) {
     revalidatePath("/dashboard/admin/timetable");
     revalidatePath("/dashboard/parent/timetable");
     revalidatePath("/dashboard/teacher/timetable");
+    revalidatePath("/dashboard/teacher");
+    revalidatePath("/dashboard/parent");
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -149,7 +147,7 @@ export async function bulkCreateTimetableSlotsAction(
     slotType?: string;
     status?: string;
   }>,
-  publishStatus: "DRAFT" | "PUBLISHED" = "PUBLISHED"
+  publishStatus: "DRAFT" | "PUBLISHED" = "DRAFT"
 ) {
   const session = await getServerSession(getAuthOptions());
   const userId = session?.user?.id || "admin";
@@ -255,6 +253,89 @@ export async function bulkCreateTimetableSlotsAction(
   }
 }
 
+/**
+ * PART 3: ONE button "Publish All".
+ * Publishes every class timetable in a single action. Never blocked.
+ */
+export async function publishAllTimetablesAction() {
+  const session = await getServerSession(getAuthOptions());
+  const userId = session?.user?.id || "admin";
+
+  if (!session || session.user.role !== "ADMIN") {
+    return { success: false, error: "Unauthorized: Admin access required." };
+  }
+
+  try {
+    const updated = await prisma.timetable.updateMany({
+      data: { status: "PUBLISHED" }
+    });
+
+    const now = new Date();
+    await prisma.timetableAudit.create({
+      data: {
+        action: "PUBLISH_ALL",
+        userId,
+        details: `Published all ${updated.count} timetable slots school-wide on ${now.toISOString()}`
+      }
+    }).catch(err => console.warn("Audit log warning:", err));
+
+    revalidatePath("/dashboard/admin/timetable");
+    revalidatePath("/dashboard/parent/timetable");
+    revalidatePath("/dashboard/teacher/timetable");
+    revalidatePath("/dashboard/teacher");
+    revalidatePath("/dashboard/parent");
+
+    return {
+      success: true,
+      count: updated.count,
+      publishedAt: now.toISOString()
+    };
+  } catch (error: any) {
+    console.error("publishAllTimetablesAction error:", error);
+    return { success: false, error: error.message || "Failed to publish all timetables." };
+  }
+}
+
+/**
+ * Unpublish option: sets all slots back to DRAFT
+ */
+export async function unpublishAllTimetablesAction() {
+  const session = await getServerSession(getAuthOptions());
+  const userId = session?.user?.id || "admin";
+
+  if (!session || session.user.role !== "ADMIN") {
+    return { success: false, error: "Unauthorized: Admin access required." };
+  }
+
+  try {
+    const updated = await prisma.timetable.updateMany({
+      data: { status: "DRAFT" }
+    });
+
+    await prisma.timetableAudit.create({
+      data: {
+        action: "UNPUBLISH_ALL",
+        userId,
+        details: `Unpublished all ${updated.count} timetable slots school-wide.`
+      }
+    }).catch(err => console.warn("Audit log warning:", err));
+
+    revalidatePath("/dashboard/admin/timetable");
+    revalidatePath("/dashboard/parent/timetable");
+    revalidatePath("/dashboard/teacher/timetable");
+    revalidatePath("/dashboard/teacher");
+    revalidatePath("/dashboard/parent");
+
+    return { success: true, count: updated.count };
+  } catch (error: any) {
+    console.error("unpublishAllTimetablesAction error:", error);
+    return { success: false, error: error.message || "Failed to unpublish timetables." };
+  }
+}
+
+/**
+ * Publishes a single class timetable without any blocking rules
+ */
 export async function publishTimetableAction(classId: string) {
   const session = await getServerSession(getAuthOptions());
   const userId = session?.user?.id || "admin";
@@ -262,102 +343,11 @@ export async function publishTimetableAction(classId: string) {
   if (!classId) return { success: false, error: "Class ID is required" };
 
   try {
-    // 1. Fetch period slots
-    let periodSlots = await prisma.periodSlot.findMany({
-      where: { OR: [{ classId }, { classId: null }] },
-      orderBy: { order: "asc" }
-    });
-    const periodSlotsData: PeriodSlotData[] = periodSlots.map(p => ({
-      order: p.order,
-      label: p.label,
-      startTime: p.startTime,
-      endTime: p.endTime,
-      type: p.type as any
-    }));
-
-    // 2. Fetch all school slots to run comprehensive conflict checks
-    const allSlots = await prisma.timetable.findMany({
-      include: {
-        subject: true,
-        teacher: { include: { user: true } },
-        class: true
-      }
-    });
-
-    const mappedSlots: TimetableSlotEntry[] = allSlots.map(s => ({
-      id: s.id,
-      classId: s.classId,
-      dayOfWeek: s.dayOfWeek,
-      period: s.period,
-      subjectId: s.subjectId,
-      subjectName: s.subject?.name,
-      subjectCode: s.subject?.code,
-      teacherId: s.teacherId || s.subject?.teacherId,
-      teacherName: s.teacher?.user?.name,
-      classroom: s.classroom,
-      startTime: s.startTime,
-      endTime: s.endTime,
-      isBreak: s.isBreak,
-      slotType: (s.slotType as any) || (s.isBreak ? "BREAK" : "LESSON"),
-      status: s.status as any
-    }));
-
-    // 3. Fetch teachers and subject requirements
-    const allTeachers = await prisma.teacher.findMany({
-      include: { user: true }
-    });
-    const classSubjects = await prisma.subject.findMany({
-      where: { classId, isActive: true },
-      include: { teacher: { include: { user: true } } }
-    });
-
-    const teacherLoads = calculateTeacherLoads({
-      allSchoolSlots: mappedSlots,
-      teachers: allTeachers.map(t => ({
-        id: t.id,
-        name: t.user.name || "Teacher",
-        maxPeriodsPerDay: t.maxPeriodsPerDay || 6,
-        maxPeriodsPerWeek: t.maxPeriodsPerWeek || 30
-      }))
-    });
-
-    const subjectSummaries = calculateSubjectSummaries({
-      classSubjects: classSubjects.map(s => ({
-        id: s.id,
-        name: s.name,
-        code: s.code,
-        requiredPeriodsPerWeek: s.requiredPeriodsPerWeek || 5,
-        teacherId: s.teacherId,
-        teacherName: s.teacher?.user?.name
-      })),
-      classSlots: mappedSlots.filter(s => s.classId === classId)
-    });
-
-    // 4. Run deterministic conflict engine
-    const analysis = analyzeTimetableConflicts({
-      targetClassId: classId,
-      allSchoolSlots: mappedSlots,
-      periodSlots: periodSlotsData,
-      teacherLoads,
-      subjectSummaries
-    });
-
-    if (!analysis.canPublish) {
-      return {
-        success: false,
-        error: `Cannot publish timetable: ${analysis.publishBlockReasons.join(". ")}`,
-        hardConflicts: analysis.hardConflicts,
-        softWarnings: analysis.softWarnings
-      };
-    }
-
-    // 5. Update all slots for this class to PUBLISHED
     const updated = await prisma.timetable.updateMany({
       where: { classId },
       data: { status: "PUBLISHED" }
     });
 
-    // 6. Log audit entry
     await prisma.timetableAudit.create({
       data: {
         action: "PUBLISH",
@@ -375,93 +365,11 @@ export async function publishTimetableAction(classId: string) {
 
     return {
       success: true,
-      count: updated.count,
-      warnings: analysis.softWarnings
+      count: updated.count
     };
   } catch (error: any) {
     console.error("publishTimetableAction error:", error);
     return { success: false, error: error.message || "Failed to publish timetable" };
-  }
-}
-
-export async function suggestFillTimetableAction(classId: string) {
-  if (!classId) return { success: false, message: "Class ID required" };
-
-  try {
-    const classSubjects = await prisma.subject.findMany({
-      where: { classId, isActive: true },
-      include: { teacher: { include: { user: true } } }
-    });
-
-    const existingSlots = await prisma.timetable.findMany({
-      where: { classId },
-      include: { subject: true, teacher: { include: { user: true } } }
-    });
-
-    const allOtherSlots = await prisma.timetable.findMany({
-      where: { classId: { not: classId } },
-      include: { subject: true, teacher: { include: { user: true } } }
-    });
-
-    const periodSlots = await prisma.periodSlot.findMany({
-      where: { OR: [{ classId }, { classId: null }] },
-      orderBy: { order: "asc" }
-    });
-
-    const mappedClassSlots: TimetableSlotEntry[] = existingSlots.map(s => ({
-      id: s.id,
-      classId: s.classId,
-      dayOfWeek: s.dayOfWeek,
-      period: s.period,
-      subjectId: s.subjectId,
-      subjectName: s.subject?.name,
-      teacherId: s.teacherId || s.subject?.teacherId,
-      isBreak: s.isBreak,
-      slotType: (s.slotType as any) || (s.isBreak ? "BREAK" : "LESSON")
-    }));
-
-    const mappedOtherSlots: TimetableSlotEntry[] = allOtherSlots.map(s => ({
-      id: s.id,
-      classId: s.classId,
-      dayOfWeek: s.dayOfWeek,
-      period: s.period,
-      subjectId: s.subjectId,
-      subjectName: s.subject?.name,
-      teacherId: s.teacherId || s.subject?.teacherId,
-      isBreak: s.isBreak,
-      slotType: (s.slotType as any) || (s.isBreak ? "BREAK" : "LESSON")
-    }));
-
-    const result = solveTimetableSlots({
-      classId,
-      classSubjects: classSubjects.map(s => ({
-        id: s.id,
-        name: s.name,
-        code: s.code,
-        teacherId: s.teacherId,
-        teacherName: s.teacher?.user?.name,
-        requiredPeriodsPerWeek: s.requiredPeriodsPerWeek || 5
-      })),
-      existingClassSlots: mappedClassSlots,
-      allOtherSchoolSlots: mappedOtherSlots,
-      periodSlots: periodSlots.map(p => ({
-        order: p.order,
-        label: p.label,
-        startTime: p.startTime,
-        endTime: p.endTime,
-        type: p.type as any
-      }))
-    });
-
-    return {
-      success: result.success,
-      suggestedSlots: result.suggestedSlots,
-      unfilledDeficits: result.unfilledDeficits,
-      message: result.message
-    };
-  } catch (error: any) {
-    console.error("suggestFillTimetableAction error:", error);
-    return { success: false, message: error.message || "Failed to generate suggestions" };
   }
 }
 
@@ -492,5 +400,58 @@ export async function clearClassTimetableAction(classId: string) {
     return { success: true, count: deleted.count };
   } catch (error: any) {
     return { success: false, error: error.message || "Failed to clear timetable" };
+  }
+}
+
+/**
+ * Copies an entire day's slots to target days for a class
+ */
+export async function copyDaySlotsAction(classId: string, sourceDay: string, targetDays: string[]) {
+  const session = await getServerSession(getAuthOptions());
+  if (!session || session.user.role !== "ADMIN") {
+    return { success: false, error: "Unauthorized." };
+  }
+
+  try {
+    const sourceSlots = await prisma.timetable.findMany({
+      where: { classId, dayOfWeek: sourceDay }
+    });
+
+    if (sourceSlots.length === 0) {
+      return { success: false, error: `No slots found on ${sourceDay} to copy.` };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const tDay of targetDays) {
+        if (tDay === sourceDay) continue;
+
+        // Delete existing on target day
+        await tx.timetable.deleteMany({
+          where: { classId, dayOfWeek: tDay }
+        });
+
+        // Insert copied slots
+        await tx.timetable.createMany({
+          data: sourceSlots.map(s => ({
+            classId,
+            dayOfWeek: tDay,
+            period: s.period,
+            subjectId: s.subjectId,
+            teacherId: s.teacherId,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            classroom: s.classroom,
+            isBreak: s.isBreak,
+            slotType: s.slotType,
+            status: s.status
+          }))
+        });
+      }
+    });
+
+    revalidatePath("/dashboard/admin/timetable");
+    return { success: true, count: sourceSlots.length * targetDays.length };
+  } catch (error: any) {
+    return { success: false, error: error.message || "Failed to copy day schedule." };
   }
 }

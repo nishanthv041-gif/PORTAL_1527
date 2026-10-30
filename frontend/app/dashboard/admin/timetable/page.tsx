@@ -35,7 +35,14 @@ export default async function AdminTimetablePage({
   currentWeekStart.setHours(0, 0, 0, 0);
 
   const currentWeekEnd = new Date(currentWeekStart);
-  currentWeekEnd.setDate(currentWeekStart.getDate() + 6); // up to Saturday
+  currentWeekEnd.setDate(currentWeekStart.getDate() + 5); // up to Saturday (Mon..Sat = 6 days)
+
+  const formatWeekLabel = (start: Date, end: Date) => {
+    const sStr = start.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    const eStr = end.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    return `${sStr} to ${eStr}`;
+  };
+  const weekLabel = formatWeekLabel(currentWeekStart, currentWeekEnd);
 
   const classes = await prisma.class.findMany({
     where: { isActive: true },
@@ -157,6 +164,28 @@ export default async function AdminTimetablePage({
     );
   });
 
+  // Fetch substitutions and absences for this week
+  const [weekSubstitutions, weekAbsences] = await Promise.all([
+    prisma.substitution.findMany({
+      where: {
+        date: { gte: currentWeekStart, lte: currentWeekEnd }
+      },
+      include: {
+        substituteTeacher: { include: { user: true } },
+        absentTeacher: { include: { user: true } }
+      }
+    }),
+    prisma.teacherAbsence.findMany({
+      where: {
+        date: { gte: currentWeekStart, lte: currentWeekEnd },
+        status: "ACTIVE"
+      },
+      include: {
+        teacher: { include: { user: true } }
+      }
+    })
+  ]);
+
   return (
     <div className={styles.dashboard}>
       <TimetableClient
@@ -184,6 +213,26 @@ export default async function AdminTimetablePage({
         pendingSubstitutionsCount={pendingSubstitutionsCount}
         events={events}
         weekOf={currentWeekStart.toISOString().split('T')[0]}
+        weekLabel={weekLabel}
+        weekSubstitutions={weekSubstitutions.map(s => ({
+          id: s.id,
+          date: s.date.toISOString().split('T')[0],
+          timetableEntryId: s.timetableEntryId,
+          absentTeacherId: s.absentTeacherId,
+          absentTeacherName: s.absentTeacher?.user?.name || "Absent Teacher",
+          substituteTeacherId: s.substituteTeacherId,
+          substituteTeacherName: s.substituteTeacher?.user?.name || null,
+          status: s.status,
+          note: s.note
+        }))}
+        weekAbsences={weekAbsences.map(a => ({
+          id: a.id,
+          date: a.date.toISOString().split('T')[0],
+          teacherId: a.teacherId,
+          teacherName: a.teacher?.user?.name || "Teacher",
+          fullDay: a.fullDay,
+          periodNumbers: a.periodNumbers ? a.periodNumbers.split(',').map(p => parseInt(p.trim(), 10)).filter(p => !isNaN(p)) : []
+        }))}
       />
     </div>
   );

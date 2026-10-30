@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
+import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
 import styles from "../dashboard.module.css";
 import { GraduationCap, Users, Clock, MessageSquare, Calendar as CalendarIcon, MapPin, Star, ArrowRight, ShieldAlert, Sparkles } from "lucide-react";
 import Link from "next/link";
@@ -35,8 +36,7 @@ export default async function TeacherDashboard() {
   const [
     activeHomeworks,
     unreadMessages,
-    rawSchedule,
-    assignedSubstitutions,
+    effectiveScheduleSlots,
     teacherAbsenceToday,
     upcomingEvents,
     upcomingMeetings
@@ -53,33 +53,7 @@ export default async function TeacherDashboard() {
         isRead: false,
       }
     }),
-    prisma.timetable.findMany({
-      where: {
-        dayOfWeek: todayDayName,
-        isBreak: false,
-        OR: [
-          { teacherId: teacher.id },
-          { subject: { teacherId: teacher.id } }
-        ]
-      },
-      include: { class: true, subject: true },
-      orderBy: { period: 'asc' }
-    }),
-    prisma.substitution.findMany({
-      where: {
-        date: todayDate,
-        substituteTeacherId: teacher.id,
-        status: "ASSIGNED"
-      },
-      include: {
-        timetableEntry: {
-          include: { class: true, subject: true }
-        },
-        absentTeacher: {
-          include: { user: true }
-        }
-      }
-    }),
+    getEffectiveTimetable({ teacherId: teacher.id }, todayDate),
     prisma.teacherAbsence.findFirst({
       where: {
         teacherId: teacher.id,
@@ -106,7 +80,7 @@ export default async function TeacherDashboard() {
     })
   ]);
 
-  // Combine regular schedule and assigned substitution duties
+  // Combine regular schedule and assigned substitution duties from getEffectiveTimetable
   const todaysSchedule: Array<{
     id: string;
     period: number;
@@ -117,13 +91,15 @@ export default async function TeacherDashboard() {
     classroom?: string | null;
     isSubstitution?: boolean;
     absentTeacherName?: string;
-    isCoveredByOther?: boolean;
+    isTeacherAbsent?: boolean;
+    hasExamOverlap?: boolean;
+    examName?: string | null;
   }> = [];
 
-  // Add regular slots (unless teacher is absent full day)
-  for (const s of rawSchedule) {
-    if (teacherAbsenceToday && teacherAbsenceToday.fullDay) {
-      // Teacher is absent today
+  for (const s of effectiveScheduleSlots) {
+    if (s.isBreak) continue;
+    // If regular teacher is marked absent for this slot and it's not their duty covering someone else
+    if (s.isTeacherAbsent && !s.isSubstituteDuty) {
       continue;
     }
     todaysSchedule.push({
@@ -131,24 +107,14 @@ export default async function TeacherDashboard() {
       period: s.period,
       startTime: s.startTime,
       endTime: s.endTime,
-      subjectName: s.subject?.name || "Subject",
-      className: `${s.class.name} - ${s.class.section}`,
-      classroom: s.classroom
-    });
-  }
-
-  // Add assigned substitutions with duty badges
-  for (const sub of assignedSubstitutions) {
-    todaysSchedule.push({
-      id: `sub-${sub.id}`,
-      period: sub.timetableEntry.period,
-      startTime: sub.timetableEntry.startTime,
-      endTime: sub.timetableEntry.endTime,
-      subjectName: sub.timetableEntry.subject?.name || "Subject",
-      className: `${sub.timetableEntry.class.name} - ${sub.timetableEntry.class.section}`,
-      classroom: sub.timetableEntry.classroom,
-      isSubstitution: true,
-      absentTeacherName: sub.absentTeacher?.user?.name || "Absent Colleague"
+      subjectName: s.subjectName || (s.hasExamOverlap ? (s.examName || "Exam") : "Subject"),
+      className: s.className,
+      classroom: s.classroom,
+      isSubstitution: Boolean(s.isSubstituteDuty),
+      absentTeacherName: s.regularTeacherName || "Absent Colleague",
+      isTeacherAbsent: s.isTeacherAbsent,
+      hasExamOverlap: s.hasExamOverlap,
+      examName: s.examName
     });
   }
 
@@ -241,6 +207,12 @@ export default async function TeacherDashboard() {
             <h3 className={styles.chartHeader} style={{ margin: 0 }}>Today&apos;s Schedule ({todayDayName})</h3>
             <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{todaysSchedule.length} periods</span>
           </div>
+
+          {teacherAbsenceToday && (
+            <div style={{ marginTop: '0.75rem', padding: '0.75rem 1rem', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '8px', color: 'var(--danger)', fontSize: '0.85rem' }}>
+              <strong>Absence Recorded:</strong> You are marked absent today ({teacherAbsenceToday.fullDay ? 'Full Day' : `Periods ${teacherAbsenceToday.periodNumbers || ''}`}). Colleague substitution duties have been assigned.
+            </div>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginTop: '1rem' }}>
             {todaysSchedule.length > 0 ? (

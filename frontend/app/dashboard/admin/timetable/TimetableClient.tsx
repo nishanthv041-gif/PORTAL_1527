@@ -14,7 +14,6 @@ import {
   Coffee,
   Loader2,
   Sparkles,
-  AlertTriangle,
   CheckCircle,
   AlertCircle,
   Settings,
@@ -26,27 +25,25 @@ import {
   ChevronRight,
   ShieldAlert,
   ArrowRight,
-  HelpCircle,
-  RotateCcw
+  Copy,
+  RotateCcw,
+  Check,
+  Globe
 } from "lucide-react";
 import {
   createTimetableSlotAction,
   deleteTimetableSlotAction,
   bulkCreateTimetableSlotsAction,
   publishTimetableAction,
-  suggestFillTimetableAction,
-  clearClassTimetableAction
+  publishAllTimetablesAction,
+  unpublishAllTimetablesAction,
+  clearClassTimetableAction,
+  copyDaySlotsAction
 } from "@/backend/api/actions/dashboard/admin/timetable/actions";
 import {
   savePeriodSlotsAction,
   quickGenerateSlotsAction
 } from "@/backend/api/actions/dashboard/admin/timetable/periodSlotActions";
-import {
-  calculateSubjectSummaries,
-  calculateTeacherLoads,
-  SCHOOL_WORKING_DAYS
-} from "@/backend/lib/timetable/timetableCalculations";
-import { analyzeTimetableConflicts } from "@/backend/lib/timetable/timetableConflictEngine";
 import type {
   PeriodSlotData,
   TimetableSlotEntry,
@@ -66,6 +63,27 @@ const SUBJECT_COLOR_PALETTE = [
   { bg: "rgba(14, 165, 233, 0.12)", border: "rgba(14, 165, 233, 0.3)", text: "#0ea5e9" },
   { bg: "rgba(234, 179, 8, 0.12)", border: "rgba(234, 179, 8, 0.3)", text: "#eab308" }
 ];
+
+export interface WeekSubstitutionInfo {
+  id: string;
+  date: string; // YYYY-MM-DD
+  timetableEntryId: string;
+  absentTeacherId: string;
+  absentTeacherName: string;
+  substituteTeacherId: string | null;
+  substituteTeacherName: string | null;
+  status: string;
+  note: string | null;
+}
+
+export interface WeekAbsenceInfo {
+  id: string;
+  date: string;
+  teacherId: string;
+  teacherName: string;
+  fullDay: boolean;
+  periodNumbers: number[];
+}
 
 export interface TimetableClientProps {
   classes: Array<{ id: string; name: string; section: string }>;
@@ -92,6 +110,9 @@ export interface TimetableClientProps {
   pendingSubstitutionsCount: number;
   events: any[];
   weekOf: string;
+  weekLabel?: string;
+  weekSubstitutions?: WeekSubstitutionInfo[];
+  weekAbsences?: WeekAbsenceInfo[];
 }
 
 export default function TimetableClient({
@@ -104,7 +125,10 @@ export default function TimetableClient({
   periodSlots: initialPeriodSlots,
   pendingSubstitutionsCount,
   events,
-  weekOf
+  weekOf,
+  weekLabel,
+  weekSubstitutions = [],
+  weekAbsences = []
 }: TimetableClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -113,7 +137,6 @@ export default function TimetableClient({
   const [selectedWeek, setSelectedWeek] = useState(weekOf);
   const [viewMode, setViewMode] = useState<"CLASS" | "TEACHER">("CLASS");
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(allTeachers[0]?.id || "");
-  const [activeTab, setActiveTab] = useState<"TIMETABLE" | "SUMMARY" | "CONFLICTS">("TIMETABLE");
 
   // Mobile layout state
   const [activeMobileDay, setActiveMobileDay] = useState<string>(() => {
@@ -155,7 +178,10 @@ export default function TimetableClient({
   const [showScanModal, setShowScanModal] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-  const [suggestPreview, setSuggestPreview] = useState<any[] | null>(null);
+
+  // Copy Day modal state
+  const [copyFromDay, setCopyFromDay] = useState<string | null>(null);
+  const [copyTargetDays, setCopyTargetDays] = useState<string[]>([]);
 
   const selectedClassObj = classes.find(c => c.id === selectedClass);
   const selectedClassName = selectedClassObj ? `${selectedClassObj.name} - ${selectedClassObj.section}` : "";
@@ -169,83 +195,14 @@ export default function TimetableClient({
     return map;
   }, [availableSubjects]);
 
-  // Map slots for calculation engine
-  const mappedCurrentSlots: TimetableSlotEntry[] = useMemo(() => {
-    return timetableData.map(s => ({
-      id: s.id,
-      classId: s.classId,
-      dayOfWeek: s.dayOfWeek,
-      period: s.period,
-      subjectId: s.subjectId,
-      subjectName: s.subject?.name,
-      subjectCode: s.subject?.code,
-      teacherId: s.teacherId || s.subject?.teacherId,
-      teacherName: s.teacher?.user?.name || s.subject?.teacher?.user?.name,
-      classroom: s.classroom,
-      startTime: s.startTime,
-      endTime: s.endTime,
-      isBreak: s.isBreak,
-      slotType: s.slotType as any,
-      status: s.status as any
-    }));
-  }, [timetableData]);
-
-  const mappedAllSchoolSlots: TimetableSlotEntry[] = useMemo(() => {
-    return allSchoolSlots.map(s => ({
-      id: s.id,
-      classId: s.classId,
-      dayOfWeek: s.dayOfWeek,
-      period: s.period,
-      subjectId: s.subjectId,
-      subjectName: s.subject?.name,
-      subjectCode: s.subject?.code,
-      teacherId: s.teacherId || s.subject?.teacherId,
-      teacherName: s.teacher?.user?.name || s.subject?.teacher?.user?.name,
-      classroom: s.classroom,
-      startTime: s.startTime,
-      endTime: s.endTime,
-      isBreak: s.isBreak,
-      slotType: s.slotType as any,
-      status: s.status as any
-    }));
-  }, [allSchoolSlots]);
-
-  // Live calculations
-  const teacherLoads = useMemo(() => {
-    return calculateTeacherLoads({
-      allSchoolSlots: mappedAllSchoolSlots,
-      teachers: allTeachers.map(t => ({
-        id: t.id,
-        name: t.name,
-        maxPeriodsPerDay: t.maxPeriodsPerDay,
-        maxPeriodsPerWeek: t.maxPeriodsPerWeek
-      }))
-    });
-  }, [mappedAllSchoolSlots, allTeachers]);
-
-  const subjectSummaries = useMemo(() => {
-    return calculateSubjectSummaries({
-      classSubjects: availableSubjects.map(s => ({
-        id: s.id,
-        name: s.name,
-        code: s.code,
-        requiredPeriodsPerWeek: s.requiredPeriodsPerWeek || 5,
-        teacherId: s.teacherId,
-        teacherName: s.teacher?.user?.name
-      })),
-      classSlots: mappedCurrentSlots
-    });
-  }, [availableSubjects, mappedCurrentSlots]);
-
-  const conflictAnalysis = useMemo(() => {
-    return analyzeTimetableConflicts({
-      targetClassId: selectedClass,
-      allSchoolSlots: mappedAllSchoolSlots,
-      periodSlots,
-      teacherLoads,
-      subjectSummaries
-    });
-  }, [selectedClass, mappedAllSchoolSlots, periodSlots, teacherLoads, subjectSummaries]);
+  // Navigate weeks
+  const changeWeek = (direction: -1 | 1) => {
+    const current = new Date(selectedWeek);
+    current.setDate(current.getDate() + direction * 7);
+    const newWeekStr = current.toISOString().split("T")[0];
+    setSelectedWeek(newWeekStr);
+    router.push(`/dashboard/admin/timetable?classId=${selectedClass}&weekOf=${newWeekStr}`);
+  };
 
   // Handle Class Switch
   const handleClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -253,7 +210,7 @@ export default function TimetableClient({
     setSelectedClass(classId);
     setActionError(null);
     setActionSuccess(null);
-    setSuggestPreview(null);
+    setEditingSlot(null);
     startTransition(() => {
       router.push(`/dashboard/admin/timetable?classId=${classId}&weekOf=${selectedWeek}`);
     });
@@ -280,7 +237,7 @@ export default function TimetableClient({
     });
   };
 
-  // Save slot
+  // Save slot (Free editing: never blocked by hard clash or warning)
   const saveSlot = async (day: string, period: number) => {
     setActionError(null);
     const formData = new FormData();
@@ -301,6 +258,7 @@ export default function TimetableClient({
         setActionError(res.error);
       } else {
         setEditingSlot(null);
+        setActionSuccess(`Saved slot for ${day} Period ${period}!`);
         router.refresh();
       }
     });
@@ -308,17 +266,21 @@ export default function TimetableClient({
 
   // Delete slot
   const deleteSlot = async (id: string) => {
-    if (confirm("Are you sure you want to remove this slot?")) {
+    if (confirm("Remove this period slot from the timetable?")) {
       startTransition(async () => {
         const res = await deleteTimetableSlotAction(id);
-        if (res.error) setActionError(res.error);
-        else router.refresh();
+        if (res.error) {
+          setActionError(res.error);
+        } else {
+          setActionSuccess("Slot removed successfully.");
+          router.refresh();
+        }
       });
     }
   };
 
-  // Publish timetable
-  const handlePublish = async () => {
+  // Publish timetable for currently selected class (zero blocking)
+  const handlePublishClass = async () => {
     setActionError(null);
     setActionSuccess(null);
     startTransition(async () => {
@@ -326,57 +288,49 @@ export default function TimetableClient({
       if (!res.success) {
         setActionError(res.error || "Failed to publish timetable.");
       } else {
-        setActionSuccess(`Timetable successfully published with ${res.count} slots!`);
+        setActionSuccess(`Timetable published for ${selectedClassName} (${res.count} slots)!`);
         router.refresh();
       }
     });
   };
 
-  // Suggest fill
-  const handleSuggestFill = async () => {
+  // Publish All Classes at once with one click
+  const handlePublishAll = async () => {
+    if (!confirm("Publish timetable for ALL classes? Parents and teachers across all grades will see the published schedule.")) {
+      return;
+    }
     setActionError(null);
     setActionSuccess(null);
     startTransition(async () => {
-      const res = await suggestFillTimetableAction(selectedClass);
+      const res = await publishAllTimetablesAction();
       if (!res.success) {
-        setActionError(res.message);
+        setActionError(res.error || "Failed to publish all timetables.");
       } else {
-        setSuggestPreview(res.suggestedSlots || []);
-        setActionSuccess(res.message);
-      }
-    });
-  };
-
-  // Apply suggested fill
-  const handleApplySuggestions = async () => {
-    if (!suggestPreview || suggestPreview.length === 0) return;
-    startTransition(async () => {
-      const res = await bulkCreateTimetableSlotsAction(
-        selectedClass,
-        suggestPreview.map(s => ({
-          dayOfWeek: s.dayOfWeek,
-          period: s.period,
-          subjectId: s.subjectId,
-          teacherId: s.teacherId,
-          startTime: s.startTime || "08:00",
-          endTime: s.endTime || "08:45",
-          classroom: s.classroom || "",
-          isBreak: Boolean(s.isBreak),
-          slotType: s.slotType || "LESSON"
-        })),
-        "PUBLISHED"
-      );
-      if (res.error) {
-        setActionError(res.error);
-      } else {
-        setActionSuccess(`Applied ${suggestPreview.length} suggested timetable slots!`);
-        setSuggestPreview(null);
+        setActionSuccess(`Published all class timetables (${res.count} slots) across the school!`);
         router.refresh();
       }
     });
   };
 
-  // Clear timetable
+  // Unpublish all classes (revert to Draft)
+  const handleUnpublishAll = async () => {
+    if (!confirm("Revert all timetables to DRAFT? Schedules will be hidden from parent & student views until published again.")) {
+      return;
+    }
+    setActionError(null);
+    setActionSuccess(null);
+    startTransition(async () => {
+      const res = await unpublishAllTimetablesAction();
+      if (!res.success) {
+        setActionError(res.error || "Failed to unpublish timetables.");
+      } else {
+        setActionSuccess(`Reverted all timetables (${res.count} slots) to Draft.`);
+        router.refresh();
+      }
+    });
+  };
+
+  // Clear timetable for selected class
   const handleClearTimetable = async () => {
     if (!confirm(`Are you sure you want to clear the entire timetable for ${selectedClassName}? This cannot be undone.`)) {
       return;
@@ -386,7 +340,24 @@ export default function TimetableClient({
       if (!res.success) {
         setActionError(res.error || "Failed to clear timetable.");
       } else {
-        setActionSuccess(`Cleared all timetable slots.`);
+        setActionSuccess(`Cleared all timetable slots for ${selectedClassName}.`);
+        router.refresh();
+      }
+    });
+  };
+
+  // Execute Day Copy
+  const handleExecuteCopyDay = async () => {
+    if (!copyFromDay || copyTargetDays.length === 0) return;
+    setActionError(null);
+    startTransition(async () => {
+      const res = await copyDaySlotsAction(selectedClass, copyFromDay, copyTargetDays);
+      if (!res.success) {
+        setActionError(res.error || "Failed to copy day schedule.");
+      } else {
+        setActionSuccess(`Successfully copied ${res.count} slots from ${copyFromDay} to ${copyTargetDays.join(", ")}!`);
+        setCopyFromDay(null);
+        setCopyTargetDays([]);
         router.refresh();
       }
     });
@@ -432,11 +403,38 @@ export default function TimetableClient({
     });
   };
 
+  // Helper to resolve substitutions/absences on a specific day & slot
+  const getSlotOverlay = (slotId: string, dayIndex: number, periodOrder: number, teacherId?: string | null) => {
+    const currentDayDate = new Date(selectedWeek);
+    currentDayDate.setDate(currentDayDate.getDate() + dayIndex);
+    const dateStr = currentDayDate.toISOString().split("T")[0];
+
+    const sub = weekSubstitutions.find(s => s.timetableEntryId === slotId && s.date === dateStr);
+    const abs = teacherId
+      ? weekAbsences.find(a => a.teacherId === teacherId && a.date === dateStr && (a.fullDay || a.periodNumbers.includes(periodOrder)))
+      : null;
+
+    if (sub && sub.substituteTeacherName) {
+      return {
+        type: "SUBSTITUTE" as const,
+        substituteName: sub.substituteTeacherName,
+        absentName: sub.absentTeacherName
+      };
+    }
+    if ((sub && sub.status === "UNASSIGNED") || (abs && !sub?.substituteTeacherName)) {
+      return {
+        type: "FREE_PERIOD" as const,
+        absentName: abs?.teacherName || sub?.absentTeacherName || "Teacher"
+      };
+    }
+    return null;
+  };
+
   // Teacher Schedule View data filter
   const teacherTimetableSlots = useMemo(() => {
     if (viewMode !== "TEACHER" || !selectedTeacherId) return [];
-    return mappedAllSchoolSlots.filter(s => s.teacherId === selectedTeacherId);
-  }, [viewMode, selectedTeacherId, mappedAllSchoolSlots]);
+    return allSchoolSlots.filter(s => s.teacherId === selectedTeacherId || s.subject?.teacherId === selectedTeacherId);
+  }, [viewMode, selectedTeacherId, allSchoolSlots]);
 
   // Sorted period slots
   const sortedPeriods = useMemo(() => {
@@ -451,39 +449,39 @@ export default function TimetableClient({
       )}
 
       {/* Header Banner & Navigation */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1.5rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem" }}>
         <div>
           <h1 style={{ fontSize: "1.75rem", fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
             Timetable Management
           </h1>
           <p style={{ color: "var(--text-secondary)", margin: "0.25rem 0 0 0", fontSize: "0.9rem" }}>
-            Automated conflict-free scheduling, staff workloads, and parent synchronization.
+            School schedule, period timings, and pick-and-assign substitution.
           </p>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-          {/* Absence & Substitution Duty link button */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+          {/* Mark Teacher Absent Button (Pick-and-Assign Flow) */}
           <Link
             href="/dashboard/admin/timetable/substitution"
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "0.5rem",
+              gap: "0.45rem",
               padding: "0.6rem 1rem",
               borderRadius: "8px",
-              background: pendingSubstitutionsCount > 0 ? "rgba(239, 68, 68, 0.12)" : "var(--card-bg)",
-              color: pendingSubstitutionsCount > 0 ? "var(--danger)" : "var(--text-primary)",
-              border: `1px solid ${pendingSubstitutionsCount > 0 ? "rgba(239, 68, 68, 0.3)" : "var(--border-color)"}`,
+              background: pendingSubstitutionsCount > 0 ? "rgba(239, 68, 68, 0.12)" : "rgba(245, 158, 11, 0.1)",
+              color: pendingSubstitutionsCount > 0 ? "var(--danger)" : "#d97706",
+              border: `1px solid ${pendingSubstitutionsCount > 0 ? "rgba(239, 68, 68, 0.3)" : "rgba(245, 158, 11, 0.3)"}`,
               textDecoration: "none",
-              fontWeight: 600,
+              fontWeight: 700,
               fontSize: "0.85rem"
             }}
           >
             <ShieldAlert size={16} />
-            <span>Absence & Substitution</span>
+            <span>Mark Teacher Absent</span>
             {pendingSubstitutionsCount > 0 && (
               <span style={{ background: "var(--danger)", color: "#fff", padding: "0.15rem 0.5rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700 }}>
-                {pendingSubstitutionsCount} Pending
+                {pendingSubstitutionsCount}
               </span>
             )}
           </Link>
@@ -522,80 +520,94 @@ export default function TimetableClient({
               gap: "0.4rem",
               padding: "0.6rem 1rem",
               borderRadius: "8px",
-              background: "var(--primary)",
-              color: "var(--primary-fg)",
-              border: "none",
+              background: "var(--card-bg)",
+              color: "var(--primary)",
+              border: "1px solid var(--border-color)",
               cursor: "pointer",
               fontSize: "0.85rem",
               fontWeight: 600
             }}
           >
-            <Sparkles size={16} /> Upload & Scan Timetable
+            <Sparkles size={16} /> Upload &amp; Scan
           </button>
+
+          {/* Publish All Classes (Single button, no blocking) */}
+          <div style={{ display: "inline-flex", alignItems: "center", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--border-color)" }}>
+            <button
+              type="button"
+              onClick={handlePublishAll}
+              disabled={isPending}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                padding: "0.6rem 1rem",
+                background: "var(--primary)",
+                color: "var(--primary-fg)",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "0.85rem",
+                fontWeight: 700
+              }}
+              title="Publish all class timetables to students, teachers, and parents"
+            >
+              <Globe size={15} /> Publish All
+            </button>
+            <button
+              type="button"
+              onClick={handleUnpublishAll}
+              disabled={isPending}
+              style={{
+                padding: "0.6rem 0.65rem",
+                background: "rgba(0,0,0,0.15)",
+                color: "var(--primary-fg)",
+                border: "none",
+                borderLeft: "1px solid rgba(255,255,255,0.2)",
+                cursor: "pointer",
+                fontSize: "0.75rem",
+                fontWeight: 600
+              }}
+              title="Revert all timetables to Draft"
+            >
+              Unpublish
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Action / Error Alerts */}
       {actionError && (
-        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "1rem 1.25rem", borderRadius: "10px", border: "1px solid var(--border-color)", marginBottom: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "0.85rem 1.15rem", borderRadius: "10px", border: "1px solid var(--border-color)", marginBottom: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-            <AlertCircle size={20} />
-            <span>{actionError}</span>
+            <AlertCircle size={18} />
+            <span style={{ fontSize: "0.875rem" }}>{actionError}</span>
           </div>
-          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={18} /></button>
+          <button onClick={() => setActionError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={16} /></button>
         </div>
       )}
 
       {actionSuccess && (
-        <div style={{ background: "rgba(16, 185, 129, 0.12)", color: "#10b981", padding: "1rem 1.25rem", borderRadius: "10px", border: "1px solid rgba(16, 185, 129, 0.25)", marginBottom: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ background: "rgba(16, 185, 129, 0.12)", color: "#10b981", padding: "0.85rem 1.15rem", borderRadius: "10px", border: "1px solid rgba(16, 185, 129, 0.25)", marginBottom: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-            <CheckCircle size={20} />
-            <span>{actionSuccess}</span>
+            <CheckCircle size={18} />
+            <span style={{ fontSize: "0.875rem" }}>{actionSuccess}</span>
           </div>
-          <button onClick={() => setActionSuccess(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={18} /></button>
+          <button onClick={() => setActionSuccess(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={16} /></button>
         </div>
       )}
 
-      {/* Suggested Preview Banner */}
-      {suggestPreview && suggestPreview.length > 0 && (
-        <div style={{ background: "rgba(99, 102, 241, 0.08)", border: "1px solid rgba(99, 102, 241, 0.3)", borderRadius: "10px", padding: "1rem 1.25rem", marginBottom: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
-          <div>
-            <div style={{ fontWeight: 700, color: "var(--primary)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <Sparkles size={18} /> Smart Constraint Solver Generated {suggestPreview.length} Suggested Slots
-            </div>
-            <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "0.2rem" }}>
-              All slots are verified against teacher clashes, break periods, and subject requirements.
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              onClick={() => setSuggestPreview(null)}
-              style={{ padding: "0.45rem 0.85rem", background: "transparent", border: "1px solid var(--border-color)", borderRadius: "6px", cursor: "pointer", fontSize: "0.85rem" }}
-            >
-              Dismiss
-            </button>
-            <button
-              onClick={handleApplySuggestions}
-              disabled={isPending}
-              style={{ padding: "0.45rem 1rem", background: "var(--primary)", color: "var(--primary-fg)", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "0.85rem" }}
-            >
-              Apply All to Timetable
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Control Bar: Class Selector, View Switcher & Actions */}
-      <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", padding: "1.25rem", marginBottom: "1.5rem" }}>
+      {/* Control Bar: Class Selector, Week Navigator & Actions */}
+      <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", padding: "1rem 1.25rem", marginBottom: "1.25rem" }}>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap", flex: "1 1 300px" }}>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             {/* View Mode Toggle */}
-            <div style={{ display: "inline-flex", background: "var(--input-bg)", padding: "0.25rem", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+            <div style={{ display: "inline-flex", background: "var(--input-bg)", padding: "0.2rem", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
               <button
                 type="button"
                 onClick={() => setViewMode("CLASS")}
                 style={{
-                  padding: "0.45rem 0.85rem",
+                  padding: "0.4rem 0.8rem",
                   borderRadius: "6px",
                   border: "none",
                   cursor: "pointer",
@@ -611,7 +623,7 @@ export default function TimetableClient({
                 type="button"
                 onClick={() => setViewMode("TEACHER")}
                 style={{
-                  padding: "0.45rem 0.85rem",
+                  padding: "0.4rem 0.8rem",
                   borderRadius: "6px",
                   border: "none",
                   cursor: "pointer",
@@ -632,7 +644,7 @@ export default function TimetableClient({
                   value={selectedClass}
                   onChange={handleClassChange}
                   disabled={isPending}
-                  style={{ width: "100%", padding: "0.6rem 0.85rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontWeight: 600 }}
+                  style={{ width: "100%", padding: "0.55rem 0.8rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontWeight: 600, fontSize: "0.875rem" }}
                 >
                   <option value="">-- Choose Class --</option>
                   {classes.map(c => (
@@ -645,7 +657,7 @@ export default function TimetableClient({
                 <select
                   value={selectedTeacherId}
                   onChange={(e) => setSelectedTeacherId(e.target.value)}
-                  style={{ width: "100%", padding: "0.6rem 0.85rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontWeight: 600 }}
+                  style={{ width: "100%", padding: "0.55rem 0.8rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontWeight: 600, fontSize: "0.875rem" }}
                 >
                   {allTeachers.map(t => (
                     <option key={t.id} value={t.id}>{t.name} ({t.subjects.join(", ") || "Faculty"})</option>
@@ -653,52 +665,56 @@ export default function TimetableClient({
                 </select>
               </div>
             )}
+
+            {/* Week Navigator with unambiguous date format: "26 Oct to 31 Oct 2026" */}
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", background: "var(--input-bg)", padding: "0.25rem 0.5rem", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+              <button
+                type="button"
+                onClick={() => changeWeek(-1)}
+                disabled={isPending}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", padding: "0.25rem", display: "flex", alignItems: "center" }}
+                title="Previous Week"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span style={{ fontSize: "0.82rem", fontWeight: 700, padding: "0 0.35rem", color: "var(--text-primary)", whiteSpace: "nowrap" }}>
+                {weekLabel || "Week Schedule"}
+              </span>
+              <button
+                type="button"
+                onClick={() => changeWeek(1)}
+                disabled={isPending}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", padding: "0.25rem", display: "flex", alignItems: "center" }}
+                title="Next Week"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
 
-          {/* Action Tools */}
+          {/* Single Class Publish & Clear Actions */}
           {viewMode === "CLASS" && selectedClass && (
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
               <button
                 type="button"
-                onClick={handleSuggestFill}
+                onClick={handlePublishClass}
                 disabled={isPending}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "0.4rem",
-                  padding: "0.55rem 0.9rem",
+                  gap: "0.35rem",
+                  padding: "0.5rem 0.9rem",
                   borderRadius: "8px",
-                  background: "var(--card-bg)",
-                  border: "1px solid var(--border-color)",
-                  color: "inherit",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  fontWeight: 600
-                }}
-              >
-                <Sparkles size={15} style={{ color: "var(--primary)" }} /> Suggest Fill
-              </button>
-
-              <button
-                type="button"
-                onClick={handlePublish}
-                disabled={isPending || !conflictAnalysis.canPublish}
-                title={!conflictAnalysis.canPublish ? conflictAnalysis.publishBlockReasons.join(". ") : "Publish timetable"}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.4rem",
-                  padding: "0.55rem 1rem",
-                  borderRadius: "8px",
-                  background: conflictAnalysis.canPublish ? "var(--success)" : "rgba(107, 114, 128, 0.4)",
+                  background: "var(--success)",
                   color: "#fff",
                   border: "none",
-                  cursor: conflictAnalysis.canPublish ? "pointer" : "not-allowed",
-                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  fontSize: "0.82rem",
                   fontWeight: 600
                 }}
+                title="Publish timetable for this class"
               >
-                <CheckCircle size={15} /> Publish Timetable
+                <Check size={14} /> Publish This Class
               </button>
 
               <button
@@ -706,221 +722,29 @@ export default function TimetableClient({
                 onClick={handleClearTimetable}
                 disabled={isPending || timetableData.length === 0}
                 style={{
-                  padding: "0.55rem 0.75rem",
+                  padding: "0.5rem 0.75rem",
                   borderRadius: "8px",
                   background: "transparent",
                   color: "var(--danger)",
                   border: "1px solid var(--border-color)",
                   cursor: "pointer",
-                  fontSize: "0.85rem"
+                  fontSize: "0.82rem"
                 }}
-                title="Clear all slots"
+                title="Clear all slots for this class"
               >
-                <Trash2 size={16} />
+                <Trash2 size={15} />
               </button>
             </div>
           )}
         </div>
-
-        {/* Secondary Subtabs: Timetable Grid vs Subject Load & Verification */}
-        {viewMode === "CLASS" && selectedClass && (
-          <div style={{ display: "flex", gap: "1rem", marginTop: "1rem", borderTop: "1px solid var(--border-color)", paddingTop: "0.75rem" }}>
-            <button
-              type="button"
-              onClick={() => setActiveTab("TIMETABLE")}
-              style={{
-                background: "none",
-                border: "none",
-                borderBottom: activeTab === "TIMETABLE" ? "2px solid var(--primary)" : "2px solid transparent",
-                padding: "0.4rem 0.5rem",
-                cursor: "pointer",
-                fontWeight: activeTab === "TIMETABLE" ? 700 : 500,
-                color: activeTab === "TIMETABLE" ? "var(--primary)" : "var(--text-secondary)",
-                fontSize: "0.875rem"
-              }}
-            >
-              Timetable Grid ({timetableData.length} Slots)
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("SUMMARY")}
-              style={{
-                background: "none",
-                border: "none",
-                borderBottom: activeTab === "SUMMARY" ? "2px solid var(--primary)" : "2px solid transparent",
-                padding: "0.4rem 0.5rem",
-                cursor: "pointer",
-                fontWeight: activeTab === "SUMMARY" ? 700 : 500,
-                color: activeTab === "SUMMARY" ? "var(--primary)" : "var(--text-secondary)",
-                fontSize: "0.875rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.35rem"
-              }}
-            >
-              Subject Requirements & Teacher Load
-              {conflictAnalysis.softWarnings.length > 0 && (
-                <span style={{ background: "#f59e0b", color: "#fff", padding: "0.1rem 0.4rem", borderRadius: "999px", fontSize: "0.7rem", fontWeight: 700 }}>
-                  {conflictAnalysis.softWarnings.length}
-                </span>
-              )}
-            </button>
-            {conflictAnalysis.hardConflicts.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setActiveTab("CONFLICTS")}
-                style={{
-                  background: "none",
-                  border: "none",
-                  borderBottom: activeTab === "CONFLICTS" ? "2px solid var(--danger)" : "2px solid transparent",
-                  padding: "0.4rem 0.5rem",
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  color: "var(--danger)",
-                  fontSize: "0.875rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.35rem"
-                }}
-              >
-                <AlertTriangle size={15} />
-                Hard Clashes ({conflictAnalysis.hardConflicts.length})
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* SUMMARY TAB: Requirements & Workloads */}
-      {viewMode === "CLASS" && activeTab === "SUMMARY" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "1.25rem", marginBottom: "1.5rem" }}>
-          {/* Subject Required vs Scheduled */}
-          <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", padding: "1.25rem" }}>
-            <h3 style={{ fontSize: "1rem", fontWeight: 700, margin: 0, marginBottom: "0.75rem" }}>
-              Subject Allocation Summary ({selectedClassName})
-            </h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-              {subjectSummaries.map(sub => {
-                const color = subjectColorMap.get(sub.subjectId) || SUBJECT_COLOR_PALETTE[0];
-                return (
-                  <div
-                    key={sub.subjectId}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "0.65rem 0.85rem",
-                      borderRadius: "8px",
-                      background: color.bg,
-                      border: `1px solid ${color.border}`
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: "0.9rem", color: color.text }}>{sub.subjectName}</div>
-                      <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                        Teacher: {sub.teacherName || "Unassigned"}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>
-                        {sub.scheduledPeriodsPerWeek} / {sub.requiredPeriodsPerWeek} Periods
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "0.72rem",
-                          fontWeight: 600,
-                          color:
-                            sub.status === "MATCHED"
-                              ? "var(--success)"
-                              : sub.status === "DEFICIT"
-                                ? "#f59e0b"
-                                : "var(--primary)"
-                        }}
-                      >
-                        {sub.status === "MATCHED"
-                          ? "✓ Required Met"
-                          : sub.status === "DEFICIT"
-                            ? `Deficit of ${Math.abs(sub.difference)}`
-                            : `Surplus of ${sub.difference}`}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Teacher Load Overview */}
-          <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", padding: "1.25rem" }}>
-            <h3 style={{ fontSize: "1rem", fontWeight: 700, margin: 0, marginBottom: "0.75rem" }}>
-              Faculty Workload & Availability
-            </h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxHeight: "400px", overflowY: "auto" }}>
-              {teacherLoads.map(t => (
-                <div key={t.teacherId} style={{ padding: "0.65rem 0.85rem", borderRadius: "8px", background: "rgba(0,0,0,0.02)", border: "1px solid var(--border-color)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontWeight: 600, fontSize: "0.875rem" }}>{t.teacherName}</span>
-                    <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
-                      {t.totalPeriodsPerWeek} / {t.maxPeriodsPerWeek} pw ({t.utilizationPercentage}%)
-                    </span>
-                  </div>
-                  {/* Progress bar */}
-                  <div style={{ width: "100%", height: "6px", background: "var(--border-color)", borderRadius: "999px", marginTop: "0.4rem", overflow: "hidden" }}>
-                    <div
-                      style={{
-                        width: `${Math.min(100, t.utilizationPercentage)}%`,
-                        height: "100%",
-                        background: t.isOverloaded ? "var(--danger)" : t.utilizationPercentage > 85 ? "#f59e0b" : "var(--primary)"
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CONFLICTS TAB */}
-      {viewMode === "CLASS" && activeTab === "CONFLICTS" && (
-        <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", padding: "1.25rem", marginBottom: "1.5rem" }}>
-          <h3 style={{ fontSize: "1.1rem", fontWeight: 700, margin: 0, color: "var(--danger)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <AlertTriangle size={20} /> Publishing Blocked: Clashes Detected
-          </h3>
-          <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
-            The following hard clashes violate scheduling rules. Resolve these before publishing.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "1rem" }}>
-            {conflictAnalysis.hardConflicts.map(c => (
-              <div key={c.id} style={{ padding: "0.85rem 1rem", borderRadius: "8px", background: "rgba(239, 68, 68, 0.08)", border: "1px solid rgba(239, 68, 68, 0.25)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: 600, color: "var(--danger)", fontSize: "0.9rem" }}>{c.title}</div>
-                  <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginTop: "0.15rem" }}>{c.message}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab("TIMETABLE");
-                    setActiveMobileDay(c.dayOfWeek);
-                    const slot = timetableData.find(t => t.dayOfWeek === c.dayOfWeek && t.period === c.period);
-                    startEdit(c.dayOfWeek, c.period, slot);
-                  }}
-                  style={{ padding: "0.4rem 0.75rem", borderRadius: "6px", background: "var(--card-bg)", border: "1px solid var(--border-color)", color: "inherit", cursor: "pointer", fontSize: "0.78rem", fontWeight: 600 }}
-                >
-                  Edit Slot
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* MAIN TIMETABLE VIEW (Grid on Desktop, Day-Cards on Mobile) */}
-      {activeTab === "TIMETABLE" && (
+      {/* MAIN TIMETABLE VIEW */}
+      {viewMode === "CLASS" && (
         <>
           {/* MOBILE VIEW (< 768px): Day Selector + Compact Vertical Period Cards */}
           <div className="timetable-mobile-container" style={{ display: "none" }}>
-            {/* View Type Toggle: Day Cards vs Week-at-a-glance */}
+            {/* View Type Toggle: Day Cards vs Week Matrix */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
               <div style={{ display: "inline-flex", background: "var(--card-bg)", borderRadius: "8px", border: "1px solid var(--border-color)", padding: "2px" }}>
                 <button
@@ -956,6 +780,30 @@ export default function TimetableClient({
                   Week at a Glance
                 </button>
               </div>
+
+              {mobileViewType === "DAY" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCopyFromDay(activeMobileDay);
+                    setCopyTargetDays([]);
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.3rem",
+                    padding: "0.35rem 0.7rem",
+                    borderRadius: "6px",
+                    background: "var(--card-bg)",
+                    border: "1px solid var(--border-color)",
+                    color: "inherit",
+                    fontSize: "0.78rem",
+                    cursor: "pointer"
+                  }}
+                >
+                  <Copy size={13} /> Copy {activeMobileDay.slice(0, 3)}
+                </button>
+              )}
             </div>
 
             {/* Mobile Day Selector Chips */}
@@ -987,7 +835,7 @@ export default function TimetableClient({
               </div>
             )}
 
-            {/* If Mobile Week at a glance: Compact Chip Matrix fitting within 360px */}
+            {/* If Mobile Week at a glance: Compact Chip Matrix */}
             {mobileViewType === "WEEK" && (
               <div style={{ background: "var(--card-bg)", borderRadius: "10px", border: "1px solid var(--border-color)", padding: "0.75rem", width: "100%", overflowX: "hidden" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "40px repeat(6, 1fr)", gap: "4px", textAlign: "center", fontSize: "0.72rem", fontWeight: 700 }}>
@@ -1001,10 +849,12 @@ export default function TimetableClient({
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "var(--text-secondary)" }}>
                           P{p.order}
                         </div>
-                        {DAYS.map(day => {
+                        {DAYS.map((day, dayIdx) => {
                           const slot = timetableData.find(t => t.dayOfWeek?.toUpperCase() === day && t.period === p.order);
                           const subColor = slot?.subjectId ? subjectColorMap.get(slot.subjectId) : null;
                           const code = slot?.subject?.code || slot?.subject?.name?.slice(0, 3)?.toUpperCase() || (isBreak ? "BRK" : "-");
+
+                          const overlay = slot ? getSlotOverlay(slot.id, dayIdx, p.order, slot.teacherId || slot.subject?.teacherId) : null;
 
                           return (
                             <button
@@ -1017,9 +867,9 @@ export default function TimetableClient({
                               style={{
                                 padding: "4px 2px",
                                 borderRadius: "4px",
-                                border: `1px solid ${subColor?.border || "var(--border-color)"}`,
-                                background: isBreak ? "rgba(245, 158, 11, 0.1)" : subColor?.bg || "transparent",
-                                color: isBreak ? "#d97706" : subColor?.text || "var(--text-secondary)",
+                                border: `1px solid ${overlay ? "rgba(245, 158, 11, 0.4)" : subColor?.border || "var(--border-color)"}`,
+                                background: overlay ? "rgba(245, 158, 11, 0.15)" : isBreak ? "rgba(245, 158, 11, 0.1)" : subColor?.bg || "transparent",
+                                color: overlay ? "#d97706" : isBreak ? "#d97706" : subColor?.text || "var(--text-secondary)",
                                 fontSize: "0.68rem",
                                 fontWeight: 700,
                                 cursor: "pointer",
@@ -1028,7 +878,7 @@ export default function TimetableClient({
                                 textOverflow: "ellipsis"
                               }}
                             >
-                              {code}
+                              {overlay ? "SUB" : code}
                             </button>
                           );
                         })}
@@ -1043,10 +893,13 @@ export default function TimetableClient({
             {mobileViewType === "DAY" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
                 {sortedPeriods.map(p => {
+                  const dayIdx = DAYS.indexOf(activeMobileDay);
                   const slot = timetableData.find(t => t.dayOfWeek?.toUpperCase() === activeMobileDay && t.period === p.order);
                   const isBreak = p.type === "BREAK" || p.type === "LUNCH" || slot?.isBreak;
                   const isEditing = editingSlot?.day?.toUpperCase() === activeMobileDay && editingSlot?.period === p.order;
                   const color = slot?.subjectId ? subjectColorMap.get(slot.subjectId) : SUBJECT_COLOR_PALETTE[0];
+
+                  const overlay = slot ? getSlotOverlay(slot.id, dayIdx, p.order, slot.teacherId || slot.subject?.teacherId) : null;
 
                   if (isBreak && !isEditing) {
                     return (
@@ -1081,7 +934,7 @@ export default function TimetableClient({
                       style={{
                         background: "var(--card-bg)",
                         borderRadius: "10px",
-                        border: `1px solid ${slot ? color?.border || "var(--border-color)" : "var(--border-color)"}`,
+                        border: `1px solid ${overlay ? "rgba(245, 158, 11, 0.4)" : slot ? color?.border || "var(--border-color)" : "var(--border-color)"}`,
                         padding: "0.85rem",
                         boxSizing: "border-box"
                       }}
@@ -1106,7 +959,7 @@ export default function TimetableClient({
                           >
                             <option value="">-- Select Subject --</option>
                             {availableSubjects.map(s => (
-                              <option key={s.id} value={s.id}>{s.name} ({s.teacher?.user?.name || "No Teacher"})</option>
+                              <option key={s.id} value={s.id}>{s.name} ({s.teacher?.user?.name || "Unassigned"})</option>
                             ))}
                           </select>
 
@@ -1150,19 +1003,35 @@ export default function TimetableClient({
                       ) : slot ? (
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
                               <span style={{ fontSize: "0.75rem", fontWeight: 700, padding: "0.15rem 0.45rem", borderRadius: "4px", background: "var(--input-bg)", color: "var(--text-secondary)" }}>
                                 P{p.order}
                               </span>
                               <span style={{ fontWeight: 700, fontSize: "0.95rem", color: color?.text || "inherit" }}>
                                 {slot.subject?.name}
                               </span>
+                              {overlay && overlay.type === "SUBSTITUTE" && (
+                                <span style={{ background: "rgba(245, 158, 11, 0.15)", color: "#d97706", padding: "0.1rem 0.4rem", borderRadius: "4px", fontSize: "0.72rem", fontWeight: 700 }}>
+                                  Sub: {overlay.substituteName}
+                                </span>
+                              )}
+                              {overlay && overlay.type === "FREE_PERIOD" && (
+                                <span style={{ background: "rgba(239, 68, 68, 0.12)", color: "var(--danger)", padding: "0.1rem 0.4rem", borderRadius: "4px", fontSize: "0.72rem", fontWeight: 700 }}>
+                                  Free Period
+                                </span>
+                              )}
                             </div>
 
-                            <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.25rem" }}>
-                              <span style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
-                                <User size={12} /> {slot.teacher?.user?.name || slot.subject?.teacher?.user?.name || "Teacher"}
-                              </span>
+                            <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.25rem", flexWrap: "wrap" }}>
+                              {overlay && overlay.type === "SUBSTITUTE" ? (
+                                <span style={{ textDecoration: "line-through", opacity: 0.6 }}>
+                                  {slot.teacher?.user?.name || slot.subject?.teacher?.user?.name}
+                                </span>
+                              ) : (
+                                <span style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
+                                  <User size={12} /> {slot.teacher?.user?.name || slot.subject?.teacher?.user?.name || "Teacher"}
+                                </span>
+                              )}
                               {slot.classroom && (
                                 <span style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
                                   <MapPin size={12} /> {slot.classroom}
@@ -1177,6 +1046,7 @@ export default function TimetableClient({
                               type="button"
                               onClick={() => startEdit(activeMobileDay, p.order, slot)}
                               style={{ padding: "0.4rem", background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer" }}
+                              title="Edit slot"
                             >
                               <Edit size={16} />
                             </button>
@@ -1184,6 +1054,7 @@ export default function TimetableClient({
                               type="button"
                               onClick={() => deleteSlot(slot.id)}
                               style={{ padding: "0.4rem", background: "transparent", border: "none", color: "var(--danger)", cursor: "pointer" }}
+                              title="Delete slot"
                             >
                               <Trash2 size={16} />
                             </button>
@@ -1218,14 +1089,14 @@ export default function TimetableClient({
             )}
           </div>
 
-          {/* DESKTOP VIEW (>= 768px): Full Table with Sticky Headers & No Sideways Stacking */}
+          {/* DESKTOP VIEW (>= 768px): Sticky First Column, Clean Grid, 88px cell height */}
           <div className="timetable-desktop-container" style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", overflow: "hidden", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
             <div style={{ overflowX: "auto", width: "100%" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", minWidth: "900px" }}>
                 <thead>
                   <tr>
                     {/* Fixed First Column for Day */}
-                    <th style={{ width: "130px", minWidth: "130px", padding: "0.85rem 1rem", borderBottom: "2px solid var(--border-color)", borderRight: "1px solid var(--border-color)", background: "var(--card-bg)", position: "sticky", left: 0, zIndex: 10, textAlign: "left", fontSize: "0.85rem", fontWeight: 700 }}>
+                    <th style={{ width: "135px", minWidth: "135px", padding: "0.85rem 1rem", borderBottom: "2px solid var(--border-color)", borderRight: "1px solid var(--border-color)", background: "var(--card-bg)", position: "sticky", left: 0, zIndex: 10, textAlign: "left", fontSize: "0.85rem", fontWeight: 700 }}>
                       Day / Period
                     </th>
 
@@ -1266,7 +1137,7 @@ export default function TimetableClient({
                         {/* Day Column */}
                         <td
                           style={{
-                            padding: "0.85rem 1rem",
+                            padding: "0.75rem 0.9rem",
                             borderBottom: "1px solid var(--border-color)",
                             borderRight: "1px solid var(--border-color)",
                             background: "var(--card-bg)",
@@ -1276,9 +1147,30 @@ export default function TimetableClient({
                             verticalAlign: "top"
                           }}
                         >
-                          <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{day}</div>
-                          <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginTop: "0.15rem", whiteSpace: "nowrap" }}>
-                            {currentDayDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>{day}</div>
+                              <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginTop: "0.15rem", whiteSpace: "nowrap" }}>
+                                {currentDayDate.toLocaleDateString("en-GB", { month: "short", day: "numeric" })}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCopyFromDay(day);
+                                setCopyTargetDays([]);
+                              }}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                padding: "2px",
+                                cursor: "pointer",
+                                color: "var(--text-secondary)"
+                              }}
+                              title={`Copy ${day}'s schedule to other days`}
+                            >
+                              <Copy size={13} />
+                            </button>
                           </div>
                         </td>
 
@@ -1289,11 +1181,13 @@ export default function TimetableClient({
                           const isEditing = editingSlot?.day?.toUpperCase() === day && editingSlot?.period === p.order;
                           const color = slot?.subjectId ? subjectColorMap.get(slot.subjectId) : null;
 
+                          const overlay = slot ? getSlotOverlay(slot.id, dayIndex, p.order, slot.teacherId || slot.subject?.teacherId) : null;
+
                           return (
                             <td
                               key={p.order}
                               style={{
-                                padding: "0.45rem",
+                                padding: "0.4rem",
                                 borderBottom: "1px solid var(--border-color)",
                                 borderRight: "1px solid var(--border-color)",
                                 verticalAlign: "top",
@@ -1307,7 +1201,7 @@ export default function TimetableClient({
                                   <span style={{ marginTop: "0.2rem" }}>{p.label || "Break"}</span>
                                 </div>
                               ) : isEditing ? (
-                                <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", height: "100%" }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", height: "100%" }}>
                                   <select
                                     value={editData.subjectId}
                                     onChange={(e) => {
@@ -1327,6 +1221,17 @@ export default function TimetableClient({
                                     ))}
                                   </select>
 
+                                  <select
+                                    value={editData.teacherId}
+                                    onChange={(e) => setEditData({ ...editData, teacherId: e.target.value })}
+                                    style={{ width: "100%", padding: "0.2rem", fontSize: "0.72rem", borderRadius: "4px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit" }}
+                                  >
+                                    <option value="">Select Teacher</option>
+                                    {allTeachers.map(t => (
+                                      <option key={t.id} value={t.id}>{t.name}</option>
+                                    ))}
+                                  </select>
+
                                   <input
                                     type="text"
                                     placeholder="Room"
@@ -1341,6 +1246,7 @@ export default function TimetableClient({
                                       onClick={() => saveSlot(day, p.order)}
                                       disabled={isPending}
                                       style={{ flex: 1, padding: "0.2rem", background: "var(--success)", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.7rem", fontWeight: 700 }}
+                                      title="Save"
                                     >
                                       ✓
                                     </button>
@@ -1348,6 +1254,7 @@ export default function TimetableClient({
                                       type="button"
                                       onClick={() => setEditingSlot(null)}
                                       style={{ flex: 1, padding: "0.2rem", background: "var(--danger)", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.7rem", fontWeight: 700 }}
+                                      title="Cancel"
                                     >
                                       ✕
                                     </button>
@@ -1362,12 +1269,12 @@ export default function TimetableClient({
                                     justifyContent: "space-between",
                                     padding: "0.45rem",
                                     borderRadius: "6px",
-                                    background: color?.bg || "rgba(79, 70, 229, 0.08)",
-                                    border: `1px solid ${color?.border || "rgba(79, 70, 229, 0.25)"}`
+                                    background: overlay ? "rgba(245, 158, 11, 0.08)" : color?.bg || "rgba(79, 70, 229, 0.08)",
+                                    border: `1px solid ${overlay ? "rgba(245, 158, 11, 0.35)" : color?.border || "rgba(79, 70, 229, 0.25)"}`
                                   }}
                                 >
                                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.2rem" }}>
-                                    <span style={{ fontWeight: 700, fontSize: "0.82rem", color: color?.text || "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    <span style={{ fontWeight: 700, fontSize: "0.82rem", color: overlay ? "#d97706" : color?.text || "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                       {slot.subject?.name}
                                     </span>
                                     <div style={{ display: "flex", gap: "2px" }}>
@@ -1375,6 +1282,7 @@ export default function TimetableClient({
                                         type="button"
                                         onClick={() => startEdit(day, p.order, slot)}
                                         style={{ background: "none", border: "none", padding: "1px", cursor: "pointer", color: "var(--text-secondary)" }}
+                                        title="Edit"
                                       >
                                         <Edit size={11} />
                                       </button>
@@ -1382,15 +1290,30 @@ export default function TimetableClient({
                                         type="button"
                                         onClick={() => deleteSlot(slot.id)}
                                         style={{ background: "none", border: "none", padding: "1px", cursor: "pointer", color: "var(--danger)" }}
+                                        title="Delete"
                                       >
                                         <Trash2 size={11} />
                                       </button>
                                     </div>
                                   </div>
 
-                                  <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {slot.teacher?.user?.name || slot.subject?.teacher?.user?.name || "No Teacher"}
-                                  </div>
+                                  {/* Substitute / Absent Overlay indicator */}
+                                  {overlay && overlay.type === "SUBSTITUTE" ? (
+                                    <div style={{ fontSize: "0.7rem", color: "#d97706", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                      Sub: {overlay.substituteName}
+                                      <span style={{ textDecoration: "line-through", opacity: 0.6, marginLeft: "4px", fontWeight: 400 }}>
+                                        {slot.teacher?.user?.name || slot.subject?.teacher?.user?.name}
+                                      </span>
+                                    </div>
+                                  ) : overlay && overlay.type === "FREE_PERIOD" ? (
+                                    <div style={{ fontSize: "0.68rem", color: "var(--danger)", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                      Teacher Absent (Free)
+                                    </div>
+                                  ) : (
+                                    <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                      {slot.teacher?.user?.name || slot.subject?.teacher?.user?.name || "Unassigned"}
+                                    </div>
+                                  )}
 
                                   {slot.classroom && (
                                     <div style={{ fontSize: "0.68rem", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "2px" }}>
@@ -1411,8 +1334,12 @@ export default function TimetableClient({
                                     borderRadius: "6px",
                                     color: "var(--text-secondary)",
                                     cursor: "pointer",
-                                    fontSize: "0.75rem"
+                                    fontSize: "0.85rem",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center"
                                   }}
+                                  title="Add slot"
                                 >
                                   +
                                 </button>
@@ -1430,7 +1357,7 @@ export default function TimetableClient({
         </>
       )}
 
-      {/* TEACHER SCHEDULE VIEW (if viewMode === "TEACHER") */}
+      {/* TEACHER SCHEDULE VIEW */}
       {viewMode === "TEACHER" && (
         <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", padding: "1.25rem" }}>
           <div style={{ marginBottom: "1rem" }}>
@@ -1470,7 +1397,7 @@ export default function TimetableClient({
                         <td style={{ padding: "0.75rem" }}>Period {s.period}</td>
                         <td style={{ padding: "0.75rem", fontSize: "0.8rem", color: "var(--text-secondary)" }}>{s.startTime} - {s.endTime}</td>
                         <td style={{ padding: "0.75rem", fontWeight: 600, color: "var(--primary)" }}>{cls ? `${cls.name} - ${cls.section}` : s.classId}</td>
-                        <td style={{ padding: "0.75rem" }}>{s.subjectName || "Subject"}</td>
+                        <td style={{ padding: "0.75rem" }}>{s.subject?.name || "Subject"}</td>
                         <td style={{ padding: "0.75rem" }}>{s.classroom || "-"}</td>
                       </tr>
                     );
@@ -1478,6 +1405,83 @@ export default function TimetableClient({
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Copy Day Modal */}
+      {copyFromDay && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", width: "100%", maxWidth: "460px", padding: "1.5rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <Copy size={18} /> Copy {copyFromDay}&apos;s Schedule
+              </h3>
+              <button onClick={() => setCopyFromDay(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}>
+                <X size={18} />
+              </button>
+            </div>
+            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "1rem" }}>
+              Select target days to duplicate {copyFromDay}&apos;s period slots into {selectedClassName}:
+            </p>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1.25rem" }}>
+              {DAYS.filter(d => d !== copyFromDay).map(day => {
+                const isSelected = copyTargetDays.includes(day);
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => {
+                      if (isSelected) {
+                        setCopyTargetDays(copyTargetDays.filter(d => d !== day));
+                      } else {
+                        setCopyTargetDays([...copyTargetDays, day]);
+                      }
+                    }}
+                    style={{
+                      padding: "0.5rem 0.85rem",
+                      borderRadius: "8px",
+                      border: isSelected ? "1px solid var(--primary)" : "1px solid var(--border-color)",
+                      background: isSelected ? "rgba(79, 70, 229, 0.15)" : "var(--input-bg)",
+                      color: isSelected ? "var(--primary)" : "inherit",
+                      cursor: "pointer",
+                      fontSize: "0.85rem",
+                      fontWeight: isSelected ? 700 : 500
+                    }}
+                  >
+                    {isSelected ? "✓ " : ""}{day}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+              <button
+                type="button"
+                onClick={() => setCopyFromDay(null)}
+                style={{ padding: "0.5rem 1rem", background: "transparent", border: "1px solid var(--border-color)", borderRadius: "6px", cursor: "pointer", fontSize: "0.85rem" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteCopyDay}
+                disabled={isPending || copyTargetDays.length === 0}
+                style={{
+                  padding: "0.5rem 1.25rem",
+                  background: copyTargetDays.length > 0 ? "var(--primary)" : "rgba(107, 114, 128, 0.4)",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: copyTargetDays.length > 0 ? "pointer" : "not-allowed",
+                  fontWeight: 600,
+                  fontSize: "0.85rem"
+                }}
+              >
+                Copy to {copyTargetDays.length} Days
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1492,7 +1496,7 @@ export default function TimetableClient({
                   <Settings size={20} /> Period Times Configuration
                 </h3>
                 <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
-                  Times set here define the period header row across every day and synchronize with teacher & parent dashboards.
+                  Times set here define the period header row across every day and synchronize with teacher &amp; parent dashboards.
                 </p>
               </div>
               <button onClick={() => setShowPeriodConfigModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}>
@@ -1534,7 +1538,7 @@ export default function TimetableClient({
                   disabled={isPending}
                   style={{ padding: "0.4rem 0.85rem", background: "var(--primary)", color: "var(--primary-fg)", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "0.8rem" }}
                 >
-                  Generate & Apply Schedule
+                  Generate &amp; Apply Schedule
                 </button>
               </div>
             </div>
@@ -1636,7 +1640,7 @@ export default function TimetableClient({
                   disabled={isPending}
                   style={{ padding: "0.55rem 1.25rem", background: "var(--primary)", color: "var(--primary-fg)", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "0.85rem" }}
                 >
-                  Save & Synchronize All
+                  Save &amp; Synchronize All
                 </button>
               </div>
             </div>

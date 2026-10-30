@@ -10,6 +10,7 @@ import Link from "next/link";
 import ExamClassPerformancePieChart from "./ExamClassPerformancePieChart";
 import { getSchoolCalendarStats } from "@/backend/api/actions/dashboard/attendance/calendarStats";
 import { isForenoonRecord, calculateAttendancePercentage } from "@/backend/lib/services/attendanceCalculation";
+import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
 
 export default async function ParentDashboard({
   searchParams
@@ -61,7 +62,7 @@ export default async function ParentDashboard({
   todayDate.setHours(0, 0, 0, 0);
 
   // 1. Fetch attendance, latest exam, calendar statistics, and today's schedule concurrently
-  const [attendanceRecords, lastExamWithMarks, calendarStats, todaysScheduleSlots, todaysSubs] = await Promise.all([
+  const [attendanceRecords, lastExamWithMarks, calendarStats, effectiveScheduleSlots] = await Promise.all([
     prisma.attendance.findMany({
       where: { studentId: selectedChild.id },
       orderBy: { date: 'desc' },
@@ -70,26 +71,10 @@ export default async function ParentDashboard({
     }),
     selectedChild.classId ? fetchLatestExam(selectedChild.classId) : Promise.resolve(null),
     getSchoolCalendarStats(new Date(), selectedChild.classId),
-    selectedChild.classId ? prisma.timetable.findMany({
-      where: { classId: selectedChild.classId, dayOfWeek: todayDayName },
-      include: { subject: { include: { teacher: { include: { user: true } } } } },
-      orderBy: { period: "asc" }
-    }) : Promise.resolve([]),
-    selectedChild.classId ? prisma.substitution.findMany({
-      where: { date: todayDate, status: "ASSIGNED", timetableEntry: { classId: selectedChild.classId } },
-      include: { substituteTeacher: { include: { user: true } }, absentTeacher: { include: { user: true } } }
-    }) : Promise.resolve([])
+    selectedChild.classId
+      ? getEffectiveTimetable({ classId: selectedChild.classId }, todayDate)
+      : Promise.resolve([])
   ]);
-
-  const activeParentSubsMap = new Map<string, { subTeacher: string; origTeacher: string }>();
-  for (const s of todaysSubs) {
-    if (s.substituteTeacher?.user?.name) {
-      activeParentSubsMap.set(s.timetableEntryId, {
-        subTeacher: s.substituteTeacher.user.name,
-        origTeacher: s.absentTeacher?.user?.name || "Teacher"
-      });
-    }
-  }
 
   const childClass = selectedChild.class;
   const presentedDays = attendanceRecords.filter((a) => a.status === "PRESENT").length;
@@ -345,26 +330,29 @@ export default async function ParentDashboard({
           </Link>
         </div>
 
-        {todaysScheduleSlots.length > 0 ? (
+        {effectiveScheduleSlots.length > 0 ? (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "0.75rem" }}>
-            {todaysScheduleSlots.map(s => {
-              const subInfo = activeParentSubsMap.get(s.id);
+            {effectiveScheduleSlots.map(s => {
+              const isSub = Boolean(s.substituteTeacherName);
+              const isFree = Boolean(s.isFreePeriod);
+              const isExam = Boolean(s.hasExamOverlap);
+
               return (
                 <div
                   key={s.id}
                   style={{
                     padding: "0.85rem",
                     borderRadius: "10px",
-                    background: subInfo ? "rgba(245, 158, 11, 0.05)" : "var(--background)",
-                    border: `1px solid ${subInfo ? "rgba(245, 158, 11, 0.3)" : "var(--border-color)"}`,
+                    background: isSub ? "rgba(245, 158, 11, 0.05)" : isFree ? "rgba(239, 68, 68, 0.04)" : isExam ? "rgba(168, 85, 247, 0.06)" : "var(--background)",
+                    border: `1px solid ${isSub ? "rgba(245, 158, 11, 0.3)" : isFree ? "rgba(239, 68, 68, 0.25)" : isExam ? "rgba(168, 85, 247, 0.3)" : "var(--border-color)"}`,
                     display: "flex",
                     flexDirection: "column",
                     gap: "0.35rem"
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontWeight: 700, fontSize: "0.85rem", color: s.isBreak ? "#d97706" : "var(--primary)" }}>
-                      {s.isBreak ? "Break" : `Period ${s.period}`}
+                    <span style={{ fontWeight: 700, fontSize: "0.85rem", color: s.isBreak ? "#d97706" : isExam ? "#a855f7" : "var(--primary)" }}>
+                      {s.isBreak ? "Break" : isExam ? "Exam Period" : `Period ${s.period}`}
                     </span>
                     <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>
                       {s.startTime} - {s.endTime}
@@ -372,16 +360,20 @@ export default async function ParentDashboard({
                   </div>
 
                   <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>
-                    {s.isBreak ? "Break / Recess" : s.subject?.name}
+                    {isExam ? (s.examName || "Scheduled Exam") : s.isBreak ? "Break / Recess" : (s.subjectName || "Subject")}
                   </div>
 
-                  {subInfo ? (
+                  {isSub ? (
                     <div style={{ fontSize: "0.75rem", color: "#d97706", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem", marginTop: "0.15rem" }}>
-                      <span>⚡ Covered by <strong>{subInfo.subTeacher}</strong> (substitute for {subInfo.origTeacher})</span>
+                      <span>⚡ Covered by <strong>{s.substituteTeacherName}</strong> (substitute for {s.regularTeacherName || "Teacher"})</span>
                     </div>
-                  ) : s.subject?.teacher ? (
+                  ) : isFree ? (
+                    <div style={{ fontSize: "0.75rem", color: "var(--danger)", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem", marginTop: "0.15rem" }}>
+                      <span>Teacher absent, free period</span>
+                    </div>
+                  ) : s.regularTeacherName ? (
                     <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                      Teacher: {s.subject.teacher.user.name}
+                      Teacher: {s.regularTeacherName}
                     </div>
                   ) : null}
 

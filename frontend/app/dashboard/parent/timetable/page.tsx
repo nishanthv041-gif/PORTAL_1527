@@ -1,5 +1,6 @@
 import { getParentAndSelectedChild } from "../parentChildHelper";
 import { prisma } from "@/backend/db/prisma";
+import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
 import styles from "../../dashboard.module.css";
 import ParentChildBanner from "../ParentChildBanner";
 import { Calendar as CalendarIcon, Clock, MapPin, User, Building2, Home } from "lucide-react";
@@ -53,11 +54,12 @@ export default async function ParentTimetablePage({
   let activeSubstitutions: Record<string, {
     substituteTeacherName: string;
     absentTeacherName: string;
+    isFreePeriod?: boolean;
     note?: string | null;
   }> = {};
 
   if (selectedChild.classId) {
-    const [rawSlots, rawSubs] = await Promise.all([
+    const [rawSlots, effectiveTodaySlots] = await Promise.all([
       prisma.timetable.findMany({
         where: {
           classId: selectedChild.classId
@@ -76,26 +78,24 @@ export default async function ParentTimetablePage({
           { startTime: 'asc' }
         ]
       }),
-      prisma.substitution.findMany({
-        where: {
-          date: todayDate,
-          status: "ASSIGNED",
-          timetableEntry: { classId: selectedChild.classId }
-        },
-        include: {
-          substituteTeacher: { include: { user: true } },
-          absentTeacher: { include: { user: true } }
-        }
-      })
+      getEffectiveTimetable({ classId: selectedChild.classId }, todayDate)
     ]);
 
     scheduleSlots = rawSlots;
-    for (const sub of rawSubs) {
-      if (sub.substituteTeacher?.user?.name) {
-        activeSubstitutions[sub.timetableEntryId] = {
-          substituteTeacherName: sub.substituteTeacher.user.name,
-          absentTeacherName: sub.absentTeacher?.user?.name || "Original Teacher",
-          note: sub.note
+    for (const eff of effectiveTodaySlots) {
+      if (eff.substituteTeacherName) {
+        activeSubstitutions[eff.baseSlotId] = {
+          substituteTeacherName: eff.substituteTeacherName,
+          absentTeacherName: eff.regularTeacherName || "Original Teacher",
+          isFreePeriod: false,
+          note: eff.note
+        };
+      } else if (eff.isFreePeriod) {
+        activeSubstitutions[eff.baseSlotId] = {
+          substituteTeacherName: "Teacher absent, free period",
+          absentTeacherName: eff.regularTeacherName || "Original Teacher",
+          isFreePeriod: true,
+          note: "Free Period"
         };
       }
     }
