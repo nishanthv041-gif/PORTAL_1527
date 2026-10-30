@@ -538,17 +538,17 @@ export default function TimetableClient({
       )}
 
       {/* Header Banner & Navigation */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem" }}>
-        <div>
-          <h1 style={{ fontSize: "1.75rem", fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1.25rem" }}>
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ fontSize: "clamp(1.3rem, 5vw, 1.75rem)", fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
             Timetable Management
           </h1>
-          <p style={{ color: "var(--text-secondary)", margin: "0.25rem 0 0 0", fontSize: "0.9rem" }}>
+          <p style={{ color: "var(--text-secondary)", margin: "0.25rem 0 0 0", fontSize: "0.85rem" }}>
             School schedule, period timings, and pick-and-assign substitution.
           </p>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+        <div className="timetable-header-actions" style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", width: "100%" }}>
           {/* Mark Teacher Absent Button (Pick-and-Assign Flow) */}
           <Link
             href="/dashboard/admin/timetable/substitution"
@@ -621,7 +621,7 @@ export default function TimetableClient({
           </button>
 
           {/* Publish All Classes (Single button, no blocking) */}
-          <div style={{ display: "inline-flex", alignItems: "center", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--border-color)" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--border-color)", width: "100%" }}>
             <button
               type="button"
               onClick={handlePublishAll}
@@ -1579,8 +1579,8 @@ export default function TimetableClient({
 
       {/* Period Slots Configuration Modal */}
       {showPeriodConfigModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-          <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", width: "100%", maxWidth: "700px", maxHeight: "90vh", overflowY: "auto", padding: "1.5rem" }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 100, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "12px 0", overflowY: "auto" }}>
+          <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", width: "calc(100% - 24px)", maxWidth: "600px", maxHeight: "90vh", overflowY: "auto", padding: "1.25rem", margin: "auto 12px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -1600,7 +1600,7 @@ export default function TimetableClient({
               <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--primary)", display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.75rem" }}>
                 <Sparkles size={16} /> Quick Setup Wizard
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.75rem", fontSize: "0.8rem" }}>
+              <div className="quick-setup-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.75rem", fontSize: "0.8rem" }}>
                 <div>
                   <label style={{ display: "block", color: "var(--text-secondary)", marginBottom: "0.2rem" }}>Start Time</label>
                   <input type="time" value={quickGenStartTime} onChange={e => setQuickGenStartTime(e.target.value)} style={{ width: "100%", padding: "0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit" }} />
@@ -1637,7 +1637,7 @@ export default function TimetableClient({
             {/* Manual Slot Customization List */}
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               {editingPeriodSlots.map((ps, idx) => (
-                <div key={idx} style={{ display: "grid", gridTemplateColumns: "60px 1.2fr 100px 100px 110px 30px", gap: "0.5rem", alignItems: "center", padding: "0.5rem", borderRadius: "6px", background: ps.type === "BREAK" || ps.type === "LUNCH" ? "rgba(245, 158, 11, 0.05)" : "rgba(0,0,0,0.02)" }}>
+                <div key={idx} style={{ display: "grid", gridTemplateColumns: "50px 1fr 90px 90px 100px 28px", gap: "0.4rem", alignItems: "center", padding: "0.5rem", borderRadius: "6px", background: ps.type === "BREAK" || ps.type === "LUNCH" ? "rgba(245, 158, 11, 0.05)" : "rgba(0,0,0,0.02)", minWidth: 0 }}>
                   <span style={{ fontWeight: 700, fontSize: "0.85rem" }}>#{ps.order}</span>
                   <input
                     type="text"
@@ -1762,6 +1762,37 @@ export default function TimetableClient({
           .timetable-mobile-container {
             display: block !important;
           }
+          /* Header action buttons: stack vertically, full width each */
+          .timetable-header-actions {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            width: 100% !important;
+          }
+          .timetable-header-actions > * {
+            width: 100% !important;
+            justify-content: center !important;
+            box-sizing: border-box !important;
+          }
+          /* Control bar: stack vertically */
+          .timetable-control-bar {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+          /* Period config modal list: collapse columns to stacked */
+          .period-slot-row {
+            grid-template-columns: 36px 1fr !important;
+            gap: 0.35rem !important;
+          }
+          .period-slot-row input,
+          .period-slot-row select {
+            grid-column: 1 / -1 !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+          }
+          /* Quick setup wizard grid: 2 columns on phones */
+          .quick-setup-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
         }
         @media (min-width: 768px) {
           .timetable-desktop-container {
@@ -1769,6 +1800,9 @@ export default function TimetableClient({
           }
           .timetable-mobile-container {
             display: none !important;
+          }
+          .timetable-header-actions {
+            width: auto !important;
           }
         }
       `}</style>

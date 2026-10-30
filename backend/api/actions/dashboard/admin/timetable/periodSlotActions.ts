@@ -88,29 +88,34 @@ export async function savePeriodSlotsAction(
       return { success: false, error: validation.errors.join(" ") };
     }
 
-    // 2. Transactionally replace period slots for this scope
+    // 2. Replace period slots for this scope using sequential non-interactive
+    //    operations to avoid Neon connection-pooler transaction timeouts.
+    //    Interactive $transaction holds the TCP connection open too long on
+    //    serverless Neon/PgBouncer, causing "Transaction not found" errors.
     const targetClassId = classId || null;
-    await prisma.$transaction(async (tx) => {
-      await tx.periodSlot.deleteMany({
-        where: targetClassId ? { classId: targetClassId } : { classId: null }
-      });
 
-      await tx.periodSlot.createMany({
-        data: slots.map((s, idx) => ({
-          classId: targetClassId,
-          order: idx + 1,
-          label: s.label || `Period ${idx + 1}`,
-          startTime: s.startTime,
-          endTime: s.endTime,
-          type: s.type || "LESSON"
-        }))
-      });
+    // Delete old slots then recreate in one batch
+    await prisma.periodSlot.deleteMany({
+      where: targetClassId ? { classId: targetClassId } : { classId: null }
+    });
 
-      // Update existing timetable slots' startTime and endTime where period matches order
-      for (let i = 0; i < slots.length; i++) {
-        const slot = slots[i];
+    await prisma.periodSlot.createMany({
+      data: slots.map((s, idx) => ({
+        classId: targetClassId,
+        order: idx + 1,
+        label: s.label || `Period ${idx + 1}`,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        type: s.type || "LESSON"
+      }))
+    });
+
+    // Update existing timetable slot times to match the new period configuration.
+    // Run as parallel batch — prisma.timetable.updateMany() is idempotent here.
+    await Promise.all(
+      slots.map((slot, i) => {
         const isNonTeaching = slot.type === "BREAK" || slot.type === "LUNCH";
-        await tx.timetable.updateMany({
+        return prisma.timetable.updateMany({
           where: {
             period: i + 1,
             ...(targetClassId ? { classId: targetClassId } : {})
@@ -122,8 +127,8 @@ export async function savePeriodSlotsAction(
             isBreak: isNonTeaching
           }
         });
-      }
-    });
+      })
+    );
 
     revalidatePath("/dashboard/admin/timetable");
     revalidatePath("/dashboard/teacher/timetable");

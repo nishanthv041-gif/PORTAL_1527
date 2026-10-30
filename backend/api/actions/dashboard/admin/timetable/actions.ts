@@ -467,33 +467,34 @@ export async function copyDaySlotsAction(classId: string, sourceDay: string, tar
       return { success: false, error: `No slots found on ${sourceDay} to copy.` };
     }
 
-    await prisma.$transaction(async (tx) => {
-      for (const tDay of targetDays) {
-        if (tDay === sourceDay) continue;
+    // Use sequential non-interactive operations to avoid Neon connection-pooler
+    // transaction timeouts (interactive $transaction holds the connection too long
+    // on serverless / Neon PgBouncer).
+    for (const tDay of targetDays) {
+      if (tDay === sourceDay) continue;
 
-        // Delete existing on target day
-        await tx.timetable.deleteMany({
-          where: { classId, dayOfWeek: tDay }
-        });
+      // Delete existing slots on the target day first
+      await prisma.timetable.deleteMany({
+        where: { classId, dayOfWeek: tDay }
+      });
 
-        // Insert copied slots
-        await tx.timetable.createMany({
-          data: sourceSlots.map(s => ({
-            classId,
-            dayOfWeek: tDay,
-            period: s.period,
-            subjectId: s.subjectId,
-            teacherId: s.teacherId,
-            startTime: s.startTime,
-            endTime: s.endTime,
-            classroom: s.classroom,
-            isBreak: s.isBreak,
-            slotType: s.slotType,
-            status: s.status
-          }))
-        });
-      }
-    });
+      // Insert copied slots
+      await prisma.timetable.createMany({
+        data: sourceSlots.map(s => ({
+          classId,
+          dayOfWeek: tDay,
+          period: s.period,
+          subjectId: s.subjectId,
+          teacherId: s.teacherId,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          classroom: s.classroom,
+          isBreak: s.isBreak,
+          slotType: s.slotType,
+          status: s.status
+        }))
+      });
+    }
 
     revalidatePath("/dashboard/admin/timetable");
     return { success: true, count: sourceSlots.length * targetDays.length };
