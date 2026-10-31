@@ -43,7 +43,7 @@ npx prisma migrate deploy
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to view the portal.
+Open [SRT Universal School Portal](https://nipoportal.vercel.app) to view the portal.
 
 ## Production Build
 
