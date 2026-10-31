@@ -8,7 +8,7 @@ import styles from "./SplashScreen.module.css";
 const SESSION_STORAGE_KEY = "srt_splash_shown";
 
 export interface SplashScreenProps {
-  /** Optional callback fired when the splash finishes or is skipped */
+  /** Optional callback fired when the splash finishes */
   onComplete?: () => void;
   /** Optional route to redirect to on completion. If provided, router.replace will be called */
   redirectTo?: string;
@@ -18,16 +18,16 @@ export interface SplashScreenProps {
   className?: string;
 }
 
-// Fixed deterministic floating particles for zero layout shift
+// Fixed deterministic floating stardust particles for zero layout shift
 const PARTICLES = [
-  { top: "18%", left: "15%", size: 4, delay: "0.2s", tx: "18px", ty: "-24px", color: "rgba(242, 184, 75, 0.45)" },
-  { top: "25%", left: "82%", size: 3, delay: "0.8s", tx: "-16px", ty: "-20px", color: "rgba(59, 130, 246, 0.5)" },
-  { top: "35%", left: "28%", size: 5, delay: "1.4s", tx: "12px", ty: "-30px", color: "rgba(242, 184, 75, 0.35)" },
-  { top: "42%", left: "75%", size: 3, delay: "0.5s", tx: "-14px", ty: "-22px", color: "rgba(255, 255, 255, 0.4)" },
-  { top: "60%", left: "20%", size: 4, delay: "1.1s", tx: "20px", ty: "-26px", color: "rgba(59, 130, 246, 0.4)" },
-  { top: "68%", left: "85%", size: 5, delay: "0.4s", tx: "-18px", ty: "-28px", color: "rgba(242, 184, 75, 0.4)" },
-  { top: "78%", left: "32%", size: 3, delay: "1.7s", tx: "15px", ty: "-20px", color: "rgba(255, 255, 255, 0.35)" },
-  { top: "82%", left: "68%", size: 4, delay: "0.9s", tx: "-12px", ty: "-25px", color: "rgba(59, 130, 246, 0.45)" },
+  { top: "16%", left: "12%", size: 4, delay: "0.2s", tx: "20px", ty: "-26px", color: "rgba(242, 184, 75, 0.6)" },
+  { top: "22%", left: "84%", size: 3, delay: "0.8s", tx: "-18px", ty: "-22px", color: "rgba(59, 130, 246, 0.6)" },
+  { top: "32%", left: "24%", size: 5, delay: "1.3s", tx: "14px", ty: "-32px", color: "rgba(242, 184, 75, 0.45)" },
+  { top: "40%", left: "78%", size: 3, delay: "0.5s", tx: "-16px", ty: "-24px", color: "rgba(255, 255, 255, 0.5)" },
+  { top: "58%", left: "18%", size: 4, delay: "1.1s", tx: "22px", ty: "-28px", color: "rgba(59, 130, 246, 0.5)" },
+  { top: "66%", left: "86%", size: 5, delay: "0.4s", tx: "-20px", ty: "-30px", color: "rgba(242, 184, 75, 0.55)" },
+  { top: "76%", left: "30%", size: 3, delay: "1.6s", tx: "16px", ty: "-22px", color: "rgba(255, 255, 255, 0.4)" },
+  { top: "84%", left: "70%", size: 4, delay: "0.9s", tx: "-14px", ty: "-26px", color: "rgba(59, 130, 246, 0.55)" },
 ];
 
 export default function SplashScreen({
@@ -65,21 +65,24 @@ export default function SplashScreen({
       setIsVisible(false);
       if (onComplete) {
         onComplete();
-      } else if (redirectTo) {
-        router.replace(redirectTo, { scroll: false });
       }
-    }, 480);
+      if (redirectTo) {
+        if (typeof window !== "undefined" && window.location.pathname !== redirectTo) {
+          router.replace(redirectTo, { scroll: false });
+        }
+      }
+    }, 580);
   }, [isExiting, onComplete, redirectTo, router]);
 
   useEffect(() => {
     if (!isVisible) return;
 
-    // Check prefers-reduced-motion
-    let duration = 3500;
+    // Full animation cycle duration: ~5.4 seconds for cinematic mass rotation & reveal
+    let duration = 5400;
     try {
       const isReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (isReduced) {
-        duration = 1400; // Accelerated fade for reduced motion
+        duration = 1800; // Accelerated gentle fade for reduced motion
       }
     } catch {}
 
@@ -109,7 +112,7 @@ export default function SplashScreen({
       {/* Background Soft Radial Glow */}
       <div className={styles.radialGlow} aria-hidden="true" />
 
-      {/* Subtle Floating Particles */}
+      {/* Subtle Floating Stardust Particles */}
       <div className={styles.particleWrapper} aria-hidden="true">
         {PARTICLES.map((p, idx) => (
           <span
@@ -122,7 +125,7 @@ export default function SplashScreen({
                 width: `${p.size}px`,
                 height: `${p.size}px`,
                 backgroundColor: p.color,
-                boxShadow: `0 0 ${p.size * 2}px ${p.color}`,
+                boxShadow: `0 0 ${p.size * 2.5}px ${p.color}`,
                 animationDelay: p.delay,
                 "--tx": p.tx,
                 "--ty": p.ty,
@@ -134,13 +137,21 @@ export default function SplashScreen({
 
       {/* Main Content Stage */}
       <div className={styles.contentStage}>
-        {/* 3D Rotating Crest with Soft Shine Sweep */}
+        {/* 3D Mass Rotating Crest Stage with Glowing Orbital Border */}
         <div className={styles.logoWrapper}>
-          <SrtLogo
-            size="clamp(120px, 28vmin, 280px)"
-            priority
-            alt="SRT Universal School Crest"
-          />
+          {/* Border-to-Border Rotating Orbital Ring */}
+          <div className={styles.orbitalRing} aria-hidden="true" />
+
+          {/* Mass 3D Rotating Crest */}
+          <div className={styles.crestSpin}>
+            <SrtLogo
+              size="clamp(130px, 30vmin, 280px)"
+              priority
+              alt="SRT Universal School Crest"
+            />
+          </div>
+
+          {/* High-Gloss Shine Sweep */}
           <div className={styles.shineSweep} aria-hidden="true" />
         </div>
 
@@ -151,7 +162,8 @@ export default function SplashScreen({
             {schoolWords.map((word, wordIdx) => (
               <span key={wordIdx} className={styles.word}>
                 {word.split("").map((letter, letterIdx) => {
-                  const delay = 1.8 + globalCharCounter++ * 0.038;
+                  // Reveal letters after crest mass rotation settles (3.2s onwards)
+                  const delay = 3.2 + globalCharCounter++ * 0.042;
                   return (
                     <span
                       key={letterIdx}
@@ -171,16 +183,16 @@ export default function SplashScreen({
             ))}
           </h1>
 
-          {/* Gold Divider Line (Draws from centre outward) */}
+          {/* Gold Divider Line (Draws from centre outward at 3.5s) */}
           <div className={styles.divider} aria-hidden="true" />
 
-          {/* Tagline */}
+          {/* Tagline (Slides in smoothly at 3.75s) */}
           <p className={styles.tagline}>
             Seeing Righteousness &amp; Truth
           </p>
         </div>
 
-        {/* Slim Gold Progress Bar */}
+        {/* Slim Gold Progress Bar (Fills smoothly at 4.15s) */}
         <div
           className={styles.progressTrack}
           role="progressbar"
@@ -189,30 +201,6 @@ export default function SplashScreen({
           <div className={styles.progressBar} />
         </div>
       </div>
-
-      {/* Skip Button */}
-      <button
-        type="button"
-        onClick={handleFinish}
-        className={styles.skipButton}
-        title="Skip intro animation"
-      >
-        <span>Skip</span>
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <polygon points="5 4 15 12 5 20 5 4" />
-          <line x1="19" y1="5" x2="19" y2="19" />
-        </svg>
-      </button>
     </div>
   );
 }
