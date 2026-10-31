@@ -14,8 +14,7 @@ import {
   Send,
   RefreshCw,
   HeartHandshake,
-  AlertCircle,
-  Sparkles
+  AlertCircle
 } from "lucide-react";
 import {
   deleteAssignment,

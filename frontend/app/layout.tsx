@@ -20,29 +20,29 @@ export const viewport: Viewport = {
 };
 
 const CANONICAL_URL = "https://nipoportal.vercel.app";
-const DEFAULT_TITLE = "School Portal | School Information and Student Services";
+const DEFAULT_TITLE = "SRT Universal School Portal";
 const DEFAULT_DESCRIPTION =
-  "Access school information, announcements, academic resources, and authorized student, parent, and teacher services through our school portal.";
+  "Official Academic & Management Portal of SRT Universal School. Access school records, attendance, report cards, announcements, and authorized administrative services.";
 
 export async function generateMetadata(): Promise<Metadata> {
-  let schoolName = "School Portal";
-  let schoolLogo = `${CANONICAL_URL}/images/school_3d_moss_campus.jpg`;
+  let schoolName = "SRT Universal School";
+  let schoolLogo = `${CANONICAL_URL}/logo/srt-logo.png`;
   try {
     const settings = await getSystemSettings();
     if (settings.SCHOOL_NAME) schoolName = settings.SCHOOL_NAME;
     if (settings.SCHOOL_LOGO) schoolLogo = settings.SCHOOL_LOGO;
   } catch (err) {}
 
-  const dynamicTitle = `${schoolName} | School Information and Student Services`;
+  const dynamicTitle = DEFAULT_TITLE;
 
   return {
     metadataBase: new URL(CANONICAL_URL),
     title: {
-      default: dynamicTitle || DEFAULT_TITLE,
-      template: `%s | ${schoolName}`,
+      default: dynamicTitle,
+      template: `%s | ${dynamicTitle}`,
     },
     description: DEFAULT_DESCRIPTION,
-    applicationName: schoolName,
+    applicationName: dynamicTitle,
     authors: [{ name: schoolName }],
     creator: schoolName,
     publisher: schoolName,
@@ -56,30 +56,34 @@ export async function generateMetadata(): Promise<Metadata> {
       canonical: "/",
     },
     openGraph: {
-      title: dynamicTitle || DEFAULT_TITLE,
+      title: dynamicTitle,
       description: DEFAULT_DESCRIPTION,
       url: CANONICAL_URL,
-      siteName: schoolName,
+      siteName: dynamicTitle,
       locale: "en_US",
       type: "website",
       images: [
         {
           url: schoolLogo,
-          width: 1200,
-          height: 630,
-          alt: `${schoolName} Campus and Student Services Portal`,
+          width: 1120,
+          height: 1120,
+          alt: `${schoolName} Official Crest`,
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: dynamicTitle || DEFAULT_TITLE,
+      title: dynamicTitle,
       description: DEFAULT_DESCRIPTION,
       images: [schoolLogo],
     },
     icons: {
-      icon: [{ url: "/favicon.ico" }],
-      apple: [{ url: "/favicon.ico" }],
+      icon: [
+        { url: "/favicon.ico", sizes: "32x32" },
+        { url: "/favicon.svg", type: "image/svg+xml" },
+        { url: "/favicon.png", sizes: "64x64", type: "image/png" },
+      ],
+      apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
     },
     robots: {
       index: true,

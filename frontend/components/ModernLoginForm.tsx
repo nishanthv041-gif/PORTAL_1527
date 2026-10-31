@@ -10,7 +10,7 @@ import {
   ArrowRight,
   AlertCircle,
   Loader2,
-  Sparkles,
+  GraduationCap,
 } from "lucide-react";
 import styles from "@/frontend/app/login/modern-login.module.css";
 import ThemeToggle from "@/frontend/components/ThemeToggle";
@@ -24,7 +24,7 @@ interface ModernLoginFormProps {
 }
 
 export default function ModernLoginForm({
-  schoolName = "SRT Portal",
+  schoolName = "SRT Universal School",
   schoolLogo = null,
   defaultRole = null,
   initialError = null,
@@ -42,19 +42,19 @@ export default function ModernLoginForm({
 
   const slides = [
     {
-      title: "More Than Just An Academic Portal",
-      desc: "An intelligent, unified digital ecosystem empowering educators, students, and parents every day.",
-      badge: "🎓 Campus Portal 2026–2027",
+      title: "Academic Management Portal",
+      desc: "A unified digital platform empowering educators, students, and parents every day.",
+      badge: "Campus Academic Session 2026–2027",
     },
     {
       title: "Real-Time Attendance & Performance Tracking",
       desc: "Instant roll-calls, grade analytics, and automated parent notifications at your fingertips.",
-      badge: "📊 Live Academic Analytics",
+      badge: "Official Academic Analytics",
     },
     {
       title: "Secure Enterprise Institutional Management",
       desc: "Robust role-based security, automated activity auditing, and centralized student records.",
-      badge: "🛡️ Institutional Security",
+      badge: "Institutional Security",
     },
   ];
 
@@ -147,7 +147,7 @@ export default function ModernLoginForm({
       {/* Floating Top Bar (Clean, no fake browser/traffic lights) */}
       <header className={styles.topBar}>
         <div className={styles.brandPill}>
-          <Sparkles size={14} className={styles.sparkleIcon} />
+          <GraduationCap size={15} className={styles.sparkleIcon} />
           <span>{portalDisplayName}</span>
         </div>
         <ThemeToggle />
@@ -161,9 +161,7 @@ export default function ModernLoginForm({
         <div className={styles.leftPanel}>
           {/* Brand Header */}
             <div className={styles.brandRow}>
-              {schoolLogo === "/logo/srt-logo.svg" ? (
-                <SrtLogo size={40} alt={portalDisplayName} />
-              ) : schoolLogo ? (
+              {schoolLogo && schoolLogo !== "/logo/srt-logo.svg" && schoolLogo !== "/logo/srt-logo.png" ? (
                 <div
                   style={{
                     width: 38,
@@ -181,7 +179,7 @@ export default function ModernLoginForm({
                   />
                 </div>
               ) : (
-                <SrtLogo size={40} alt={portalDisplayName} />
+                <SrtLogo size={42} alt={portalDisplayName} />
               )}
               <div className={styles.brandTextGroup}>
                 <span className={styles.brandName}>{portalDisplayName}</span>
@@ -308,7 +306,7 @@ export default function ModernLoginForm({
 
             {/* Footer note */}
             <div className={styles.formFooter}>
-              &copy; {new Date().getFullYear()} {portalDisplayName}. All rights reserved.
+              &copy; SRT Universal School
             </div>
           </div>
 
@@ -319,7 +317,7 @@ export default function ModernLoginForm({
             {/* Top Badge */}
             <div className={styles.topBadgeRow}>
               <div className={styles.portalBadge}>
-                <Sparkles size={14} />
+                <GraduationCap size={15} />
                 <span>{slides[activeSlide].badge}</span>
               </div>
             </div>

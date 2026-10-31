@@ -2328,7 +2328,7 @@ export default function BulkUpload({
                         type="text"
                         value={editFormData.name || ""}
                         onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                        placeholder="e.g. John Doe"
+                        placeholder="e.g. Robert Smith"
                         style={{
                           width: "100%",
                           padding: "0.5rem 0.75rem",

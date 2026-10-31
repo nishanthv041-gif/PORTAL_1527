@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState, useEffect } from "react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import SrtLogo from "@/frontend/components/ui/SrtLogo";
 import styles from "./Sidebar.module.css";
 import { 
   Menu,
@@ -115,7 +116,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
   if (role === "ADMIN") links = adminLinks;
   if (role === "TEACHER") links = teacherLinks;
 
-  const schoolName = settings.SCHOOL_NAME || "EduPortal";
+  const schoolName = settings.SCHOOL_NAME || "SRT UNIVERSAL SCHOOL";
   const schoolLogo = settings.SCHOOL_LOGO || null;
 
   return (
@@ -130,22 +131,26 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
         </button>
         {!isCollapsed && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
-            {schoolLogo && (
-              <div style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                padding: '2px',
-                background: 'linear-gradient(135deg, #3b82f6, #ec4899)',
-                boxShadow: '0 4px 12px rgba(236, 72, 153, 0.2)',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                flexShrink: 0
-              }}>
-                <img src={schoolLogo} alt={schoolName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', backgroundColor: 'transparent' }} />
-              </div>
-            )}
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              backgroundColor: '#ffffff',
+              border: '2px solid #f2b84b',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              flexShrink: 0,
+              padding: '2px',
+              overflow: 'hidden'
+            }}>
+              {schoolLogo && schoolLogo !== "/logo/srt-logo.svg" && schoolLogo !== "/logo/srt-logo.png" ? (
+                <img src={schoolLogo} alt={schoolName} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              ) : (
+                <SrtLogo size={34} alt={schoolName} />
+              )}
+            </div>
             <span className={styles.logoText} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{schoolName}</span>
           </div>
         )}

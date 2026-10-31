@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import {
   Calendar as CalendarIcon, Clock, MapPin, User,
-  BookOpen, Sparkles, CheckCircle2, PlayCircle,
+  BookOpen, CheckCircle2, PlayCircle,
   CalendarDays, ChevronRight, GraduationCap
 } from "lucide-react";
 
@@ -285,7 +285,7 @@ export default function TeacherTimetableClient({
       {assignedSubstitutions && assignedSubstitutions.length > 0 && (
         <div style={{ background: "rgba(245, 158, 11, 0.08)", border: "1px solid rgba(245, 158, 11, 0.3)", borderRadius: "14px", padding: "1.25rem", marginBottom: "1.75rem" }}>
           <div style={{ fontWeight: 700, fontSize: "1rem", color: "#d97706", display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-            <Sparkles size={18} /> Today&apos;s Substitution Duty Assignments ({assignedSubstitutions.length})
+            <Clock size={18} /> Today&apos;s Substitution Duty Assignments ({assignedSubstitutions.length})
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "0.75rem" }}>
             {assignedSubstitutions.map(sub => (

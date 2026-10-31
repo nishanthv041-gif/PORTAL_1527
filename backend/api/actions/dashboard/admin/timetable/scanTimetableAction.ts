@@ -260,7 +260,7 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
       const buffer = Buffer.from(arrayBuffer);
 
       // ────────────────────────────────────────────────────────────────
-      // SCENARIO B: Images / Photos (Gemini Vision + In-Memory fallback)
+      // SCENARIO B: Images / Photos (Vision OCR + In-Memory fallback)
       // ────────────────────────────────────────────────────────────────
       if (mimeType.startsWith("image/") || /\.(jpg|jpeg|png|webp|bmp)$/i.test(extension)) {
         fileType = "Image / Photo";

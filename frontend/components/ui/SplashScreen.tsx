@@ -142,10 +142,11 @@ export default function SplashScreen({
           {/* Border-to-Border Rotating Orbital Ring */}
           <div className={styles.orbitalRing} aria-hidden="true" />
 
-          {/* Mass 3D Rotating Crest */}
+          {/* Mass 3D Rotating Crest on Circular White Plate */}
           <div className={styles.crestSpin}>
             <SrtLogo
-              size="clamp(130px, 30vmin, 280px)"
+              size="clamp(160px, 32vmin, 320px)"
+              withPlate
               priority
               alt="SRT Universal School Crest"
             />

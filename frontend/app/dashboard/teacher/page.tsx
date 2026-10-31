@@ -3,7 +3,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
 import styles from "../dashboard.module.css";
-import { GraduationCap, Users, Clock, MessageSquare, Calendar as CalendarIcon, MapPin, Star, ArrowRight, ShieldAlert, Sparkles } from "lucide-react";
+import { GraduationCap, Users, Clock, MessageSquare, Calendar as CalendarIcon, MapPin, Star, ArrowRight, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 
 const DAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
@@ -263,7 +263,7 @@ export default async function TeacherDashboard() {
                             fontWeight: 700
                           }}
                         >
-                          <Sparkles size={11} /> Substitution Duty
+                          <Clock size={11} /> Substitution Duty
                         </span>
                       )}
                     </div>

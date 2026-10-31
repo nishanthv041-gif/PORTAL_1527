@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import {
   Calendar as CalendarIcon, Clock, MapPin, User,
-  Sparkles, CheckCircle2, PlayCircle, AlertCircle,
+  CheckCircle2, PlayCircle, AlertCircle,
   CalendarDays, ChevronRight
 } from "lucide-react";
 

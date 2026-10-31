@@ -3,7 +3,7 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import {
   Upload, FileText, Image as ImageIcon, FileSpreadsheet,
-  CheckCircle2, AlertCircle, Sparkles, RefreshCw, Trash2, Plus,
+  CheckCircle2, AlertCircle, RefreshCw, Trash2, Plus,
   Award, Calendar, Users, Eye, EyeOff, RotateCcw,
   ShieldCheck, Check, X, ArrowRight, Layers, FileCheck, Send, Sliders, Edit3, Download
 } from "lucide-react";
@@ -968,7 +968,7 @@ export default function ReportCardDocumentStudio({
             flexShrink: 0,
             boxShadow: "0 4px 12px rgba(59, 130, 246, 0.3)"
           }}>
-            <Sparkles size={20} />
+            <FileCheck size={20} />
           </div>
           <div style={{ minWidth: 0 }}>
             <h2 style={{ margin: 0, fontSize: "clamp(1rem, 2.8vw, 1.15rem)", fontWeight: 800 }}>

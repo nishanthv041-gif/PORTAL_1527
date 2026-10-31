@@ -4,7 +4,7 @@ import { useState, useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import {
   X, User, Mail, Phone, BookOpen, GraduationCap, Calendar, Shield, Key, Eye, EyeOff,
-  Copy, Check, AlertTriangle, Trash2, CheckCircle2, XCircle, Sparkles, Loader2, Link2
+  Copy, Check, AlertTriangle, Trash2, CheckCircle2, XCircle, Loader2, Link2
 } from "lucide-react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import {
@@ -521,7 +521,7 @@ export default function TeacherEditDrawer({
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. John Doe"
+                    placeholder="e.g. Robert Smith"
                     style={{
                       width: "100%",
                       padding: "0.65rem 0.85rem",
@@ -932,7 +932,7 @@ export default function TeacherEditDrawer({
                         cursor: "pointer",
                       }}
                     >
-                      <Sparkles size={13} />
+                      <Key size={13} />
                       <span>Generate Strong</span>
                     </button>
                   </div>

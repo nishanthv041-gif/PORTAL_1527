@@ -5,7 +5,7 @@ import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 import { useState } from "react";
 import { 
   Calendar as CalendarIcon, MapPin, Clock, 
-  Search, Star, ChevronDown, ChevronUp, History, Sparkles, User
+  Search, Star, ChevronDown, ChevronUp, History, User
 } from "lucide-react";
 import { CalendarEvent } from "@prisma/client";
 
@@ -258,7 +258,7 @@ export default function ProgramsParentClient({ programs }: { programs: CalendarE
       {(activeTab === "ALL" || activeTab === "UPCOMING") && (
         <section style={{ marginBottom: "2.5rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem" }}>
-            <Sparkles size={20} style={{ color: "var(--primary)" }} />
+            <Star size={20} style={{ color: "var(--primary)" }} />
             <h2 style={{ fontSize: "1.25rem", fontWeight: 700, margin: 0 }}>
               Upcoming Programs ({upcomingPrograms.length})
             </h2>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Play, Pause, Volume2, VolumeX, Sparkles, Loader2, RotateCcw, AlertCircle } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Loader2, RotateCcw, AlertCircle } from "lucide-react";
 import { playbackEnhancer } from "@/frontend/utils/audioProcessor";
 import { audioPlaybackCoordinator } from "@/frontend/utils/audioPlaybackManager";
 
@@ -317,8 +317,8 @@ export default function VoiceNotePlayer({ src, duration, isMine, messageId }: Vo
                   transition: "all 0.15s ease",
                 }}
               >
-                <Sparkles size={11} fill={isEnhanced ? "currentColor" : "none"} />
-                <span>{isEnhanced ? "Boost" : "Raw"}</span>
+                <Volume2 size={11} />
+                <span>{isEnhanced ? "Enhanced" : "Standard"}</span>
               </button>
 
               {/* Volume Control Button & Popover */}

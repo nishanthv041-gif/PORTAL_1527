@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { 
-  Layers, Plus, ArrowRight, Sparkles, GraduationCap, Users, 
+  Layers, Plus, ArrowRight, GraduationCap, Users, 
   Calendar, Check, AlertCircle, RefreshCw, Star, ShieldCheck, 
   Clock, BookOpen, X, Loader2, Edit3, Trash2, History
 } from "lucide-react";
@@ -342,7 +342,7 @@ export default function BatchManagementClient({
               boxShadow: "0 2px 10px rgba(99, 102, 241, 0.35)"
             }}
           >
-            <Sparkles size={16} /> Promote to Next Batch
+            <GraduationCap size={16} /> Promote to Next Batch
           </button>
         </div>
       </div>

@@ -5,7 +5,7 @@ import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 import { useState } from "react";
 import { 
   Calendar as CalendarIcon, MapPin, Clock, 
-  Search, Star, ChevronDown, ChevronUp, History, Sparkles, User, Filter, GraduationCap, CheckCircle2
+  Search, Star, ChevronDown, ChevronUp, History, User, Filter, GraduationCap, CheckCircle2
 } from "lucide-react";
 import { CalendarEvent } from "@prisma/client";
 
@@ -100,7 +100,7 @@ export default function ProgramsTeacherClient({
               boxShadow: "0 8px 20px rgba(99, 102, 241, 0.3)"
             }}
           >
-            <Sparkles size={26} />
+            <Star size={26} />
           </div>
           <div>
             <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 800, color: "var(--foreground)" }}>

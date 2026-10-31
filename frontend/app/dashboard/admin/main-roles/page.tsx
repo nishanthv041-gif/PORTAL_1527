@@ -15,9 +15,13 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { redirect } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 export default async function MainRolesPage() {
   const session = await getServerSession(getAuthOptions());
-  if (!session || session.user?.role !== "ADMIN") redirect("/login");
+  if (!session?.user || session.user.role !== "ADMIN") {
+    redirect("/login");
+  }
 
   // Core School Roles & Operations
   const roleLinks = [

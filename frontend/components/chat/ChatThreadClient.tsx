@@ -10,7 +10,7 @@ import {
   ChevronDown, 
   ShieldCheck, 
   User as UserIcon,
-  Sparkles
+  MessageSquare
 } from "lucide-react";
 import ChatMessageItem, { ChatMessage } from "./ChatMessageItem";
 import ChatComposer from "./ChatComposer";
@@ -632,7 +632,7 @@ export default function ChatThreadClient({
               justifyContent: "center",
               marginBottom: "1rem",
             }}>
-              <Sparkles size={26} />
+              <MessageSquare size={26} />
             </div>
             <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>
               No messages yet

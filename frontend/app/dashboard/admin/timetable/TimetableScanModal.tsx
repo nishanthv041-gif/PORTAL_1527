@@ -5,7 +5,7 @@ import { Modal } from "@/frontend/components/ui";
 import {
   Upload, FileText, Image as ImageIcon, FileSpreadsheet,
   FileCheck, AlertTriangle, X, Check, RefreshCw, Trash2, Plus,
-  Clock, MapPin, Loader2, Sparkles, AlertCircle, Zap
+  Clock, MapPin, Loader2, AlertCircle, Zap
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import type { ScannedSlot } from "@/backend/api/actions/dashboard/admin/timetable/scanTimetableTypes";
@@ -600,7 +600,7 @@ export default function TimetableScanModal({
       isOpen={isOpen}
       onClose={onClose}
       title={`Scan & Update Timetable - ${selectedClassName}`}
-      icon={<Sparkles size={20} color="var(--primary)" />}
+      icon={<FileText size={20} color="var(--primary)" />}
       size="xl"
       footer={footerContent}
     >

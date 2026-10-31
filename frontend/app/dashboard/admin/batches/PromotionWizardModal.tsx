@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Modal } from "@/frontend/components/ui";
 import { 
-  X, Check, AlertTriangle, ArrowRight, Loader2, Sparkles, 
+  X, Check, AlertTriangle, ArrowRight, Loader2, Award, 
   GraduationCap, Users, RefreshCw, ChevronDown, ChevronUp,
   ShieldCheck, AlertCircle
 } from "lucide-react";
@@ -714,7 +714,7 @@ export default function PromotionWizardModal({
               alignItems: "center",
               justifyContent: "center"
             }}>
-              <Sparkles size={32} />
+              <Award size={32} />
             </div>
 
             <div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Send, CheckCircle, ArrowLeft, Users, Mail, Phone, AlertCircle, Sparkles } from "lucide-react";
+import { Send, CheckCircle, ArrowLeft, Users, Mail, Phone, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { sendReportCardToParentAction } from "@/backend/lib/services/reportCardActions";
 

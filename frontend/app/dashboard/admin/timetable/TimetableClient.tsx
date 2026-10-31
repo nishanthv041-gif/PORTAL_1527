@@ -13,7 +13,7 @@ import {
   MapPin,
   Coffee,
   Loader2,
-  Sparkles,
+  FileText,
   CheckCircle,
   AlertCircle,
   Settings,
@@ -615,7 +615,7 @@ export default function TimetableClient({
               fontWeight: 600
             }}
           >
-            <Sparkles size={16} /> Upload &amp; Scan
+            <FileText size={16} /> Upload &amp; Scan
           </button>
 
           {/* Publish All Classes (Single button, no blocking) */}
@@ -1656,7 +1656,7 @@ export default function TimetableClient({
           {/* Quick Generator Wizard Box */}
           <div style={{ background: "rgba(99, 102, 241, 0.05)", border: "1px solid rgba(99, 102, 241, 0.2)", borderRadius: "10px", padding: "0.85rem" }}>
             <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "var(--primary)", display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.6rem" }}>
-              <Sparkles size={16} /> Quick Setup Wizard
+              <CalendarIcon size={16} /> Quick Setup Wizard
             </div>
             <div className="quick-setup-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(115px, 1fr))", gap: "0.6rem", fontSize: "0.8rem" }}>
               <div>

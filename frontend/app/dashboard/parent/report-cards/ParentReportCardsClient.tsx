@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Award, Clock, FileText, CheckCircle2, ChevronRight, Sparkles } from "lucide-react";
+import { Award, Clock, FileText, CheckCircle2, ChevronRight } from "lucide-react";
 import ProfessionalReportCard, {
   ProfessionalReportCardData
 } from "@/frontend/components/ReportCards/ProfessionalReportCard";

@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Send, Trash2, Eye, CheckCircle2, Clock, Sparkles,
+  Send, Trash2, Eye, CheckCircle2, Clock, Calculator,
   BookOpen, Users, Award, AlertCircle, Calendar,
   Search, Check, X, ShieldAlert, FileText, ChevronRight,
   Sliders, Settings2, Target, Upload
@@ -463,7 +463,7 @@ export default function TeacherReportCardsClient({
               className={`${styles.tabBtn} ${activeTab === "CREATE" ? styles.tabBtnActive : ""}`}
               onClick={() => setActiveTab("CREATE")}
             >
-              <Sparkles size={16} />
+              <FileText size={16} />
               <span>Create &amp; Send</span>
             </button>
 
@@ -475,7 +475,7 @@ export default function TeacherReportCardsClient({
               onClick={() => setActiveTab("STUDIO")}
             >
               <Upload size={16} />
-              <span>AI Document &amp; OCR Studio</span>
+              <span>Document &amp; Gradebook OCR Studio</span>
             </button>
 
             <button
@@ -914,7 +914,7 @@ export default function TeacherReportCardsClient({
           <div className={styles.calculationPanel} aria-live="polite">
             <div className={styles.calcHeaderRow}>
               <div className={styles.calcHeaderTitleArea}>
-                <Sparkles size={16} className={styles.calcSparkleIcon} />
+                <Calculator size={16} className={styles.calcSparkleIcon} />
                 <span className={styles.calcHeaderTitle}>Live Academic Summary</span>
               </div>
               <div className={styles.statusIndicator}>
@@ -1051,7 +1051,7 @@ export default function TeacherReportCardsClient({
       )}
 
       {/* =========================================================
-          TAB 2: AI DOCUMENT & OCR STUDIO (FULL-PAGE WORKSPACE)
+          TAB 2: DOCUMENT & GRADEBOOK OCR STUDIO (FULL-PAGE WORKSPACE)
           ========================================================= */}
       {activeTab === "STUDIO" && (
         <ReportCardDocumentStudio

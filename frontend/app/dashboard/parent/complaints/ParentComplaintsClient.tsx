@@ -157,7 +157,7 @@ export default function ParentComplaintsClient({
     if (res.success) {
       setFeedback({
         type: "success",
-        text: `✨ Complaint submitted successfully! Administration has been notified.`
+        text: `Complaint submitted successfully! Administration has been notified.`
       });
       setTitle("");
       setDescription("");

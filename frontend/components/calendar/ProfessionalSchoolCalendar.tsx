@@ -21,7 +21,8 @@ import {
   ChevronRight,
   CheckCircle2,
   CalendarOff,
-  Sparkles,
+  Award,
+  Star,
   Plus,
   X,
   Trash2,
@@ -331,7 +332,7 @@ export default function ProfessionalSchoolCalendar({
               className={styles.btnSecondary}
               title="Quick setup for recurring days or vacation ranges"
             >
-              <Sparkles size={16} color="#9333ea" />
+              <Award size={16} color="#9333ea" />
               <span>Quick Set Days</span>
             </button>
           </div>
@@ -372,7 +373,7 @@ export default function ProfessionalSchoolCalendar({
 
         <div className={styles.metricCard}>
           <div className={`${styles.metricIconWrap} ${styles.metricIconEvents}`}>
-            <Sparkles size={22} />
+            <Star size={22} />
           </div>
           <div className={styles.metricInfo}>
             <span className={styles.metricValue}>{initialData.stats.eventsCount}</span>
@@ -1138,7 +1139,7 @@ export default function ProfessionalSchoolCalendar({
                   </>
                 ) : (
                   <>
-                    <Sparkles size={16} />
+                    <CheckCircle2 size={16} />
                     <span>Apply Batch Schedule</span>
                   </>
                 )}

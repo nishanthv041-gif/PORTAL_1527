@@ -53,7 +53,7 @@ export async function extractTimetableWithGemini(
   const base64Data = buffer.toString("base64");
 
   const prompt = `
-You are an expert school document OCR and academic timetable extraction AI.
+You are an expert school document OCR and academic timetable extraction parser.
 Analyze this school timetable image or scan carefully.
 
 TABLE EXTRACTION RULES:

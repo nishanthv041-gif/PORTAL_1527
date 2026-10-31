@@ -7,7 +7,6 @@ import {
   Calendar as CalendarIcon,
   Trash2,
   MessageSquare,
-  Sparkles,
   PlusCircle,
   GraduationCap,
   Clock,
@@ -227,7 +226,7 @@ export default function HomeworkClientPage({
 
       setAssignments([newItem, ...assignments]);
       setPortalAssignments([newItem, ...portalAssignments]);
-      setCreateFeedback({ type: "success", text: "✨ Home Work successfully assigned and sent to parents!" });
+      setCreateFeedback({ type: "success", text: "Home Work successfully assigned and sent to parents!" });
 
       // Reset form fields
       setTitle("");
@@ -488,7 +487,7 @@ export default function HomeworkClientPage({
                   justifyContent: "center"
                 }}
               >
-                <Sparkles size={24} />
+                <BookOpen size={24} />
               </div>
               <div>
                 <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontWeight: 600 }}>Assigned Today</div>
@@ -688,7 +687,7 @@ export default function HomeworkClientPage({
                             fontWeight: 700
                           }}
                         >
-                          ✨ Given Today
+                          Given Today
                         </span>
                       )}
 

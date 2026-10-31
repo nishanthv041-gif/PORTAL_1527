@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { 
   Users, UserCheck, Search, MessageSquare, Mail, Phone, 
-  GraduationCap, BookOpen, ArrowRight, Bell, Sparkles, Filter
+  GraduationCap, BookOpen, ArrowRight, Bell, Filter
 } from "lucide-react";
 import { Class } from "@prisma/client";
 

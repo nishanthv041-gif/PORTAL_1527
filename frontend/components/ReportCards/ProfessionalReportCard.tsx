@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   Award, CheckCircle2, ShieldCheck, Download, Eye,
-  Calendar, BookOpen, User, Sparkles, MessageSquareQuote, Check
+  Calendar, BookOpen, User, MessageSquareQuote, Check
 } from "lucide-react";
 import styles from "./ProfessionalReportCard.module.css";
 import { verifyReportCardAction } from "@/backend/lib/services/reportCardActions";

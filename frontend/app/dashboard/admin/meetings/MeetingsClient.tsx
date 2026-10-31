@@ -6,7 +6,7 @@ import {
   Plus, Calendar, Clock, MapPin, Link as LinkIcon, Trash2, 
   Users, UserCheck, Video, Building2, Bell, Send, CheckCircle, 
   AlertCircle, Search, ArrowLeft, ExternalLink, Copy, Check,
-  X, Loader2, Sparkles, Filter, ShieldCheck, AlertTriangle
+  X, Loader2, Filter, ShieldCheck, AlertTriangle
 } from "lucide-react";
 import { 
   createMeetingAction, 

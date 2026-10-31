@@ -4,7 +4,7 @@ import { useState, useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import {
   X, User, Mail, Phone, GraduationCap, Calendar, Shield, Key, Eye, EyeOff,
-  Copy, Check, AlertTriangle, Trash2, CheckCircle2, XCircle, Sparkles, Loader2,
+  Copy, Check, AlertTriangle, Trash2, CheckCircle2, XCircle, Loader2,
   Users, MapPin, Heart, Home, RefreshCw
 } from "lucide-react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
@@ -1136,7 +1136,7 @@ export default function StudentEditDrawer({
                         cursor: "pointer",
                       }}
                     >
-                      <Sparkles size={13} />
+                      <Key size={13} />
                       <span>Generate Strong</span>
                     </button>
                   </div>

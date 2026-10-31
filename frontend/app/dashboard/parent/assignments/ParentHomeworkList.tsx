@@ -249,12 +249,12 @@ export default function ParentHomeworkList({
                       </span>
                       {isToday(item.createdAt) && (
                         <span style={{ fontSize: "0.75rem", padding: "2px 7px", borderRadius: "10px", backgroundColor: "rgba(16, 185, 129, 0.15)", color: "var(--success)", fontWeight: 700 }}>
-                          ✨ Given Today
+                          Given Today
                         </span>
                       )}
                       {isToday(item.deadline) && (
                         <span style={{ fontSize: "0.75rem", padding: "2px 7px", borderRadius: "10px", backgroundColor: "rgba(234, 179, 8, 0.15)", color: "#ca8a04", fontWeight: 700 }}>
-                          ⚠️ Due Today
+                          Due Today
                         </span>
                       )}
                     </div>

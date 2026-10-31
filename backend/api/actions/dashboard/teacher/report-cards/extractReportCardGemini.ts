@@ -76,7 +76,7 @@ export async function extractWithGemini(options: GeminiExtractionOptions): Promi
   const base64Data = buffer.toString("base64");
 
   const prompt = `
-You are an expert school document OCR and gradebook data extraction AI.
+You are an expert school document OCR and gradebook data extraction parser.
 Analyze this academic report card or marksheet image carefully.
 
 TABLE EXTRACTION INSTRUCTIONS:

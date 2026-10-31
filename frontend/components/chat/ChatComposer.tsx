@@ -14,7 +14,7 @@ import {
   FileText, 
   AlertCircle,
   RotateCcw,
-  Sparkles
+  Volume2
 } from "lucide-react";
 import { 
   getOptimalAudioConstraints, 
@@ -926,8 +926,8 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
                       transition: "all 0.15s ease",
                     }}
                   >
-                    <Sparkles size={11} fill={previewEnhanced ? "currentColor" : "none"} />
-                    <span>{previewEnhanced ? "Boosted" : "Raw"}</span>
+                    <Volume2 size={11} />
+                    <span>{previewEnhanced ? "Enhanced" : "Standard"}</span>
                   </button>
 
                   {/* Discard */}
