@@ -43,7 +43,17 @@ import {
   updateBusStatusAction,
   sendBusMessageAction,
   getBusDetailAction,
+  updateBusStudentRouteAction,
 } from "@/backend/api/actions/dashboard/admin/transport/actions";
+
+interface TransportSummaryMetrics {
+  totalBuses: number;
+  runningBuses: number;
+  issuesBuses: number;
+  totalDayScholars: number;
+  dayScholarsOnBuses: number;
+  dayScholarsUnassigned: number;
+}
 
 interface AdminBusManagementProps {
   initialBuses: any[];
@@ -52,6 +62,7 @@ interface AdminBusManagementProps {
   recentMessages?: any[];
   recentStatusLogs?: any[];
   currentUserName?: string;
+  summaryMetrics?: TransportSummaryMetrics;
   // Legacy compatibility props if passed
   teachers?: any[];
   initialAlerts?: any[];
@@ -65,6 +76,7 @@ export default function AdminBusManagement({
   recentMessages = [],
   recentStatusLogs = [],
   currentUserName = "Administrator",
+  summaryMetrics,
   teachers = [],
 }: AdminBusManagementProps) {
   const router = useRouter();
@@ -221,12 +233,9 @@ export default function AdminBusManagement({
   const [pickupPointInput, setPickupPointInput] = useState("");
   const [dropPointInput, setDropPointInput] = useState("");
 
-  const [residenceFilter, setResidenceFilter] = useState<"ALL" | "DAYSCHOLAR" | "HOSTEL">("ALL");
-
   const handleOpenAssignStudents = (bus: any) => {
     setTargetBusForAssign(bus);
     setSelectedClassId("ALL");
-    setResidenceFilter("ALL");
     setStudentSearchQuery("");
     setSelectedStudentIds([]);
     setPickupPointInput(bus.routeDescription || "");
@@ -234,38 +243,34 @@ export default function AdminBusManagement({
     setIsAssignModalOpen(true);
   };
 
-  // Extract all real students across all classes with metadata and assignment status
+  // Extract all real DAY SCHOLAR students across all classes with metadata and assignment status
   const allAvailableStudents = useMemo(() => {
     const list: any[] = [];
     classes.forEach((cls) => {
-      (cls.students || []).forEach((st: any) => {
-        const activeAssignment = (st.busAssignments || []).find((ba: any) => ba.academicYear === "2025-2026" || !ba.academicYear);
-        const assignedBusNumber = activeAssignment?.bus?.busNumber || (st.busAssignments?.[0]?.bus?.busNumber);
-        list.push({
-          ...st,
-          className: `${cls.name} - ${cls.section}`,
-          classObjId: cls.id,
-          isAssigned: !!assignedBusNumber,
-          assignedBusNumber: assignedBusNumber || null,
-          isDayScholar: st.residenceType !== "HOSTEL",
+      (cls.students || [])
+        .filter((st: any) => st.isActive !== false && st.residenceType !== "HOSTEL")
+        .forEach((st: any) => {
+          const activeAssignment = (st.busAssignments || []).find((ba: any) => ba.academicYear === "2025-2026" || !ba.academicYear);
+          const assignedBusNumber = activeAssignment?.bus?.busNumber || (st.busAssignments?.[0]?.bus?.busNumber);
+          list.push({
+            ...st,
+            className: `${cls.name} - ${cls.section}`,
+            classObjId: cls.id,
+            isAssigned: !!assignedBusNumber,
+            assignedBusNumber: assignedBusNumber || null,
+            isDayScholar: true,
+          });
         });
-      });
     });
     return list;
   }, [classes]);
 
-  // Current filtered list of real students based on Class, Residence & search
+  // Current filtered list of real Day Scholar students based on Class & search
   const availableStudentsList = useMemo(() => {
     let list = allAvailableStudents;
 
     if (selectedClassId !== "ALL") {
       list = list.filter((st) => st.classObjId === selectedClassId);
-    }
-
-    if (residenceFilter === "DAYSCHOLAR") {
-      list = list.filter((st) => st.isDayScholar);
-    } else if (residenceFilter === "HOSTEL") {
-      list = list.filter((st) => !st.isDayScholar);
     }
 
     if (studentSearchQuery.trim()) {
@@ -281,7 +286,7 @@ export default function AdminBusManagement({
     }
 
     return list;
-  }, [allAvailableStudents, selectedClassId, residenceFilter, studentSearchQuery]);
+  }, [allAvailableStudents, selectedClassId, studentSearchQuery]);
 
   // Select all unassigned students currently visible in selected view
   const handleSelectAllInClass = () => {
@@ -357,9 +362,16 @@ export default function AdminBusManagement({
   const [isRosterModalOpen, setIsRosterModalOpen] = useState(false);
   const [rosterBusData, setRosterBusData] = useState<any | null>(null);
   const [isLoadingRoster, setIsLoadingRoster] = useState(false);
+  const [rosterSearchQuery, setRosterSearchQuery] = useState("");
+  const [editingLandmarkId, setEditingLandmarkId] = useState<string | null>(null);
+  const [pickupLandmarkInput, setPickupLandmarkInput] = useState("");
+  const [dropLandmarkInput, setDropLandmarkInput] = useState("");
+  const [isUpdatingLandmarks, setIsUpdatingLandmarks] = useState(false);
 
   const handleOpenRoster = async (bus: any) => {
     setIsLoadingRoster(true);
+    setRosterSearchQuery("");
+    setEditingLandmarkId(null);
     setIsRosterModalOpen(true);
     const detail = await getBusDetailAction(bus.id);
     setIsLoadingRoster(false);
@@ -367,6 +379,32 @@ export default function AdminBusManagement({
       setRosterBusData(detail.bus);
     } else {
       setRosterBusData(bus);
+    }
+  };
+
+  const handleStartEditLandmarks = (assignmentItem: any) => {
+    setEditingLandmarkId(assignmentItem.id);
+    setPickupLandmarkInput(assignmentItem.pickupPoint || "");
+    setDropLandmarkInput(assignmentItem.dropPoint || "");
+  };
+
+  const handleSaveLandmarks = async (assignmentId: string) => {
+    setIsUpdatingLandmarks(true);
+    const res = await updateBusStudentRouteAction(assignmentId, {
+      pickupPoint: pickupLandmarkInput,
+      dropPoint: dropLandmarkInput,
+    });
+    setIsUpdatingLandmarks(false);
+    if (res.error) {
+      showToast("error", res.error);
+    } else {
+      showToast("success", res.message || "Pickup/Drop landmarks updated.");
+      setEditingLandmarkId(null);
+      if (rosterBusData?.id) {
+        const fresh = await getBusDetailAction(rosterBusData.id);
+        if (fresh.bus) setRosterBusData(fresh.bus);
+      }
+      router.refresh();
     }
   };
 
@@ -633,23 +671,30 @@ export default function AdminBusManagement({
         </div>
       )}
 
-      {/* COMPACT METRIC STRIP (Fit for Mobile & Desktop) */}
+      {/* COMPACT METRIC STRIP (Database Grounded & Clickable Filters) */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
           gap: "0.6rem",
         }}
       >
+        {/* Card 1: Total Buses */}
         <div
+          onClick={() => setStatusFilter("ALL")}
+          role="button"
+          tabIndex={0}
+          title="Filter all buses"
           style={{
-            backgroundColor: "var(--card)",
-            border: "1px solid var(--border)",
+            backgroundColor: statusFilter === "ALL" ? "rgba(37, 99, 235, 0.08)" : "var(--card)",
+            border: statusFilter === "ALL" ? "1px solid var(--primary)" : "1px solid var(--border)",
             borderRadius: "10px",
             padding: "0.65rem 0.85rem",
             display: "flex",
             alignItems: "center",
             gap: "0.65rem",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
           }}
         >
           <div
@@ -672,20 +717,27 @@ export default function AdminBusManagement({
               Total Buses
             </div>
             <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--foreground)", lineHeight: 1.2 }}>
-              {buses.length}
+              {summaryMetrics?.totalBuses ?? buses.length}
             </div>
           </div>
         </div>
 
+        {/* Card 2: Running */}
         <div
+          onClick={() => setStatusFilter("RUNNING")}
+          role="button"
+          tabIndex={0}
+          title="Filter running buses"
           style={{
-            backgroundColor: "var(--card)",
-            border: "1px solid var(--border)",
+            backgroundColor: statusFilter === "RUNNING" ? "rgba(16, 185, 129, 0.08)" : "var(--card)",
+            border: statusFilter === "RUNNING" ? "1px solid var(--success)" : "1px solid var(--border)",
             borderRadius: "10px",
             padding: "0.65rem 0.85rem",
             display: "flex",
             alignItems: "center",
             gap: "0.65rem",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
           }}
         >
           <div
@@ -708,20 +760,27 @@ export default function AdminBusManagement({
               Running
             </div>
             <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--success)", lineHeight: 1.2 }}>
-              {buses.filter((b) => b.status === "RUNNING").length}
+              {summaryMetrics?.runningBuses ?? buses.filter((b) => b.status === "RUNNING").length}
             </div>
           </div>
         </div>
 
+        {/* Card 3: Delays / Issues */}
         <div
+          onClick={() => setStatusFilter("ISSUES")}
+          role="button"
+          tabIndex={0}
+          title="Filter delayed and maintenance buses"
           style={{
-            backgroundColor: "var(--card)",
-            border: issueBuses.length > 0 ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid var(--border)",
+            backgroundColor: statusFilter === "ISSUES" ? "rgba(239, 68, 68, 0.08)" : "var(--card)",
+            border: statusFilter === "ISSUES" ? "1px solid #ef4444" : issueBuses.length > 0 ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid var(--border)",
             borderRadius: "10px",
             padding: "0.65rem 0.85rem",
             display: "flex",
             alignItems: "center",
             gap: "0.65rem",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
           }}
         >
           <div
@@ -729,8 +788,8 @@ export default function AdminBusManagement({
               width: "36px",
               height: "36px",
               borderRadius: "8px",
-              backgroundColor: issueBuses.length > 0 ? "rgba(239, 68, 68, 0.15)" : "rgba(245, 158, 11, 0.12)",
-              color: issueBuses.length > 0 ? "#ef4444" : "var(--warning)",
+              backgroundColor: (summaryMetrics?.issuesBuses ?? issueBuses.length) > 0 ? "rgba(239, 68, 68, 0.15)" : "rgba(245, 158, 11, 0.12)",
+              color: (summaryMetrics?.issuesBuses ?? issueBuses.length) > 0 ? "#ef4444" : "var(--warning)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -743,13 +802,15 @@ export default function AdminBusManagement({
             <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.03em" }}>
               Delays / Issues
             </div>
-            <div style={{ fontSize: "1.2rem", fontWeight: 700, color: issueBuses.length > 0 ? "#ef4444" : "var(--foreground)", lineHeight: 1.2 }}>
-              {issueBuses.length}
+            <div style={{ fontSize: "1.2rem", fontWeight: 700, color: (summaryMetrics?.issuesBuses ?? issueBuses.length) > 0 ? "#ef4444" : "var(--foreground)", lineHeight: 1.2 }}>
+              {summaryMetrics?.issuesBuses ?? issueBuses.length}
             </div>
           </div>
         </div>
 
+        {/* Card 4: Day Scholars on Buses */}
         <div
+          title="Day Scholars assigned to buses vs total active Day Scholars"
           style={{
             backgroundColor: "var(--card)",
             border: "1px solid var(--border)",
@@ -777,10 +838,48 @@ export default function AdminBusManagement({
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.03em" }}>
-              Day Scholars
+              Day Scholars (Bus)
             </div>
             <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--foreground)", lineHeight: 1.2 }}>
-              {totalEnrolled}
+              {summaryMetrics ? `${summaryMetrics.dayScholarsOnBuses} / ${summaryMetrics.totalDayScholars}` : `${totalEnrolled}`}
+            </div>
+          </div>
+        </div>
+
+        {/* Card 5: Unassigned Day Scholars */}
+        <div
+          title="Active Day Scholars not yet assigned to any bus"
+          style={{
+            backgroundColor: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "10px",
+            padding: "0.65rem 0.85rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.65rem",
+          }}
+        >
+          <div
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "8px",
+              backgroundColor: (summaryMetrics?.dayScholarsUnassigned ?? 0) > 0 ? "rgba(245, 158, 11, 0.12)" : "rgba(16, 185, 129, 0.12)",
+              color: (summaryMetrics?.dayScholarsUnassigned ?? 0) > 0 ? "var(--warning)" : "var(--success)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <UserPlus size={18} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.03em" }}>
+              Unassigned Day Scholars
+            </div>
+            <div style={{ fontSize: "1.2rem", fontWeight: 700, color: (summaryMetrics?.dayScholarsUnassigned ?? 0) > 0 ? "var(--warning)" : "var(--foreground)", lineHeight: 1.2 }}>
+              {summaryMetrics?.dayScholarsUnassigned ?? 0}
             </div>
           </div>
         </div>
@@ -1047,7 +1146,7 @@ export default function AdminBusManagement({
                         width: `${percent}%`,
                         height: "100%",
                         backgroundColor:
-                          percent >= 100 ? "#ef4444" : percent >= 80 ? "#f59e0b" : "var(--primary)",
+                          percent >= 90 ? "#ef4444" : percent >= 75 ? "#f59e0b" : "#10b981",
                         borderRadius: "3px",
                         transition: "width 0.3s ease",
                       }}
@@ -1521,48 +1620,11 @@ export default function AdminBusManagement({
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
               <label style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--foreground)" }}>
-                Step 1: Filter by Class &amp; Student Type
+                Step 1: Filter by Class
               </label>
               <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>
-                Total: {allAvailableStudents.length} Students
+                {allAvailableStudents.length} Active Day Scholar{allAvailableStudents.length === 1 ? "" : "s"}
               </span>
-            </div>
-
-            {/* Residence Type Tabs */}
-            <div style={{ display: "flex", gap: "0.3rem", marginBottom: "0.4rem" }}>
-              {(["ALL", "DAYSCHOLAR", "HOSTEL"] as const).map((mode) => {
-                const isSelected = residenceFilter === mode;
-                const label = mode === "ALL" ? "All Students" : mode === "DAYSCHOLAR" ? "Day Scholars" : "Hostellers";
-                const count = mode === "ALL"
-                  ? allAvailableStudents.length
-                  : mode === "DAYSCHOLAR"
-                  ? allAvailableStudents.filter((s) => s.isDayScholar).length
-                  : allAvailableStudents.filter((s) => !s.isDayScholar).length;
-
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setResidenceFilter(mode)}
-                    style={{
-                      padding: "0.25rem 0.6rem",
-                      borderRadius: "6px",
-                      fontSize: "0.74rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      border: isSelected ? "1px solid var(--primary)" : "1px solid var(--border)",
-                      backgroundColor: isSelected ? "rgba(37, 99, 235, 0.1)" : "transparent",
-                      color: isSelected ? "var(--primary)" : "var(--text-secondary)",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.3rem",
-                    }}
-                  >
-                    <span>{label}</span>
-                    <span style={{ fontSize: "0.68rem", opacity: 0.8 }}>({count})</span>
-                  </button>
-                );
-              })}
             </div>
 
             {/* Class Selection Pills / Grid */}
@@ -1742,12 +1804,12 @@ export default function AdminBusManagement({
                               fontSize: "0.68rem",
                               padding: "1px 5px",
                               borderRadius: "4px",
-                              backgroundColor: st.isDayScholar ? "rgba(16, 185, 129, 0.12)" : "rgba(99, 102, 241, 0.12)",
-                              color: st.isDayScholar ? "var(--success)" : "#6366f1",
+                              backgroundColor: "rgba(16, 185, 129, 0.12)",
+                              color: "var(--success)",
                               fontWeight: 600,
                             }}
                           >
-                            {st.isDayScholar ? "Day Scholar" : "Hosteller"}
+                            Day Scholar
                           </span>
                         </div>
                       </div>
@@ -1932,6 +1994,29 @@ export default function AdminBusManagement({
             )}
           </div>
 
+          {/* Search bar inside Roster */}
+          {rosterBusData?.students && rosterBusData.students.length > 0 && (
+            <div style={{ position: "relative" }}>
+              <Search size={14} style={{ position: "absolute", left: "9px", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)" }} />
+              <input
+                type="text"
+                value={rosterSearchQuery}
+                onChange={(e) => setRosterSearchQuery(e.target.value)}
+                placeholder="Search roster by student name, roll or class..."
+                style={{
+                  width: "100%",
+                  padding: "0.4rem 0.5rem 0.4rem 1.8rem",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border)",
+                  backgroundColor: "var(--card)",
+                  color: "var(--foreground)",
+                  fontSize: "0.8rem",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+          )}
+
           {isLoadingRoster ? (
             <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-secondary)", fontSize: "0.9rem" }}>
               Loading student roster...
@@ -1941,88 +2026,200 @@ export default function AdminBusManagement({
               No students currently assigned to this bus. Click "+ Add More Students" above to enroll Day Scholars.
             </div>
           ) : (
-            <div style={{ maxHeight: "340px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-              {rosterBusData.students.map((item: any) => {
-                const student = item.student;
-                if (!student) return null;
+            <div style={{ maxHeight: "360px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+              {rosterBusData.students
+                .filter((item: any) => {
+                  if (!rosterSearchQuery.trim()) return true;
+                  const q = rosterSearchQuery.toLowerCase();
+                  const s = item.student;
+                  if (!s) return false;
+                  const name = `${s.firstName} ${s.lastName}`.toLowerCase();
+                  const roll = (s.rollNumber || "").toLowerCase();
+                  const cls = s.class ? `${s.class.name} ${s.class.section}`.toLowerCase() : "";
+                  return name.includes(q) || roll.includes(q) || cls.includes(q);
+                })
+                .map((item: any) => {
+                  const student = item.student;
+                  if (!student) return null;
+                  const isEditingThis = editingLandmarkId === item.id;
+                  const parentPhone = student.parents?.[0]?.parent?.phone || student.parents?.[0]?.parent?.alternatePhone;
 
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "0.5rem",
-                      padding: "0.6rem 0.75rem",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border)",
-                      backgroundColor: "var(--card)",
-                      fontSize: "0.82rem",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0 }}>
-                      <div
-                        style={{
-                          width: "32px",
-                          height: "32px",
-                          borderRadius: "50%",
-                          backgroundColor: "rgba(37, 99, 235, 0.12)",
-                          color: "var(--primary)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontWeight: 700,
-                          fontSize: "0.75rem",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {student.firstName[0]}
-                        {student.lastName[0] || ""}
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {student.firstName} {student.lastName}
-                        </div>
-                        <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginTop: "1px", display: "flex", alignItems: "center", gap: "0.3rem", flexWrap: "wrap" }}>
-                          <span>{student.class ? `${student.class.name} - ${student.class.section}` : "Class"}</span>
-                          <span>•</span>
-                          <span>Roll: {student.rollNumber}</span>
-                          {item.pickupPoint && (
-                            <>
-                              <span>•</span>
-                              <span style={{ color: "var(--primary)" }}>📍 {item.pickupPoint}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveStudentFromRoster(student.id, `${student.firstName} ${student.lastName}`)}
+                  return (
+                    <div
+                      key={item.id}
                       style={{
-                        padding: "0.35rem 0.65rem",
-                        borderRadius: "6px",
-                        backgroundColor: "rgba(239, 68, 68, 0.08)",
-                        color: "var(--danger)",
-                        border: "1px solid rgba(239, 68, 68, 0.25)",
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "0.3rem",
-                        flexShrink: 0,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.4rem",
+                        padding: "0.65rem 0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border)",
+                        backgroundColor: "var(--card)",
+                        fontSize: "0.82rem",
                       }}
-                      title="Remove this student from bus"
                     >
-                      <Trash2 size={13} />
-                      <span>Remove</span>
-                    </button>
-                  </div>
-                );
-              })}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0 }}>
+                          <div
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              borderRadius: "50%",
+                              backgroundColor: "rgba(37, 99, 235, 0.12)",
+                              color: "var(--primary)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 700,
+                              fontSize: "0.75rem",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {student.firstName[0]}
+                            {student.lastName[0] || ""}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {student.firstName} {student.lastName}
+                            </div>
+                            <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginTop: "1px", display: "flex", alignItems: "center", gap: "0.3rem", flexWrap: "wrap" }}>
+                              <span>{student.class ? `${student.class.name} - ${student.class.section}` : "Class"}</span>
+                              <span>•</span>
+                              <span>Roll: {student.rollNumber}</span>
+                              {parentPhone && (
+                                <>
+                                  <span>•</span>
+                                  <a href={`tel:${parentPhone}`} style={{ color: "var(--primary)", textDecoration: "none" }}>
+                                    📞 {parentPhone}
+                                  </a>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveStudentFromRoster(student.id, `${student.firstName} ${student.lastName}`)}
+                          style={{
+                            padding: "0.35rem 0.65rem",
+                            borderRadius: "6px",
+                            backgroundColor: "rgba(239, 68, 68, 0.08)",
+                            color: "var(--danger)",
+                            border: "1px solid rgba(239, 68, 68, 0.25)",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            flexShrink: 0,
+                          }}
+                          title="Remove this student from bus"
+                        >
+                          <Trash2 size={13} />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+
+                      {/* Route landmarks view or edit */}
+                      {isEditingThis ? (
+                        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap", paddingTop: "0.3rem", borderTop: "1px dashed var(--border)" }}>
+                          <input
+                            type="text"
+                            value={pickupLandmarkInput}
+                            onChange={(e) => setPickupLandmarkInput(e.target.value)}
+                            placeholder="Pickup Landmark (e.g. Main Gate)"
+                            style={{
+                              flex: "1 1 140px",
+                              padding: "0.3rem 0.5rem",
+                              borderRadius: "4px",
+                              border: "1px solid var(--border)",
+                              backgroundColor: "var(--background)",
+                              color: "var(--foreground)",
+                              fontSize: "0.75rem",
+                            }}
+                          />
+                          <input
+                            type="text"
+                            value={dropLandmarkInput}
+                            onChange={(e) => setDropLandmarkInput(e.target.value)}
+                            placeholder="Drop Landmark (e.g. Bus Stand)"
+                            style={{
+                              flex: "1 1 140px",
+                              padding: "0.3rem 0.5rem",
+                              borderRadius: "4px",
+                              border: "1px solid var(--border)",
+                              backgroundColor: "var(--background)",
+                              color: "var(--foreground)",
+                              fontSize: "0.75rem",
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveLandmarks(item.id)}
+                            disabled={isUpdatingLandmarks}
+                            style={{
+                              padding: "0.3rem 0.6rem",
+                              borderRadius: "4px",
+                              backgroundColor: "var(--primary)",
+                              color: "#fff",
+                              border: "none",
+                              fontSize: "0.75rem",
+                              fontWeight: 600,
+                              cursor: isUpdatingLandmarks ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            {isUpdatingLandmarks ? "Saving..." : "Save Route"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingLandmarkId(null)}
+                            style={{
+                              padding: "0.3rem 0.5rem",
+                              borderRadius: "4px",
+                              border: "1px solid var(--border)",
+                              backgroundColor: "transparent",
+                              color: "var(--foreground)",
+                              fontSize: "0.75rem",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem", paddingTop: "0.3rem", borderTop: "1px dashed var(--border)", fontSize: "0.74rem", color: "var(--text-secondary)" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                            <span>📍 Pickup: <strong style={{ color: "var(--foreground)" }}>{item.pickupPoint || "Default Route"}</strong></span>
+                            <span>•</span>
+                            <span>🏁 Drop: <strong style={{ color: "var(--foreground)" }}>{item.dropPoint || "Default Route"}</strong></span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditLandmarks(item)}
+                            style={{
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              border: "1px solid var(--border)",
+                              backgroundColor: "transparent",
+                              color: "var(--primary)",
+                              fontSize: "0.72rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "3px",
+                            }}
+                          >
+                            <Edit size={11} />
+                            <span>Edit Landmark</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
             </div>
           )}
 

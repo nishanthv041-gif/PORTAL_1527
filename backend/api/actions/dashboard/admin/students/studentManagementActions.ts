@@ -230,6 +230,31 @@ export async function updateStudentAction(rawData: z.infer<typeof studentUpdateS
         }
       });
 
+      // 1b. Automatic Bus unassignment if switched to HOSTEL or Deactivated (Day Scholar only rule)
+      if (validated.residenceType === "HOSTEL" || validated.isActive === false) {
+        const existingBusAssignments = await tx.busStudent.findMany({
+          where: { studentId: student.id },
+          include: { bus: true },
+        });
+
+        if (existingBusAssignments.length > 0) {
+          await tx.busStudent.deleteMany({
+            where: { studentId: student.id },
+          });
+
+          for (const ba of existingBusAssignments) {
+            await tx.busStatusLog.create({
+              data: {
+                busId: ba.busId,
+                status: ba.bus.status,
+                issueType: "OTHER",
+                description: `Auto-unassigned student ${validated.firstName.trim()} ${validated.lastName.trim()} (Roll: ${validated.rollNumber.trim()}): status changed to ${!validated.isActive ? "Inactive" : "Hosteller"}. Seat freed up.`,
+              },
+            });
+          }
+        }
+      }
+
       // 2. Manage Parent Details & Credentials
       const currentParentStudent = student.parents[0];
       const targetParentId = validated.existingParentId || validated.parentId || currentParentStudent?.parentId;
@@ -361,6 +386,8 @@ export async function updateStudentAction(rawData: z.infer<typeof studentUpdateS
     });
 
     revalidatePath("/dashboard/admin/students");
+    revalidatePath("/admin/buses");
+    revalidatePath("/dashboard/admin/transport");
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
@@ -393,6 +420,31 @@ export async function toggleStudentStatusAction(studentId: string) {
         data: { isActive: newIsActive }
       });
 
+      // Automatic Bus unassignment if deactivated (Day Scholar only rule)
+      if (!newIsActive) {
+        const existingBusAssignments = await tx.busStudent.findMany({
+          where: { studentId },
+          include: { bus: true },
+        });
+
+        if (existingBusAssignments.length > 0) {
+          await tx.busStudent.deleteMany({
+            where: { studentId },
+          });
+
+          for (const ba of existingBusAssignments) {
+            await tx.busStatusLog.create({
+              data: {
+                busId: ba.busId,
+                status: ba.bus.status,
+                issueType: "OTHER",
+                description: `Auto-unassigned student ${student.firstName} ${student.lastName} (Roll: ${student.rollNumber}): student deactivated. Seat freed up.`,
+              },
+            });
+          }
+        }
+      }
+
       await tx.auditLog.create({
         data: {
           userId: session.user.id,
@@ -405,6 +457,8 @@ export async function toggleStudentStatusAction(studentId: string) {
     });
 
     revalidatePath("/dashboard/admin/students");
+    revalidatePath("/admin/buses");
+    revalidatePath("/dashboard/admin/transport");
     return { success: true, newStatus: newIsActive };
   } catch (error: unknown) {
     if (error instanceof Error) return { error: error.message };
@@ -470,6 +524,8 @@ export async function deleteStudentPermanentlyAction(studentId: string) {
     });
 
     revalidatePath("/dashboard/admin/students");
+    revalidatePath("/admin/buses");
+    revalidatePath("/dashboard/admin/transport");
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) return { error: error.message };

@@ -12,6 +12,11 @@ import {
   UpdateBusStatusSchema,
   SendBusMessageSchema,
 } from "@/backend/lib/validations/transport";
+import {
+  getDayScholarWhere,
+  getDayScholarBusStudentWhere,
+  isDayScholarStudent,
+} from "@/backend/lib/transport/dayScholarHelper";
 
 // Helper: resolve staff record for current session user (supports STAFF and TEACHER roles)
 async function getStaffForUser(userId: string) {
@@ -74,7 +79,11 @@ export async function getTransportOverviewAction() {
         },
         _count: {
           select: {
-            students: true,
+            students: {
+              where: {
+                student: getDayScholarWhere(),
+              },
+            },
           },
         },
         statusLogs: {
@@ -108,7 +117,7 @@ export async function getTransportOverviewAction() {
       orderBy: { user: { name: "asc" } },
     });
 
-    // 3. Fetch active classes with students for the assignment picker
+    // 3. Fetch active classes with strictly Day-Scholar students for the assignment picker
     const classes = await prisma.class.findMany({
       where: { isActive: true },
       select: {
@@ -116,7 +125,7 @@ export async function getTransportOverviewAction() {
         name: true,
         section: true,
         students: {
-          where: { isActive: true },
+          where: getDayScholarWhere(),
           select: {
             id: true,
             firstName: true,
@@ -126,6 +135,9 @@ export async function getTransportOverviewAction() {
             classId: true,
             residenceType: true,
             busAssignments: {
+              where: {
+                bus: { isActive: true },
+              },
               select: {
                 id: true,
                 busId: true,
@@ -194,6 +206,44 @@ export async function getTransportOverviewAction() {
       },
     });
 
+    // 6. Aggregate summary metrics strictly from real database counts
+    const totalBuses = await prisma.bus.count({
+      where: { isActive: true },
+    });
+    const runningBuses = await prisma.bus.count({
+      where: { isActive: true, status: "RUNNING" },
+    });
+    const issuesBuses = await prisma.bus.count({
+      where: {
+        isActive: true,
+        status: { in: ["DELAYED", "MAINTENANCE", "NOT_RUNNING"] },
+      },
+    });
+
+    const totalDayScholars = await prisma.student.count({
+      where: getDayScholarWhere(),
+    });
+    const dayScholarsOnBuses = await prisma.student.count({
+      where: {
+        ...getDayScholarWhere(),
+        busAssignments: {
+          some: {
+            bus: { isActive: true },
+          },
+        },
+      },
+    });
+    const dayScholarsUnassigned = await prisma.student.count({
+      where: {
+        ...getDayScholarWhere(),
+        busAssignments: {
+          none: {
+            bus: { isActive: true },
+          },
+        },
+      },
+    });
+
     return {
       success: true,
       data: {
@@ -202,6 +252,14 @@ export async function getTransportOverviewAction() {
         classes,
         recentMessages,
         recentStatusLogs,
+        summaryMetrics: {
+          totalBuses,
+          runningBuses,
+          issuesBuses,
+          totalDayScholars,
+          dayScholarsOnBuses,
+          dayScholarsUnassigned,
+        },
       },
     };
   } catch (error: any) {
@@ -235,6 +293,7 @@ export async function getBusDetailAction(busId: string) {
           },
         },
         students: {
+          where: getDayScholarBusStudentWhere(),
           include: {
             student: {
               select: {
@@ -550,12 +609,42 @@ export async function assignStudentsToBusAction(busId: string, rawPayload: any) 
 
     const { students: assignments, academicYear } = parsed.data;
 
+    const studentIds = assignments.map((a) => a.studentId);
+
+    // Strict validation: Verify all students are active Day Scholars
+    const targetStudents = await prisma.student.findMany({
+      where: { id: { in: studentIds } },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        rollNumber: true,
+        residenceType: true,
+        isActive: true,
+      },
+    });
+
+    if (targetStudents.length !== studentIds.length) {
+      return { error: "One or more selected students could not be found in the database." };
+    }
+
+    for (const student of targetStudents) {
+      if (!isDayScholarStudent(student)) {
+        return {
+          error: `Cannot assign student ${student.firstName} ${student.lastName} (Roll: ${student.rollNumber}). Student is registered as ${student.residenceType || "Inactive"}. Bus transport is strictly reserved for active Day Scholars.`,
+        };
+      }
+    }
+
     // Check bus existence and capacity
     const bus = await prisma.bus.findUnique({
       where: { id: busId },
       include: {
         students: {
-          where: { academicYear },
+          where: {
+            academicYear,
+            student: getDayScholarWhere(),
+          },
           select: { studentId: true },
         },
       },
@@ -577,7 +666,6 @@ export async function assignStudentsToBusAction(busId: string, rawPayload: any) 
     }
 
     // Check if any student is ALREADY assigned to ANOTHER bus in the same academic year
-    const studentIds = assignments.map((a) => a.studentId);
     const existingOtherAssignments = await prisma.busStudent.findMany({
       where: {
         studentId: { in: studentIds },
@@ -694,6 +782,53 @@ export async function removeStudentFromBusAction(busStudentIdOrBusId: string, ma
 }
 
 // ==========================================
+// 7B. UPDATE BUS STUDENT ROUTE / LANDMARKS
+// ==========================================
+export async function updateBusStudentRouteAction(
+  busStudentId: string,
+  data: { pickupPoint?: string | null; dropPoint?: string | null }
+) {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session || !["ADMIN", "TEACHER", "STAFF"].includes(session.user.role)) {
+      return { error: "Unauthorized access." };
+    }
+
+    const assignment = await prisma.busStudent.findUnique({
+      where: { id: busStudentId },
+      include: {
+        student: { select: { firstName: true, lastName: true } },
+      },
+    });
+    if (!assignment) {
+      return { error: "Student bus assignment record not found." };
+    }
+
+    const updated = await prisma.busStudent.update({
+      where: { id: busStudentId },
+      data: {
+        pickupPoint: data.pickupPoint !== undefined ? (data.pickupPoint ? data.pickupPoint.trim() : null) : assignment.pickupPoint,
+        dropPoint: data.dropPoint !== undefined ? (data.dropPoint ? data.dropPoint.trim() : null) : assignment.dropPoint,
+      },
+    });
+
+    revalidatePath("/admin/buses");
+    revalidatePath("/dashboard/admin/transport");
+    revalidatePath("/staff/my-bus");
+    revalidatePath("/parent/bus");
+
+    return {
+      success: true,
+      assignment: updated,
+      message: `Pickup/drop landmarks updated for ${assignment.student.firstName} ${assignment.student.lastName}.`,
+    };
+  } catch (error: any) {
+    console.error("Error updating bus student route points:", error);
+    return { error: error?.message || "Failed to update landmarks." };
+  }
+}
+
+// ==========================================
 // 8. UPDATE BUS STATUS & REPORT ISSUES
 // ==========================================
 export async function updateBusStatusAction(busId: string, rawPayload: any) {
@@ -748,9 +883,12 @@ export async function updateBusStatusAction(busId: string, rawPayload: any) {
     // 2. AUTOMATIC URGENT PARENT NOTIFICATION IF STATUS != 'RUNNING'
     let parentAlertCount = 0;
     if (status !== "RUNNING") {
-      // Find all parents of active students on this bus
+      // Find all parents of active Day Scholar students on this bus
       const busStudents = await prisma.busStudent.findMany({
-        where: { busId },
+        where: {
+          busId,
+          student: getDayScholarWhere(),
+        },
         select: {
           student: {
             select: {
@@ -882,9 +1020,12 @@ export async function sendBusMessageAction(busId: string, rawPayload: any) {
     }
 
     if (type === "COMMON") {
-      // Common message: sends to every parent of every student on that bus
+      // Common message: sends to every parent of every Day Scholar student on that bus
       const busStudents = await prisma.busStudent.findMany({
-        where: { busId },
+        where: {
+          busId,
+          student: getDayScholarWhere(),
+        },
         select: {
           student: {
             select: {
@@ -1052,9 +1193,16 @@ export async function getStaffAssignedBusesAction() {
           include: { user: { select: { name: true, email: true } } },
         },
         _count: {
-          select: { students: true },
+          select: {
+            students: {
+              where: {
+                student: getDayScholarWhere(),
+              },
+            },
+          },
         },
         students: {
+          where: getDayScholarBusStudentWhere(),
           include: {
             student: {
               select: {
@@ -1154,7 +1302,9 @@ export async function getParentBusOverviewAction() {
       return { error: "Parent profile not found." };
     }
 
-    const childrenTransport = parent.children.map((childRel) => {
+    const childrenTransport = parent.children
+      .filter((childRel) => isDayScholarStudent(childRel.student))
+      .map((childRel) => {
       const student = childRel.student;
       const assignment = student.busAssignments[0] || null;
 
@@ -1390,7 +1540,11 @@ export async function previewBusMessageRecipientsAction(busId: string, studentId
     }
 
     const busStudents = await prisma.busStudent.findMany({
-      where: { busId, studentId: { in: studentIds } },
+      where: {
+        busId,
+        studentId: { in: studentIds },
+        student: getDayScholarWhere(),
+      },
       include: {
         student: {
           select: {

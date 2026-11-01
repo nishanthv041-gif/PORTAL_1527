@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
+import { isDayScholarStudent } from "@/backend/lib/transport/dayScholarHelper";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Parent record not found" }, { status: 404 });
     }
 
-    const childrenTransport = parent.children.map((rel) => {
+    const childrenTransport = parent.children
+      .filter((rel) => isDayScholarStudent(rel.student))
+      .map((rel) => {
       const student = rel.student;
       const assignment = student.busAssignments[0] || null;
 

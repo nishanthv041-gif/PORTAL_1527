@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { AssignStudentsSchema } from "@/backend/lib/validations/transport";
+import { getDayScholarWhere, isDayScholarStudent } from "@/backend/lib/transport/dayScholarHelper";
 
 export const dynamic = "force-dynamic";
 
@@ -27,13 +28,42 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const { students: assignments, academicYear } = parsed.data;
+    const studentIds = assignments.map((a) => a.studentId);
+
+    // Validate target students: strictly active Day Scholars
+    const targetStudents = await prisma.student.findMany({
+      where: { id: { in: studentIds } },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        rollNumber: true,
+        residenceType: true,
+        isActive: true,
+      },
+    });
+
+    if (targetStudents.length !== studentIds.length) {
+      return NextResponse.json({ error: "One or more selected students could not be found." }, { status: 404 });
+    }
+
+    for (const student of targetStudents) {
+      if (!isDayScholarStudent(student)) {
+        return NextResponse.json({
+          error: `Cannot assign student ${student.firstName} ${student.lastName} (Roll: ${student.rollNumber}). Student is registered as ${student.residenceType || "Inactive"}. Bus transport is strictly reserved for active Day Scholars.`,
+        }, { status: 400 });
+      }
+    }
 
     // Check bus existence and capacity
     const bus = await prisma.bus.findUnique({
       where: { id: busId },
       include: {
         students: {
-          where: { academicYear },
+          where: {
+            academicYear,
+            student: getDayScholarWhere(),
+          },
           select: { studentId: true },
         },
       },
@@ -57,7 +87,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     // Check if any student belongs to ANOTHER bus in the same academic year
-    const studentIds = assignments.map((a) => a.studentId);
     const existingOther = await prisma.busStudent.findMany({
       where: {
         studentId: { in: studentIds },

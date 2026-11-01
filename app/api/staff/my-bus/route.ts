@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
+import { getDayScholarWhere, getDayScholarBusStudentWhere } from "@/backend/lib/transport/dayScholarHelper";
 
 export const dynamic = "force-dynamic";
 
@@ -41,8 +42,17 @@ export async function GET(req: NextRequest) {
         inChargeStaff: {
           include: { user: { select: { name: true, email: true } } },
         },
-        _count: { select: { students: true } },
+        _count: {
+          select: {
+            students: {
+              where: {
+                student: getDayScholarWhere(),
+              },
+            },
+          },
+        },
         students: {
+          where: getDayScholarBusStudentWhere(),
           include: {
             student: {
               select: {

@@ -20,6 +20,7 @@ export default async function AdminBusesPage() {
     classes: [],
     recentMessages: [],
     recentStatusLogs: [],
+    summaryMetrics: undefined,
   };
 
   return (
@@ -30,6 +31,7 @@ export default async function AdminBusesPage() {
         classes={overview.classes}
         recentMessages={overview.recentMessages}
         recentStatusLogs={overview.recentStatusLogs}
+        summaryMetrics={overview.summaryMetrics}
         currentUserName={session.user.name || "Administrator"}
       />
     </div>
