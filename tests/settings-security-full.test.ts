@@ -249,6 +249,32 @@ async function runTests() {
     }
   });
 
+  // 9. Batch Promotion Password Verification Gate
+  await test("9. Batch Promotion requires Admin Password Verification before moving to preview", async () => {
+    const wizardModal = fs.readFileSync(
+      path.join(process.cwd(), "frontend/app/dashboard/admin/batches/PromotionWizardModal.tsx"),
+      "utf-8"
+    );
+
+    if (!wizardModal.includes("AdminPasswordVerificationModal")) {
+      throw new Error("PromotionWizardModal does not import AdminPasswordVerificationModal");
+    }
+    if (!wizardModal.includes("handleGenerateClick") || !wizardModal.includes("setIsPasswordModalOpen(true)")) {
+      throw new Error("PromotionWizardModal does not intercept 'Generate Promotion Preview' with password modal");
+    }
+    if (!wizardModal.includes("handlePasswordVerified") || !wizardModal.includes("setStep(2)")) {
+      throw new Error("PromotionWizardModal does not advance to step 2 upon password verification");
+    }
+
+    const actionsCode = fs.readFileSync(
+      path.join(process.cwd(), "backend/api/actions/dashboard/admin/batches/actions.ts"),
+      "utf-8"
+    );
+    if (!actionsCode.includes("adminPassword?: string") || !actionsCode.includes("unlockSettingsAction(adminPassword)")) {
+      throw new Error("simulateBatchPromotionAction does not enforce server-side admin password check");
+    }
+  });
+
   console.log("\n================================================================================");
   console.log(` SUMMARY: ${passed} PASSED, ${failed} FAILED`);
   console.log("================================================================================\n");

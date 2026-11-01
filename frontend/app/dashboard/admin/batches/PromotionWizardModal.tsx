@@ -12,6 +12,7 @@ import {
   executeBatchPromotionAction 
 } from "@/backend/api/actions/dashboard/admin/batches/actions";
 import { PromotionSimulationResult } from "@/backend/lib/services/batchPromotionEngine";
+import AdminPasswordVerificationModal from "@/frontend/components/settings/AdminPasswordVerificationModal";
 
 interface BatchItem {
   id: string;
@@ -44,6 +45,7 @@ export default function PromotionWizardModal({
 
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [executionResult, setExecutionResult] = useState<{
     promotedCount: number;
     graduatedCount: number;
@@ -54,16 +56,26 @@ export default function PromotionWizardModal({
   // Available candidate target batches (excluding source batch)
   const availableTargetBatches = batches.filter(b => b.id !== sourceBatchId);
 
-  // Step 1: Simulate Promotion
-  const handleSimulate = () => {
+  // Step 1: Trigger Admin Password Verification before generating preview
+  const handleGenerateClick = () => {
     if (!sourceBatchId || !targetBatchId) {
       setError("Please select both a Source Batch and a Target Batch.");
       return;
     }
     setError(null);
+    setIsPasswordModalOpen(true);
+  };
 
+  // Called when Admin Password Verification succeeds
+  const handlePasswordVerified = async (verifiedPassword: string) => {
+    setError(null);
     startTransition(async () => {
-      const res = await simulateBatchPromotionAction(sourceBatchId, targetBatchId, terminalGrade);
+      const res = await simulateBatchPromotionAction(
+        sourceBatchId,
+        targetBatchId,
+        terminalGrade,
+        verifiedPassword
+      );
       if (res.success && res.simulation) {
         setSimulation(res.simulation);
         // Pre-fill default overrides
@@ -74,7 +86,7 @@ export default function PromotionWizardModal({
           });
         });
         setStudentOverrides(initialOverrides);
-        setStep(2);
+        setStep(2); // Move to next page (Promotion Preview)
       } else {
         setError(res.error || "Failed to generate promotion simulation.");
       }
@@ -160,7 +172,7 @@ export default function PromotionWizardModal({
           </button>
           <button
             type="button"
-            onClick={handleSimulate}
+            onClick={handleGenerateClick}
             disabled={isPending || !sourceBatchId || !targetBatchId}
             style={{
               padding: "0.55rem 1.35rem",
@@ -252,14 +264,15 @@ export default function PromotionWizardModal({
   );
 
   return (
-    <Modal
-      isOpen={true}
-      onClose={onClose}
-      title="Batch Promotion & Rollover Wizard"
-      icon={<GraduationCap size={22} color="#6366f1" />}
-      size="xl"
-      footer={footerContent}
-    >
+    <>
+      <Modal
+        isOpen={true}
+        onClose={onClose}
+        title="Batch Promotion & Rollover Wizard"
+        icon={<GraduationCap size={22} color="#6366f1" />}
+        size="xl"
+        footer={footerContent}
+      >
 
         {/* Wizard Step Progress Indicator */}
         <div style={{
@@ -757,6 +770,16 @@ export default function PromotionWizardModal({
           </div>
         )}
 
-    </Modal>
+      </Modal>
+
+      <AdminPasswordVerificationModal
+        isOpen={isPasswordModalOpen}
+        onClose={() => setIsPasswordModalOpen(false)}
+        onVerified={handlePasswordVerified}
+        title="Admin Password Verification"
+        subtitle="Please enter your settings password to verify administrative authority before generating the promotion preview."
+        actionText="Verify & Generate Preview"
+      />
+    </>
   );
 }

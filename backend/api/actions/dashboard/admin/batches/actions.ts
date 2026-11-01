@@ -334,10 +334,21 @@ export async function assignClassesToBatchAction(batchId: string, classIds: stri
 export async function simulateBatchPromotionAction(
   sourceBatchId: string,
   targetBatchId: string,
-  terminalGrade: number = 12
+  terminalGrade: number = 12,
+  adminPassword?: string
 ) {
   try {
     await requireAdmin();
+
+    if (adminPassword) {
+      const { unlockSettingsAction } = await import(
+        "@/backend/api/actions/dashboard/admin/settings/securityActions"
+      );
+      const verifyRes = await unlockSettingsAction(adminPassword);
+      if (!verifyRes.success) {
+        return { success: false, error: verifyRes.error || "Incorrect admin settings password." };
+      }
+    }
 
     if (!sourceBatchId || !targetBatchId) {
       return { success: false, error: "Source batch and Target batch are required." };
