@@ -986,3 +986,15 @@ model BusMessageTarget {
   @@index([busMessageId])
   @@index([studentId])
 }
+
+model SettingsSecurity {
+  id              String    @id @default(cuid())
+  passwordHash    String
+  passwordVersion Int       @default(1)
+  failedAttempts  Int       @default(0)
+  lockedUntil     DateTime?
+  updatedAt       DateTime  @updatedAt
+  updatedByUserId String?
+
+  @@index([passwordVersion])
+}

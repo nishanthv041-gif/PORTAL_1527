@@ -1,24 +1,78 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { saveSystemSettingsBatchAction } from "@/backend/api/actions/dashboard/admin/settings/actions";
+import {
+  lockSettingsAction,
+  changeSettingsPasswordAction,
+} from "@/backend/api/actions/dashboard/admin/settings/securityActions";
 import { SystemSetting } from "@prisma/client";
 import {
   Building2, Save, Loader2, CheckCircle2, Upload, AlertCircle, Image as ImageIcon,
-  Phone, Mail, Globe, User, Calendar, MapPin, Users, GraduationCap, Clock, ArrowRight
+  Phone, Mail, Globe, User, Calendar, MapPin, Users, GraduationCap, Clock, ArrowRight,
+  Layers, Lock, KeyRound, Eye, EyeOff, ShieldCheck, ShieldAlert, Sparkles, RefreshCw
 } from "lucide-react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import BatchManagementClient from "../batches/BatchManagementClient";
 import styles from "./settings.module.css";
 
 interface SettingsClientProps {
   initialSettings: SystemSetting[];
+  batches?: any[];
+  currentBatch?: any;
+  unassignedClasses?: any[];
+  initialTab?: string;
 }
 
-export default function SettingsClient({ initialSettings }: SettingsClientProps) {
+function calculatePasswordStrength(pass: string): {
+  score: number;
+  label: "Weak" | "Fair" | "Good" | "Strong";
+  color: string;
+} {
+  if (!pass) return { score: 0, label: "Weak", color: "#ef4444" };
+  let s = 0;
+  if (pass.length >= 8) s++;
+  if (pass.length >= 12) s++;
+  if (/[A-Z]/.test(pass) && /[a-z]/.test(pass)) s++;
+  if (/[0-9]/.test(pass)) s++;
+  if (/[^A-Za-z0-9]/.test(pass)) s++;
+
+  if (s <= 1) return { score: 1, label: "Weak", color: "#ef4444" };
+  if (s === 2) return { score: 2, label: "Fair", color: "#f59e0b" };
+  if (s === 3) return { score: 3, label: "Good", color: "#3b82f6" };
+  return { score: 4, label: "Strong", color: "#10b981" };
+}
+
+export default function SettingsClient({
+  initialSettings,
+  batches = [],
+  currentBatch = null,
+  unassignedClasses = [],
+  initialTab = "info",
+}: SettingsClientProps) {
+  const router = useRouter();
   const confirm = useConfirm();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Active Tab: "info" | "batches" | "security"
+  const [activeTab, setActiveTab] = useState<"info" | "batches" | "security">(() => {
+    if (initialTab === "batches") return "batches";
+    if (initialTab === "security") return "security";
+    return "info";
+  });
+
+  const handleTabChange = (tab: "info" | "batches" | "security") => {
+    setActiveTab(tab);
+    // Update URL query string smoothly without reload
+    const newUrl = tab === "info" ? "/dashboard/admin/settings" : `/dashboard/admin/settings?tab=${tab}`;
+    window.history.pushState(null, "", newUrl);
+  };
+
+  // ----------------------------------------------------
+  // SCHOOL INFORMATION TAB STATE
+  // ----------------------------------------------------
   const [settingsValues, setSettingsValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {
       SCHOOL_NAME: "Modern School Portal",
@@ -40,6 +94,48 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // ----------------------------------------------------
+  // CHANGE SETTINGS PASSWORD TAB STATE
+  // ----------------------------------------------------
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showOld, setShowOld] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [passErrors, setPassErrors] = useState<Record<string, string>>({});
+  const [passSubmitting, setPassSubmitting] = useState(false);
+  const [passSuccessMessage, setPassSuccessMessage] = useState<string | null>(null);
+  const [passErrorMessage, setPassErrorMessage] = useState<string | null>(null);
+
+  const passwordStrength = calculatePasswordStrength(newPassword);
+
+  // ----------------------------------------------------
+  // LOCK SETTINGS ACTION
+  // ----------------------------------------------------
+  const [isLocking, startLockTransition] = useTransition();
+
+  const handleLockSettings = async () => {
+    const confirmed = await confirm({
+      title: "Lock Settings Session?",
+      message: "This will lock system settings and batch controls immediately. You will need to enter the settings password to access them again.",
+      confirmText: "Lock Settings",
+      cancelText: "Keep Unlocked",
+      variant: "warning",
+    });
+
+    if (!confirmed) return;
+
+    startLockTransition(async () => {
+      await lockSettingsAction();
+      router.push("/dashboard/admin/settings/unlock");
+      router.refresh();
+    });
+  };
+
+  // ----------------------------------------------------
+  // LOGO & SCHOOL INFO HANDLERS
+  // ----------------------------------------------------
   const handleChange = (key: string, value: string) => {
     setSettingsValues((prev) => ({ ...prev, [key]: value }));
     setSaveSuccess(false);
@@ -104,14 +200,12 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate size (< 2MB)
     const MAX_SIZE = 2 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
       setErrorMessage("Logo image must be smaller than 2MB.");
       return;
     }
 
-    // Validate type (PNG, JPG, SVG, WebP)
     const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp"];
     if (!validTypes.includes(file.type)) {
       setErrorMessage("Only PNG, JPG, SVG, and WebP image formats are supported.");
@@ -127,7 +221,7 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSaveInfo = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -175,508 +269,971 @@ export default function SettingsClient({ initialSettings }: SettingsClientProps)
     }
   };
 
+  // ----------------------------------------------------
+  // CHANGE SETTINGS PASSWORD HANDLER
+  // ----------------------------------------------------
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPassErrorMessage(null);
+    setPassSuccessMessage(null);
+    setPassErrors({});
+
+    // Client-side validation
+    const errors: Record<string, string> = {};
+    if (!oldPassword.trim()) {
+      errors.oldPassword = "Current settings password is required.";
+    }
+    if (newPassword.length < 8) {
+      errors.newPassword = "New password must be at least 8 characters long.";
+    } else if (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      errors.newPassword = "New password must contain at least one letter and one number.";
+    } else if (newPassword === oldPassword) {
+      errors.newPassword = "New password must be different from your current password.";
+    }
+    if (!confirmPassword) {
+      errors.confirmPassword = "Please confirm your new password.";
+    } else if (newPassword !== confirmPassword) {
+      errors.confirmPassword = "Passwords do not match.";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setPassErrors(errors);
+      return;
+    }
+
+    setPassSubmitting(true);
+    try {
+      const res = await changeSettingsPasswordAction({
+        oldPassword,
+        newPassword,
+        confirmPassword,
+      });
+
+      if (res?.error) {
+        setPassErrorMessage(res.error);
+        if (res.fieldErrors) {
+          setPassErrors(res.fieldErrors);
+        }
+      } else if (res?.success) {
+        setPassSuccessMessage("Settings password successfully changed! You remain authenticated in Settings.");
+        setOldPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setPassErrors({});
+        setTimeout(() => setPassSuccessMessage(null), 6000);
+      }
+    } catch {
+      setPassErrorMessage("An unexpected network error occurred. Please try again.");
+    } finally {
+      setPassSubmitting(false);
+    }
+  };
+
   return (
-    <div style={{ maxWidth: "860px", width: "100%", margin: "0 auto" }}>
+    <div style={{ maxWidth: "1080px", width: "100%", margin: "0 auto", boxSizing: "border-box" }}>
+      {/* ── SETTINGS NAVIGATION BAR (TABS + LOCK BUTTON) ────────────────────── */}
       <div
         style={{
-          background: "var(--card-bg, #0f172a)",
-          border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-          borderRadius: "16px",
-          overflow: "hidden",
-          boxShadow: "0 10px 30px -10px rgba(0,0,0,0.5)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1rem",
+          marginBottom: "1.5rem",
         }}
       >
-        {/* Header */}
+        {/* Navigation Tabs */}
         <div
           style={{
-            padding: "1.5rem 2rem",
-            borderBottom: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
-            gap: "0.75rem",
-            background: "rgba(59, 130, 246, 0.05)",
+            gap: "0.35rem",
+            background: "var(--card-bg, #0f172a)",
+            padding: "0.35rem",
+            borderRadius: "12px",
+            border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+            flexWrap: "wrap",
           }}
         >
-          <div
+          <button
+            type="button"
+            onClick={() => handleTabChange("info")}
             style={{
-              width: "40px",
-              height: "40px",
-              borderRadius: "10px",
-              background: "rgba(59, 130, 246, 0.15)",
-              color: "#3b82f6",
-              display: "flex",
+              display: "inline-flex",
               alignItems: "center",
-              justifyContent: "center",
+              gap: "0.5rem",
+              padding: "0.6rem 1.1rem",
+              borderRadius: "8px",
+              fontSize: "0.9rem",
+              fontWeight: activeTab === "info" ? 700 : 500,
+              border: "none",
+              color: activeTab === "info" ? "#ffffff" : "var(--text-secondary, #94a3b8)",
+              background: activeTab === "info" ? "var(--primary, #3b82f6)" : "transparent",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
             }}
           >
-            <Building2 size={22} />
-          </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
-              School Information
-            </h2>
-          </div>
+            <Building2 size={18} />
+            <span>School Information</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleTabChange("batches")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.6rem 1.1rem",
+              borderRadius: "8px",
+              fontSize: "0.9rem",
+              fontWeight: activeTab === "batches" ? 700 : 500,
+              border: "none",
+              color: activeTab === "batches" ? "#ffffff" : "var(--text-secondary, #94a3b8)",
+              background: activeTab === "batches" ? "var(--primary, #3b82f6)" : "transparent",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <Layers size={18} />
+            <span>Batches &amp; Promotion</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleTabChange("security")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.6rem 1.1rem",
+              borderRadius: "8px",
+              fontSize: "0.9rem",
+              fontWeight: activeTab === "security" ? 700 : 500,
+              border: "none",
+              color: activeTab === "security" ? "#ffffff" : "var(--text-secondary, #94a3b8)",
+              background: activeTab === "security" ? "var(--primary, #3b82f6)" : "transparent",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <KeyRound size={18} />
+            <span>Change Settings Password</span>
+          </button>
         </div>
 
-        {/* Feedback Messages */}
-        <div style={{ padding: "0 2rem", marginTop: errorMessage || saveSuccess ? "1.5rem" : 0 }}>
-          {errorMessage && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-                padding: "0.85rem 1rem",
-                borderRadius: "8px",
-                background: "rgba(239, 68, 68, 0.12)",
-                border: "1px solid rgba(239, 68, 68, 0.3)",
-                color: "#f87171",
-                fontSize: "0.9rem",
-              }}
-            >
-              <AlertCircle size={18} />
-              <span>{errorMessage}</span>
-            </div>
+        {/* Lock Settings Button */}
+        <button
+          type="button"
+          onClick={handleLockSettings}
+          disabled={isLocking}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            padding: "0.6rem 1.1rem",
+            borderRadius: "10px",
+            background: "rgba(239, 68, 68, 0.12)",
+            border: "1px solid rgba(239, 68, 68, 0.35)",
+            color: "#f87171",
+            fontSize: "0.875rem",
+            fontWeight: 600,
+            cursor: isLocking ? "not-allowed" : "pointer",
+            transition: "all 0.15s ease",
+          }}
+          title="Instantly lock Settings session"
+        >
+          {isLocking ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              <span>Locking...</span>
+            </>
+          ) : (
+            <>
+              <Lock size={16} />
+              <span>Lock Settings</span>
+            </>
           )}
-
-          {saveSuccess && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-                padding: "0.85rem 1rem",
-                borderRadius: "8px",
-                background: "rgba(16, 185, 129, 0.12)",
-                border: "1px solid rgba(16, 185, 129, 0.3)",
-                color: "#34d399",
-                fontSize: "0.9rem",
-              }}
-            >
-              <CheckCircle2 size={18} />
-              <span>School information successfully updated and cached across the portal!</span>
-            </div>
-          )}
-        </div>
-
-        {/* Form Body */}
-        <form onSubmit={handleSave} style={{ padding: "2rem" }}>
-          {/* Logo Section */}
-          <div
-            style={{
-              padding: "1.5rem",
-              background: "rgba(255, 255, 255, 0.02)",
-              borderRadius: "12px",
-              border: "1px dashed var(--border-color, rgba(255, 255, 255, 0.15))",
-              marginBottom: "2rem",
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: "1.5rem",
-            }}
-          >
-            <div
-              style={{
-                width: "90px",
-                height: "90px",
-                borderRadius: "12px",
-                background: "rgba(0, 0, 0, 0.3)",
-                border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                overflow: "hidden",
-                position: "relative",
-              }}
-            >
-              {settingsValues.SCHOOL_LOGO ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={settingsValues.SCHOOL_LOGO}
-                  alt="School Logo"
-                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                />
-              ) : (
-                <ImageIcon size={36} style={{ color: "var(--text-secondary, #64748b)" }} />
-              )}
-            </div>
-
-            <div style={{ flex: 1, minWidth: "240px" }}>
-              <div style={{ fontWeight: 600, fontSize: "0.95rem", color: "var(--text-primary, #f8fafc)", marginBottom: "0.25rem" }}>
-                School Logo
-              </div>
-              <div style={{ fontSize: "0.8rem", color: "var(--text-secondary, #94a3b8)", marginBottom: "0.75rem" }}>
-                Upload PNG, JPG, SVG, or WebP (max 2MB), or paste an image URL below.
-              </div>
-
-              <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept="image/png, image/jpeg, image/jpg, image/svg+xml, image/webp"
-                  onChange={handleLogoUpload}
-                  style={{ display: "none" }}
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    padding: "0.5rem 1rem",
-                    background: "rgba(59, 130, 246, 0.15)",
-                    border: "1px solid rgba(59, 130, 246, 0.3)",
-                    color: "#60a5fa",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontSize: "0.85rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  <Upload size={16} />
-                  <span>Upload Logo Image</span>
-                </button>
-
-                {settingsValues.SCHOOL_LOGO && (
-                  <button
-                    type="button"
-                    onClick={() => handleChange("SCHOOL_LOGO", "")}
-                    style={{
-                      padding: "0.5rem 0.85rem",
-                      background: "rgba(239, 68, 68, 0.1)",
-                      border: "1px solid rgba(239, 68, 68, 0.2)",
-                      color: "#f87171",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                      fontSize: "0.85rem",
-                    }}
-                  >
-                    Remove Logo
-                  </button>
-                )}
-              </div>
-
-              <div style={{ marginTop: "0.75rem" }}>
-                <input
-                  type="text"
-                  placeholder="Or enter logo image URL (e.g., https://...)"
-                  value={settingsValues.SCHOOL_LOGO || ""}
-                  onChange={(e) => handleChange("SCHOOL_LOGO", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.45rem 0.75rem",
-                    borderRadius: "6px",
-                    border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                    background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                    color: "inherit",
-                    fontSize: "0.82rem",
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Form Fields Grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem" }}>
-            {/* School Name */}
-            <div>
-              <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
-                School Name <span style={{ color: "#ef4444" }}>*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={settingsValues.SCHOOL_NAME || ""}
-                onChange={(e) => handleChange("SCHOOL_NAME", e.target.value)}
-                placeholder="e.g. Modern School"
-                style={{
-                  width: "100%",
-                  padding: "0.65rem 0.85rem",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                  background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                  color: "inherit",
-                  fontSize: "0.9rem",
-                }}
-              />
-            </div>
-
-            {/* Principal Name */}
-            <div>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
-                <User size={15} style={{ color: "#3b82f6" }} />
-                <span>Principal Name</span>
-              </label>
-              <input
-                type="text"
-                value={settingsValues.PRINCIPAL_NAME || ""}
-                onChange={(e) => handleChange("PRINCIPAL_NAME", e.target.value)}
-                placeholder="e.g. Dr. Eleanor Vance"
-                style={{
-                  width: "100%",
-                  padding: "0.65rem 0.85rem",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                  background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                  color: "inherit",
-                  fontSize: "0.9rem",
-                }}
-              />
-            </div>
-
-            {/* Contact / Phone */}
-            <div>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
-                <Phone size={15} style={{ color: "#3b82f6" }} />
-                <span>Contact Phone</span>
-              </label>
-              <input
-                type="text"
-                value={settingsValues.SCHOOL_CONTACT || ""}
-                onChange={(e) => handleChange("SCHOOL_CONTACT", e.target.value)}
-                placeholder="e.g. +1 (555) 019-2834"
-                style={{
-                  width: "100%",
-                  padding: "0.65rem 0.85rem",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                  background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                  color: "inherit",
-                  fontSize: "0.9rem",
-                }}
-              />
-            </div>
-
-            {/* Email */}
-            <div>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
-                <Mail size={15} style={{ color: "#3b82f6" }} />
-                <span>School Email</span>
-              </label>
-              <input
-                type="email"
-                value={settingsValues.SCHOOL_EMAIL || ""}
-                onChange={(e) => handleChange("SCHOOL_EMAIL", e.target.value)}
-                placeholder="e.g. admin@schoolportal.edu"
-                style={{
-                  width: "100%",
-                  padding: "0.65rem 0.85rem",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                  background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                  color: "inherit",
-                  fontSize: "0.9rem",
-                }}
-              />
-            </div>
-
-            {/* Website */}
-            <div>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
-                <Globe size={15} style={{ color: "#3b82f6" }} />
-                <span>School Website</span>
-              </label>
-              <input
-                type="url"
-                value={settingsValues.SCHOOL_WEBSITE || ""}
-                onChange={(e) => handleChange("SCHOOL_WEBSITE", e.target.value)}
-                placeholder="e.g. https://schoolportal.edu"
-                style={{
-                  width: "100%",
-                  padding: "0.65rem 0.85rem",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                  background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                  color: "inherit",
-                  fontSize: "0.9rem",
-                }}
-              />
-            </div>
-
-            {/* Academic Year */}
-            <div>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
-                <Calendar size={15} style={{ color: "#3b82f6" }} />
-                <span>Academic Year Label</span>
-              </label>
-              <input
-                type="text"
-                value={settingsValues.ACADEMIC_YEAR || ""}
-                onChange={(e) => handleChange("ACADEMIC_YEAR", e.target.value)}
-                placeholder="e.g. 2026-2027"
-                style={{
-                  width: "100%",
-                  padding: "0.65rem 0.85rem",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                  background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                  color: "inherit",
-                  fontSize: "0.9rem",
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Address */}
-          <div style={{ marginTop: "1.5rem" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
-              <MapPin size={15} style={{ color: "#3b82f6" }} />
-              <span>School Address</span>
-            </label>
-            <textarea
-              rows={3}
-              value={settingsValues.SCHOOL_ADDRESS || ""}
-              onChange={(e) => handleChange("SCHOOL_ADDRESS", e.target.value)}
-              placeholder="e.g. 123 Education Lane, Knowledge Park, District 5"
-              style={{
-                width: "100%",
-                padding: "0.65rem 0.85rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                color: "inherit",
-                fontSize: "0.9rem",
-                resize: "vertical",
-              }}
-            />
-          </div>
-
-          {/* Action Bar */}
-          <div
-            style={{
-              marginTop: "2.5rem",
-              paddingTop: "1.5rem",
-              borderTop: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: "1rem",
-            }}
-          >
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.6rem",
-                padding: "0.75rem 1.75rem",
-                borderRadius: "10px",
-                background: "var(--primary, #3b82f6)",
-                color: "#ffffff",
-                border: "none",
-                fontWeight: 600,
-                fontSize: "0.95rem",
-                cursor: isSubmitting ? "not-allowed" : "pointer",
-                boxShadow: "0 4px 14px 0 rgba(59, 130, 246, 0.39)",
-                opacity: isSubmitting ? 0.7 : 1,
-              }}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <>
-                  <Save size={18} />
-                  <span>Save School Information</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
+        </button>
       </div>
 
-      {/* ── Management Shortcuts ───────────────────────────────────────────── */}
-      <div
-        style={{
-          marginTop: "1.5rem",
-          background: "var(--card-bg, #0f172a)",
-          border: "1px solid var(--border-color, rgba(255,255,255,0.1))",
-          borderRadius: "16px",
-          overflow: "hidden",
-          boxShadow: "0 10px 30px -10px rgba(0,0,0,0.5)",
-        }}
-      >
-        <div
-          style={{
-            padding: "1.25rem 2rem",
-            borderBottom: "1px solid var(--border-color, rgba(255,255,255,0.1))",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.75rem",
-            background: "rgba(99,102,241,0.05)",
-          }}
-        >
+      {/* ── TAB 1: SCHOOL INFORMATION ───────────────────────────────────────── */}
+      {activeTab === "info" && (
+        <div style={{ maxWidth: "860px", width: "100%", margin: "0 auto" }}>
           <div
             style={{
-              width: "40px",
-              height: "40px",
-              borderRadius: "10px",
-              background: "rgba(99,102,241,0.15)",
-              color: "#6366f1",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              background: "var(--card-bg, #0f172a)",
+              border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+              borderRadius: "16px",
+              overflow: "hidden",
+              boxShadow: "0 10px 30px -10px rgba(0,0,0,0.5)",
             }}
           >
-            <Users size={22} />
-          </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
-              Management Pages
-            </h2>
-          </div>
-        </div>
-        <div style={{ padding: "1.25rem 2rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "0.85rem" }}>
-          {[
-            { href: "/dashboard/admin/teachers", label: "Teacher Management", desc: "Profiles, credentials, assigned subjects & Google SSO", icon: <Users size={20} />, color: "#3b82f6" },
-            { href: "/dashboard/admin/students", label: "Parent & Student", desc: "Students, parent contacts, classes & credentials", icon: <GraduationCap size={20} />, color: "#10b981" },
-          ].map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              style={{ textDecoration: "none", color: "inherit" }}
+            {/* Header */}
+            <div
+              style={{
+                padding: "1.5rem 2rem",
+                borderBottom: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                background: "rgba(59, 130, 246, 0.05)",
+              }}
             >
               <div
                 style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "10px",
+                  background: "rgba(59, 130, 246, 0.15)",
+                  color: "#3b82f6",
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.85rem",
-                  padding: "0.9rem 1rem",
-                  borderRadius: "10px",
-                  border: `1px solid ${item.color}33`,
-                  background: `${item.color}0d`,
-                  cursor: "pointer",
-                  transition: "background 0.15s",
+                  justifyContent: "center",
+                }}
+              >
+                <Building2 size={22} />
+              </div>
+              <div>
+                <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
+                  School Profile &amp; General Configuration
+                </h2>
+              </div>
+            </div>
+
+            {/* Feedback Messages */}
+            <div style={{ padding: "0 2rem", marginTop: errorMessage || saveSuccess ? "1.5rem" : 0 }}>
+              {errorMessage && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    padding: "0.85rem 1rem",
+                    borderRadius: "8px",
+                    background: "rgba(239, 68, 68, 0.12)",
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                    color: "#f87171",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  <AlertCircle size={18} />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
+              {saveSuccess && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    padding: "0.85rem 1rem",
+                    borderRadius: "8px",
+                    background: "rgba(16, 185, 129, 0.12)",
+                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                    color: "#34d399",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  <CheckCircle2 size={18} />
+                  <span>School information successfully updated across the portal!</span>
+                </div>
+              )}
+            </div>
+
+            {/* Form Body */}
+            <form onSubmit={handleSaveInfo} style={{ padding: "2rem" }}>
+              {/* Logo Section */}
+              <div
+                style={{
+                  padding: "1.5rem",
+                  background: "rgba(255, 255, 255, 0.02)",
+                  borderRadius: "12px",
+                  border: "1px dashed var(--border-color, rgba(255, 255, 255, 0.15))",
+                  marginBottom: "2rem",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: "1.5rem",
                 }}
               >
                 <div
                   style={{
-                    width: "38px",
-                    height: "38px",
-                    borderRadius: "9px",
-                    background: `${item.color}22`,
-                    color: item.color,
+                    width: "90px",
+                    height: "90px",
+                    borderRadius: "12px",
+                    background: "rgba(0, 0, 0, 0.3)",
+                    border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    flexShrink: 0,
+                    overflow: "hidden",
+                    position: "relative",
                   }}
                 >
-                  {item.icon}
+                  {settingsValues.SCHOOL_LOGO ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={settingsValues.SCHOOL_LOGO}
+                      alt="School Logo"
+                      style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                    />
+                  ) : (
+                    <ImageIcon size={36} style={{ color: "var(--text-secondary, #64748b)" }} />
+                  )}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-primary)" }}>{item.label}</div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.1rem" }}>{item.desc}</div>
+
+                <div style={{ flex: "1 1 240px" }}>
+                  <h4 style={{ margin: "0 0 0.35rem 0", fontSize: "1rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)" }}>
+                    School Crest / Official Logo
+                  </h4>
+                  <p style={{ margin: "0 0 1rem 0", fontSize: "0.825rem", color: "var(--text-secondary, #94a3b8)", lineHeight: 1.4 }}>
+                    Displayed on the login splash screen, topbar navigation, report cards, and official emails.
+                  </p>
+
+                  <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleLogoUpload}
+                      accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
+                      style={{ display: "none" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        padding: "0.5rem 1rem",
+                        borderRadius: "8px",
+                        background: "rgba(59, 130, 246, 0.15)",
+                        border: "1px solid rgba(59, 130, 246, 0.3)",
+                        color: "#3b82f6",
+                        fontSize: "0.85rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <Upload size={15} />
+                      <span>Upload New Logo</span>
+                    </button>
+
+                    {settingsValues.SCHOOL_LOGO && (
+                      <button
+                        type="button"
+                        onClick={() => handleChange("SCHOOL_LOGO", "")}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          padding: "0.5rem 1rem",
+                          borderRadius: "8px",
+                          background: "rgba(239, 68, 68, 0.1)",
+                          border: "1px solid rgba(239, 68, 68, 0.25)",
+                          color: "#f87171",
+                          fontSize: "0.85rem",
+                          fontWeight: 500,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Remove Logo
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <ArrowRight size={16} style={{ color: "var(--text-secondary)", flexShrink: 0 }} />
               </div>
-            </Link>
-          ))}
+
+              {/* Grid of Fields */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.25rem" }}>
+                {/* School Name */}
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
+                    <Building2 size={15} style={{ color: "#3b82f6" }} />
+                    <span>School Name *</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsValues.SCHOOL_NAME || ""}
+                    onChange={(e) => handleChange("SCHOOL_NAME", e.target.value)}
+                    placeholder="e.g. SRT Universal School"
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                      background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                      color: "inherit",
+                      fontSize: "0.9rem",
+                    }}
+                  />
+                </div>
+
+                {/* Principal Name */}
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
+                    <User size={15} style={{ color: "#3b82f6" }} />
+                    <span>Principal / Head of Institution</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsValues.PRINCIPAL_NAME || ""}
+                    onChange={(e) => handleChange("PRINCIPAL_NAME", e.target.value)}
+                    placeholder="e.g. Dr. Eleanor Vance"
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                      background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                      color: "inherit",
+                      fontSize: "0.9rem",
+                    }}
+                  />
+                </div>
+
+                {/* Contact Phone */}
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
+                    <Phone size={15} style={{ color: "#3b82f6" }} />
+                    <span>Contact Phone</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsValues.SCHOOL_CONTACT || ""}
+                    onChange={(e) => handleChange("SCHOOL_CONTACT", e.target.value)}
+                    placeholder="e.g. +91 98765 43210"
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                      background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                      color: "inherit",
+                      fontSize: "0.9rem",
+                    }}
+                  />
+                </div>
+
+                {/* Contact Email */}
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
+                    <Mail size={15} style={{ color: "#3b82f6" }} />
+                    <span>Official Email</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={settingsValues.SCHOOL_EMAIL || ""}
+                    onChange={(e) => handleChange("SCHOOL_EMAIL", e.target.value)}
+                    placeholder="e.g. admin@schoolportal.edu"
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                      background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                      color: "inherit",
+                      fontSize: "0.9rem",
+                    }}
+                  />
+                </div>
+
+                {/* School Website */}
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
+                    <Globe size={15} style={{ color: "#3b82f6" }} />
+                    <span>Official Website</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsValues.SCHOOL_WEBSITE || ""}
+                    onChange={(e) => handleChange("SCHOOL_WEBSITE", e.target.value)}
+                    placeholder="e.g. https://srtuniversalschool.edu"
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                      background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                      color: "inherit",
+                      fontSize: "0.9rem",
+                    }}
+                  />
+                </div>
+
+                {/* Academic Year Label */}
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
+                    <Calendar size={15} style={{ color: "#3b82f6" }} />
+                    <span>Academic Year Label</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsValues.ACADEMIC_YEAR || ""}
+                    onChange={(e) => handleChange("ACADEMIC_YEAR", e.target.value)}
+                    placeholder="e.g. 2026-2027"
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                      background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                      color: "inherit",
+                      fontSize: "0.9rem",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Address */}
+              <div style={{ marginTop: "1.5rem" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.4rem" }}>
+                  <MapPin size={15} style={{ color: "#3b82f6" }} />
+                  <span>School Address</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={settingsValues.SCHOOL_ADDRESS || ""}
+                  onChange={(e) => handleChange("SCHOOL_ADDRESS", e.target.value)}
+                  placeholder="e.g. 123 Education Lane, Knowledge Park"
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                    background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                    color: "inherit",
+                    fontSize: "0.9rem",
+                    resize: "vertical",
+                  }}
+                />
+              </div>
+
+              {/* Action Bar */}
+              <div
+                style={{
+                  marginTop: "2.5rem",
+                  paddingTop: "1.5rem",
+                  borderTop: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "1rem",
+                }}
+              >
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.6rem",
+                    padding: "0.75rem 1.75rem",
+                    borderRadius: "10px",
+                    background: "var(--primary, #3b82f6)",
+                    color: "#ffffff",
+                    border: "none",
+                    fontWeight: 600,
+                    fontSize: "0.95rem",
+                    cursor: isSubmitting ? "not-allowed" : "pointer",
+                    boxShadow: "0 4px 14px 0 rgba(59, 130, 246, 0.39)",
+                    opacity: isSubmitting ? 0.7 : 1,
+                  }}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save size={18} />
+                      <span>Save School Information</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* ── TAB 2: BATCHES & PROMOTION ───────────────────────────────────────── */}
+      {activeTab === "batches" && (
+        <div style={{ width: "100%" }}>
+          <BatchManagementClient
+            batches={batches}
+            currentBatch={currentBatch}
+            unassignedClasses={unassignedClasses}
+          />
+        </div>
+      )}
+
+      {/* ── TAB 3: CHANGE SETTINGS PASSWORD ─────────────────────────────────── */}
+      {activeTab === "security" && (
+        <div style={{ maxWidth: "680px", width: "100%", margin: "0 auto" }}>
+          <div
+            style={{
+              background: "var(--card-bg, #0f172a)",
+              border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+              borderRadius: "16px",
+              overflow: "hidden",
+              boxShadow: "0 10px 30px -10px rgba(0,0,0,0.5)",
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: "1.5rem 2rem",
+                borderBottom: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                background: "rgba(139, 92, 246, 0.05)",
+              }}
+            >
+              <div
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "10px",
+                  background: "rgba(139, 92, 246, 0.15)",
+                  color: "#8b5cf6",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <KeyRound size={22} />
+              </div>
+              <div>
+                <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
+                  Change Settings Master Password
+                </h2>
+                <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.825rem", color: "var(--text-secondary, #94a3b8)" }}>
+                  Update the password required to unlock settings and academic batch promotion controls.
+                </p>
+              </div>
+            </div>
+
+            {/* Feedback Banners */}
+            <div style={{ padding: "0 2rem", marginTop: passErrorMessage || passSuccessMessage ? "1.5rem" : 0 }}>
+              {passErrorMessage && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    padding: "0.85rem 1rem",
+                    borderRadius: "8px",
+                    background: "rgba(239, 68, 68, 0.12)",
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                    color: "#f87171",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  <ShieldAlert size={18} />
+                  <span>{passErrorMessage}</span>
+                </div>
+              )}
+
+              {passSuccessMessage && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    padding: "0.85rem 1rem",
+                    borderRadius: "8px",
+                    background: "rgba(16, 185, 129, 0.12)",
+                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                    color: "#34d399",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  <ShieldCheck size={18} />
+                  <span>{passSuccessMessage}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Password Form */}
+            <form onSubmit={handleSavePassword} style={{ padding: "2rem" }}>
+              {/* Old Password */}
+              <div style={{ marginBottom: "1.5rem" }}>
+                <label
+                  htmlFor="settings-old-password"
+                  style={{
+                    display: "block",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    color: "var(--text-primary, #f8fafc)",
+                    marginBottom: "0.4rem",
+                  }}
+                >
+                  Current Settings Password *
+                </label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    id="settings-old-password"
+                    type={showOld ? "text" : "password"}
+                    value={oldPassword}
+                    onChange={(e) => {
+                      setOldPassword(e.target.value);
+                      if (passErrors.oldPassword) setPassErrors((p) => ({ ...p, oldPassword: "" }));
+                    }}
+                    placeholder="Enter current password..."
+                    disabled={passSubmitting}
+                    autoComplete="current-password"
+                    style={{
+                      width: "100%",
+                      padding: "0.7rem 2.85rem 0.7rem 0.9rem",
+                      borderRadius: "8px",
+                      border: passErrors.oldPassword
+                        ? "1px solid #ef4444"
+                        : "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                      background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                      color: "inherit",
+                      fontSize: "0.9rem",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOld((p) => !p)}
+                    style={{
+                      position: "absolute",
+                      right: "0.75rem",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "none",
+                      border: "none",
+                      color: "var(--text-secondary, #94a3b8)",
+                      cursor: "pointer",
+                      padding: "0.25rem",
+                    }}
+                    title={showOld ? "Hide password" : "Show password"}
+                  >
+                    {showOld ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {passErrors.oldPassword && (
+                  <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.8rem", color: "#f87171" }}>
+                    {passErrors.oldPassword}
+                  </p>
+                )}
+              </div>
+
+              {/* New Password */}
+              <div style={{ marginBottom: "1.5rem" }}>
+                <label
+                  htmlFor="settings-new-password"
+                  style={{
+                    display: "block",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    color: "var(--text-primary, #f8fafc)",
+                    marginBottom: "0.4rem",
+                  }}
+                >
+                  New Settings Password *
+                </label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    id="settings-new-password"
+                    type={showNew ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value);
+                      if (passErrors.newPassword) setPassErrors((p) => ({ ...p, newPassword: "" }));
+                    }}
+                    placeholder="At least 8 characters with a letter and a number..."
+                    disabled={passSubmitting}
+                    autoComplete="new-password"
+                    style={{
+                      width: "100%",
+                      padding: "0.7rem 2.85rem 0.7rem 0.9rem",
+                      borderRadius: "8px",
+                      border: passErrors.newPassword
+                        ? "1px solid #ef4444"
+                        : "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                      background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                      color: "inherit",
+                      fontSize: "0.9rem",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNew((p) => !p)}
+                    style={{
+                      position: "absolute",
+                      right: "0.75rem",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "none",
+                      border: "none",
+                      color: "var(--text-secondary, #94a3b8)",
+                      cursor: "pointer",
+                      padding: "0.25rem",
+                    }}
+                    title={showNew ? "Hide password" : "Show password"}
+                  >
+                    {showNew ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {passErrors.newPassword && (
+                  <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.8rem", color: "#f87171" }}>
+                    {passErrors.newPassword}
+                  </p>
+                )}
+
+                {/* Password Strength Indicator */}
+                {newPassword.length > 0 && (
+                  <div style={{ marginTop: "0.6rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-secondary, #94a3b8)" }}>
+                        Password Strength
+                      </span>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: passwordStrength.color }}>
+                        {passwordStrength.label}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        height: "5px",
+                        width: "100%",
+                        background: "rgba(255, 255, 255, 0.08)",
+                        borderRadius: "999px",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: "100%",
+                          width: `${(passwordStrength.score / 4) * 100}%`,
+                          background: passwordStrength.color,
+                          borderRadius: "999px",
+                          transition: "width 0.2s ease, background 0.2s ease",
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Confirm Password */}
+              <div style={{ marginBottom: "2rem" }}>
+                <label
+                  htmlFor="settings-confirm-password"
+                  style={{
+                    display: "block",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    color: "var(--text-primary, #f8fafc)",
+                    marginBottom: "0.4rem",
+                  }}
+                >
+                  Confirm New Password *
+                </label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    id="settings-confirm-password"
+                    type={showConfirm ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      if (passErrors.confirmPassword) setPassErrors((p) => ({ ...p, confirmPassword: "" }));
+                    }}
+                    placeholder="Re-enter new password..."
+                    disabled={passSubmitting}
+                    autoComplete="new-password"
+                    style={{
+                      width: "100%",
+                      padding: "0.7rem 2.85rem 0.7rem 0.9rem",
+                      borderRadius: "8px",
+                      border: passErrors.confirmPassword
+                        ? "1px solid #ef4444"
+                        : "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                      background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
+                      color: "inherit",
+                      fontSize: "0.9rem",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm((p) => !p)}
+                    style={{
+                      position: "absolute",
+                      right: "0.75rem",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "none",
+                      border: "none",
+                      color: "var(--text-secondary, #94a3b8)",
+                      cursor: "pointer",
+                      padding: "0.25rem",
+                    }}
+                    title={showConfirm ? "Hide password" : "Show password"}
+                  >
+                    {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {passErrors.confirmPassword && (
+                  <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.8rem", color: "#f87171" }}>
+                    {passErrors.confirmPassword}
+                  </p>
+                )}
+              </div>
+
+              {/* Action Bar */}
+              <div
+                style={{
+                  paddingTop: "1.5rem",
+                  borderTop: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "1rem",
+                }}
+              >
+                <button
+                  type="submit"
+                  disabled={passSubmitting}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.6rem",
+                    padding: "0.75rem 1.75rem",
+                    borderRadius: "10px",
+                    background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
+                    color: "#ffffff",
+                    border: "none",
+                    fontWeight: 600,
+                    fontSize: "0.95rem",
+                    cursor: passSubmitting ? "not-allowed" : "pointer",
+                    boxShadow: "0 4px 14px 0 rgba(139, 92, 246, 0.35)",
+                    opacity: passSubmitting ? 0.75 : 1,
+                  }}
+                >
+                  {passSubmitting ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      <span>Updating Password...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save size={18} />
+                      <span>Change Settings Password</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

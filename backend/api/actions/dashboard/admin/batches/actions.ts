@@ -4,17 +4,22 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { isSettingsUnlockedServer } from "@/backend/lib/settings/settingsSecurityConfig";
 import { 
   simulateBatchPromotion, 
   executeBatchPromotionTransaction,
   ExecutePromotionInput 
 } from "@/backend/lib/services/batchPromotionEngine";
 
-// Verify admin authorization
+// Verify admin authorization & settings unlock
 async function requireAdmin() {
   const session = await getServerSession(getAuthOptions());
   if (!session || session.user.role !== "ADMIN") {
     throw new Error("Unauthorized: Admin privileges required.");
+  }
+  const unlockStatus = await isSettingsUnlockedServer();
+  if (!unlockStatus.unlocked) {
+    throw new Error("Settings are locked. Please unlock settings first.");
   }
   return session.user;
 }
@@ -161,6 +166,7 @@ export async function createBatchAction(formData: FormData) {
     // Connect starting date and ending date to Calendar and working day schedules
     await syncBatchDatesWithCalendar(created.name, created.academicYear || created.name, created.startDate, created.endDate);
 
+    revalidatePath("/dashboard/admin/settings");
     revalidatePath("/dashboard/admin/batches");
     revalidatePath("/dashboard/admin/classes");
     revalidatePath("/dashboard/admin/calendar");
@@ -289,6 +295,7 @@ export async function setCurrentBatchAction(batchId: string) {
       })
     ]);
 
+    revalidatePath("/dashboard/admin/settings");
     revalidatePath("/dashboard/admin/batches");
     return { success: true };
   } catch (err: any) {
@@ -312,6 +319,7 @@ export async function assignClassesToBatchAction(batchId: string, classIds: stri
       data: { batchId }
     });
 
+    revalidatePath("/dashboard/admin/settings");
     revalidatePath("/dashboard/admin/batches");
     revalidatePath("/dashboard/admin/classes");
     return { success: true };
@@ -372,6 +380,7 @@ export async function executeBatchPromotionAction(input: {
 
     const result = await executeBatchPromotionTransaction(promotionInput);
 
+    revalidatePath("/dashboard/admin/settings");
     revalidatePath("/dashboard/admin/batches");
     revalidatePath("/dashboard/admin/classes");
     revalidatePath("/dashboard/admin/students");
@@ -526,6 +535,7 @@ export async function updateBatchDatesAction(input: {
       updated.endDate
     );
 
+    revalidatePath("/dashboard/admin/settings");
     revalidatePath("/dashboard/admin/batches");
     revalidatePath("/dashboard/admin/calendar");
     revalidatePath("/dashboard/admin/attendance");
@@ -593,6 +603,7 @@ export async function deleteBatchAction(batchId: string) {
       where: { id: batchId }
     });
 
+    revalidatePath("/dashboard/admin/settings");
     revalidatePath("/dashboard/admin/batches");
     revalidatePath("/dashboard/admin/classes");
     revalidatePath("/dashboard/admin/students");

@@ -50,8 +50,8 @@ const ROUTE_MAP: Record<string, BreadcrumbInfo> = {
     currentLabel: "Class Management"
   },
   "/dashboard/admin/batches": {
-    parentHref: "/dashboard/admin",
-    parentLabel: "Dashboard",
+    parentHref: "/dashboard/admin/settings?tab=batches",
+    parentLabel: "Settings",
     currentLabel: "Batches & Promotion"
   },
   "/dashboard/admin/transport": {

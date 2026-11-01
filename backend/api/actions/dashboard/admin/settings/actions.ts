@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath, unstable_cache, updateTag } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import { isSettingsUnlockedServer } from "@/backend/lib/settings/settingsSecurityConfig";
 
 export async function invalidateSettingsCache() {
   try {
@@ -15,6 +16,11 @@ export async function saveSystemSettingAction(formData: FormData) {
   try {
     const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
+
+    const unlockStatus = await isSettingsUnlockedServer();
+    if (!unlockStatus.unlocked) {
+      return { error: "Settings are locked. Please unlock settings first.", locked: true };
+    }
 
     const key = formData.get("key") as string;
     const value = formData.get("value") as string;
@@ -46,6 +52,11 @@ export async function saveSystemSettingsBatchAction(settings: { key: string; val
     const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
 
+    const unlockStatus = await isSettingsUnlockedServer();
+    if (!unlockStatus.unlocked) {
+      return { error: "Settings are locked. Please unlock settings first.", locked: true };
+    }
+
     const upserts = settings
       .filter(s => s.key)
       .map(setting => 
@@ -70,6 +81,11 @@ export async function deleteSystemSettingAction(key: string) {
   try {
     const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== 'ADMIN') return { error: "Unauthorized" };
+
+    const unlockStatus = await isSettingsUnlockedServer();
+    if (!unlockStatus.unlocked) {
+      return { error: "Settings are locked. Please unlock settings first.", locked: true };
+    }
 
     await prisma.systemSetting.delete({ where: { key } });
     try { updateTag("system-settings"); } catch {}
