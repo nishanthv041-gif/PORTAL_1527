@@ -27,6 +27,8 @@ export {
   Select,
   Textarea,
   Checkbox,
+  MultiSelect,
+  SingleSelect,
   SearchInput,
 } from "./form";
 export type {
@@ -36,6 +38,9 @@ export type {
   SelectOption,
   TextareaProps,
   CheckboxProps,
+  MultiSelectProps,
+  MultiSelectOption,
+  SingleSelectProps,
   SearchInputProps,
 } from "./form";
 

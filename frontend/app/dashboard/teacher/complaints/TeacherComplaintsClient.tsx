@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { User, Clock, AlertCircle, Edit2, Trash2 } from "lucide-react";
 import { raiseComplaintAction } from "@/backend/api/actions/dashboard/teacher/complaints/actions";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { SingleSelect } from "@/frontend/components/ui/form";
 
 type ComplaintWithStudent = {
   id: string;
@@ -35,6 +36,21 @@ export default function TeacherComplaintsClient({
   const [editingComplaint, setEditingComplaint] = useState<ComplaintWithStudent | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("BEHAVIOR");
+  const [selectedSeverity, setSelectedSeverity] = useState("LOW");
+
+  useEffect(() => {
+    if (editingComplaint) {
+      setSelectedStudentId(editingComplaint.studentId || "");
+      setSelectedCategory(editingComplaint.category || "BEHAVIOR");
+      setSelectedSeverity(editingComplaint.severity || "LOW");
+    } else {
+      setSelectedStudentId("");
+      setSelectedCategory("BEHAVIOR");
+      setSelectedSeverity("LOW");
+    }
+  }, [editingComplaint]);
 
   const router = useRouter();
   const confirm = useConfirm();
@@ -197,13 +213,21 @@ export default function TeacherComplaintsClient({
           )}
 
           <div>
-            <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.25rem" }}>Select Student *</label>
-            <select required name="studentId" defaultValue={editingComplaint?.studentId || ""} style={{ width: "100%", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border)", background: "transparent" }}>
-              <option value="">-- Choose a student --</option>
-              {students.map(s => (
-                <option key={s.id} value={s.id}>{s.name} ({s.rollNo}) - {s.className}</option>
-              ))}
-            </select>
+            <SingleSelect
+              name="studentId"
+              label="Select Student"
+              required={true}
+              value={selectedStudentId}
+              onChange={setSelectedStudentId}
+              options={students.map((s) => ({
+                value: s.id,
+                label: s.name,
+                subLabel: `Roll: ${s.rollNo}`,
+                badge: s.className,
+              }))}
+              placeholder="-- Choose a student --"
+              searchable={true}
+            />
           </div>
 
           <div>
@@ -213,21 +237,35 @@ export default function TeacherComplaintsClient({
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: "1rem" }}>
             <div>
-              <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.25rem" }}>Category *</label>
-              <select required name="category" defaultValue={editingComplaint?.category || "BEHAVIOR"} style={{ width: "100%", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border)", background: "transparent" }}>
-                <option value="BEHAVIOR">Behavior</option>
-                <option value="ACADEMIC">Academic</option>
-                <option value="ATTENDANCE">Attendance</option>
-                <option value="OTHER">Other</option>
-              </select>
+              <SingleSelect
+                name="category"
+                label="Category"
+                required={true}
+                value={selectedCategory}
+                onChange={setSelectedCategory}
+                options={[
+                  { value: "BEHAVIOR", label: "Behavior" },
+                  { value: "ACADEMIC", label: "Academic" },
+                  { value: "ATTENDANCE", label: "Attendance" },
+                  { value: "OTHER", label: "Other" },
+                ]}
+                searchable={false}
+              />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.25rem" }}>Severity *</label>
-              <select required name="severity" defaultValue={editingComplaint?.severity || "LOW"} style={{ width: "100%", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border)", background: "transparent" }}>
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-              </select>
+              <SingleSelect
+                name="severity"
+                label="Severity"
+                required={true}
+                value={selectedSeverity}
+                onChange={setSelectedSeverity}
+                options={[
+                  { value: "LOW", label: "Low" },
+                  { value: "MEDIUM", label: "Medium" },
+                  { value: "HIGH", label: "High" },
+                ]}
+                searchable={false}
+              />
             </div>
           </div>
 

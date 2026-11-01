@@ -20,6 +20,7 @@ import {
 } from "./meetingUtils";
 import { Meeting, Teacher, Parent, User, Class } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { MultiSelect } from "@/frontend/components/ui";
 
 export type TimetableSlotItem = {
   id: string;
@@ -1539,30 +1540,30 @@ export default function MeetingsClient({
                   <div style={{ display: "flex", gap: "1rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
                     <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.875rem", cursor: "pointer" }}>
                       <input
-                        type="radio"
-                        name="parentAudience"
+                        type="checkbox"
                         checked={formParentAudience === "ALL"}
                         onChange={() => setFormParentAudience("ALL")}
+                        style={{ width: "16px", height: "16px", accentColor: "var(--primary)" }}
                       />
                       All Parents (School-wide)
                     </label>
 
                     <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.875rem", cursor: "pointer" }}>
                       <input
-                        type="radio"
-                        name="parentAudience"
+                        type="checkbox"
                         checked={formParentAudience === "CLASS"}
                         onChange={() => setFormParentAudience("CLASS")}
+                        style={{ width: "16px", height: "16px", accentColor: "var(--primary)" }}
                       />
                       Specific Class Parents
                     </label>
 
                     <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.875rem", cursor: "pointer" }}>
                       <input
-                        type="radio"
-                        name="parentAudience"
+                        type="checkbox"
                         checked={formParentAudience === "SELECTED"}
                         onChange={() => setFormParentAudience("SELECTED")}
+                        style={{ width: "16px", height: "16px", accentColor: "var(--primary)" }}
                       />
                       Selected Parents Only
                     </label>
@@ -1596,37 +1597,21 @@ export default function MeetingsClient({
                   )}
 
                   {formParentAudience === "SELECTED" && (
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                        Select Parents (Hold Ctrl/Cmd to select multiple) *
-                      </label>
-                      <select
-                        multiple
+                    <div style={{ marginTop: "0.5rem" }}>
+                      <MultiSelect
+                        label="Select Parents *"
+                        placeholder="Choose one or more parents..."
+                        searchPlaceholder="Search parent by name or email..."
+                        options={parents.map(p => ({
+                          value: p.id,
+                          label: p.user.name,
+                          subLabel: p.user.email,
+                          badge: p.phone ? `📞 ${p.phone}` : undefined,
+                        }))}
                         value={formSelectedParentIds}
-                        onChange={(e) => {
-                          const selected = Array.from(e.target.selectedOptions, opt => opt.value);
-                          setFormSelectedParentIds(selected);
-                        }}
-                        style={{
-                          width: "100%",
-                          padding: "0.5rem",
-                          borderRadius: "8px",
-                          border: "1px solid var(--border-color)",
-                          backgroundColor: "var(--card-bg, #ffffff)",
-                          color: "var(--foreground)",
-                          fontSize: "0.8125rem",
-                          minHeight: "110px"
-                        }}
-                      >
-                        {parents.map(p => (
-                          <option key={p.id} value={p.id}>
-                            {p.user.name} ({p.user.email})
-                          </option>
-                        ))}
-                      </select>
-                      <span style={{ fontSize: "0.725rem", color: "var(--text-secondary)", marginTop: "0.2rem", display: "block" }}>
-                        {formSelectedParentIds.length} parents selected
-                      </span>
+                        onChange={setFormSelectedParentIds}
+                        required
+                      />
                     </div>
                   )}
                 </div>
@@ -1640,57 +1625,44 @@ export default function MeetingsClient({
                   <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 700, marginBottom: "0.5rem" }}>
                     Target Teachers Audience *
                   </label>
-                  <div style={{ display: "flex", gap: "1rem", marginBottom: "0.75rem" }}>
+                  <div style={{ display: "flex", gap: "1rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
                     <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.875rem", cursor: "pointer" }}>
                       <input
-                        type="radio"
-                        name="teacherAudience"
+                        type="checkbox"
                         checked={formTeacherAudience === "ALL"}
                         onChange={() => setFormTeacherAudience("ALL")}
+                        style={{ width: "16px", height: "16px", accentColor: "var(--primary)" }}
                       />
                       All Teachers &amp; Faculty ({teachers.length})
                     </label>
 
                     <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.875rem", cursor: "pointer" }}>
                       <input
-                        type="radio"
-                        name="teacherAudience"
+                        type="checkbox"
                         checked={formTeacherAudience === "SELECTED"}
                         onChange={() => setFormTeacherAudience("SELECTED")}
+                        style={{ width: "16px", height: "16px", accentColor: "var(--primary)" }}
                       />
                       Select Specific Teachers
                     </label>
                   </div>
 
                   {formTeacherAudience === "SELECTED" && (
-                    <div>
-                      <select
-                        multiple
+                    <div style={{ marginTop: "0.5rem" }}>
+                      <MultiSelect
+                        label="Select Teachers *"
+                        placeholder="Choose one or more faculty members..."
+                        searchPlaceholder="Search teacher by name or email..."
+                        options={teachers.map(t => ({
+                          value: t.id,
+                          label: t.user.name,
+                          subLabel: t.user.email,
+                          badge: t.qualification ? `🎓 ${t.qualification}` : undefined,
+                        }))}
                         value={formSelectedTeacherIds}
-                        onChange={(e) => {
-                          const selected = Array.from(e.target.selectedOptions, opt => opt.value);
-                          setFormSelectedTeacherIds(selected);
-                        }}
-                        style={{
-                          width: "100%",
-                          padding: "0.5rem",
-                          borderRadius: "8px",
-                          border: "1px solid var(--border-color)",
-                          backgroundColor: "var(--card-bg, #ffffff)",
-                          color: "var(--foreground)",
-                          fontSize: "0.8125rem",
-                          minHeight: "110px"
-                        }}
-                      >
-                        {teachers.map(t => (
-                          <option key={t.id} value={t.id}>
-                            {t.user.name} ({t.user.email})
-                          </option>
-                        ))}
-                      </select>
-                      <span style={{ fontSize: "0.725rem", color: "var(--text-secondary)", marginTop: "0.2rem", display: "block" }}>
-                        {formSelectedTeacherIds.length} teachers selected (plus Staff In-charge)
-                      </span>
+                        onChange={setFormSelectedTeacherIds}
+                        required
+                      />
                     </div>
                   )}
                 </div>

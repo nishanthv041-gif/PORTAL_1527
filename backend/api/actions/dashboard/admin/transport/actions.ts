@@ -849,7 +849,7 @@ export async function sendBusMessageAction(busId: string, rawPayload: any) {
       return { error: firstError };
     }
 
-    const { type, title, message, priority, targetStudentId } = parsed.data;
+    const { type, title, message, priority, targetStudentId, targetStudentIds } = parsed.data;
 
     const bus = await prisma.bus.findUnique({
       where: { id: busId },
@@ -869,8 +869,17 @@ export async function sendBusMessageAction(busId: string, rawPayload: any) {
 
     const staffIdForMessage = userStaff?.id || bus.inChargeStaffId || null;
 
-    // Resolve target recipient parent user IDs
+    // Resolve target recipient parent user IDs and target student IDs
     let targetParentUserIds: string[] = [];
+    const resolvedStudentIds: string[] = [];
+
+    if (type === "INDIVIDUAL") {
+      if (Array.isArray(targetStudentIds) && targetStudentIds.length > 0) {
+        resolvedStudentIds.push(...targetStudentIds.filter(Boolean));
+      } else if (targetStudentId) {
+        resolvedStudentIds.push(targetStudentId);
+      }
+    }
 
     if (type === "COMMON") {
       // Common message: sends to every parent of every student on that bus
@@ -901,37 +910,51 @@ export async function sendBusMessageAction(busId: string, rawPayload: any) {
         }
       }
     } else if (type === "INDIVIDUAL") {
-      if (!targetStudentId) {
-        return { error: "Target student must be selected for an individual message." };
+      if (resolvedStudentIds.length === 0) {
+        return { error: "At least one target student must be selected for an individual message." };
       }
 
-      // Verify that this student is actually assigned to this bus
-      const isStudentOnBus = await prisma.busStudent.findFirst({
-        where: { busId, studentId: targetStudentId },
-      });
-      if (!isStudentOnBus) {
-        return { error: "Selected student is not enrolled on this bus." };
-      }
-
-      const parentStudents = await prisma.parentStudent.findMany({
-        where: { studentId: targetStudentId },
-        select: {
-          parent: {
+      // Verify that all selected students are actually enrolled on this bus
+      const enrolledStudentsOnBus = await prisma.busStudent.findMany({
+        where: {
+          busId,
+          studentId: { in: resolvedStudentIds },
+        },
+        include: {
+          student: {
             select: {
-              userId: true,
+              id: true,
+              firstName: true,
+              lastName: true,
+              parents: {
+                select: {
+                  parent: {
+                    select: {
+                      userId: true,
+                    },
+                  },
+                },
+              },
             },
           },
         },
       });
 
-      for (const ps of parentStudents) {
-        if (ps.parent?.userId && !targetParentUserIds.includes(ps.parent.userId)) {
-          targetParentUserIds.push(ps.parent.userId);
+      if (enrolledStudentsOnBus.length !== resolvedStudentIds.length) {
+        return { error: "One or more selected students are not enrolled on this bus." };
+      }
+
+      // Map parent userId for deduplicated notifications
+      for (const item of enrolledStudentsOnBus) {
+        for (const p of item.student.parents) {
+          if (p.parent?.userId && !targetParentUserIds.includes(p.parent.userId)) {
+            targetParentUserIds.push(p.parent.userId);
+          }
         }
       }
     }
 
-    // CREATE BUS MESSAGE + ALL NOTIFICATION ROWS INSIDE ONE PRISMA TRANSACTION
+    // CREATE BUS MESSAGE + TARGETS + ALL NOTIFICATION ROWS INSIDE ONE PRISMA TRANSACTION
     const result = await prisma.$transaction(async (tx) => {
       // 1. Create BusMessage record
       const busMessage = await tx.busMessage.create({
@@ -942,11 +965,21 @@ export async function sendBusMessageAction(busId: string, rawPayload: any) {
           title: title.trim(),
           message: message.trim(),
           priority,
-          targetStudentId: type === "INDIVIDUAL" ? targetStudentId : null,
+          targetStudentId: resolvedStudentIds[0] || null,
         },
       });
 
-      // 2. Insert Notification rows for all target parent users
+      // 2. Insert BusMessageTarget rows for multi-student messaging
+      if (resolvedStudentIds.length > 0) {
+        await tx.busMessageTarget.createMany({
+          data: resolvedStudentIds.map((sId) => ({
+            busMessageId: busMessage.id,
+            studentId: sId,
+          })),
+        });
+      }
+
+      // 3. Insert Notification rows for all target parent users
       if (targetParentUserIds.length > 0) {
         const notifIcon = priority === "URGENT" ? "🚨 " : "🚌 ";
         const formattedTitle = `${notifIcon}Bus ${bus.busNumber}: ${title.trim()}`;
@@ -1348,5 +1381,45 @@ export async function sendBusAlertAction(data: {
 
 export async function getParentTransportOverviewAction() {
   return getParentBusOverviewAction();
+}
+
+export async function previewBusMessageRecipientsAction(busId: string, studentIds: string[]) {
+  try {
+    if (!studentIds || studentIds.length === 0) {
+      return { studentCount: 0, parentCount: 0 };
+    }
+
+    const busStudents = await prisma.busStudent.findMany({
+      where: { busId, studentId: { in: studentIds } },
+      include: {
+        student: {
+          select: {
+            id: true,
+            parents: {
+              select: {
+                parent: {
+                  select: { userId: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const uniqueParentUserIds = new Set<string>();
+    busStudents.forEach((bs) => {
+      bs.student.parents.forEach((p) => {
+        if (p.parent?.userId) uniqueParentUserIds.add(p.parent.userId);
+      });
+    });
+
+    return {
+      studentCount: busStudents.length,
+      parentCount: uniqueParentUserIds.size,
+    };
+  } catch (e: any) {
+    return { studentCount: 0, parentCount: 0 };
+  }
 }
 

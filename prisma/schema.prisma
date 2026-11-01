@@ -99,6 +99,7 @@ model Student {
   promotions    PromotionAudit[]
   busAssignments BusStudent[]
   busMessages    BusMessage[]
+  busMessageTargets BusMessageTarget[]
 
   @@index([classId])
   @@index([classId, isActive])
@@ -938,10 +939,24 @@ model BusMessage {
   priority        String   @default("NORMAL") // NORMAL | URGENT
   targetStudentId String?
   targetStudent   Student? @relation(fields: [targetStudentId], references: [id], onDelete: SetNull)
+  targets         BusMessageTarget[]
   createdAt       DateTime @default(now())
 
   @@index([busId])
   @@index([createdAt])
   @@index([targetStudentId])
   @@index([senderStaffId])
+}
+
+model BusMessageTarget {
+  id           String      @id @default(cuid())
+  busMessageId String
+  busMessage   BusMessage  @relation(fields: [busMessageId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt    DateTime    @default(now())
+
+  @@unique([busMessageId, studentId])
+  @@index([busMessageId])
+  @@index([studentId])
 }

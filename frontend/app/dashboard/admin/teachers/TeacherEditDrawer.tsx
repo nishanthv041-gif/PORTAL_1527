@@ -13,6 +13,7 @@ import {
   toggleTeacherStatusAction,
   deleteTeacherPermanentlyAction
 } from "@/backend/api/actions/dashboard/admin/teachers/teacherManagementActions";
+import { SingleSelect } from "@/frontend/components/ui/form";
 
 export interface TeacherData {
   id: string;
@@ -644,22 +645,15 @@ export default function TeacherEditDrawer({
                     <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.35rem" }}>
                       Account Status
                     </label>
-                    <select
+                    <SingleSelect
                       value={status}
-                      onChange={(e) => setStatus(e.target.value as "ACTIVE" | "INACTIVE")}
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "8px",
-                        border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                        background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                        color: "inherit",
-                        fontSize: "0.9rem",
-                      }}
-                    >
-                      <option value="ACTIVE">Active</option>
-                      <option value="INACTIVE">Inactive (Disabled)</option>
-                    </select>
+                      onChange={(val) => setStatus(val as "ACTIVE" | "INACTIVE")}
+                      options={[
+                        { value: "ACTIVE", label: "Active" },
+                        { value: "INACTIVE", label: "Inactive (Disabled)" },
+                      ]}
+                      searchable={false}
+                    />
                   </div>
                 </div>
 
@@ -694,26 +688,19 @@ export default function TeacherEditDrawer({
                   <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.35rem" }}>
                     Class Teacher Assignment
                   </label>
-                  <select
+                  <SingleSelect
                     value={classTeacherOfId}
-                    onChange={(e) => setClassTeacherOfId(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "0.65rem 0.85rem",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                      background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                      color: "inherit",
-                      fontSize: "0.9rem",
-                    }}
-                  >
-                    <option value="">None (Subject Teacher Only)</option>
-                    {allClasses.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} - {c.section}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setClassTeacherOfId}
+                    options={[
+                      { value: "", label: "None (Subject Teacher Only)" },
+                      ...allClasses.map((c) => ({
+                        value: c.id,
+                        label: `${c.name} - ${c.section}`,
+                      })),
+                    ]}
+                    placeholder="None (Subject Teacher Only)"
+                    searchable={true}
+                  />
                 </div>
 
                 {/* Period Limits */}

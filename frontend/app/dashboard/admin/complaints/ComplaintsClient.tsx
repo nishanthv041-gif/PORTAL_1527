@@ -28,6 +28,7 @@ import {
 import ComplaintConversationModal, { ComplaintMessageItem } from "@/frontend/components/complaints/ComplaintConversationModal";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
+import { SingleSelect } from "@/frontend/components/ui/form";
 import styles from "../../dashboard.module.css";
 
 export type StudentLookupOption = {
@@ -370,67 +371,48 @@ export default function ComplaintsClient({
           </div>
 
           {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
-            style={{
-              padding: "0.45rem 0.75rem",
-              borderRadius: "6px",
-              border: "1px solid var(--border)",
-              backgroundColor: "var(--background)",
-              color: "var(--foreground)",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              outline: "none"
-            }}
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="OPEN">Open ({openCount})</option>
-            <option value="UNDER_REVIEW">Under Review ({reviewCount})</option>
-            <option value="RESOLVED">Resolved ({resolvedCount})</option>
-          </select>
+          <div style={{ minWidth: "160px" }}>
+            <SingleSelect
+              value={statusFilter}
+              onChange={(val) => setStatusFilter(val as any)}
+              options={[
+                { value: "ALL", label: "All Statuses" },
+                { value: "OPEN", label: `Open (${openCount})` },
+                { value: "UNDER_REVIEW", label: `Under Review (${reviewCount})` },
+                { value: "RESOLVED", label: `Resolved (${resolvedCount})` },
+              ]}
+              searchable={false}
+              placeholder="Status..."
+            />
+          </div>
 
           {/* Severity Filter */}
-          <select
-            value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
-            style={{
-              padding: "0.45rem 0.75rem",
-              borderRadius: "6px",
-              border: "1px solid var(--border)",
-              backgroundColor: "var(--background)",
-              color: "var(--foreground)",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              outline: "none"
-            }}
-          >
-            <option value="ALL">All Priorities</option>
-            {SEVERITIES.map(s => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
+          <div style={{ minWidth: "160px" }}>
+            <SingleSelect
+              value={severityFilter}
+              onChange={setSeverityFilter}
+              options={[
+                { value: "ALL", label: "All Priorities" },
+                ...SEVERITIES.map((s) => ({ value: s.value, label: s.label })),
+              ]}
+              searchable={false}
+              placeholder="Priority..."
+            />
+          </div>
 
           {/* Category Filter */}
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            style={{
-              padding: "0.45rem 0.75rem",
-              borderRadius: "6px",
-              border: "1px solid var(--border)",
-              backgroundColor: "var(--background)",
-              color: "var(--foreground)",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              outline: "none"
-            }}
-          >
-            <option value="ALL">All Categories</option>
-            {CATEGORIES.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
+          <div style={{ minWidth: "170px" }}>
+            <SingleSelect
+              value={categoryFilter}
+              onChange={setCategoryFilter}
+              options={[
+                { value: "ALL", label: "All Categories" },
+                ...CATEGORIES.map((c) => ({ value: c, label: c })),
+              ]}
+              searchable={false}
+              placeholder="Category..."
+            />
+          </div>
         </div>
 
         <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)", fontWeight: 600 }}>
@@ -768,105 +750,45 @@ export default function ComplaintsClient({
             <form onSubmit={handleCreateSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
               {/* Student Search & Select */}
               <div>
-                <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 700, marginBottom: "0.4rem" }}>
-                  1. Choose Student *
-                </label>
-                <input
-                  type="text"
-                  placeholder="Type to filter students by name, roll no, or class..."
-                  value={createStudentSearch}
-                  onChange={(e) => setCreateStudentSearch(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.6rem 0.85rem",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border)",
-                    backgroundColor: "var(--background)",
-                    color: "var(--foreground)",
-                    fontSize: "0.85rem",
-                    marginBottom: "0.5rem",
-                    outline: "none"
-                  }}
-                />
-
-                <select
-                  required
+                <SingleSelect
+                  label="1. Choose Student"
+                  required={true}
                   value={selectedStudentId}
-                  onChange={(e) => setSelectedStudentId(e.target.value)}
-                  size={5}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border)",
-                    backgroundColor: "var(--background)",
-                    color: "var(--foreground)",
-                    fontSize: "0.85rem",
-                    outline: "none"
-                  }}
-                >
-                  <option value="" disabled>-- Click a student below to select --</option>
-                  {filteredStudents.map(s => (
-                    <option key={s.id} value={s.id} style={{ padding: "6px" }}>
-                      {s.firstName} {s.lastName} — {s.class ? `${s.class.name}-${s.class.section}` : "No Class"} (Roll: {s.rollNumber})
-                    </option>
-                  ))}
-                </select>
-                {selectedStudentId && (
-                  <span style={{ fontSize: "0.75rem", color: "var(--success)", display: "block", marginTop: "0.25rem", fontWeight: 600 }}>
-                    ✓ Selected: {studentsList.find(s => s.id === selectedStudentId)?.firstName} {studentsList.find(s => s.id === selectedStudentId)?.lastName}
-                  </span>
-                )}
+                  onChange={setSelectedStudentId}
+                  options={studentsList.map((s) => ({
+                    value: s.id,
+                    label: `${s.firstName} ${s.lastName}`,
+                    subLabel: `Roll: ${s.rollNumber}`,
+                    badge: s.class ? `${s.class.name}-${s.class.section}` : "No Class",
+                  }))}
+                  searchable={true}
+                  placeholder="-- Search & select a student --"
+                  searchPlaceholder="Type name, roll number, or class..."
+                />
               </div>
 
               {/* Category & Severity */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 700, marginBottom: "0.4rem" }}>
-                    Category *
-                  </label>
-                  <select
+                  <SingleSelect
+                    label="Category"
+                    required={true}
                     value={createCategory}
-                    onChange={(e) => setCreateCategory(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "0.65rem 0.85rem",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border)",
-                      backgroundColor: "var(--background)",
-                      color: "var(--foreground)",
-                      fontSize: "0.85rem",
-                      outline: "none"
-                    }}
-                  >
-                    {CATEGORIES.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+                    onChange={setCreateCategory}
+                    options={CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+                    searchable={false}
+                  />
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 700, marginBottom: "0.4rem" }}>
-                    Priority / Severity *
-                  </label>
-                  <select
+                  <SingleSelect
+                    label="Priority / Severity"
+                    required={true}
                     value={createSeverity}
-                    onChange={(e) => setCreateSeverity(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "0.65rem 0.85rem",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border)",
-                      backgroundColor: "var(--background)",
-                      color: "var(--foreground)",
-                      fontSize: "0.85rem",
-                      outline: "none"
-                    }}
-                  >
-                    {SEVERITIES.map(sev => (
-                      <option key={sev.value} value={sev.value}>{sev.label}</option>
-                    ))}
-                  </select>
+                    onChange={setCreateSeverity}
+                    options={SEVERITIES.map((sev) => ({ value: sev.value, label: sev.label }))}
+                    searchable={false}
+                  />
                 </div>
               </div>
 
@@ -1011,27 +933,18 @@ export default function ComplaintsClient({
 
             <form onSubmit={handleStatusSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "0.35rem" }}>
-                  Status *
-                </label>
-                <select
+                <SingleSelect
+                  label="Status"
+                  required={true}
                   value={editStatus}
-                  onChange={(e) => setEditStatus(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.65rem 0.85rem",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border)",
-                    backgroundColor: "var(--background)",
-                    color: "var(--foreground)",
-                    fontSize: "0.9rem",
-                    outline: "none"
-                  }}
-                >
-                  <option value="OPEN">Open</option>
-                  <option value="UNDER_REVIEW">Under Review</option>
-                  <option value="RESOLVED">Resolved</option>
-                </select>
+                  onChange={setEditStatus}
+                  options={[
+                    { value: "OPEN", label: "Open" },
+                    { value: "UNDER_REVIEW", label: "Under Review" },
+                    { value: "RESOLVED", label: "Resolved" },
+                  ]}
+                  searchable={false}
+                />
               </div>
 
               <div>

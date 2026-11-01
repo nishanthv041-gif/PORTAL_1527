@@ -12,6 +12,7 @@ import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { toggleStudentStatusAction } from "@/backend/api/actions/dashboard/admin/students/studentManagementActions";
 import StudentEditDrawer, { StudentData } from "./StudentEditDrawer";
 import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
+import { SingleSelect } from "@/frontend/components/ui/form";
 
 interface ClassItem {
   id: string;
@@ -293,81 +294,67 @@ export default function StudentListClient({ students, classes }: StudentListClie
         {/* Filter Dropdowns */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
           {/* Class Filter */}
-          <select
-            value={selectedClassId}
-            onChange={(e) => setSelectedClassId(e.target.value)}
-            style={{
-              padding: "0.55rem 0.85rem",
-              borderRadius: "8px",
-              border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-              background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-              color: "inherit",
-              fontSize: "0.85rem",
-            }}
-          >
-            {classes.length === 0 && <option value="">No Classes Available</option>}
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>
-                Class: {c.name} - {c.section} ({classStudentCounts.get(c.id) || 0} students)
-              </option>
-            ))}
-          </select>
+          <div style={{ minWidth: "220px", flex: "1 1 220px" }}>
+            <SingleSelect
+              value={selectedClassId}
+              onChange={setSelectedClassId}
+              options={classes.map((c) => ({
+                value: c.id,
+                label: `Class: ${c.name} - ${c.section}`,
+                badge: `${classStudentCounts.get(c.id) || 0} students`,
+              }))}
+              searchable={true}
+              placeholder="Select class..."
+              searchPlaceholder="Search classes..."
+            />
+          </div>
 
           {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{
-              padding: "0.55rem 0.85rem",
-              borderRadius: "8px",
-              border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-              background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-              color: "inherit",
-              fontSize: "0.85rem",
-            }}
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="ACTIVE">Active Only</option>
-            <option value="INACTIVE">Inactive Only</option>
-          </select>
+          <div style={{ minWidth: "160px" }}>
+            <SingleSelect
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: "ALL", label: "All Statuses" },
+                { value: "ACTIVE", label: "Active Only" },
+                { value: "INACTIVE", label: "Inactive Only" },
+              ]}
+              searchable={false}
+              placeholder="Status..."
+            />
+          </div>
 
           {/* Residence Filter */}
-          <select
-            value={residenceFilter}
-            onChange={(e) => setResidenceFilter(e.target.value)}
-            style={{
-              padding: "0.55rem 0.85rem",
-              borderRadius: "8px",
-              border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-              background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-              color: "inherit",
-              fontSize: "0.85rem",
-            }}
-          >
-            <option value="ALL">All Residencies</option>
-            <option value="DAYSCHOLAR">Day Scholar</option>
-            <option value="HOSTEL">Hostel</option>
-          </select>
+          <div style={{ minWidth: "160px" }}>
+            <SingleSelect
+              value={residenceFilter}
+              onChange={setResidenceFilter}
+              options={[
+                { value: "ALL", label: "All Residencies" },
+                { value: "DAYSCHOLAR", label: "Day Scholar" },
+                { value: "HOSTEL", label: "Hostel" },
+              ]}
+              searchable={false}
+              placeholder="Residence..."
+            />
+          </div>
 
           {/* Sorter */}
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <ArrowUpDown size={15} style={{ color: "var(--text-secondary, #94a3b8)" }} />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              style={{
-                padding: "0.55rem 0.85rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                color: "inherit",
-                fontSize: "0.85rem",
-              }}
-            >
-              <option value="ROLL">Roll Number</option>
-              <option value="NAME">First Name (A-Z)</option>
-              <option value="ADM">Admission No</option>
-            </select>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.4rem", minWidth: "180px" }}>
+            <ArrowUpDown size={15} style={{ color: "var(--text-secondary, #94a3b8)", flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <SingleSelect
+                value={sortBy}
+                onChange={(val) => setSortBy(val as any)}
+                options={[
+                  { value: "ROLL", label: "Roll Number" },
+                  { value: "NAME", label: "First Name (A-Z)" },
+                  { value: "ADM", label: "Admission No" },
+                ]}
+                searchable={false}
+                placeholder="Sort by..."
+              />
+            </div>
           </div>
         </div>
       </div>

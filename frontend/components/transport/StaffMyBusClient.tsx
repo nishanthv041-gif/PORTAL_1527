@@ -20,6 +20,7 @@ import {
   updateBusStatusAction,
   sendBusMessageAction,
 } from "@/backend/api/actions/dashboard/admin/transport/actions";
+import { MultiSelect } from "@/frontend/components/ui";
 
 interface StaffMyBusClientProps {
   buses: any[];
@@ -78,14 +79,14 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
   // SEND MESSAGE (COMMON / INDIVIDUAL)
   // ==========================================
   const [messageType, setMessageType] = useState<"COMMON" | "INDIVIDUAL">("COMMON");
-  const [targetStudentId, setTargetStudentId] = useState("");
+  const [targetStudentIds, setTargetStudentIds] = useState<string[]>([]);
   const [messageTitle, setMessageTitle] = useState("");
   const [messageContent, setMessageContent] = useState("");
   const [messagePriority, setMessagePriority] = useState<"NORMAL" | "URGENT">("NORMAL");
 
   // Recipient Count Preview
-  const previewRecipientCount = useMemo(() => {
-    if (!currentBus?.students) return 0;
+  const previewRecipientCounts = useMemo(() => {
+    if (!currentBus?.students) return { students: 0, parents: 0 };
     if (messageType === "COMMON") {
       const pIds = new Set<string>();
       (currentBus?.students || []).forEach((item: any) => {
@@ -93,13 +94,22 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
           if (p.parent?.user?.id) pIds.add(p.parent.user.id);
         });
       });
-      return pIds.size;
+      return { students: (currentBus?.students || []).length, parents: pIds.size };
     } else {
-      if (!targetStudentId) return 0;
-      const targetItem = (currentBus?.students || []).find((item: any) => item.student?.id === targetStudentId);
-      return targetItem?.student?.parents?.length || 0;
+      const pIds = new Set<string>();
+      const selSet = new Set(targetStudentIds);
+      let count = 0;
+      (currentBus?.students || []).forEach((item: any) => {
+        if (selSet.has(item.student?.id)) {
+          count++;
+          (item.student?.parents || []).forEach((p: any) => {
+            if (p.parent?.user?.id) pIds.add(p.parent.user.id);
+          });
+        }
+      });
+      return { students: count, parents: pIds.size };
     }
-  }, [currentBus, messageType, targetStudentId]);
+  }, [currentBus, messageType, targetStudentIds]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,8 +117,8 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
       showToast("error", "Title and message content are required.");
       return;
     }
-    if (messageType === "INDIVIDUAL" && !targetStudentId) {
-      showToast("error", "Please select a target student for the individual message.");
+    if (messageType === "INDIVIDUAL" && targetStudentIds.length === 0) {
+      showToast("error", "Please select at least one target student for the individual message.");
       return;
     }
 
@@ -118,7 +128,8 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
         title: messageTitle.trim(),
         message: messageContent.trim(),
         priority: messagePriority,
-        targetStudentId: messageType === "INDIVIDUAL" ? targetStudentId : null,
+        targetStudentIds: messageType === "INDIVIDUAL" ? targetStudentIds : [],
+        targetStudentId: messageType === "INDIVIDUAL" ? targetStudentIds[0] : null,
       });
 
       if (res.error) {
@@ -127,6 +138,7 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
         showToast("success", res.message || "Message dispatched successfully.");
         setMessageTitle("");
         setMessageContent("");
+        setTargetStudentIds([]);
         router.refresh();
       }
     });
@@ -451,47 +463,62 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
               <div style={{ display: "flex", gap: "1.25rem" }}>
                 <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "0.88rem" }}>
                   <input
-                    type="radio"
-                    name="staffMsgType"
+                    type="checkbox"
                     checked={messageType === "COMMON"}
                     onChange={() => setMessageType("COMMON")}
+                    style={{ width: "16px", height: "16px", accentColor: "var(--primary)" }}
                   />
                   <strong>All Parents on this Bus (Common Broadcast)</strong>
                 </label>
                 <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "0.88rem" }}>
                   <input
-                    type="radio"
-                    name="staffMsgType"
+                    type="checkbox"
                     checked={messageType === "INDIVIDUAL"}
                     onChange={() => setMessageType("INDIVIDUAL")}
+                    style={{ width: "16px", height: "16px", accentColor: "var(--primary)" }}
                   />
-                  <strong>Individual Student Parent</strong>
+                  <strong>Select Individual Students</strong>
                 </label>
               </div>
 
               {messageType === "INDIVIDUAL" && (
-                <div style={{ marginTop: "0.6rem" }}>
-                  <select
-                    value={targetStudentId}
-                    onChange={(e) => setTargetStudentId(e.target.value)}
+                <div style={{ marginTop: "0.75rem" }}>
+                  <MultiSelect
+                    label="Select Student(s) to Message Parents *"
+                    placeholder="Choose one or more students on this bus..."
+                    searchPlaceholder="Search student name, roll or class..."
+                    options={(currentBus.students || []).map((item: any) => ({
+                      value: item.student.id,
+                      label: `${item.student.firstName} ${item.student.lastName}`,
+                      subLabel: `Roll: ${item.student.rollNumber} • ${item.student.class?.name || "Class"}`,
+                      badge: item.pickupPoint ? `📍 ${item.pickupPoint}` : undefined,
+                    }))}
+                    value={targetStudentIds}
+                    onChange={setTargetStudentIds}
                     required
-                    style={{
-                      width: "100%",
-                      padding: "0.55rem",
-                      borderRadius: "6px",
-                      border: "1px solid var(--border)",
-                      backgroundColor: "var(--card)",
-                      color: "var(--foreground)",
-                      fontSize: "0.88rem",
-                    }}
-                  >
-                    <option value="">-- Select Student to Message Parent --</option>
-                    {(currentBus.students || []).map((item: any) => (
-                      <option key={item.student.id} value={item.student.id}>
-                        {item.student.firstName} {item.student.lastName} (Roll: {item.student.rollNumber} • {item.student.class?.name || "Class"})
-                      </option>
-                    ))}
-                  </select>
+                  />
+
+                  {targetStudentIds.length > 0 && (
+                    <div
+                      style={{
+                        marginTop: "0.4rem",
+                        padding: "0.4rem 0.65rem",
+                        borderRadius: "6px",
+                        backgroundColor: "rgba(37, 99, 235, 0.08)",
+                        border: "1px solid rgba(37, 99, 235, 0.2)",
+                        fontSize: "0.78rem",
+                        color: "var(--primary)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                      }}
+                    >
+                      <Users size={13} />
+                      <span>
+                        Recipient Preview: <strong>{targetStudentIds.length}</strong> student{targetStudentIds.length === 1 ? "" : "s"} selected • <strong>{previewRecipientCounts.parents}</strong> unique parent account{previewRecipientCounts.parents === 1 ? "" : "s"} will be notified.
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -569,7 +596,7 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
             {/* Live Recipient Count Preview */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-                Recipient Preview: <strong>{previewRecipientCount} parent accounts</strong>
+                Recipient Preview: <strong>{previewRecipientCounts.parents} parent accounts</strong>
               </span>
               <button
                 type="submit"

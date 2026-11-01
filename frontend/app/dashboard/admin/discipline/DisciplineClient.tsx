@@ -5,6 +5,7 @@ import { Plus, ShieldAlert, Calendar, User, FileText, Trash2, ShieldCheck, Shiel
 import { createDisciplineRecordAction, deleteDisciplineRecordAction } from "@/backend/api/actions/dashboard/admin/discipline/actions";
 import { DisciplineRecord, Student, Class } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { SingleSelect } from "@/frontend/components/ui/form";
 
 type StudentWithClass = Student & { class: Class | null };
 type DisciplineRecordWithRelations = DisciplineRecord & { student: StudentWithClass };
@@ -12,6 +13,9 @@ type DisciplineRecordWithRelations = DisciplineRecord & { student: StudentWithCl
 export default function DisciplineClient({ records, students }: { records: DisciplineRecordWithRelations[], students: StudentWithClass[] }) {
   const [showCreate, setShowCreate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [selectedSeverity, setSelectedSeverity] = useState("MEDIUM");
+  const [selectedStatus, setSelectedStatus] = useState("OPEN");
   const confirm = useConfirm();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -66,13 +70,20 @@ export default function DisciplineClient({ records, students }: { records: Disci
           <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem' }}>File Discipline Record</h2>
           <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: '1.5rem' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Student *</label>
-              <select required name="studentId" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }}>
-                <option value="">Select Student</option>
-                {students.map(s => (
-                  <option key={s.id} value={s.id}>{s.firstName} {s.lastName} ({s.class?.name}-{s.class?.section})</option>
-                ))}
-              </select>
+              <SingleSelect
+                name="studentId"
+                label="Student"
+                required={true}
+                value={selectedStudentId}
+                onChange={setSelectedStudentId}
+                options={students.map((s) => ({
+                  value: s.id,
+                  label: `${s.firstName} ${s.lastName}`,
+                  badge: `${s.class?.name}-${s.class?.section}`,
+                }))}
+                placeholder="Select Student..."
+                searchable={true}
+              />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Date of Incident *</label>
@@ -87,20 +98,34 @@ export default function DisciplineClient({ records, students }: { records: Disci
               <textarea required name="description" rows={3} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', resize: 'vertical' }} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Severity *</label>
-              <select required name="severity" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }}>
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-                <option value="SEVERE">Severe</option>
-              </select>
+              <SingleSelect
+                name="severity"
+                label="Severity"
+                required={true}
+                value={selectedSeverity}
+                onChange={setSelectedSeverity}
+                options={[
+                  { value: "LOW", label: "Low" },
+                  { value: "MEDIUM", label: "Medium" },
+                  { value: "HIGH", label: "High" },
+                  { value: "SEVERE", label: "Severe" },
+                ]}
+                searchable={false}
+              />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Status *</label>
-              <select required name="status" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }}>
-                <option value="OPEN">Open / Pending Action</option>
-                <option value="RESOLVED">Resolved / Closed</option>
-              </select>
+              <SingleSelect
+                name="status"
+                label="Status"
+                required={true}
+                value={selectedStatus}
+                onChange={setSelectedStatus}
+                options={[
+                  { value: "OPEN", label: "Open / Pending Action" },
+                  { value: "RESOLVED", label: "Resolved / Closed" },
+                ]}
+                searchable={false}
+              />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Action Taken *</label>

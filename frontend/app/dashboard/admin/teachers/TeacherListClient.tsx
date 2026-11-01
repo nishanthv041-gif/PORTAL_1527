@@ -12,6 +12,7 @@ import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { toggleTeacherStatusAction } from "@/backend/api/actions/dashboard/admin/teachers/teacherManagementActions";
 import TeacherEditDrawer, { TeacherData } from "./TeacherEditDrawer";
 import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
+import { MultiSelect, SingleSelect } from "@/frontend/components/ui/form";
 
 interface ClassItem {
   id: string;
@@ -43,8 +44,8 @@ export default function TeacherListClient({
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
-  const [subjectFilter, setSubjectFilter] = useState<string>("ALL");
-  const [classFilter, setClassFilter] = useState<string>("ALL");
+  const [subjectFilter, setSubjectFilter] = useState<string[]>([]);
+  const [classFilter, setClassFilter] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"NAME_ASC" | "NAME_DESC" | "DATE_DESC" | "DATE_ASC" | "STATUS">("NAME_ASC");
   const [viewMode, setViewMode] = useState<"GRID" | "LIST">("GRID");
 
@@ -60,6 +61,39 @@ export default function TeacherListClient({
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);
+
+  const subjectOptions = useMemo(
+    () =>
+      allSubjects.map((s) => ({
+        value: s.id,
+        label: s.name,
+        badge: s.code,
+      })),
+    [allSubjects]
+  );
+
+  const classOptions = useMemo(
+    () =>
+      allClasses.map((c) => ({
+        value: c.id,
+        label: `${c.name} - ${c.section}`,
+      })),
+    [allClasses]
+  );
+
+  const statusOptions = [
+    { value: "ALL", label: "All Statuses" },
+    { value: "ACTIVE", label: "Active Only" },
+    { value: "INACTIVE", label: "Inactive Only" },
+  ];
+
+  const sortOptions = [
+    { value: "NAME_ASC", label: "Name (A → Z)" },
+    { value: "NAME_DESC", label: "Name (Z → A)" },
+    { value: "DATE_DESC", label: "Newest Joined" },
+    { value: "DATE_ASC", label: "Oldest Joined" },
+    { value: "STATUS", label: "Active First" },
+  ];
 
   // Filtering & Sorting
   const filteredAndSortedTeachers = useMemo(() => {
@@ -83,15 +117,17 @@ export default function TeacherListClient({
         if (statusFilter === "ACTIVE" && !teacher.isActive) return false;
         if (statusFilter === "INACTIVE" && teacher.isActive) return false;
 
-        // Subject Filter
-        if (subjectFilter !== "ALL") {
-          const hasSubject = teacher.subjects.some(s => s.id === subjectFilter || s.name === subjectFilter);
+        // Subject Filter (Multi-select)
+        if (subjectFilter.length > 0) {
+          const hasSubject = teacher.subjects.some(
+            (s) => subjectFilter.includes(s.id) || subjectFilter.includes(s.name)
+          );
           if (!hasSubject) return false;
         }
 
-        // Class Filter
-        if (classFilter !== "ALL") {
-          const hasClass = teacher.classes.some(c => c.id === classFilter);
+        // Class Filter (Multi-select)
+        if (classFilter.length > 0) {
+          const hasClass = teacher.classes.some((c) => classFilter.includes(c.id));
           if (!hasClass) return false;
         }
 
@@ -253,86 +289,52 @@ export default function TeacherListClient({
         {/* Filters and Sorters Row */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
           {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{
-              padding: "0.55rem 0.85rem",
-              borderRadius: "8px",
-              border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-              background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-              color: "inherit",
-              fontSize: "0.85rem",
-            }}
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="ACTIVE">Active Only</option>
-            <option value="INACTIVE">Inactive Only</option>
-          </select>
+          <div style={{ minWidth: "160px" }}>
+            <SingleSelect
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={statusOptions}
+              searchable={false}
+              placeholder="Status..."
+            />
+          </div>
 
-          {/* Subject Filter */}
-          <select
-            value={subjectFilter}
-            onChange={(e) => setSubjectFilter(e.target.value)}
-            style={{
-              padding: "0.55rem 0.85rem",
-              borderRadius: "8px",
-              border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-              background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-              color: "inherit",
-              fontSize: "0.85rem",
-            }}
-          >
-            <option value="ALL">All Subjects</option>
-            {allSubjects.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+          {/* Subject Filter (MultiSelect) */}
+          <div style={{ minWidth: "220px", maxWidth: "340px", flex: "1 1 220px" }}>
+            <MultiSelect
+              value={subjectFilter}
+              onChange={setSubjectFilter}
+              options={subjectOptions}
+              placeholder="Filter by subject(s)..."
+              searchPlaceholder="Search subjects..."
+              maxChipsDisplay={2}
+            />
+          </div>
 
-          {/* Class Filter */}
-          <select
-            value={classFilter}
-            onChange={(e) => setClassFilter(e.target.value)}
-            style={{
-              padding: "0.55rem 0.85rem",
-              borderRadius: "8px",
-              border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-              background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-              color: "inherit",
-              fontSize: "0.85rem",
-            }}
-          >
-            <option value="ALL">All Classes</option>
-            {allClasses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} - {c.section}
-              </option>
-            ))}
-          </select>
+          {/* Class Filter (MultiSelect) */}
+          <div style={{ minWidth: "200px", maxWidth: "320px", flex: "1 1 200px" }}>
+            <MultiSelect
+              value={classFilter}
+              onChange={setClassFilter}
+              options={classOptions}
+              placeholder="Filter by class(es)..."
+              searchPlaceholder="Search classes..."
+              maxChipsDisplay={2}
+            />
+          </div>
 
           {/* Sorter */}
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <ArrowUpDown size={15} style={{ color: "var(--text-secondary, #94a3b8)" }} />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              style={{
-                padding: "0.55rem 0.85rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                color: "inherit",
-                fontSize: "0.85rem",
-              }}
-            >
-              <option value="NAME_ASC">Name (A → Z)</option>
-              <option value="NAME_DESC">Name (Z → A)</option>
-              <option value="DATE_DESC">Newest Joined</option>
-              <option value="DATE_ASC">Oldest Joined</option>
-              <option value="STATUS">Active First</option>
-            </select>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.4rem", minWidth: "180px" }}>
+            <ArrowUpDown size={15} style={{ color: "var(--text-secondary, #94a3b8)", flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <SingleSelect
+                value={sortBy}
+                onChange={(val) => setSortBy(val as any)}
+                options={sortOptions}
+                searchable={false}
+                placeholder="Sort by..."
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -346,8 +348,8 @@ export default function TeacherListClient({
         onReset={() => {
           setSearchTerm("");
           setStatusFilter("ALL");
-          setSubjectFilter("ALL");
-          setClassFilter("ALL");
+          setSubjectFilter([]);
+          setClassFilter([]);
         }}
         resetLabel="Reset Filters"
       >

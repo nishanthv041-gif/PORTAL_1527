@@ -14,6 +14,7 @@ import {
   toggleStudentStatusAction,
   deleteStudentPermanentlyAction
 } from "@/backend/api/actions/dashboard/admin/students/studentManagementActions";
+import { SingleSelect } from "@/frontend/components/ui/form";
 
 export interface StudentData {
   id: string;
@@ -694,25 +695,16 @@ export default function StudentEditDrawer({
                     <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.35rem" }}>
                       Enrolled Class <span style={{ color: "#ef4444" }}>*</span>
                     </label>
-                    <select
+                    <SingleSelect
                       value={classId}
-                      onChange={(e) => setClassId(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "8px",
-                        border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                        background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                        color: "inherit",
-                        fontSize: "0.9rem",
-                      }}
-                    >
-                      {allClasses.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} - {c.section}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setClassId}
+                      options={allClasses.map((c) => ({
+                        value: c.id,
+                        label: `${c.name} - ${c.section}`,
+                      }))}
+                      placeholder="Select class..."
+                      searchable={true}
+                    />
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.35rem" }}>
@@ -761,23 +753,17 @@ export default function StudentEditDrawer({
                     <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.35rem" }}>
                       Gender
                     </label>
-                    <select
-                      value={gender}
-                      onChange={(e) => setGender(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "8px",
-                        border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                        background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                        color: "inherit",
-                        fontSize: "0.9rem",
-                      }}
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
+                    <SingleSelect
+                      value={gender || ""}
+                      onChange={setGender}
+                      options={[
+                        { value: "Male", label: "Male" },
+                        { value: "Female", label: "Female" },
+                        { value: "Other", label: "Other" },
+                      ]}
+                      placeholder="Select gender..."
+                      searchable={false}
+                    />
                   </div>
                 </div>
 
@@ -807,22 +793,16 @@ export default function StudentEditDrawer({
                     <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.35rem" }}>
                       Residence Type
                     </label>
-                    <select
-                      value={residenceType}
-                      onChange={(e) => setResidenceType(e.target.value as any)}
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "8px",
-                        border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                        background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                        color: "inherit",
-                        fontSize: "0.9rem",
-                      }}
-                    >
-                      <option value="DAYSCHOLAR">Day Scholar</option>
-                      <option value="HOSTEL">Hostel</option>
-                    </select>
+                    <SingleSelect
+                      value={residenceType || "DAYSCHOLAR"}
+                      onChange={(val) => setResidenceType(val as any)}
+                      options={[
+                        { value: "DAYSCHOLAR", label: "Day Scholar" },
+                        { value: "HOSTEL", label: "Hostel" },
+                      ]}
+                      placeholder="Select residence..."
+                      searchable={false}
+                    />
                   </div>
                 </div>
 
@@ -905,26 +885,19 @@ export default function StudentEditDrawer({
                     <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.35rem" }}>
                       Select Existing Parent in School
                     </label>
-                    <select
+                    <SingleSelect
                       value={existingParentId}
-                      onChange={(e) => setExistingParentId(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "8px",
-                        border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                        background: "var(--input-bg, rgba(0, 0, 0, 0.2))",
-                        color: "inherit",
-                        fontSize: "0.9rem",
-                      }}
-                    >
-                      <option value="">-- Choose a Parent --</option>
-                      {existingParents.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({p.email}) {p.phone ? `• ${p.phone}` : ""}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setExistingParentId}
+                      options={existingParents.map((p) => ({
+                        value: p.id,
+                        label: p.name,
+                        subLabel: p.email,
+                        badge: p.phone || undefined,
+                      }))}
+                      placeholder="-- Choose a Parent --"
+                      searchable={true}
+                      allowClear={true}
+                    />
                     <p style={{ fontSize: "0.78rem", color: "var(--text-secondary, #94a3b8)", marginTop: "0.4rem" }}>
                       Linking an existing parent connects this student to the same parent dashboard without creating duplicate credentials.
                     </p>

@@ -44,5 +44,6 @@ export const SendBusMessageSchema = z.object({
   message: z.string().trim().min(1, "Message content is required"),
   priority: PriorityEnum.default("NORMAL"),
   targetStudentId: z.string().trim().optional().nullable(),
+  targetStudentIds: z.array(z.string().trim()).optional().default([]),
 });
 

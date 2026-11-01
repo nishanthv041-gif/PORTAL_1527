@@ -33,6 +33,7 @@ import {
 import Modal from "@/frontend/components/ui/Modal";
 import SearchBar from "@/frontend/components/ui/SearchBar";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { MultiSelect } from "@/frontend/components/ui";
 import {
   createBusAction,
   updateBusAction,
@@ -447,7 +448,7 @@ export default function AdminBusManagement({
   const [isMsgModalOpen, setIsMsgModalOpen] = useState(false);
   const [msgBusTarget, setMsgBusTarget] = useState<any | null>(null);
   const [msgAudienceType, setMsgAudienceType] = useState<"COMMON" | "INDIVIDUAL">("COMMON");
-  const [msgTargetStudentId, setMsgTargetStudentId] = useState("");
+  const [msgTargetStudentIds, setMsgTargetStudentIds] = useState<string[]>([]);
   const [msgTitleInput, setMsgTitleInput] = useState("");
   const [msgContentInput, setMsgContentInput] = useState("");
   const [msgPriorityInput, setMsgPriorityInput] = useState<"NORMAL" | "URGENT">("NORMAL");
@@ -455,7 +456,7 @@ export default function AdminBusManagement({
   const handleOpenSendMessage = async (bus: any) => {
     setMsgBusTarget(bus);
     setMsgAudienceType("COMMON");
-    setMsgTargetStudentId("");
+    setMsgTargetStudentIds([]);
     setMsgTitleInput(`Bus ${bus.busNumber} Notice`);
     setMsgContentInput("");
     setMsgPriorityInput("NORMAL");
@@ -468,6 +469,32 @@ export default function AdminBusManagement({
     }
   };
 
+  const recipientCounts = useMemo(() => {
+    if (!msgBusTarget?.students) return { students: 0, parents: 0 };
+    if (msgAudienceType === "COMMON") {
+      const pSet = new Set<string>();
+      (msgBusTarget.students || []).forEach((item: any) => {
+        (item.student?.parents || []).forEach((p: any) => {
+          if (p.parent?.userId) pSet.add(p.parent.userId);
+        });
+      });
+      return { students: (msgBusTarget.students || []).length, parents: pSet.size };
+    } else {
+      const pSet = new Set<string>();
+      const selSet = new Set(msgTargetStudentIds);
+      let studentCount = 0;
+      (msgBusTarget.students || []).forEach((item: any) => {
+        if (selSet.has(item.student?.id)) {
+          studentCount++;
+          (item.student?.parents || []).forEach((p: any) => {
+            if (p.parent?.userId) pSet.add(p.parent.userId);
+          });
+        }
+      });
+      return { students: studentCount, parents: pSet.size };
+    }
+  }, [msgAudienceType, msgBusTarget, msgTargetStudentIds]);
+
   const handleSendBusMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!msgBusTarget) return;
@@ -477,10 +504,16 @@ export default function AdminBusManagement({
       return;
     }
 
+    if (msgAudienceType === "INDIVIDUAL" && msgTargetStudentIds.length === 0) {
+      showToast("error", "Please select at least one student for the individual message.");
+      return;
+    }
+
     startTransition(async () => {
       const res = await sendBusMessageAction(msgBusTarget.id, {
         type: msgAudienceType,
-        targetStudentId: msgAudienceType === "INDIVIDUAL" ? msgTargetStudentId : undefined,
+        targetStudentIds: msgAudienceType === "INDIVIDUAL" ? msgTargetStudentIds : undefined,
+        targetStudentId: msgAudienceType === "INDIVIDUAL" ? msgTargetStudentIds[0] : undefined,
         title: msgTitleInput.trim(),
         message: msgContentInput.trim(),
         priority: msgPriorityInput,
@@ -2237,34 +2270,46 @@ export default function AdminBusManagement({
 
           {msgAudienceType === "INDIVIDUAL" && (
             <div>
-              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, marginBottom: "4px" }}>
-                Select Student *
-              </label>
-              <select
-                value={msgTargetStudentId}
-                onChange={(e) => setMsgTargetStudentId(e.target.value)}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.5rem",
-                  borderRadius: "6px",
-                  border: "1px solid var(--border)",
-                  backgroundColor: "var(--card)",
-                  color: "var(--foreground)",
-                  fontSize: "0.82rem",
-                }}
-              >
-                <option value="">-- Choose student on this bus --</option>
-                {(msgBusTarget?.students || []).map((item: any) => {
+              <MultiSelect
+                label="Select Student(s) on this Bus *"
+                placeholder="Choose one or more students..."
+                searchPlaceholder="Search by student name or roll..."
+                options={(msgBusTarget?.students || []).map((item: any) => {
                   const s = item.student;
-                  if (!s) return null;
-                  return (
-                    <option key={s.id} value={s.id}>
-                      {s.firstName} {s.lastName} (Roll: {s.rollNumber})
-                    </option>
-                  );
+                  return {
+                    value: s.id,
+                    label: `${s.firstName} ${s.lastName}`,
+                    subLabel: `Roll: ${s.rollNumber} • ${s.class ? `${s.class.name} - ${s.class.section}` : "Class"}`,
+                    badge: item.pickupPoint ? `📍 ${item.pickupPoint}` : undefined,
+                  };
                 })}
-              </select>
+                value={msgTargetStudentIds}
+                onChange={setMsgTargetStudentIds}
+                required
+              />
+
+              {/* Recipient Preview */}
+              {msgTargetStudentIds.length > 0 && (
+                <div
+                  style={{
+                    marginTop: "0.4rem",
+                    padding: "0.4rem 0.65rem",
+                    borderRadius: "6px",
+                    backgroundColor: "rgba(37, 99, 235, 0.08)",
+                    border: "1px solid rgba(37, 99, 235, 0.2)",
+                    fontSize: "0.76rem",
+                    color: "var(--primary)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                  }}
+                >
+                  <Users size={13} />
+                  <span>
+                    Recipient Preview: <strong>{recipientCounts.students}</strong> student{recipientCounts.students === 1 ? "" : "s"} selected • <strong>{recipientCounts.parents}</strong> unique parent account{recipientCounts.parents === 1 ? "" : "s"} will be notified.
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -2390,7 +2435,7 @@ export default function AdminBusManagement({
             </button>
             <button
               type="submit"
-              disabled={isPending || (msgAudienceType === "INDIVIDUAL" && !msgTargetStudentId)}
+              disabled={isPending || (msgAudienceType === "INDIVIDUAL" && msgTargetStudentIds.length === 0)}
               style={{
                 padding: "0.45rem 1.1rem",
                 borderRadius: "6px",
@@ -2399,8 +2444,8 @@ export default function AdminBusManagement({
                 border: "none",
                 fontWeight: 600,
                 fontSize: "0.82rem",
-                cursor: isPending || (msgAudienceType === "INDIVIDUAL" && !msgTargetStudentId) ? "not-allowed" : "pointer",
-                opacity: isPending || (msgAudienceType === "INDIVIDUAL" && !msgTargetStudentId) ? 0.6 : 1,
+                cursor: isPending || (msgAudienceType === "INDIVIDUAL" && msgTargetStudentIds.length === 0) ? "not-allowed" : "pointer",
+                opacity: isPending || (msgAudienceType === "INDIVIDUAL" && msgTargetStudentIds.length === 0) ? 0.6 : 1,
               }}
             >
               {isPending ? "Sending..." : "Dispatch to Parents"}
