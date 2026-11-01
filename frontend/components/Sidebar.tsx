@@ -73,33 +73,63 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     { href: "/dashboard/admin/settings", label: "Settings", icon: <Settings size={20} /> },
   ];
 
-  let teacherLinks: NavItem[] = [
-    { href: "/dashboard/teacher", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
-    { href: "/dashboard/teacher/programs", label: "School Programs", icon: <Star size={20} /> },
-    { href: "/dashboard/teacher/classes", label: "My Classes", icon: <GraduationCap size={20} /> },
-    { href: "/dashboard/teacher/attendance", label: "Attendance", icon: <Users size={20} /> },
-    { href: "/staff/my-bus", label: "My Assigned Bus", icon: <Bus size={20} /> },
-    { href: "/dashboard/teacher/exams", label: "Exams", icon: <BookOpen size={20} /> },
-    { href: "/dashboard/teacher/assignments", label: "Home Work", icon: <BookOpen size={20} /> },
-    { href: "/dashboard/teacher/report-cards", label: "Report Cards", icon: <BookOpen size={20} /> },
-    { href: "/dashboard/teacher/messages", label: "Messages", icon: <MessageSquare size={20} /> },
-    { href: "/dashboard/teacher/calendar", label: "Calendar", icon: <Calendar size={20} /> },
-    { href: "/dashboard/teacher/meetings", label: "Meetings", icon: <Video size={20} /> },
-    { href: "/dashboard/teacher/complaints", label: "Complaints", icon: <FileWarning size={20} /> },
-    { href: "/dashboard/teacher/discipline", label: "Discipline", icon: <AlertTriangle size={20} /> },
-    { href: "/dashboard/teacher/achievements", label: "Achievements", icon: <Award size={20} /> },
-    { href: "/dashboard/teacher/leaves", label: "Leaves", icon: <CalendarOff size={20} /> },
-    { href: "/dashboard/teacher/announcements", label: "Announcements", icon: <Megaphone size={20} /> },
-    { href: "/dashboard/teacher/notifications", label: "Notifications", icon: <Bell size={20} /> },
-    { href: "/dashboard/teacher/settings", label: "Settings", icon: <Settings size={20} /> },
+  const teacherSections: NavSection[] = [
+    {
+      items: [
+        { href: "/dashboard/teacher", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
+      ],
+    },
+    {
+      title: "ACADEMIC",
+      items: [
+        { href: "/dashboard/teacher/classes", label: "My Classes", icon: <GraduationCap size={20} /> },
+        { href: "/dashboard/teacher/attendance", label: "Attendance", icon: <Users size={20} /> },
+        { href: "/dashboard/teacher/assignments", label: "Home Work", icon: <BookOpen size={20} /> },
+        { href: "/dashboard/teacher/exams", label: "Exams", icon: <BookOpen size={20} /> },
+        { href: "/dashboard/teacher/report-cards", label: "Report Cards", icon: <BookOpen size={20} /> },
+      ],
+    },
+    {
+      title: "SCHOOL ACTIVITIES",
+      items: [
+        { href: "/dashboard/teacher/programs", label: "School Programs", icon: <Star size={20} /> },
+        { href: "/dashboard/teacher/calendar", label: "Calendar", icon: <Calendar size={20} /> },
+        { href: "/staff/my-bus", label: "My Assigned Bus", icon: <Bus size={20} /> },
+        { href: "/dashboard/teacher/discipline", label: "Discipline", icon: <AlertTriangle size={20} /> },
+        { href: "/dashboard/teacher/achievements", label: "Achievements", icon: <Award size={20} /> },
+      ],
+    },
+    {
+      title: "COMMUNICATION",
+      items: [
+        { href: "/dashboard/teacher/messages", label: "Messages", icon: <MessageSquare size={20} /> },
+        { href: "/dashboard/teacher/meetings", label: "Meetings", icon: <Video size={20} /> },
+        { href: "/dashboard/teacher/announcements", label: "Announcements", icon: <Megaphone size={20} /> },
+        { href: "/dashboard/teacher/notifications", label: "Notifications", icon: <Bell size={20} /> },
+        { href: "/dashboard/teacher/complaints", label: "Complaints", icon: <FileWarning size={20} /> },
+      ],
+    },
+    {
+      title: "PERSONAL",
+      items: [
+        { href: "/dashboard/teacher/leaves", label: "Leaves", icon: <CalendarOff size={20} /> },
+        { href: "/dashboard/teacher/settings", label: "Settings", icon: <Settings size={20} /> },
+      ],
+    },
   ];
 
-  if (settings.TEACHER_MANAGE_ATTENDANCE === "false") {
-    teacherLinks = teacherLinks.filter(l => l.href !== "/dashboard/teacher/attendance");
-  }
-  if (settings.TEACHER_MANAGE_MARKS === "false") {
-    teacherLinks = teacherLinks.filter(l => !["/dashboard/teacher/exams", "/dashboard/teacher/assignments", "/dashboard/teacher/report-cards"].includes(l.href));
-  }
+  const filteredTeacherSections: NavSection[] = teacherSections.map(sec => ({
+    ...sec,
+    items: sec.items.filter(item => {
+      if (settings.TEACHER_MANAGE_ATTENDANCE === "false" && item.href === "/dashboard/teacher/attendance") {
+        return false;
+      }
+      if (settings.TEACHER_MANAGE_MARKS === "false" && ["/dashboard/teacher/exams", "/dashboard/teacher/assignments", "/dashboard/teacher/report-cards"].includes(item.href)) {
+        return false;
+      }
+      return true;
+    }),
+  })).filter(sec => sec.items.length > 0);
 
   const parentSections: NavSection[] = [
     {
@@ -161,7 +191,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
   if (userRole === "ADMIN") {
     sections = [{ items: adminLinks }];
   } else if (userRole === "TEACHER") {
-    sections = [{ items: teacherLinks }];
+    sections = filteredTeacherSections;
   }
 
   const schoolName = settings.SCHOOL_NAME || "SRT UNIVERSAL SCHOOL";
@@ -223,7 +253,9 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
                     pathname.startsWith(link.href + "/")) ||
                   (link.href === "/admin/buses" && pathname === "/dashboard/admin/transport") ||
                   (link.href === "/staff/my-bus" && pathname === "/dashboard/teacher/transport") ||
-                  (link.href === "/parent/bus" && pathname === "/dashboard/parent/transport");
+                  (link.href === "/parent/bus" && pathname === "/dashboard/parent/transport") ||
+                  (link.href === "/dashboard/teacher/assignments" && (pathname === "/dashboard/teacher/homework" || pathname.startsWith("/dashboard/teacher/homework/"))) ||
+                  (link.href === "/dashboard/parent/assignments" && (pathname === "/dashboard/parent/homework" || pathname.startsWith("/dashboard/parent/homework/")));
                 return (
                   <div key={link.href} className={styles.navItemWrapper}>
                     <Link
