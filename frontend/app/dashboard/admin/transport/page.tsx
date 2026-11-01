@@ -3,7 +3,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { redirect } from "next/navigation";
 import styles from "../../dashboard.module.css";
 import { getTransportOverviewAction } from "@/backend/api/actions/dashboard/admin/transport/actions";
-import TransportClient from "./TransportClient";
+import AdminBusManagement from "@/frontend/components/transport/AdminBusManagement";
 
 export const dynamic = "force-dynamic";
 
@@ -16,26 +16,22 @@ export default async function AdminTransportPage() {
   const overviewRes = await getTransportOverviewAction();
   const overview = overviewRes.data || {
     buses: [],
-    teachers: [],
+    staffList: [],
     classes: [],
-    recentAlerts: [],
+    recentMessages: [],
+    recentStatusLogs: [],
   };
 
   return (
     <div className={styles.dashboard}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-        <h1 className={styles.title} style={{ margin: 0 }}>Bus Details &amp; Transport Management</h1>
-      </div>
-
-      <TransportClient
+      <AdminBusManagement
         initialBuses={overview.buses}
-        teachers={overview.teachers}
+        staffList={overview.staffList}
         classes={overview.classes}
-        initialAlerts={overview.recentAlerts}
-        currentUserRole={session.user.role}
+        recentMessages={overview.recentMessages}
+        recentStatusLogs={overview.recentStatusLogs}
         currentUserName={session.user.name || "Administrator"}
       />
     </div>
   );
 }
-

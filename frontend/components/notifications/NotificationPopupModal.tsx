@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { 
   Bell, ChevronLeft, ChevronRight, ExternalLink, 
   Megaphone, MessageSquare, Award, BookOpen, Calendar, Info,
-  FileText, Clock, Users, AlertCircle, BellOff, CheckCheck
+  FileText, Clock, Users, AlertCircle, BellOff, CheckCheck, Bus
 } from "lucide-react";
 import styles from "./NotificationPopupModal.module.css";
 import { 
@@ -275,6 +275,8 @@ export default function NotificationPopupModal({
         return <BookOpen size={13} />;
       case "ATTENDANCE":
         return <Clock size={13} />;
+      case "BUS":
+        return <Bus size={13} />;
       default:
         return <Info size={13} />;
     }

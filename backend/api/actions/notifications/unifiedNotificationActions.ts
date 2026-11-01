@@ -7,7 +7,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 
 export type UnifiedNotification = {
   id: string;
-  category: "ANNOUNCEMENT" | "INSTRUCTION" | "MEETING" | "MESSAGE" | "REPORT_CARD" | "ASSIGNMENT" | "ATTENDANCE" | "SYSTEM" | "GENERAL";
+  category: "ANNOUNCEMENT" | "INSTRUCTION" | "MEETING" | "MESSAGE" | "REPORT_CARD" | "ASSIGNMENT" | "ATTENDANCE" | "SYSTEM" | "GENERAL" | "BUS";
   title: string;
   description: string;
   senderOrAuthor?: string;
@@ -116,10 +116,12 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
         category = "SYSTEM";
         badgeLabel = "Complaint";
         badgeColors = { bg: "rgba(239, 68, 68, 0.12)", text: "#ef4444", border: "rgba(239, 68, 68, 0.25)" };
-      } else if (typeStr.includes("BUS") || typeStr.includes("TRANSPORT") || titleLower.includes("bus")) {
-        category = "SYSTEM";
-        badgeLabel = "Bus Alert";
-        badgeColors = { bg: "rgba(239, 68, 68, 0.15)", text: "#ef4444", border: "rgba(239, 68, 68, 0.35)" };
+      } else if (typeStr.includes("BUS") || typeStr.includes("TRANSPORT") || titleLower.includes("bus") || notif.category === "BUS") {
+        category = "BUS";
+        badgeLabel = notif.priority === "URGENT" ? "Urgent Bus Alert" : "Bus Alert";
+        badgeColors = notif.priority === "URGENT"
+          ? { bg: "rgba(239, 68, 68, 0.18)", text: "#ef4444", border: "rgba(239, 68, 68, 0.4)" }
+          : { bg: "rgba(245, 158, 11, 0.15)", text: "#f59e0b", border: "rgba(245, 158, 11, 0.35)" };
       }
 
       let defaultLink = userRole === "PARENT" ? "/dashboard/parent/notifications" : userRole === "TEACHER" ? "/dashboard/teacher/notifications" : "/dashboard/admin/notifications";
@@ -128,7 +130,7 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
       } else if (typeStr.includes("COMPLAINT") || titleLower.includes("complaint")) {
         defaultLink = userRole === "PARENT" ? "/dashboard/parent/complaints" : userRole === "ADMIN" ? "/dashboard/admin/complaints" : "/dashboard/teacher/complaints";
       } else if (typeStr.includes("BUS") || typeStr.includes("TRANSPORT") || titleLower.includes("bus")) {
-        defaultLink = userRole === "PARENT" ? "/dashboard/parent/transport" : "/dashboard/admin/transport";
+        defaultLink = userRole === "PARENT" ? "/parent/bus" : "/admin/buses";
       }
 
       items.push({

@@ -407,7 +407,7 @@ export default function TransportClient({
         alertType: alertForm.alertType,
         severity: alertForm.severity,
         targetType: alertForm.targetType,
-        targetStudentId: alertForm.targetStudentId || null,
+        targetStudentId: alertForm.targetStudentId || undefined,
         updateBusStatus: alertForm.updateBusStatus,
       });
 

@@ -54,7 +54,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     { href: "/dashboard/admin/main-roles", label: "Main Roles", icon: <Users size={20} /> },
     { href: "/dashboard/admin/batches", label: "Batches & Promotion", icon: <Layers size={20} /> },
     { href: "/dashboard/admin/teacher-attendance", label: "Teacher Attendance", icon: <UserCheck size={20} /> },
-    { href: "/dashboard/admin/transport", label: "Bus Details & Alerts", icon: <Bus size={20} /> },
+    { href: "/admin/buses", label: "Bus Details & Fleet", icon: <Bus size={20} /> },
     { href: "/dashboard/admin/activity-centre", label: "Activity Centre", icon: <Star size={20} /> },
     { href: "/dashboard/admin/users", label: "User Management", icon: <UserCheck size={20} /> },
     { href: "/dashboard/admin/create-roles", label: "Create New Roles", icon: <UserPlus size={20} /> },
@@ -68,6 +68,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     { href: "/dashboard/teacher/programs", label: "School Programs", icon: <Star size={20} /> },
     { href: "/dashboard/teacher/classes", label: "My Classes", icon: <GraduationCap size={20} /> },
     { href: "/dashboard/teacher/attendance", label: "Attendance", icon: <Users size={20} /> },
+    { href: "/staff/my-bus", label: "My Assigned Bus", icon: <Bus size={20} /> },
     { href: "/dashboard/teacher/exams", label: "Exams", icon: <BookOpen size={20} /> },
     { href: "/dashboard/teacher/assignments", label: "Home Work", icon: <BookOpen size={20} /> },
     { href: "/dashboard/teacher/report-cards", label: "Report Cards", icon: <BookOpen size={20} /> },
@@ -95,7 +96,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     { href: "/dashboard/parent/programs", label: "School Programs", icon: <Star size={20} /> },
     { href: "/dashboard/parent/classes", label: "Classes", icon: <GraduationCap size={20} /> },
     { href: "/dashboard/parent/attendance", label: "Attendance", icon: <Users size={20} /> },
-    { href: "/dashboard/parent/transport", label: "Bus & Transport", icon: <Bus size={20} /> },
+    { href: "/parent/bus", label: "Child's Bus & Alerts", icon: <Bus size={20} /> },
     { href: "/dashboard/parent/exams", label: "Exams", icon: <BookOpen size={20} /> },
     { href: "/dashboard/parent/assignments", label: "Home Work", icon: <BookOpen size={20} /> },
     { href: "/dashboard/parent/report-cards", label: "Report Cards", icon: <BookOpen size={20} /> },
@@ -163,7 +164,10 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
       </div>
       <nav className={styles.nav}>
         {links.map((link) => {
-          const isActive = pathname === link.href;
+          const isActive = pathname === link.href ||
+            (link.href === "/admin/buses" && pathname === "/dashboard/admin/transport") ||
+            (link.href === "/staff/my-bus" && pathname === "/dashboard/teacher/transport") ||
+            (link.href === "/parent/bus" && pathname === "/dashboard/parent/transport");
           return (
             <div key={link.href} className={styles.navItemWrapper}>
               <Link

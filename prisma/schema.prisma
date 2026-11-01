@@ -76,6 +76,7 @@ model Student {
   complaints    Complaint[]
   promotions    PromotionAudit[]
   busAssignments BusStudent[]
+  busMessages    BusMessage[]
 
   @@index([classId])
   @@index([classId, isActive])
@@ -109,7 +110,6 @@ model Teacher {
   absences              TeacherAbsence[]
   absentSubstitutions   Substitution[]      @relation("AbsentTeacher")
   assignedSubstitutions Substitution[]      @relation("SubstituteTeacher")
-  inchargeBuses         Bus[]               @relation("BusInchargeTeacher")
 }
 
 model Staff {
@@ -123,6 +123,11 @@ model Staff {
   address     String?
   joinDate    DateTime?
   isActive    Boolean   @default(true)
+
+  // Relationships
+  inChargeBuses Bus[]          @relation("StaffInChargeBuses")
+  statusLogs    BusStatusLog[] @relation("StaffReportedStatusLogs")
+  sentMessages  BusMessage[]   @relation("StaffSentBusMessages")
 }
 
 model Parent {
@@ -703,7 +708,9 @@ model Notification {
   user      User     @relation(fields: [userId], references: [id])
   title     String
   content   String
-  type      String // ATTENDANCE, EXAM, HOMEWORK, MEETING, ANNOUNCEMENT, SYSTEM
+  type      String // ATTENDANCE, EXAM, HOMEWORK, MEETING, ANNOUNCEMENT, SYSTEM, BUS
+  category  String?  @default("GENERAL") // BUS, ACADEMIC, SYSTEM
+  priority  String?  @default("NORMAL")  // NORMAL, URGENT
   link      String?
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -711,6 +718,9 @@ model Notification {
   @@index([userId, createdAt])
   @@index([userId, isRead, createdAt])
   @@index([userId, isRead, type])
+  @@index([userId, category])
+  @@index([userId, isRead, category])
+  @@index([createdAt])
 }
 
 model AuditLog {
@@ -837,67 +847,79 @@ model PromotionAudit {
 // ==========================================
 
 model Bus {
-  id                 String       @id @default(cuid())
-  busNumber          String       @unique // e.g., "Bus 01", "Route A"
-  registrationNumber String       // e.g., "TN-01-AB-1234"
-  routeName          String       // e.g., "North Zone - School Campus"
-  capacity           Int          @default(40)
+  id                 String         @id @default(cuid())
+  busNumber          String         @unique // e.g. "BUS-01", "BUS-02"
+  registrationNo     String         // e.g. "TN-01-AB-1234"
+  name               String         // e.g. "SRT Bus 01 - North Campus Route"
+  capacity           Int            @default(40)
   driverName         String
   driverPhone        String
-  inchargeTeacherId  String?
-  inchargeTeacher    Teacher?     @relation("BusInchargeTeacher", fields: [inchargeTeacherId], references: [id], onDelete: SetNull)
-  inchargeStaffName  String?
-  inchargeStaffPhone String?
-  status             String       @default("ACTIVE") // ACTIVE, IN_TRANSIT, DELAYED, BREAKDOWN, IN_MAINTENANCE
-  currentIssue       String?
-  issueReportedAt    DateTime?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  routeDescription   String?
+  status             String         @default("RUNNING") // RUNNING | NOT_RUNNING | MAINTENANCE | DELAYED
+  inChargeStaffId    String?
+  inChargeStaff      Staff?         @relation("StaffInChargeBuses", fields: [inChargeStaffId], references: [id], onDelete: SetNull)
+  isActive           Boolean        @default(true)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
   students           BusStudent[]
-  alerts             BusAlert[]
+  statusLogs         BusStatusLog[]
+  messages           BusMessage[]
 
   @@index([status])
-  @@index([inchargeTeacherId])
+  @@index([inChargeStaffId])
+  @@index([isActive])
 }
 
 model BusStudent {
-  id          String   @id @default(cuid())
-  busId       String
-  bus         Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
-  studentId   String
-  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  pickupStop  String?
-  pickupTime  String?  // e.g., "07:30 AM"
-  dropStop    String?
-  dropTime    String?  // e.g., "04:30 PM"
-  status      String   @default("ACTIVE") // ACTIVE, INACTIVE
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  busId        String
+  bus          Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicYear String   @default("2025-2026")
+  pickupPoint  String?
+  dropPoint    String?
+  assignedAt   DateTime @default(now())
 
-  @@unique([busId, studentId])
+  @@unique([studentId, academicYear])
   @@index([busId])
   @@index([studentId])
+  @@index([assignedAt])
 }
 
-model BusAlert {
+model BusStatusLog {
+  id                String   @id @default(cuid())
+  busId             String
+  bus               Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
+  status            String   // RUNNING | NOT_RUNNING | MAINTENANCE | DELAYED
+  issueType         String?  // BREAKDOWN | TRAFFIC | ACCIDENT | LATE | ROUTE_CHANGE | OTHER
+  description       String
+  reportedByStaffId String?
+  reportedByStaff   Staff?   @relation("StaffReportedStatusLogs", fields: [reportedByStaffId], references: [id], onDelete: SetNull)
+  createdAt         DateTime @default(now())
+
+  @@index([busId])
+  @@index([createdAt])
+  @@index([reportedByStaffId])
+}
+
+model BusMessage {
   id              String   @id @default(cuid())
   busId           String
   bus             Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
-  senderId        String?  // User ID who sent the alert
-  senderName      String?
-  senderRole      String?  // ADMIN, TEACHER, INCHARGE
+  senderStaffId   String?
+  senderStaff     Staff?   @relation("StaffSentBusMessages", fields: [senderStaffId], references: [id], onDelete: SetNull)
+  type            String   @default("COMMON") // COMMON | INDIVIDUAL
   title           String
   message         String
-  alertType       String   @default("GENERAL") // BREAKDOWN, DELAY, ROUTE_CHANGE, EMERGENCY, GENERAL
-  severity        String   @default("INFO") // INFO, WARNING, URGENT
-  targetType      String   @default("ALL_PARENTS") // ALL_PARENTS, INDIVIDUAL
-  targetStudentId String?  // Optional studentId for individual target
-  recipientCount  Int      @default(0)
+  priority        String   @default("NORMAL") // NORMAL | URGENT
+  targetStudentId String?
+  targetStudent   Student? @relation(fields: [targetStudentId], references: [id], onDelete: SetNull)
   createdAt       DateTime @default(now())
 
-  @@index([busId, createdAt])
-  @@index([alertType])
+  @@index([busId])
+  @@index([createdAt])
   @@index([targetStudentId])
+  @@index([senderStaffId])
 }
-
