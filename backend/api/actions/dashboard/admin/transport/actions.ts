@@ -124,6 +124,7 @@ export async function getTransportOverviewAction() {
             rollNumber: true,
             admissionNo: true,
             classId: true,
+            residenceType: true,
             busAssignments: {
               select: {
                 id: true,
@@ -242,6 +243,7 @@ export async function getBusDetailAction(busId: string) {
                 lastName: true,
                 rollNumber: true,
                 admissionNo: true,
+                residenceType: true,
                 class: {
                   select: {
                     id: true,
@@ -641,20 +643,31 @@ export async function assignStudentsToBusAction(busId: string, rawPayload: any) 
 // ==========================================
 // 7. REMOVE STUDENT FROM BUS
 // ==========================================
-export async function removeStudentFromBusAction(busStudentId: string) {
+export async function removeStudentFromBusAction(busStudentIdOrBusId: string, maybeStudentId?: string) {
   try {
     const session = await getServerSession(getAuthOptions());
     if (!session || session.user.role !== "ADMIN") {
       return { error: "Unauthorized: Administrator privileges required." };
     }
 
-    const assignment = await prisma.busStudent.findUnique({
-      where: { id: busStudentId },
-      include: {
-        student: { select: { firstName: true, lastName: true } },
-        bus: { select: { busNumber: true } },
-      },
-    });
+    let assignment;
+    if (maybeStudentId) {
+      assignment = await prisma.busStudent.findFirst({
+        where: { busId: busStudentIdOrBusId, studentId: maybeStudentId },
+        include: {
+          student: { select: { firstName: true, lastName: true } },
+          bus: { select: { busNumber: true } },
+        },
+      });
+    } else {
+      assignment = await prisma.busStudent.findUnique({
+        where: { id: busStudentIdOrBusId },
+        include: {
+          student: { select: { firstName: true, lastName: true } },
+          bus: { select: { busNumber: true } },
+        },
+      });
+    }
 
     if (!assignment) {
       return { error: "Student bus assignment record not found." };
@@ -662,7 +675,7 @@ export async function removeStudentFromBusAction(busStudentId: string) {
 
     // Delete ONLY the BusStudent assignment (student record is preserved)
     await prisma.busStudent.delete({
-      where: { id: busStudentId },
+      where: { id: assignment.id },
     });
 
     revalidatePath("/admin/buses");
@@ -1017,6 +1030,7 @@ export async function getStaffAssignedBusesAction() {
                 lastName: true,
                 rollNumber: true,
                 admissionNo: true,
+                residenceType: true,
                 class: { select: { name: true, section: true } },
                 parents: {
                   include: {
