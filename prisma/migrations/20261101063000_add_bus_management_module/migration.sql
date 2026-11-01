@@ -110,3 +110,4 @@ ALTER TABLE "BusMessage" ADD CONSTRAINT "BusMessage_senderStaffId_fkey" FOREIGN 
 
 ALTER TABLE "BusMessage" DROP CONSTRAINT IF EXISTS "BusMessage_targetStudentId_fkey";
 ALTER TABLE "BusMessage" ADD CONSTRAINT "BusMessage_targetStudentId_fkey" FOREIGN KEY ("targetStudentId") REFERENCES "Student"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+

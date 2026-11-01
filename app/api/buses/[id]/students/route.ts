@@ -150,3 +150,4 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
   }
 }
+

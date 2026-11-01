@@ -181,3 +181,4 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: error?.message || "Failed to delete bus" }, { status: 500 });
   }
 }
+

@@ -43,3 +43,4 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
   }
 }
+

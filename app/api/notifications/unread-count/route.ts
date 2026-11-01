@@ -34,3 +34,4 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ unreadCount: 0, hasBusAlert: false }, { status: 500 });
   }
 }
+
