@@ -12,7 +12,12 @@ export default async function AdminUsersPage() {
     orderBy: { createdAt: 'desc' },
     include: {
       teacher: true,
-      parent: true
+      parent: true,
+      sessions: {
+        where: { revokedAt: null, expiresAt: { gt: new Date() } },
+        select: { id: true, deviceInfo: true, ipAddress: true, lastActiveAt: true, createdAt: true },
+        orderBy: { lastActiveAt: "desc" },
+      },
     }
   });
 

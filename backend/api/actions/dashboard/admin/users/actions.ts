@@ -2,6 +2,9 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { getServerSession } from "next-auth/next";
+import { getAuthOptions } from "@/backend/auth/authOptions";
+import { revokeAllUserSessions, getUserActiveSessions } from "@/backend/lib/session-manager";
 
 export async function deactivateUser(id: string) {
   await prisma.user.update({
@@ -212,4 +215,34 @@ export async function deleteUser(id: string) {
     return { error: "An unexpected error occurred while deleting the user." };
   }
 }
+
+export async function forceLogoutUser(userId: string) {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session || session.user?.role !== "ADMIN") {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    await revokeAllUserSessions(userId, "ADMIN_FORCED");
+    revalidatePath("/dashboard/admin/users");
+    return { success: true, message: "User forced logout successfully." };
+  } catch (err: unknown) {
+    console.error("forceLogoutUser error:", err);
+    return { success: false, error: "Failed to force logout user." };
+  }
+}
+
+export async function getUserSessions(userId: string) {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session || session.user?.role !== "ADMIN") {
+      return [];
+    }
+    return await getUserActiveSessions(userId);
+  } catch (err) {
+    console.error("getUserSessions error:", err);
+    return [];
+  }
+}
+
 

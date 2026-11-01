@@ -9,6 +9,7 @@ interface HomeClientProps {
   schoolName?: string;
   schoolLogo?: string | null;
   initialError?: string | null;
+  initialReason?: string | null;
 }
 
 const SESSION_KEY = "srt_splash_shown";
@@ -34,6 +35,7 @@ export default function HomeClient({
   schoolName = "SRT UNIVERSAL SCHOOL",
   schoolLogo = "/logo/srt-logo.svg",
   initialError,
+  initialReason,
 }: HomeClientProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -66,6 +68,7 @@ export default function HomeClient({
         schoolName={schoolName}
         schoolLogo={schoolLogo || "/logo/srt-logo.svg"}
         initialError={initialError}
+        initialReason={initialReason}
       />
     </>
   );

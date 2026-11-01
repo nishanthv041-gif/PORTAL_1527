@@ -7,6 +7,7 @@ declare module "next-auth" {
       role: string;
       theme: string;
       notificationsEnabled: boolean;
+      sessionId?: string;
     } & DefaultSession["user"];
   }
 
@@ -15,6 +16,7 @@ declare module "next-auth" {
     role: string;
     theme: string;
     notificationsEnabled: boolean;
+    sessionId?: string;
   }
 }
 
@@ -24,5 +26,9 @@ declare module "next-auth/jwt" {
     role: string;
     theme: string;
     notificationsEnabled: boolean;
+    sessionId?: string;
+    isRevoked?: boolean;
+    revokedReason?: string;
+    sessionVersion?: number;
   }
 }

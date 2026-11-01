@@ -21,21 +21,49 @@ interface ModernLoginFormProps {
   schoolLogo?: string | null;
   defaultRole?: string | null;
   initialError?: string | null;
+  initialReason?: string | null;
 }
+
+const REASON_MESSAGES: Record<string, string> = {
+  "other-device": "You were logged out because your account was signed in on another device.",
+  "timeout": "Your session has expired due to 6 hours of inactivity. Please log in again.",
+  "max-time": "Your session has reached its maximum allowed duration. Please log in again.",
+  "admin-forced": "Your session was ended by an administrator.",
+  "password-changed": "Your password was changed. Please log in again with your new credentials.",
+  "logout": "You have been logged out successfully.",
+};
 
 export default function ModernLoginForm({
   schoolName = "SRT Universal School",
   schoolLogo = null,
   defaultRole = null,
   initialError = null,
+  initialReason = null,
 }: ModernLoginFormProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string>(initialError || "");
+  const [error, setError] = useState<string>(
+    initialError || (initialReason && REASON_MESSAGES[initialReason]) || ""
+  );
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Check URL reason parameter on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const reasonParam = params.get("reason");
+        if (reasonParam && REASON_MESSAGES[reasonParam]) {
+          setError(REASON_MESSAGES[reasonParam]);
+        }
+      } catch (e) {
+        // Fallback
+      }
+    }
+  }, []);
 
   // Carousel State
   const [activeSlide, setActiveSlide] = useState(0);

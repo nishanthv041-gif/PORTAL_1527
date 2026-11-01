@@ -38,10 +38,32 @@ model User {
   notifications    Notification[]
   homeworkComments HomeworkComment[]
   complaintMessages ComplaintMessage[]
+  sessions         UserSession[]
 
   @@index([role, status])
   @@index([googleEmail])
 }
+
+// UserSession model for Single-Device Login & Auto-Logout Session Enforcement
+model UserSession {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId     String    @unique
+  deviceInfo    String?
+  ipAddress     String?
+  createdAt     DateTime  @default(now())
+  lastActiveAt  DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedReason String?   // LOGIN_ELSEWHERE | IDLE_TIMEOUT | MAX_TIME | LOGOUT | PASSWORD_CHANGED | ADMIN_FORCED
+
+  @@index([userId])
+  @@index([userId, revokedAt])
+  @@index([sessionId])
+  @@index([expiresAt])
+}
+
 
 model Student {
   id          String    @id @default(cuid())

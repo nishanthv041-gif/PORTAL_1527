@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import bcrypt from "bcryptjs";
 import { revalidatePath, updateTag } from "next/cache";
+import { revokeAllUserSessions } from "@/backend/lib/session-manager";
 
 export interface UpdateProfileInput {
   name: string;
@@ -130,6 +131,9 @@ export async function changeUserPassword(input: ChangePasswordInput) {
       },
     });
 
+    // Revoke all active sessions on other devices immediately
+    await revokeAllUserSessions(userId, "PASSWORD_CHANGED");
+
     return { success: true, message: "Password changed successfully." };
   } catch (err: unknown) {
     console.error("changeUserPassword error:", err);
@@ -147,12 +151,8 @@ export async function logoutAllSessions() {
       return { success: false, error: "Unauthorized." };
     }
 
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: {
-        sessionVersion: { increment: 1 },
-      },
-    });
+    // Revoke all existing sessions and increment sessionVersion
+    await revokeAllUserSessions(session.user.id, "ADMIN_FORCED");
 
     return {
       success: true,

@@ -3,6 +3,7 @@ import GoogleProvider from "next-auth/providers/google";
 import { headers } from "next/headers";
 import { prisma } from "@/backend/db/prisma";
 import { env } from "@/backend/config/env";
+import { createUserSession } from "@/backend/lib/session-manager";
 
 export const googleProviderConfig = GoogleProvider({
   get clientId() { return env.GOOGLE_CLIENT_ID; },
@@ -125,6 +126,19 @@ export async function populateGoogleJwt(token: any, user: any, account: any) {
         token.theme = dbUser.theme;
         token.notificationsEnabled = dbUser.notificationsEnabled;
         token.sessionVersion = dbUser.sessionVersion || 1;
+
+        try {
+          const { ipAddress, userAgent } = await getClientMetadata();
+          const userSession = await createUserSession({
+            userId: dbUser.id,
+            userRole: dbUser.role,
+            ipAddress,
+            deviceInfo: userAgent || "Google Login",
+          });
+          token.sessionId = userSession.sessionId;
+        } catch (sessErr) {
+          console.error("[GoogleAuth JWT] Failed to create session:", sessErr);
+        }
       }
     } catch (error) {
       console.error("[GoogleAuth JWT] Prisma error:", error);

@@ -2,18 +2,27 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Shield, CheckCircle2, XCircle } from "lucide-react";
+import { Search, Shield, CheckCircle2, XCircle, Laptop, Smartphone, LogOut } from "lucide-react";
 import Link from "next/link";
-import { deactivateUser, activateUser, activateAllUsers, deleteUser } from "@/backend/api/actions/dashboard/admin/users/actions";
+import { deactivateUser, activateUser, activateAllUsers, deleteUser, forceLogoutUser } from "@/backend/api/actions/dashboard/admin/users/actions";
 import { User, Teacher, Parent } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
-import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
+import { SearchBar, ResultsContainer, Modal } from "@/frontend/components/ui";
 
 import { MoreVertical, Eye, Trash2 } from "lucide-react";
+
+type SessionSummary = {
+  id: string;
+  deviceInfo: string | null;
+  ipAddress: string | null;
+  lastActiveAt: Date;
+  createdAt: Date;
+};
 
 type UserWithRelations = User & {
   teacher: Teacher | null;
   parent: Parent | null;
+  sessions?: SessionSummary[];
 };
 
 export default function UserListClient({ users }: { users: (UserWithRelations & { expiresAt: Date | null })[] }) {
@@ -24,6 +33,7 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
   const [isActivating, setIsActivating] = useState(false);
   const [isPendingSearch, setIsPendingSearch] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [selectedUserForSessions, setSelectedUserForSessions] = useState<(UserWithRelations & { expiresAt: Date | null }) | null>(null);
   const router = useRouter();
   const confirm = useConfirm();
 
@@ -277,6 +287,44 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
                         </button>
                       )}
                       {user.role !== 'ADMIN' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenMenuId(null);
+                            setSelectedUserForSessions(user);
+                          }}
+                          style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--primary)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
+                        >
+                          <Laptop size={16} /> Active Sessions ({user.sessions?.length || 0})
+                        </button>
+                      )}
+                      {user.role !== 'ADMIN' && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const ok = await confirm({
+                              title: `Force Logout "${user.name}"?`,
+                              message: `Are you sure you want to revoke all active sessions for "${user.name}"? They will be logged out immediately across all devices.`,
+                              confirmText: "Force Logout",
+                              cancelText: "Cancel",
+                              variant: "danger"
+                            });
+                            if (!ok) return;
+
+                            setOpenMenuId(null);
+                            const res = await forceLogoutUser(user.id);
+                            if (res.success) {
+                              router.refresh();
+                            } else {
+                              alert(res.error || "Failed to force logout user.");
+                            }
+                          }}
+                          style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--danger)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
+                        >
+                          <LogOut size={16} /> Force Logout All Devices
+                        </button>
+                      )}
+                      {user.role !== 'ADMIN' && (
                         <button 
                           onClick={async () => {
                             const ok = await confirm({
@@ -338,6 +386,129 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
         
       </div>
       </ResultsContainer>
+
+      {/* Active Sessions Modal */}
+      {selectedUserForSessions && (
+        <Modal
+          isOpen={!!selectedUserForSessions}
+          onClose={() => setSelectedUserForSessions(null)}
+          title={`Active Sessions: ${selectedUserForSessions.name}`}
+          size="md"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+              Logged-in devices for <strong>{selectedUserForSessions.email}</strong> ({selectedUserForSessions.role}).
+            </p>
+
+            {(!selectedUserForSessions.sessions || selectedUserForSessions.sessions.length === 0) ? (
+              <div style={{ padding: '2rem', textAlign: 'center', background: 'var(--card)', borderRadius: '10px', border: '1px dashed var(--border-color)', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                No active device sessions currently registered.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {selectedUserForSessions.sessions.map((sess, idx) => (
+                  <div
+                    key={sess.id}
+                    style={{
+                      padding: '0.85rem 1rem',
+                      borderRadius: '10px',
+                      background: 'var(--card)',
+                      border: '1px solid var(--border-color)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '0.75rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '8px',
+                          background: 'rgba(59, 130, 246, 0.1)',
+                          color: 'var(--primary)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Laptop size={18} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--foreground)' }}>
+                          Session #{idx + 1}: {sess.deviceInfo || 'Standard Browser'}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                          IP: {sess.ipAddress || 'unknown'} • Last active: {new Date(sess.lastActiveAt).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+              <button
+                type="button"
+                onClick={async () => {
+                  const targetUser = selectedUserForSessions;
+                  const ok = await confirm({
+                    title: `Force Logout "${targetUser.name}"?`,
+                    message: `This will immediately revoke all sessions on all devices for this account.`,
+                    confirmText: "Force Logout",
+                    cancelText: "Cancel",
+                    variant: "danger",
+                  });
+                  if (!ok) return;
+
+                  const res = await forceLogoutUser(targetUser.id);
+                  if (res.success) {
+                    setSelectedUserForSessions(null);
+                    router.refresh();
+                  } else {
+                    alert(res.error || "Failed to force logout user.");
+                  }
+                }}
+                style={{
+                  padding: '0.65rem 1.25rem',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  color: '#ef4444',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                }}
+              >
+                <LogOut size={16} /> Force Logout All Devices
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedUserForSessions(null)}
+                style={{
+                  padding: '0.65rem 1.25rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  background: 'transparent',
+                  color: 'var(--foreground)',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

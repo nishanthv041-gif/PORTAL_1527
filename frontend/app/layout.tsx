@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { ThemeProvider } from "@/frontend/components/ThemeProvider";
 import { ConfirmDialogProvider } from "@/frontend/components/ui/ConfirmDialog";
+import SessionGuard from "@/frontend/components/auth/SessionGuard";
 import Script from "next/script";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -216,6 +217,7 @@ export default async function RootLayout({
           isAuthenticated={isAuthenticated}
         >
           <ConfirmDialogProvider>
+            <SessionGuard />
             {children}
           </ConfirmDialogProvider>
         </ThemeProvider>

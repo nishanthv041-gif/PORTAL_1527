@@ -4,6 +4,15 @@ import { prisma } from "@/backend/db/prisma";
 import bcrypt from "bcryptjs";
 import { loginRateLimiter } from "@/backend/lib/rate-limit";
 import { googleProviderConfig, verifyGoogleSignIn, populateGoogleJwt } from "./providers/google";
+import {
+  createUserSession,
+  validateSession,
+  recordSessionActivity,
+} from "@/backend/lib/session-manager";
+import {
+  IDLE_TIMEOUT_HOURS,
+  ACTIVITY_UPDATE_INTERVAL_MIN,
+} from "@/backend/lib/session-config";
 
 export function getAuthOptions(): NextAuthOptions {
   return {
@@ -71,6 +80,18 @@ export function getAuthOptions(): NextAuthOptions {
             );
           }
 
+          let userSession;
+          try {
+            userSession = await createUserSession({
+              userId: user.id,
+              userRole: user.role,
+              ipAddress: ip,
+              deviceInfo: userAgent || "Web Browser",
+            });
+          } catch (sessErr) {
+            console.error("[NextAuth] Failed to create UserSession:", sessErr);
+          }
+
           logAttempt(true);
 
           return {
@@ -81,6 +102,7 @@ export function getAuthOptions(): NextAuthOptions {
             theme: user.theme,
             notificationsEnabled: user.notificationsEnabled,
             sessionVersion: user.sessionVersion || 1,
+            sessionId: userSession?.sessionId,
           };
         }
 
@@ -107,6 +129,24 @@ export function getAuthOptions(): NextAuthOptions {
         token.theme = user.theme;
         token.notificationsEnabled = user.notificationsEnabled;
         token.sessionVersion = (user as any).sessionVersion || 1;
+        token.sessionId = (user as any).sessionId;
+      } else if (token.sessionId) {
+        try {
+          const validation = await validateSession(token.sessionId as string);
+          if (!validation.valid) {
+            token.isRevoked = true;
+            token.revokedReason = validation.reason || "LOGOUT";
+          } else if (validation.user) {
+            token.role = validation.user.role;
+            token.name = validation.user.name;
+            // Activity tracking (throttled to at most once per ACTIVITY_UPDATE_INTERVAL_MIN minutes)
+            recordSessionActivity(token.sessionId as string).catch((err) =>
+              console.warn("[Auth JWT] recordSessionActivity error:", err)
+            );
+          }
+        } catch (err) {
+          console.warn("[Auth JWT] validateSession error:", err);
+        }
       } else if (token.id) {
         try {
           const dbUser = await prisma.user.findUnique({
@@ -115,6 +155,7 @@ export function getAuthOptions(): NextAuthOptions {
           });
           if (!dbUser || dbUser.status === "INACTIVE" || (token.sessionVersion && dbUser.sessionVersion !== token.sessionVersion)) {
             token.isRevoked = true;
+            token.revokedReason = "ADMIN_FORCED";
           } else {
             token.role = dbUser.role;
           }
@@ -133,6 +174,7 @@ export function getAuthOptions(): NextAuthOptions {
         session.user.id = token.id as string;
         session.user.theme = token.theme as string;
         session.user.notificationsEnabled = token.notificationsEnabled as boolean;
+        session.user.sessionId = token.sessionId as string;
         if (token.name) {
           session.user.name = token.name as string;
         }
@@ -145,6 +187,20 @@ export function getAuthOptions(): NextAuthOptions {
   },
   session: {
     strategy: "jwt",
+    maxAge: IDLE_TIMEOUT_HOURS * 3600, // 6 hours
+    updateAge: ACTIVITY_UPDATE_INTERVAL_MIN * 60, // 5 minutes
+  },
+  cookies: {
+    sessionToken: {
+      name: process.env.NODE_ENV === "production" ? "__Secure-next-auth.session-token" : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: IDLE_TIMEOUT_HOURS * 3600,
+      },
+    },
   },
   secret: process.env.NEXTAUTH_SECRET,
   logger: {
