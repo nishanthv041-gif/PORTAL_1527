@@ -420,6 +420,57 @@ export default function SettingsClient({
             <KeyRound size={18} />
             <span>Change Settings Password</span>
           </button>
+
+          <div
+            style={{
+              width: "1px",
+              height: "22px",
+              backgroundColor: "rgba(255, 255, 255, 0.12)",
+              margin: "0 0.2rem",
+            }}
+          />
+
+          <Link
+            href="/dashboard/admin/teachers"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.6rem 1.1rem",
+              borderRadius: "8px",
+              fontSize: "0.9rem",
+              fontWeight: 500,
+              textDecoration: "none",
+              color: "var(--text-secondary, #94a3b8)",
+              background: "transparent",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <Users size={18} />
+            <span>Teacher Management</span>
+          </Link>
+
+          <Link
+            href="/dashboard/admin/students"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.6rem 1.1rem",
+              borderRadius: "8px",
+              fontSize: "0.9rem",
+              fontWeight: 500,
+              textDecoration: "none",
+              color: "var(--text-secondary, #94a3b8)",
+              background: "transparent",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <GraduationCap size={18} />
+            <span>Parent &amp; Student</span>
+          </Link>
         </div>
 
         {/* Lock Settings Button */}

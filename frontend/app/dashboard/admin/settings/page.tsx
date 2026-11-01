@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import SettingsClient from "./SettingsClient";
-import SettingsNavSwitcher from "@/frontend/components/admin/SettingsNavSwitcher";
 import { isSettingsUnlockedServer } from "@/backend/lib/settings/settingsSecurityConfig";
 import { getBatchesAction, createBatchAction } from "@/backend/api/actions/dashboard/admin/batches/actions";
 
@@ -66,9 +65,6 @@ export default async function AdminSettingsPage({
       <h1 className={styles.title} style={{ margin: 0, marginBottom: "1.25rem" }}>
         Admin Settings &amp; System Configuration
       </h1>
-
-      {/* Switcher Option to navigate between Settings, Teacher Management, and Parent & Student */}
-      <SettingsNavSwitcher />
 
       <SettingsClient
         initialSettings={settings}

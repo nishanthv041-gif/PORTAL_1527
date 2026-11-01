@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Users, GraduationCap } from "lucide-react";
+import { Building2, Users, GraduationCap, Layers } from "lucide-react";
 
 export default function SettingsNavSwitcher() {
   const pathname = usePathname();
@@ -12,6 +12,11 @@ export default function SettingsNavSwitcher() {
       href: "/dashboard/admin/settings",
       label: "School Information",
       icon: <Building2 size={18} />,
+    },
+    {
+      href: "/dashboard/admin/settings?tab=batches",
+      label: "Batches & Promotion",
+      icon: <Layers size={18} />,
     },
     {
       href: "/dashboard/admin/teachers",
