@@ -9,6 +9,155 @@ import {
 } from "lucide-react";
 import { CalendarEvent } from "@prisma/client";
 
+interface ProgramCardProps {
+  prog: CalendarEvent;
+  isPast?: boolean;
+}
+
+function ProgramCard({ prog, isPast }: ProgramCardProps) {
+  const eventDate = new Date(prog.date);
+  const dayName = eventDate.toLocaleDateString(undefined, { weekday: "short" });
+  const dayNum = eventDate.getDate();
+  const monthName = eventDate.toLocaleDateString(undefined, { month: "short" });
+
+  return (
+    <div
+      style={{
+        background: "var(--card-bg, #ffffff)",
+        borderRadius: "14px",
+        border: `1px solid ${isPast ? "var(--border-color, #e5e7eb)" : "rgba(99, 102, 241, 0.25)"}`,
+        boxShadow: isPast ? "none" : "0 4px 16px rgba(99, 102, 241, 0.05)",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+        position: "relative"
+      }}
+    >
+      {/* Top Header Row with Date Badge & Title */}
+      <div style={{ padding: "1.25rem 1.25rem 0.75rem 1.25rem", display: "flex", gap: "1rem", alignItems: "flex-start" }}>
+        {/* Calendar Badge */}
+        <div
+          style={{
+            width: "56px",
+            height: "56px",
+            borderRadius: "12px",
+            background: isPast ? "rgba(107, 114, 128, 0.08)" : "linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15))",
+            border: `1px solid ${isPast ? "var(--border-color, #e5e7eb)" : "rgba(99, 102, 241, 0.3)"}`,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0
+          }}
+        >
+          <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", color: isPast ? "var(--text-secondary)" : "var(--primary)" }}>
+            {monthName}
+          </span>
+          <span style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--foreground)", lineHeight: 1.1 }}>
+            {dayNum}
+          </span>
+          <span style={{ fontSize: "0.6rem", opacity: 0.7 }}>
+            {dayName}
+          </span>
+        </div>
+
+        {/* Title & Status */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
+            <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "var(--foreground)", wordBreak: "break-word" }}>
+              {prog.title}
+            </h3>
+            <span
+              style={{
+                fontSize: "0.72rem",
+                padding: "0.2rem 0.55rem",
+                borderRadius: "12px",
+                background: isPast
+                  ? "rgba(107, 114, 128, 0.1)"
+                  : "rgba(16, 185, 129, 0.12)",
+                color: isPast
+                  ? "var(--text-secondary)"
+                  : "#059669",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.03em",
+                flexShrink: 0
+              }}
+            >
+              {isPast ? "Concluded" : "Upcoming"}
+            </span>
+          </div>
+          <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
+            {eventDate.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+          </div>
+
+          {/* Target Class Badge */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem' }}>
+            <span style={{
+              fontSize: '0.72rem',
+              padding: '0.15rem 0.5rem',
+              borderRadius: '6px',
+              background: (!prog.targetClass || prog.targetClass === 'ALL') ? 'rgba(99, 102, 241, 0.08)' : 'rgba(16, 185, 129, 0.08)',
+              color: (!prog.targetClass || prog.targetClass === 'ALL') ? 'var(--primary)' : '#10b981',
+              border: `1px solid ${(!prog.targetClass || prog.targetClass === 'ALL') ? 'rgba(99, 102, 241, 0.2)' : 'rgba(16, 185, 129, 0.2)'}`,
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem'
+            }}>
+              {(!prog.targetClass || prog.targetClass === 'ALL') ? '🌐 All Classes' : `🏫 ${prog.targetClass}`}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Event Details: Time, Location, Organizer */}
+      <div style={{ padding: "0 1.25rem 1rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+          <Clock size={15} style={{ color: "var(--primary)", flexShrink: 0 }} />
+          <span>{prog.startTime} {prog.endTime ? `– ${prog.endTime}` : ""}</span>
+        </div>
+
+        {prog.location && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+            <MapPin size={15} style={{ color: "#ef4444", flexShrink: 0 }} />
+            <span>{prog.location}</span>
+          </div>
+        )}
+
+        {prog.organizer && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+            <User size={15} style={{ color: "#8b5cf6", flexShrink: 0 }} />
+            <span>Organized by: <strong>{prog.organizer}</strong></span>
+          </div>
+        )}
+
+        {/* Intimation & Description Box */}
+        {prog.description && (
+          <div
+            style={{
+              marginTop: "0.5rem",
+              padding: "0.85rem 1rem",
+              borderRadius: "10px",
+              backgroundColor: isPast ? "rgba(0, 0, 0, 0.02)" : "rgba(99, 102, 241, 0.04)",
+              border: `1px solid ${isPast ? "var(--border-color, #e5e7eb)" : "rgba(99, 102, 241, 0.12)"}`,
+              fontSize: "0.875rem",
+              lineHeight: 1.55,
+              color: "var(--foreground)"
+            }}
+          >
+            <div style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--primary)", marginBottom: "0.25rem" }}>
+              Program Details &amp; Intimation
+            </div>
+            {prog.description}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ProgramsParentClient({ programs }: { programs: CalendarEvent[] }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isPendingSearch, setIsPendingSearch] = useState(false);
@@ -31,151 +180,6 @@ export default function ProgramsParentClient({ programs }: { programs: CalendarE
 
   const upcomingPrograms = filtered.filter(p => new Date(p.date) >= today);
   const previousPrograms = filtered.filter(p => new Date(p.date) < today);
-
-  const ProgramCard = ({ prog, isPast }: { prog: CalendarEvent; isPast?: boolean }) => {
-    const eventDate = new Date(prog.date);
-    const dayName = eventDate.toLocaleDateString(undefined, { weekday: "short" });
-    const dayNum = eventDate.getDate();
-    const monthName = eventDate.toLocaleDateString(undefined, { month: "short" });
-    const yearNum = eventDate.getFullYear();
-
-    return (
-      <div
-        style={{
-          background: "var(--card-bg, #ffffff)",
-          borderRadius: "14px",
-          border: `1px solid ${isPast ? "var(--border-color, #e5e7eb)" : "rgba(99, 102, 241, 0.25)"}`,
-          boxShadow: isPast ? "none" : "0 4px 16px rgba(99, 102, 241, 0.05)",
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-          transition: "transform 0.2s ease, box-shadow 0.2s ease",
-          position: "relative"
-        }}
-      >
-        {/* Top Header Row with Date Badge & Title */}
-        <div style={{ padding: "1.25rem 1.25rem 0.75rem 1.25rem", display: "flex", gap: "1rem", alignItems: "flex-start" }}>
-          {/* Calendar Badge */}
-          <div
-            style={{
-              width: "56px",
-              height: "56px",
-              borderRadius: "12px",
-              background: isPast ? "rgba(107, 114, 128, 0.08)" : "linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15))",
-              border: `1px solid ${isPast ? "var(--border-color, #e5e7eb)" : "rgba(99, 102, 241, 0.3)"}`,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0
-            }}
-          >
-            <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", color: isPast ? "var(--text-secondary)" : "var(--primary)" }}>
-              {monthName}
-            </span>
-            <span style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--foreground)", lineHeight: 1.1 }}>
-              {dayNum}
-            </span>
-            <span style={{ fontSize: "0.6rem", opacity: 0.7 }}>
-              {dayName}
-            </span>
-          </div>
-
-          {/* Title & Status */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
-              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "var(--foreground)", wordBreak: "break-word" }}>
-                {prog.title}
-              </h3>
-              <span
-                style={{
-                  fontSize: "0.72rem",
-                  padding: "0.2rem 0.55rem",
-                  borderRadius: "12px",
-                  background: isPast
-                    ? "rgba(107, 114, 128, 0.1)"
-                    : "rgba(16, 185, 129, 0.12)",
-                  color: isPast
-                    ? "var(--text-secondary)"
-                    : "#059669",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.03em",
-                  flexShrink: 0
-                }}
-              >
-                {isPast ? "Concluded" : "Upcoming"}
-              </span>
-            </div>
-            <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
-              {eventDate.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-            </div>
-
-            {/* Target Class Badge */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem' }}>
-              <span style={{
-                fontSize: '0.72rem',
-                padding: '0.15rem 0.5rem',
-                borderRadius: '6px',
-                background: (!prog.targetClass || prog.targetClass === 'ALL') ? 'rgba(99, 102, 241, 0.08)' : 'rgba(16, 185, 129, 0.08)',
-                color: (!prog.targetClass || prog.targetClass === 'ALL') ? 'var(--primary)' : '#10b981',
-                border: `1px solid ${(!prog.targetClass || prog.targetClass === 'ALL') ? 'rgba(99, 102, 241, 0.2)' : 'rgba(16, 185, 129, 0.2)'}`,
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.3rem'
-              }}>
-                {(!prog.targetClass || prog.targetClass === 'ALL') ? '🌐 All Classes' : `🏫 ${prog.targetClass}`}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Event Details: Time, Location, Organizer */}
-        <div style={{ padding: "0 1.25rem 1rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-            <Clock size={15} style={{ color: "var(--primary)", flexShrink: 0 }} />
-            <span>{prog.startTime} {prog.endTime ? `– ${prog.endTime}` : ""}</span>
-          </div>
-
-          {prog.location && (
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-              <MapPin size={15} style={{ color: "#ef4444", flexShrink: 0 }} />
-              <span>{prog.location}</span>
-            </div>
-          )}
-
-          {prog.organizer && (
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-              <User size={15} style={{ color: "#8b5cf6", flexShrink: 0 }} />
-              <span>Organized by: <strong>{prog.organizer}</strong></span>
-            </div>
-          )}
-
-          {/* Intimation & Description Box */}
-          {prog.description && (
-            <div
-              style={{
-                marginTop: "0.5rem",
-                padding: "0.85rem 1rem",
-                borderRadius: "10px",
-                backgroundColor: isPast ? "rgba(0, 0, 0, 0.02)" : "rgba(99, 102, 241, 0.04)",
-                border: `1px solid ${isPast ? "var(--border-color, #e5e7eb)" : "rgba(99, 102, 241, 0.12)"}`,
-                fontSize: "0.875rem",
-                lineHeight: 1.55,
-                color: "var(--foreground)"
-              }}
-            >
-              <div style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--primary)", marginBottom: "0.25rem" }}>
-                Program Details &amp; Intimation
-              </div>
-              {prog.description}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div>

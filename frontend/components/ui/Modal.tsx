@@ -75,24 +75,39 @@ export default function Modal({
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedElement = useRef<HTMLElement | null>(null);
 
-  // Handle body scroll lock & Escape key
+  // Store callbacks in stable refs so re-renders of the parent
+  // (e.g. typing into a form field) NEVER re-trigger the modal effect or steal focus!
+  const onCloseRef = useRef(onClose);
+  const closeOnEscRef = useRef(closeOnEsc);
+
   useEffect(() => {
-    if (!isOpen) return;
+    onCloseRef.current = onClose;
+    closeOnEscRef.current = closeOnEsc;
+  }, [onClose, closeOnEsc]);
+
+  const hasFocusedRef = useRef(false);
+
+  // Handle body scroll lock & Escape key & Initial Focus ONLY once per open
+  useEffect(() => {
+    if (!isOpen) {
+      hasFocusedRef.current = false;
+      return;
+    }
 
     previouslyFocusedElement.current = document.activeElement as HTMLElement;
     lockBodyScroll();
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (closeOnEsc && e.key === "Escape") {
+      if (closeOnEscRef.current && e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
-      // Focus trap
+      // Accessible Focus trap inside modal
       if (e.key === "Tab" && panelRef.current) {
         const focusables = panelRef.current.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
         );
         if (focusables.length === 0) return;
 
@@ -111,27 +126,61 @@ export default function Modal({
 
     window.addEventListener("keydown", handleKeyDown);
 
-    // Initial focus into modal
-    const focusTimer = setTimeout(() => {
-      if (panelRef.current) {
-        const firstInputOrBtn = panelRef.current.querySelector<HTMLElement>(
-          'input:not([type="hidden"]), select, textarea, button:not([data-close-btn])'
-        );
-        if (firstInputOrBtn) {
-          firstInputOrBtn.focus();
-        } else {
-          panelRef.current.focus();
+    // Initial focus into modal: runs strictly ONCE on open, and NEVER on state updates or keystrokes!
+    // Also does not steal focus if user has already focused any element inside the modal.
+    let focusTimer: ReturnType<typeof setTimeout> | null = null;
+    if (!hasFocusedRef.current) {
+      hasFocusedRef.current = true;
+      focusTimer = setTimeout(() => {
+        if (panelRef.current) {
+          // If focus is already inside the panel, do not touch it!
+          if (panelRef.current.contains(document.activeElement)) {
+            return;
+          }
+
+          const firstInputOrBtn = panelRef.current.querySelector<HTMLElement>(
+            'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([data-close-btn]):not([disabled])'
+          );
+          if (firstInputOrBtn) {
+            firstInputOrBtn.focus();
+          } else {
+            panelRef.current.focus();
+          }
         }
+      }, 50);
+    }
+
+    // Dynamic Visual Viewport adjustment for mobile phone keyboards
+    const handleViewportResize = () => {
+      if (typeof window !== "undefined" && window.visualViewport && panelRef.current) {
+        const vpHeight = window.visualViewport.height;
+        const maxH = Math.max(200, vpHeight - 16);
+        panelRef.current.style.maxHeight = `${maxH}px`;
       }
-    }, 40);
+    };
+
+    if (typeof window !== "undefined" && window.visualViewport) {
+      window.visualViewport.addEventListener("resize", handleViewportResize);
+      window.visualViewport.addEventListener("scroll", handleViewportResize);
+      handleViewportResize();
+    }
 
     return () => {
-      clearTimeout(focusTimer);
+      if (focusTimer) clearTimeout(focusTimer);
       window.removeEventListener("keydown", handleKeyDown);
+
+      if (typeof window !== "undefined" && window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", handleViewportResize);
+        window.visualViewport.removeEventListener("scroll", handleViewportResize);
+      }
+
       unlockBodyScroll();
 
       // Restore previously focused element
-      if (previouslyFocusedElement.current && typeof previouslyFocusedElement.current.focus === "function") {
+      if (
+        previouslyFocusedElement.current &&
+        typeof previouslyFocusedElement.current.focus === "function"
+      ) {
         try {
           previouslyFocusedElement.current.focus();
         } catch {
@@ -139,15 +188,15 @@ export default function Modal({
         }
       }
     };
-  }, [isOpen, closeOnEsc, onClose]);
+  }, [isOpen]); // STABLE: Only re-runs when modal opens or closes!
 
   const handleOverlayClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (closeOnOverlayClick && e.target === e.currentTarget) {
-        onClose();
+        onCloseRef.current();
       }
     },
-    [closeOnOverlayClick, onClose]
+    [closeOnOverlayClick]
   );
 
   if (!mounted || !isOpen) return null;
@@ -182,7 +231,7 @@ export default function Modal({
               <button
                 type="button"
                 data-close-btn="true"
-                onClick={onClose}
+                onClick={() => onCloseRef.current()}
                 className={styles.closeButton}
                 title="Close"
                 aria-label="Close"
@@ -280,4 +329,3 @@ Modal.Footer = function ModalFooter({
     </div>
   );
 };
-

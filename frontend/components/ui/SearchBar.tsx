@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useTransition, useCallback } from "react";
+import React, { useState, useEffect, useTransition, useCallback, useId, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Search, X } from "lucide-react";
 import Spinner from "./Spinner";
@@ -19,6 +19,7 @@ export interface SearchBarProps {
   clearable?: boolean;
   ariaLabel?: string;
   syncWithUrl?: boolean;
+  id?: string;
 }
 
 export default function SearchBar({
@@ -34,7 +35,10 @@ export default function SearchBar({
   clearable = true,
   ariaLabel = "Search input",
   syncWithUrl = true,
+  id: customId,
 }: SearchBarProps) {
+  const generatedId = useId();
+  const inputId = customId || `search-${generatedId}`;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -46,12 +50,13 @@ export default function SearchBar({
   const [prevValue, setPrevValue] = useState(value);
   const [prevUrlQuery, setPrevUrlQuery] = useState(urlQuery);
 
-  const onChangeRef = React.useRef(onChange);
-  React.useEffect(() => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
 
-  // Sync state if controlled prop changed
+  // Sync state if controlled prop changed externally
   if (value !== undefined && value !== prevValue) {
     setPrevValue(value);
     setQuery(value);
@@ -101,11 +106,11 @@ export default function SearchBar({
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [query, paramName, pathname, searchParams, syncWithUrl]);
+  }, [query, paramName, pathname, searchParams, syncWithUrl, router]);
 
   const handleClear = useCallback(() => {
     setQuery("");
-    onChange?.("");
+    onChangeRef.current?.("");
 
     if (syncWithUrl && searchParams) {
       const params = new URLSearchParams(searchParams.toString());
@@ -120,7 +125,9 @@ export default function SearchBar({
         router.replace(targetUrl, { scroll: false });
       });
     }
-  }, [paramName, pathname, searchParams, syncWithUrl, onChange, router]);
+
+    inputRef.current?.focus();
+  }, [paramName, pathname, searchParams, syncWithUrl, router]);
 
   return (
     <div className={`${styles.searchContainer} ${className}`} style={style}>
@@ -129,11 +136,19 @@ export default function SearchBar({
       </div>
 
       <input
+        ref={inputRef}
+        id={inputId}
         type="text"
         className={styles.searchInput}
         placeholder={placeholder}
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          // If in local/controlled mode without URL sync, notify parent immediately
+          if (!syncWithUrl) {
+            onChangeRef.current?.(e.target.value);
+          }
+        }}
         autoFocus={autoFocus}
         aria-label={ariaLabel}
         autoComplete="off"
@@ -162,4 +177,3 @@ export default function SearchBar({
     </div>
   );
 }
-

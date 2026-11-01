@@ -26,8 +26,8 @@
 .panel {
   position: relative;
   width: 100%;
-  max-height: calc(100dvh - 24px);
   max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
   display: flex;
   flex-direction: column;
   background-color: var(--card-bg, #151f32);
@@ -157,6 +157,7 @@
   overscroll-behavior: contain;
   padding: clamp(12px, 3vw, 20px);
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 /* Footer */
@@ -179,8 +180,8 @@
   }
 
   .panel {
-    max-height: calc(100dvh - 16px);
     max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
     border-radius: 12px;
   }
 
@@ -190,6 +191,8 @@
 
   .body {
     padding: 12px;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
   }
 
   .footer {
@@ -205,4 +208,3 @@
     text-align: center;
   }
 }
-

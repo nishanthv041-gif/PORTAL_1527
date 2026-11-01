@@ -1,0 +1,284 @@
+/* Unified Form Kit CSS Modules */
+
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--foreground, #0f172a);
+  line-height: 1.3;
+  user-select: none;
+}
+
+.requiredAsterisk {
+  color: #ef4444;
+  margin-left: 0.2rem;
+  font-weight: 700;
+}
+
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.leftIcon {
+  position: absolute;
+  left: 0.85rem;
+  color: var(--text-muted, #94a3b8);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.rightIcon {
+  position: absolute;
+  right: 0.85rem;
+  color: var(--text-muted, #94a3b8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+/* Base input element */
+.input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0 0.85rem;
+  font-size: 16px; /* Prevents auto-zoom on iOS */
+  line-height: 1.4;
+  color: var(--foreground, #0f172a);
+  background-color: var(--input-bg, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  outline: none;
+  box-sizing: border-box;
+  scroll-margin-top: 80px;
+  scroll-margin-bottom: 120px;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+@media (min-width: 640px) {
+  .input {
+    font-size: 0.9375rem;
+    height: 42px;
+  }
+}
+
+.input:focus {
+  border-color: var(--primary, #3b82f6);
+  box-shadow: 0 0 0 3px var(--primary-bg, rgba(59, 130, 246, 0.18));
+}
+
+.input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.inputHasLeftIcon {
+  padding-left: 2.6rem;
+}
+
+.inputHasRightIcon {
+  padding-right: 2.6rem;
+}
+
+.inputError {
+  border-color: #ef4444 !important;
+}
+
+.inputError:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
+}
+
+/* Select element */
+.selectWrapper {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.select {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0 2.4rem 0 0.85rem;
+  font-size: 16px; /* Prevents auto-zoom on iOS */
+  line-height: 1.4;
+  color: var(--foreground, #0f172a);
+  background-color: var(--input-bg, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  outline: none;
+  box-sizing: border-box;
+  scroll-margin-top: 80px;
+  scroll-margin-bottom: 120px;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+@media (min-width: 640px) {
+  .select {
+    font-size: 0.9375rem;
+    height: 42px;
+  }
+}
+
+.select:focus {
+  border-color: var(--primary, #3b82f6);
+  box-shadow: 0 0 0 3px var(--primary-bg, rgba(59, 130, 246, 0.18));
+}
+
+.select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.selectArrow {
+  position: absolute;
+  right: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-muted, #94a3b8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Textarea element */
+.textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 96px;
+  padding: 0.75rem 0.85rem;
+  font-size: 16px; /* Prevents auto-zoom on iOS */
+  font-family: inherit;
+  line-height: 1.5;
+  color: var(--foreground, #0f172a);
+  background-color: var(--input-bg, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  outline: none;
+  resize: vertical;
+  box-sizing: border-box;
+  scroll-margin-top: 80px;
+  scroll-margin-bottom: 120px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+@media (min-width: 640px) {
+  .textarea {
+    font-size: 0.9375rem;
+  }
+}
+
+.textarea:focus {
+  border-color: var(--primary, #3b82f6);
+  box-shadow: 0 0 0 3px var(--primary-bg, rgba(59, 130, 246, 0.18));
+}
+
+/* Checkbox element */
+.checkboxContainer {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  cursor: pointer;
+  user-select: none;
+  width: 100%;
+}
+
+.checkboxInput {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border-radius: 4px;
+  accent-color: var(--primary, #3b82f6);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.checkboxText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.checkboxLabel {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--foreground, #0f172a);
+  line-height: 1.3;
+}
+
+.checkboxDesc {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #64748b);
+  line-height: 1.4;
+}
+
+/* Feedback messages */
+.helperText {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #64748b);
+  line-height: 1.35;
+}
+
+.errorText {
+  font-size: 0.8rem;
+  color: #ef4444;
+  font-weight: 500;
+  line-height: 1.35;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* Search input */
+.searchClearButton {
+  position: absolute;
+  right: 0.75rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted, #94a3b8);
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.searchClearButton:hover {
+  color: var(--foreground, #0f172a);
+  background-color: rgba(0, 0, 0, 0.06);
+}
+

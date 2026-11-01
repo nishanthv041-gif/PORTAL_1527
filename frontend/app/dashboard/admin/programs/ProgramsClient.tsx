@@ -6,6 +6,251 @@ import { createProgramAction, updateProgramStatusAction, deleteProgramAction, se
 import { CalendarEvent } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
+interface ProgramCardProps {
+  prog: CalendarEvent;
+  today: Date;
+  isMenuOpen: boolean;
+  isDeleting: boolean;
+  notifyingId: string | null;
+  onToggleMenu: (id: string) => void;
+  onSendNotification: (id: string, title: string) => void;
+  onTogglePublish: (id: string, currentStatus: boolean) => void;
+  onDelete: (id: string, title: string) => void;
+}
+
+function ProgramCard({
+  prog,
+  today,
+  isMenuOpen,
+  isDeleting,
+  notifyingId,
+  onToggleMenu,
+  onSendNotification,
+  onTogglePublish,
+  onDelete
+}: ProgramCardProps) {
+  const isPast = new Date(prog.date) < today;
+
+  return (
+    <div
+      key={prog.id}
+      style={{
+        background: 'var(--card-bg)',
+        borderRadius: '12px',
+        border: `1px solid ${isPast ? 'var(--border-color)' : 'var(--border-color)'}`,
+        overflow: 'visible',
+        display: 'flex',
+        flexDirection: 'column',
+        opacity: isDeleting ? 0.5 : 1,
+        transition: 'opacity 0.2s ease',
+        position: 'relative'
+      }}
+    >
+      <div style={{ padding: '1.5rem', flex: 1 }}>
+        <div style={{ marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, flex: 1, marginRight: '0.75rem' }}>{prog.title}</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+              <span style={{
+                fontSize: '0.72rem',
+                padding: '0.2rem 0.55rem',
+                borderRadius: '12px',
+                background: isPast
+                  ? 'rgba(107, 114, 128, 0.1)'
+                  : prog.status === 'UPCOMING'
+                    ? 'var(--primary-bg)'
+                    : 'rgba(107, 114, 128, 0.1)',
+                color: isPast
+                  ? 'var(--text-secondary)'
+                  : prog.status === 'UPCOMING'
+                    ? 'var(--primary)'
+                    : 'var(--text-secondary)',
+                fontWeight: 600,
+                textTransform: 'uppercase' as const,
+                letterSpacing: '0.03em'
+              }}>
+                {isPast ? 'Past' : prog.status}
+              </span>
+
+              {/* Options Menu Button */}
+              <div data-action-menu-container={prog.id} style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => onToggleMenu(prog.id)}
+                  title="Options"
+                  disabled={isDeleting}
+                  style={{
+                    background: isMenuOpen ? 'var(--primary-bg)' : 'rgba(0,0,0,0.04)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    color: isMenuOpen ? 'var(--primary)' : 'var(--text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.2rem',
+                    padding: '0.3rem 0.55rem',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  Options
+                  {isMenuOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                </button>
+
+                {/* Dropdown menu */}
+                {isMenuOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    background: 'var(--card-bg)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                    zIndex: 50,
+                    minWidth: '180px',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {/* Send Notification to All */}
+                  <button
+                    type="button"
+                    onClick={() => onSendNotification(prog.id, prog.title)}
+                    disabled={notifyingId === prog.id}
+                    style={{
+                      width: '100%',
+                      background: 'transparent',
+                      border: 'none',
+                      padding: '0.6rem 1rem',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.6rem',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      color: 'var(--primary)',
+                      transition: 'background 0.12s ease'
+                    }}
+                    onMouseOver={e => e.currentTarget.style.background = 'var(--primary-bg)'}
+                    onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <Bell size={15} />
+                    {notifyingId === prog.id ? 'Sending...' : 'Send Notification to All'}
+                  </button>
+
+                  <div style={{ height: '1px', background: 'var(--border-color)', margin: '0 0.5rem' }} />
+
+                  {/* Publish / Unpublish */}
+                  <button
+                    type="button"
+                    onClick={() => onTogglePublish(prog.id, prog.isPublished)}
+                    style={{
+                      width: '100%',
+                      background: 'transparent',
+                      border: 'none',
+                      padding: '0.6rem 1rem',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.6rem',
+                      fontSize: '0.85rem',
+                      fontWeight: 500,
+                      color: prog.isPublished ? 'var(--success)' : 'var(--text-secondary)',
+                      transition: 'background 0.12s ease'
+                    }}
+                    onMouseOver={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
+                    onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    {prog.isPublished ? <><Eye size={15} /> Unpublish</> : <><EyeOff size={15} /> Publish</>}
+                  </button>
+
+                  <div style={{ height: '1px', background: 'var(--border-color)', margin: '0 0.5rem' }} />
+
+                  {/* Delete */}
+                  <button
+                    type="button"
+                    onClick={() => onDelete(prog.id, prog.title)}
+                    style={{
+                      width: '100%',
+                      background: 'transparent',
+                      border: 'none',
+                      padding: '0.6rem 1rem',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.6rem',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      color: 'var(--danger)',
+                      transition: 'background 0.12s ease'
+                    }}
+                    onMouseOver={e => e.currentTarget.style.background = 'rgba(239,68,68,0.07)'}
+                    onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <Trash2 size={15} />
+                    Delete Program
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.45rem', marginBottom: '0.85rem' }}>
+          <span style={{
+            fontSize: '0.75rem',
+            padding: '0.2rem 0.55rem',
+            borderRadius: '6px',
+            background: (!prog.targetClass || prog.targetClass === 'ALL') ? 'rgba(99, 102, 241, 0.08)' : 'rgba(16, 185, 129, 0.08)',
+            color: (!prog.targetClass || prog.targetClass === 'ALL') ? 'var(--primary)' : '#10b981',
+            border: `1px solid ${(!prog.targetClass || prog.targetClass === 'ALL') ? 'rgba(99, 102, 241, 0.2)' : 'rgba(16, 185, 129, 0.2)'}`,
+            fontWeight: 600,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.3rem'
+          }}>
+            {(!prog.targetClass || prog.targetClass === 'ALL') ? '🌐 All Classes' : `🏫 ${prog.targetClass}`}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: prog.description ? '1rem' : 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+            <CalendarIcon size={15} /> {new Date(prog.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+            <Clock size={15} /> {prog.startTime} – {prog.endTime}
+          </div>
+          {prog.location && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+              <MapPin size={15} /> {prog.location}
+            </div>
+          )}
+        </div>
+
+        {prog.description && (
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.55, background: 'rgba(0,0,0,0.02)', padding: '0.85rem 1rem', borderRadius: '8px', margin: '1rem 0 0 0' }}>
+            {prog.description}
+          </p>
+        )}
+      </div>
+
+      {/* Card Footer — publish status indicator */}
+      <div style={{ padding: '0.75rem 1.5rem', background: 'rgba(0,0,0,0.02)', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: prog.isPublished ? 'var(--success)' : 'var(--text-secondary)' }}>
+        {prog.isPublished ? <Eye size={14} /> : <EyeOff size={14} />}
+        <span style={{ fontWeight: 600 }}>{prog.isPublished ? 'Published' : 'Draft — Not visible to parents/teachers'}</span>
+        {notifyingId === prog.id && <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>Notifying all...</span>}
+        {isDeleting && <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 600 }}>Deleting...</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function ProgramsClient({ 
   programs,
   classes = []
@@ -122,227 +367,6 @@ export default function ProgramsClient({
 
   const toggleMenu = (id: string) => {
     setOpenMenuId(prev => (prev === id ? null : id));
-  };
-
-  const ProgramCard = ({ prog }: { prog: CalendarEvent }) => {
-    const isPast = new Date(prog.date) < today;
-    const isMenuOpen = openMenuId === prog.id;
-    const isDeleting = deletingId === prog.id;
-
-    return (
-      <div
-        key={prog.id}
-        style={{
-          background: 'var(--card-bg)',
-          borderRadius: '12px',
-          border: `1px solid ${isPast ? 'var(--border-color)' : 'var(--border-color)'}`,
-          overflow: 'visible',
-          display: 'flex',
-          flexDirection: 'column',
-          opacity: isDeleting ? 0.5 : 1,
-          transition: 'opacity 0.2s ease',
-          position: 'relative'
-        }}
-      >
-        <div style={{ padding: '1.5rem', flex: 1 }}>
-          <div style={{ marginBottom: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, flex: 1, marginRight: '0.75rem' }}>{prog.title}</h3>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-                <span style={{
-                  fontSize: '0.72rem',
-                  padding: '0.2rem 0.55rem',
-                  borderRadius: '12px',
-                  background: isPast
-                    ? 'rgba(107, 114, 128, 0.1)'
-                    : prog.status === 'UPCOMING'
-                      ? 'var(--primary-bg)'
-                      : 'rgba(107, 114, 128, 0.1)',
-                  color: isPast
-                    ? 'var(--text-secondary)'
-                    : prog.status === 'UPCOMING'
-                      ? 'var(--primary)'
-                      : 'var(--text-secondary)',
-                  fontWeight: 600,
-                  textTransform: 'uppercase' as const,
-                  letterSpacing: '0.03em'
-                }}>
-                  {isPast ? 'Past' : prog.status}
-                </span>
-
-                {/* Options Menu Button */}
-                <div data-action-menu-container={prog.id} style={{ position: 'relative' }}>
-                  <button
-                    onClick={() => toggleMenu(prog.id)}
-                    title="Options"
-                    disabled={isDeleting}
-                    style={{
-                      background: isMenuOpen ? 'var(--primary-bg)' : 'rgba(0,0,0,0.04)',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      color: isMenuOpen ? 'var(--primary)' : 'var(--text-secondary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.2rem',
-                      padding: '0.3rem 0.55rem',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    Options
-                    {isMenuOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                  </button>
-
-                  {/* Dropdown menu */}
-                  {isMenuOpen && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: 'calc(100% + 6px)',
-                      right: 0,
-                      background: 'var(--card-bg)',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '10px',
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                      zIndex: 50,
-                      minWidth: '180px',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    {/* Send Notification to All */}
-                    <button
-                      onClick={() => handleSendNotification(prog.id, prog.title)}
-                      disabled={notifyingId === prog.id}
-                      style={{
-                        width: '100%',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '0.6rem 1rem',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.6rem',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        color: 'var(--primary)',
-                        transition: 'background 0.12s ease'
-                      }}
-                      onMouseOver={e => e.currentTarget.style.background = 'var(--primary-bg)'}
-                      onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <Bell size={15} />
-                      {notifyingId === prog.id ? 'Sending...' : 'Send Notification to All'}
-                    </button>
-
-                    <div style={{ height: '1px', background: 'var(--border-color)', margin: '0 0.5rem' }} />
-
-                    {/* Publish / Unpublish */}
-                    <button
-                      onClick={() => togglePublish(prog.id, prog.isPublished)}
-                      style={{
-                        width: '100%',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '0.6rem 1rem',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.6rem',
-                        fontSize: '0.85rem',
-                        fontWeight: 500,
-                        color: prog.isPublished ? 'var(--success)' : 'var(--text-secondary)',
-                        transition: 'background 0.12s ease'
-                      }}
-                      onMouseOver={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
-                      onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      {prog.isPublished ? <><Eye size={15} /> Unpublish</> : <><EyeOff size={15} /> Publish</>}
-                    </button>
-
-                    <div style={{ height: '1px', background: 'var(--border-color)', margin: '0 0.5rem' }} />
-
-                    {/* Delete */}
-                    <button
-                      onClick={() => handleDelete(prog.id, prog.title)}
-                      style={{
-                        width: '100%',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '0.6rem 1rem',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.6rem',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        color: 'var(--danger)',
-                        transition: 'background 0.12s ease'
-                      }}
-                      onMouseOver={e => e.currentTarget.style.background = 'rgba(239,68,68,0.07)'}
-                      onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <Trash2 size={15} />
-                      Delete Program
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.45rem', marginBottom: '0.85rem' }}>
-            <span style={{
-              fontSize: '0.75rem',
-              padding: '0.2rem 0.55rem',
-              borderRadius: '6px',
-              background: (!prog.targetClass || prog.targetClass === 'ALL') ? 'rgba(99, 102, 241, 0.08)' : 'rgba(16, 185, 129, 0.08)',
-              color: (!prog.targetClass || prog.targetClass === 'ALL') ? 'var(--primary)' : '#10b981',
-              border: `1px solid ${(!prog.targetClass || prog.targetClass === 'ALL') ? 'rgba(99, 102, 241, 0.2)' : 'rgba(16, 185, 129, 0.2)'}`,
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.3rem'
-            }}>
-              {(!prog.targetClass || prog.targetClass === 'ALL') ? '🌐 All Classes' : `🏫 ${prog.targetClass}`}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: prog.description ? '1rem' : 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-              <CalendarIcon size={15} /> {new Date(prog.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-              <Clock size={15} /> {prog.startTime} – {prog.endTime}
-            </div>
-            {prog.location && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                <MapPin size={15} /> {prog.location}
-              </div>
-            )}
-          </div>
-
-          {prog.description && (
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.55, background: 'rgba(0,0,0,0.02)', padding: '0.85rem 1rem', borderRadius: '8px', margin: '1rem 0 0 0' }}>
-              {prog.description}
-            </p>
-          )}
-        </div>
-
-        {/* Card Footer — publish status indicator */}
-        <div style={{ padding: '0.75rem 1.5rem', background: 'rgba(0,0,0,0.02)', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: prog.isPublished ? 'var(--success)' : 'var(--text-secondary)' }}>
-          {prog.isPublished ? <Eye size={14} /> : <EyeOff size={14} />}
-          <span style={{ fontWeight: 600 }}>{prog.isPublished ? 'Published' : 'Draft — Not visible to parents/teachers'}</span>
-          {notifyingId === prog.id && <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>Notifying all...</span>}
-          {isDeleting && <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 600 }}>Deleting...</span>}
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -484,7 +508,7 @@ export default function ProgramsClient({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))', gap: '1.25rem', width: '100%', minWidth: 0 }}>
         {upcomingPrograms.map(prog => (
           <div key={prog.id} onClick={e => e.stopPropagation()}>
-            <ProgramCard prog={prog} />
+            <ProgramCard prog={prog} today={today} isMenuOpen={openMenuId === prog.id} isDeleting={deletingId === prog.id} notifyingId={notifyingId} onToggleMenu={toggleMenu} onSendNotification={handleSendNotification} onTogglePublish={togglePublish} onDelete={handleDelete} />
           </div>
         ))}
         {upcomingPrograms.length === 0 && (
@@ -525,7 +549,7 @@ export default function ProgramsClient({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))', gap: '1.25rem', width: '100%', minWidth: 0 }}>
               {previousPrograms.map(prog => (
                 <div key={prog.id} onClick={e => e.stopPropagation()}>
-                  <ProgramCard prog={prog} />
+                  <ProgramCard prog={prog} today={today} isMenuOpen={openMenuId === prog.id} isDeleting={deletingId === prog.id} notifyingId={notifyingId} onToggleMenu={toggleMenu} onSendNotification={handleSendNotification} onTogglePublish={togglePublish} onDelete={handleDelete} />
                 </div>
               ))}
             </div>

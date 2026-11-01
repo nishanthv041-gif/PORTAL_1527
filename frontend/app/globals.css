@@ -49,6 +49,14 @@
   /* Elevation shadow */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+  /* SRT Brand Palette */
+  --navy: #0b1329;
+  --navy-dark: #070c1b;
+  --navy-light: #142247;
+  --gold: #f2b84b;
+  --gold-hover: #e5a835;
+  --gold-light: #fdf4df;
 }
 
 /* ============================================================
@@ -101,6 +109,14 @@
   /* Elevation shadow */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+
+  /* SRT Brand Palette */
+  --navy: #0b1329;
+  --navy-dark: #070c1b;
+  --navy-light: #142247;
+  --gold: #f2b84b;
+  --gold-hover: #e5a835;
+  --gold-light: #2a2010;
 }
 
 /* ============================================================
@@ -152,7 +168,18 @@ textarea,
 select {
   color: var(--foreground);
   background-color: var(--input-bg);
+  scroll-margin-top: 80px;
+  scroll-margin-bottom: 120px;
 }
+
+@media screen and (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important; /* Prevents auto-zoom on iOS mobile */
+  }
+}
+
 
 a {
   color: inherit;

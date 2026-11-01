@@ -7,7 +7,8 @@ import React, {
   useRef,
   useEffect,
   useCallback,
-  ReactNode
+  useSyncExternalStore,
+  ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, AlertCircle, HelpCircle, Loader2 } from "lucide-react";
@@ -43,21 +44,54 @@ export function useConfirm() {
   return context.confirm;
 }
 
+// Module-level variant styles so no new functions or objects are created on render
+function getVariantStyles(variant: ConfirmVariant = "danger") {
+  switch (variant) {
+    case "primary":
+      return {
+        iconBg: "#dbeafe",
+        iconColor: "#2563eb",
+        btnBg: "#2563eb",
+        btnHover: "#1d4ed8",
+        Icon: HelpCircle,
+      };
+    case "warning":
+      return {
+        iconBg: "#fef3c7",
+        iconColor: "#d97706",
+        btnBg: "#d97706",
+        btnHover: "#b45309",
+        Icon: AlertCircle,
+      };
+    case "danger":
+    default:
+      return {
+        iconBg: "#fee2e2",
+        iconColor: "#dc2626",
+        btnBg: "#dc2626",
+        btnHover: "#b91c1c",
+        Icon: AlertTriangle,
+      };
+  }
+}
+
 export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
   const [queue, setQueue] = useState<DialogQueueItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [typedInput, setTypedInput] = useState("");
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
+
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
   const cancelBtnRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogCardRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const prevDialogIdRef = useRef<string | null>(null);
 
   const current = queue[0] || null;
 
@@ -66,15 +100,16 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
       const item: DialogQueueItem = {
         ...options,
         id: Math.random().toString(36).substring(2, 9),
-        resolve
+        resolve,
       };
       setQueue((prev) => [...prev, item]);
     });
   }, []);
 
-  // Reset local state when current dialog changes
+  // Reset local state and manage focus only when current dialog ID genuinely changes
   useEffect(() => {
-    if (current) {
+    if (current && prevDialogIdRef.current !== current.id) {
+      prevDialogIdRef.current = current.id;
       setLoading(false);
       setTypedInput("");
       setErrorText(null);
@@ -83,8 +118,12 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
 
-      // Focus management
+      // Focus management: strictly runs once per dialog open
       const timer = setTimeout(() => {
+        if (dialogCardRef.current?.contains(document.activeElement)) {
+          return;
+        }
+
         if (current.requireText && inputRef.current) {
           inputRef.current.focus();
         } else if (current.variant === "danger" && cancelBtnRef.current) {
@@ -98,8 +137,10 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
         clearTimeout(timer);
         document.body.style.overflow = originalOverflow;
       };
+    } else if (!current) {
+      prevDialogIdRef.current = null;
     }
-  }, [current?.id, current?.variant, current?.requireText]);
+  }, [current]);
 
   const handleCancel = useCallback(() => {
     if (loading || !current) return;
@@ -115,37 +156,35 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (current.onConfirm) {
+    try {
       setLoading(true);
       setErrorText(null);
-      try {
+
+      if (current.onConfirm) {
         await current.onConfirm();
-        current.resolve(true);
-        setQueue((prev) => prev.slice(1));
-      } catch (err: any) {
-        setErrorText(err?.message || "An unexpected error occurred. Please try again.");
-      } finally {
-        setLoading(false);
       }
-    } else {
+
       current.resolve(true);
       setQueue((prev) => prev.slice(1));
+    } catch (err: any) {
+      setErrorText(err?.message || "Action failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
   }, [current, loading, typedInput]);
 
-  // Keyboard navigation & accessibility focus trap
+  // Trap focus and close on Escape
   useEffect(() => {
     if (!current) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !loading) {
         e.preventDefault();
         handleCancel();
         return;
       }
 
-      if (e.key === "Tab") {
-        if (!dialogCardRef.current) return;
+      if (e.key === "Tab" && dialogCardRef.current) {
         const focusable = dialogCardRef.current.querySelectorAll<HTMLElement>(
           'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
         );
@@ -170,47 +209,17 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [current, handleCancel]);
+  }, [current, handleCancel, loading]);
 
   const variant = current?.variant || "danger";
   const confirmText = current?.confirmText || (variant === "danger" ? "Delete" : "Confirm");
   const cancelText = current?.cancelText || "Cancel";
 
-  const getVariantStyles = () => {
-    switch (variant) {
-      case "primary":
-        return {
-          iconBg: "#dbeafe",
-          iconColor: "#2563eb",
-          btnBg: "#2563eb",
-          btnHover: "#1d4ed8",
-          Icon: HelpCircle
-        };
-      case "warning":
-        return {
-          iconBg: "#fef3c7",
-          iconColor: "#d97706",
-          btnBg: "#d97706",
-          btnHover: "#b45309",
-          Icon: AlertCircle
-        };
-      case "danger":
-      default:
-        return {
-          iconBg: "#fee2e2",
-          iconColor: "#dc2626",
-          btnBg: "#dc2626",
-          btnHover: "#b91c1c",
-          Icon: AlertTriangle
-        };
-    }
-  };
+  const variantStyle = getVariantStyles(variant);
+  const Icon = variantStyle.Icon;
 
   const isConfirmDisabled =
     loading || (Boolean(current?.requireText) && typedInput.trim() !== current?.requireText?.trim());
-
-  const variantStyle = getVariantStyles();
-  const IconComponent = variantStyle.Icon;
 
   return (
     <ConfirmContext.Provider value={{ confirm }}>
@@ -239,7 +248,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
               justifyContent: "center",
               padding: "16px",
               zIndex: 999999,
-              animation: "portalFadeIn 0.15s ease-out"
+              animation: "portalFadeIn 0.15s ease-out",
             }}
           >
             <div
@@ -251,13 +260,15 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
               style={{
                 width: "100%",
                 maxWidth: "380px",
+                maxHeight: "calc(100dvh - 32px)",
+                overflowY: "auto",
                 backgroundColor: "#ffffff",
                 borderRadius: "16px",
                 boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(226, 232, 240, 0.8)",
                 padding: "24px 20px",
                 boxSizing: "border-box",
                 color: "#0f172a",
-                animation: "portalZoomIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+                animation: "portalZoomIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
               }}
             >
               {/* Top Icon Badge */}
@@ -271,10 +282,10 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                     color: variantStyle.iconColor,
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center"
+                    justifyContent: "center",
                   }}
                 >
-                  <IconComponent size={24} strokeWidth={2.2} />
+                  <Icon size={24} strokeWidth={2.2} />
                 </div>
               </div>
 
@@ -287,7 +298,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                   fontWeight: 700,
                   textAlign: "center",
                   color: "#0f172a",
-                  lineHeight: 1.3
+                  lineHeight: 1.3,
                 }}
               >
                 {current.title}
@@ -302,7 +313,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                   color: "#64748b",
                   textAlign: "center",
                   lineHeight: 1.45,
-                  wordBreak: "break-word"
+                  wordBreak: "break-word",
                 }}
               >
                 {current.message}
@@ -318,7 +329,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                       fontSize: "0.78rem",
                       fontWeight: 600,
                       color: "#475569",
-                      marginBottom: "6px"
+                      marginBottom: "6px",
                     }}
                   >
                     Type <span style={{ fontWeight: 700, color: "#0f172a" }}>{current.requireText}</span> to continue:
@@ -337,13 +348,13 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                     style={{
                       width: "100%",
                       padding: "10px 12px",
-                      fontSize: "0.875rem",
+                      fontSize: "16px",
                       border: "1px solid #cbd5e1",
                       borderRadius: "8px",
                       outline: "none",
                       color: "#0f172a",
                       backgroundColor: "#f8fafc",
-                      boxSizing: "border-box"
+                      boxSizing: "border-box",
                     }}
                   />
                 </div>
@@ -360,7 +371,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                     borderRadius: "8px",
                     padding: "8px 12px",
                     marginBottom: "14px",
-                    lineHeight: 1.4
+                    lineHeight: 1.4,
                   }}
                 >
                   {errorText}
@@ -372,7 +383,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                 style={{
                   display: "flex",
                   gap: "10px",
-                  alignItems: "stretch"
+                  alignItems: "stretch",
                 }}
               >
                 <button
@@ -395,7 +406,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    outline: "none"
+                    outline: "none",
                   }}
                 >
                   {cancelText}
@@ -424,7 +435,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                     justifyContent: "center",
                     gap: "6px",
                     outline: "none",
-                    boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)"
+                    boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
                   }}
                 >
                   {loading && <Loader2 size={16} className="animate-spin" style={{ animation: "spin 1s linear infinite" }} />}
