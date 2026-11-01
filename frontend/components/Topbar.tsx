@@ -18,9 +18,13 @@ export default function Topbar({
   const [showRedDot, setShowRedDot] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [hasBusAlert, setHasBusAlert] = useState<boolean>(false);
+  const [retryDelay, setRetryDelay] = useState<number>(20000);
 
-  // Function to poll unread count & bus alerts
+  // Smart Function to poll unread count & bus alerts
   const checkNotifications = useCallback(async () => {
+    // Pause polling when browser tab is hidden to save mobile battery and network
+    if (typeof document !== "undefined" && document.hidden) return;
+
     try {
       const res = await fetch("/api/notifications/unread-count", {
         cache: "no-store",
@@ -32,20 +36,39 @@ export default function Topbar({
           setHasBusAlert(!!data.hasBusAlert);
           const isClearedForever = localStorage.getItem(CLEARED_KEY) === "true";
           setShowRedDot(!isClearedForever && (data.unreadCount > 0 || data.hasBusAlert));
+          setRetryDelay(20000); // Reset backoff on success
         }
+      } else {
+        // Backoff on server errors
+        setRetryDelay((prev) => Math.min(prev * 1.5, 60000));
       }
     } catch {
-      // Quietly ignore network failures in background polling
+      // Quietly backoff on network failures
+      setRetryDelay((prev) => Math.min(prev * 1.5, 60000));
     }
   }, []);
 
-  // On mount and polling interval (every 20s)
+  // Smart polling lifecycle: window focus, tab visibility, and interval
   useEffect(() => {
     checkNotifications();
 
     const interval = setInterval(() => {
       checkNotifications();
-    }, 20000); // 20s polling as required
+    }, retryDelay);
+
+    // Immediate refetch when user switches back to the tab
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        checkNotifications();
+      }
+    };
+
+    const handleWindowFocus = () => {
+      checkNotifications();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleWindowFocus);
 
     // Listen for notification-cleared event
     const handleCleared = () => {
@@ -57,9 +80,11 @@ export default function Topbar({
     window.addEventListener("notifications-cleared", handleCleared);
     return () => {
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleWindowFocus);
       window.removeEventListener("notifications-cleared", handleCleared);
     };
-  }, [checkNotifications]);
+  }, [checkNotifications, retryDelay]);
 
   return (
     <header className={styles.topbar}>
