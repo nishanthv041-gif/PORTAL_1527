@@ -11,6 +11,7 @@ import Link from "next/link";
 import { getSchoolCalendarStats } from "@/backend/api/actions/dashboard/attendance/calendarStats";
 import { isForenoonRecord, calculateAttendancePercentage } from "@/backend/lib/services/attendanceCalculation";
 import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
+import ParentDashboardTimetableCard from "./ParentDashboardTimetableCard";
 
 const ExamClassPerformancePieChart = dynamic(
   () => import("./ExamClassPerformancePieChart"),
@@ -72,8 +73,8 @@ export default async function ParentDashboard({
   const todayDate = new Date();
   todayDate.setHours(0, 0, 0, 0);
 
-  // 1. Fetch attendance, latest exam, calendar statistics, and today's schedule concurrently
-  const [attendanceRecords, lastExamWithMarks, calendarStats, effectiveScheduleSlots] = await Promise.all([
+  // 1. Fetch attendance, latest exam, calendar statistics, today's schedule, and weekly timetable slots concurrently
+  const [attendanceRecords, lastExamWithMarks, calendarStats, effectiveScheduleSlots, weeklyTimetableSlots] = await Promise.all([
     prisma.attendance.findMany({
       where: { studentId: selectedChild.id },
       orderBy: { date: 'desc' },
@@ -84,7 +85,22 @@ export default async function ParentDashboard({
     getSchoolCalendarStats(new Date(), selectedChild.classId),
     selectedChild.classId
       ? getEffectiveTimetable({ classId: selectedChild.classId }, todayDate)
-      : Promise.resolve([])
+      : Promise.resolve([]),
+    selectedChild.classId
+      ? prisma.timetable.findMany({
+          where: { classId: selectedChild.classId },
+          include: {
+            subject: {
+              include: {
+                teacher: {
+                  include: { user: { select: { name: true } } },
+                },
+              },
+            },
+          },
+          orderBy: [{ period: "asc" }, { startTime: "asc" }],
+        })
+      : Promise.resolve([]),
   ]);
 
   const childClass = selectedChild.class;
@@ -320,89 +336,15 @@ export default async function ParentDashboard({
         subjectBreakdown={subjectBreakdown}
       />
 
-      {/* Today's Schedule Card */}
-      <div style={{ background: "var(--card-bg)", border: "1px solid var(--border-color)", borderRadius: "14px", padding: "1.25rem 1.5rem", marginBottom: "1.5rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <CalendarDays size={20} color="var(--primary)" />
-              Today&apos;s Class Schedule ({todayDayName})
-            </h3>
-            <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-              Live periods for <strong>{selectedChild.firstName} {selectedChild.lastName}</strong> ({childClass ? `${childClass.name} - ${childClass.section}` : ""})
-            </p>
-          </div>
-          <Link
-            href={`/dashboard/parent/timetable?childId=${selectedChild.id}`}
-            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.85rem", color: "var(--primary)", textDecoration: "none", fontWeight: 600 }}
-          >
-            <span>Full Weekly Timetable</span>
-            <ArrowRight size={14} />
-          </Link>
-        </div>
-
-        {effectiveScheduleSlots.length > 0 ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "0.75rem" }}>
-            {effectiveScheduleSlots.map(s => {
-              const isSub = Boolean(s.substituteTeacherName);
-              const isFree = Boolean(s.isFreePeriod);
-              const isExam = Boolean(s.hasExamOverlap);
-
-              return (
-                <div
-                  key={s.id}
-                  style={{
-                    padding: "0.85rem",
-                    borderRadius: "10px",
-                    background: isSub ? "rgba(245, 158, 11, 0.05)" : isFree ? "rgba(239, 68, 68, 0.04)" : isExam ? "rgba(168, 85, 247, 0.06)" : "var(--background)",
-                    border: `1px solid ${isSub ? "rgba(245, 158, 11, 0.3)" : isFree ? "rgba(239, 68, 68, 0.25)" : isExam ? "rgba(168, 85, 247, 0.3)" : "var(--border-color)"}`,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.35rem"
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontWeight: 700, fontSize: "0.85rem", color: s.isBreak ? "#d97706" : isExam ? "#a855f7" : "var(--primary)" }}>
-                      {s.isBreak ? "Break" : isExam ? "Exam Period" : `Period ${s.period}`}
-                    </span>
-                    <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>
-                      {s.startTime} - {s.endTime}
-                    </span>
-                  </div>
-
-                  <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>
-                    {isExam ? (s.examName || "Scheduled Exam") : s.isBreak ? "Break / Recess" : (s.subjectName || "Subject")}
-                  </div>
-
-                  {isSub ? (
-                    <div style={{ fontSize: "0.75rem", color: "#d97706", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem", marginTop: "0.15rem" }}>
-                      <span>⚡ Covered by <strong>{s.substituteTeacherName}</strong> (substitute for {s.regularTeacherName || "Teacher"})</span>
-                    </div>
-                  ) : isFree ? (
-                    <div style={{ fontSize: "0.75rem", color: "var(--danger)", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem", marginTop: "0.15rem" }}>
-                      <span>Teacher absent, free period</span>
-                    </div>
-                  ) : s.regularTeacherName ? (
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                      Teacher: {s.regularTeacherName}
-                    </div>
-                  ) : null}
-
-                  {s.classroom && (
-                    <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>
-                      Room: {s.classroom}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div style={{ padding: "1.5rem", textAlign: "center", color: "var(--text-secondary)", fontSize: "0.875rem" }}>
-            No classes scheduled for today.
-          </div>
-        )}
-      </div>
+      {/* Today's Schedule & Weekly Timetable Card */}
+      <ParentDashboardTimetableCard
+        childName={`${selectedChild.firstName} ${selectedChild.lastName}`}
+        classNameStr={childClass ? `${childClass.name} - ${childClass.section}` : ""}
+        childId={selectedChild.id}
+        todayDayName={todayDayName}
+        todaySlots={effectiveScheduleSlots}
+        weeklySlots={weeklyTimetableSlots as any}
+      />
 
       {/* Recent Attendance Section with direct View Attendance action */}
       <div className={styles.recentAttendanceCard}>

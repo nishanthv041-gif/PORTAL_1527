@@ -42,6 +42,7 @@ export default function ParentTimetableClient({
   }>;
 }) {
   const [activeTab, setActiveTab] = useState<"today" | "week">("today");
+  const [selectedDay, setSelectedDay] = useState<string>("ALL");
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
   useEffect(() => {
@@ -352,11 +353,72 @@ export default function ParentTimetableClient({
 
       {/* TAB 2: FULL WEEKLY TIMETABLE */}
       {activeTab === "week" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
-          {SCHOOL_DAYS.map(day => {
-            const daySlots = scheduleByDay[day] || [];
-            if (daySlots.length === 0) return null;
-            const isToday = day === todayDayName;
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          {/* Day Filter Selector Pills */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              flexWrap: "wrap",
+              padding: "0.6rem 0.85rem",
+              borderRadius: "12px",
+              backgroundColor: "rgba(0, 0, 0, 0.15)",
+              border: "1px solid var(--border-color)",
+            }}
+          >
+            <span style={{ fontSize: "0.825rem", fontWeight: 700, color: "var(--text-secondary)", marginRight: "0.25rem" }}>
+              Filter by Day:
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedDay("ALL")}
+              style={{
+                padding: "0.4rem 0.85rem",
+                borderRadius: "8px",
+                border: "none",
+                fontSize: "0.825rem",
+                fontWeight: selectedDay === "ALL" ? 700 : 500,
+                backgroundColor: selectedDay === "ALL" ? "var(--primary)" : "transparent",
+                color: selectedDay === "ALL" ? "#ffffff" : "var(--text-secondary)",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+            >
+              All Days ({scheduleSlots.length} Periods)
+            </button>
+            {SCHOOL_DAYS.map((day) => {
+              const count = (scheduleByDay[day] || []).length;
+              const isToday = day === todayDayName;
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => setSelectedDay(day)}
+                  style={{
+                    padding: "0.4rem 0.85rem",
+                    borderRadius: "8px",
+                    border: `1px solid ${selectedDay === day ? "var(--primary)" : isToday ? "rgba(99, 102, 241, 0.4)" : "rgba(255, 255, 255, 0.08)"}`,
+                    fontSize: "0.825rem",
+                    fontWeight: selectedDay === day ? 700 : 500,
+                    backgroundColor: selectedDay === day ? "var(--primary)" : isToday ? "rgba(99, 102, 241, 0.1)" : "transparent",
+                    color: selectedDay === day ? "#ffffff" : isToday ? "var(--primary)" : "var(--text-secondary)",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {day.slice(0, 3)} {isToday ? "(Today)" : `(${count})`}
+                </button>
+              );
+            })}
+          </div>
+
+          {SCHOOL_DAYS
+            .filter((day) => selectedDay === "ALL" || selectedDay === day)
+            .map((day) => {
+              const daySlots = scheduleByDay[day] || [];
+              if (daySlots.length === 0) return null;
+              const isToday = day === todayDayName;
 
             return (
               <div
