@@ -75,6 +75,7 @@ model Student {
   leaveRequests LeaveRequest[]
   complaints    Complaint[]
   promotions    PromotionAudit[]
+  busAssignments BusStudent[]
 
   @@index([classId])
   @@index([classId, isActive])
@@ -108,6 +109,7 @@ model Teacher {
   absences              TeacherAbsence[]
   absentSubstitutions   Substitution[]      @relation("AbsentTeacher")
   assignedSubstitutions Substitution[]      @relation("SubstituteTeacher")
+  inchargeBuses         Bus[]               @relation("BusInchargeTeacher")
 }
 
 model Staff {
@@ -829,3 +831,73 @@ model PromotionAudit {
   @@index([fromBatchName, toBatchName])
   @@index([action])
 }
+
+// ==========================================
+// TRANSPORTATION & BUS FLEET MANAGEMENT
+// ==========================================
+
+model Bus {
+  id                 String       @id @default(cuid())
+  busNumber          String       @unique // e.g., "Bus 01", "Route A"
+  registrationNumber String       // e.g., "TN-01-AB-1234"
+  routeName          String       // e.g., "North Zone - School Campus"
+  capacity           Int          @default(40)
+  driverName         String
+  driverPhone        String
+  inchargeTeacherId  String?
+  inchargeTeacher    Teacher?     @relation("BusInchargeTeacher", fields: [inchargeTeacherId], references: [id], onDelete: SetNull)
+  inchargeStaffName  String?
+  inchargeStaffPhone String?
+  status             String       @default("ACTIVE") // ACTIVE, IN_TRANSIT, DELAYED, BREAKDOWN, IN_MAINTENANCE
+  currentIssue       String?
+  issueReportedAt    DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  students           BusStudent[]
+  alerts             BusAlert[]
+
+  @@index([status])
+  @@index([inchargeTeacherId])
+}
+
+model BusStudent {
+  id          String   @id @default(cuid())
+  busId       String
+  bus         Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  pickupStop  String?
+  pickupTime  String?  // e.g., "07:30 AM"
+  dropStop    String?
+  dropTime    String?  // e.g., "04:30 PM"
+  status      String   @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([busId, studentId])
+  @@index([busId])
+  @@index([studentId])
+}
+
+model BusAlert {
+  id              String   @id @default(cuid())
+  busId           String
+  bus             Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
+  senderId        String?  // User ID who sent the alert
+  senderName      String?
+  senderRole      String?  // ADMIN, TEACHER, INCHARGE
+  title           String
+  message         String
+  alertType       String   @default("GENERAL") // BREAKDOWN, DELAY, ROUTE_CHANGE, EMERGENCY, GENERAL
+  severity        String   @default("INFO") // INFO, WARNING, URGENT
+  targetType      String   @default("ALL_PARENTS") // ALL_PARENTS, INDIVIDUAL
+  targetStudentId String?  // Optional studentId for individual target
+  recipientCount  Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([busId, createdAt])
+  @@index([alertType])
+  @@index([targetStudentId])
+}
+

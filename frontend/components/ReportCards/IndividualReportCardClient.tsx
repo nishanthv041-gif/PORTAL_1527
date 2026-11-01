@@ -181,7 +181,7 @@ export default function IndividualReportCardClient({
             ) : (
               <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                 {parentsList.map((p, idx) => (
-                  <div 
+                  <div
                     key={p.id || idx}
                     style={{
                       background: 'rgba(0,0,0,0.03)',
@@ -238,10 +238,10 @@ export default function IndividualReportCardClient({
                     totalMax += sub.maxMarks;
                     return <td key={sub.id} style={{ padding: '1rem', color: 'var(--danger)', fontWeight: 600 }}>Absent</td>;
                   }
-                  
+
                   totalScore += mark.score;
                   totalMax += mark.maxScore;
-                  
+
                   const isFail = mark.score < sub.passMarks;
                   return (
                     <td key={sub.id} style={{ padding: '1rem' }}>
@@ -266,8 +266,8 @@ export default function IndividualReportCardClient({
                     <td style={{ padding: '1rem', fontWeight: 600 }}>{totalScore} <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>/ {totalMax}</span></td>
                     <td style={{ padding: '1rem', fontWeight: 600 }}>{percentage.toFixed(1)}%</td>
                     <td style={{ padding: '1rem' }}>
-                      <span style={{ 
-                        fontWeight: 700, 
+                      <span style={{
+                        fontWeight: 700,
                         color: isFail ? 'var(--danger)' : overallGrade.startsWith('A') ? 'var(--success)' : 'inherit',
                         background: isFail ? 'var(--danger-bg)' : overallGrade.startsWith('A') ? 'var(--success-bg)' : 'rgba(0,0,0,0.05)',
                         padding: '0.25rem 0.5rem',
@@ -292,10 +292,10 @@ export default function IndividualReportCardClient({
       {/* Sticky Send to All Parents Action */}
       {!isReadOnly && (
         <div style={{ position: 'sticky', bottom: '2rem', display: 'flex', justifyContent: 'center', zIndex: 10 }}>
-          <div style={{ 
-            background: 'var(--card-bg)', 
-            padding: '1rem 2rem', 
-            borderRadius: '50px', 
+          <div style={{
+            background: 'var(--card-bg)',
+            padding: '1rem 2rem',
+            borderRadius: '50px',
             boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
             border: '1px solid var(--border-color)',
             display: 'flex',

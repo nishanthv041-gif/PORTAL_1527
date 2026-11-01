@@ -10,6 +10,7 @@ import {
   Calendar,
   FileWarning,
   ArrowRight,
+  Bus,
 } from "lucide-react";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
@@ -35,6 +36,7 @@ export default async function MainRolesPage() {
     { href: "/dashboard/admin/students", label: "Students List", icon: <Users size={22} />, color: "var(--primary)", bg: "var(--primary-bg)" },
     { href: "/dashboard/admin/teachers", label: "Teachers List", icon: <GraduationCap size={22} />, color: "var(--success)", bg: "var(--success-bg)" },
     { href: "/dashboard/admin/parents", label: "Parents List", icon: <Users size={22} />, color: "var(--warning)", bg: "var(--warning-bg)" },
+    { href: "/dashboard/admin/transport", label: "Bus Details & Transport", icon: <Bus size={22} />, color: "#f59e0b", bg: "rgba(245, 158, 11, 0.1)" },
   ];
 
   return (

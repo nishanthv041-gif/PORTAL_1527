@@ -116,6 +116,10 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
         category = "SYSTEM";
         badgeLabel = "Complaint";
         badgeColors = { bg: "rgba(239, 68, 68, 0.12)", text: "#ef4444", border: "rgba(239, 68, 68, 0.25)" };
+      } else if (typeStr.includes("BUS") || typeStr.includes("TRANSPORT") || titleLower.includes("bus")) {
+        category = "SYSTEM";
+        badgeLabel = "Bus Alert";
+        badgeColors = { bg: "rgba(239, 68, 68, 0.15)", text: "#ef4444", border: "rgba(239, 68, 68, 0.35)" };
       }
 
       let defaultLink = userRole === "PARENT" ? "/dashboard/parent/notifications" : userRole === "TEACHER" ? "/dashboard/teacher/notifications" : "/dashboard/admin/notifications";
@@ -123,6 +127,8 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
         defaultLink = userRole === "PARENT" ? "/dashboard/parent/programs" : userRole === "ADMIN" ? "/dashboard/admin/programs" : "/dashboard/teacher/calendar";
       } else if (typeStr.includes("COMPLAINT") || titleLower.includes("complaint")) {
         defaultLink = userRole === "PARENT" ? "/dashboard/parent/complaints" : userRole === "ADMIN" ? "/dashboard/admin/complaints" : "/dashboard/teacher/complaints";
+      } else if (typeStr.includes("BUS") || typeStr.includes("TRANSPORT") || titleLower.includes("bus")) {
+        defaultLink = userRole === "PARENT" ? "/dashboard/parent/transport" : "/dashboard/admin/transport";
       }
 
       items.push({

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>SRT Universal School</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at 50% 30%, #0d1544 0%, #060a28 65%, #020412 100%);
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      max-width: 380px;
+      width: 100%;
+    }
+    .plate {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid #f2b84b;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 24px rgba(242, 184, 75, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      margin-bottom: 24px;
+      animation: pulseGlow 3s ease-in-out infinite alternate;
+    }
+    .plate img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    @keyframes pulseGlow {
+      0% { transform: scale(0.98); box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 16px rgba(242,184,75,0.25); }
+      100% { transform: scale(1.02); box-shadow: 0 14px 36px rgba(0,0,0,0.6), 0 0 32px rgba(242,184,75,0.5); }
+    }
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      color: #ffffff;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .tagline {
+      font-size: 0.82rem;
+      letter-spacing: 0.15em;
+      color: #f2b84b;
+      font-weight: 600;
+      margin-bottom: 28px;
+      text-transform: uppercase;
+    }
+    .spinner-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid rgba(242, 184, 75, 0.2);
+      border-top-color: #f2b84b;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .status-text {
+      font-size: 0.88rem;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+    .offline-box {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      margin-top: 10px;
+    }
+    .offline-message {
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+    .retry-btn {
+      padding: 10px 24px;
+      border-radius: 8px;
+      border: none;
+      background: #3b82f6;
+      color: #ffffff;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+      transition: background 0.2s, transform 0.1s;
+    }
+    .retry-btn:active {
+      transform: scale(0.96);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="plate">
+      <img src="logo.png" alt="SRT Universal School Crest" />
+    </div>
+    <h1>SRT Universal School</h1>
+    <p class="tagline">Seeing Righteousness &amp; Truth</p>
+
+    <div id="loadingSection" class="spinner-wrapper">
+      <div class="spinner"></div>
+      <p id="statusLabel" class="status-text">Connecting to school portal...</p>
+    </div>
+
+    <div id="offlineSection" class="offline-box">
+      <p class="offline-message">Unable to connect to the portal. Please check your internet connection and try again.</p>
+      <button class="retry-btn" onclick="checkAndConnect()">Retry Connection</button>
+    </div>
+  </div>
+
+  <script>
+    const PORTAL_URL = 'https://nipoportal.vercel.app';
+
+    function checkAndConnect() {
+      const loading = document.getElementById('loadingSection');
+      const offline = document.getElementById('offlineSection');
+      const statusLabel = document.getElementById('statusLabel');
+
+      loading.style.display = 'flex';
+      offline.style.display = 'none';
+      statusLabel.textContent = 'Connecting to school portal...';
+
+      if (!navigator.onLine) {
+        showOffline();
+        return;
+      }
+
+      // Try reaching portal endpoint
+      fetch(PORTAL_URL + '/api/health', { method: 'GET', cache: 'no-store', mode: 'no-cors' })
+        .then(() => {
+          window.location.href = PORTAL_URL;
+        })
+        .catch(() => {
+          // If fetch failed, still attempt navigation if online
+          if (navigator.onLine) {
+            window.location.href = PORTAL_URL;
+          } else {
+            showOffline();
+          }
+        });
+    }
+
+    function showOffline() {
+      document.getElementById('loadingSection').style.display = 'none';
+      document.getElementById('offlineSection').style.display = 'flex';
+    }
+
+    window.addEventListener('online', checkAndConnect);
+    window.addEventListener('offline', showOffline);
+
+    // Initial connection attempt
+    setTimeout(checkAndConnect, 600);
+  </script>
+</body>
+</html>
+

@@ -498,21 +498,18 @@ export default function ProfessionalSchoolCalendar({
               return (
                 <div
                   key={day.dateStr}
-                  className={`${styles.dayCell} ${
-                    isWorking ? styles.dayCellWorking : styles.dayCellLeave
-                  } ${day.isToday ? styles.dayCellToday : ""}`}
+                  className={`${styles.dayCell} ${isWorking ? styles.dayCellWorking : styles.dayCellLeave
+                    } ${day.isToday ? styles.dayCellToday : ""}`}
                   style={cellStyle}
                   onClick={() => handleOpenDayModal(day)}
-                  title={`${day.dateStr}: ${day.title || (isWorking ? "Working Day" : "Leave Day")}${
-                    isSpecific ? ` (${day.targetClassNames || "Specific Classes"})` : ""
-                  }${isAdmin ? " (Click to edit)" : ""}`}
+                  title={`${day.dateStr}: ${day.title || (isWorking ? "Working Day" : "Leave Day")}${isSpecific ? ` (${day.targetClassNames || "Specific Classes"})` : ""
+                    }${isAdmin ? " (Click to edit)" : ""}`}
                 >
                   {/* Top row in cell: day number and status badge */}
                   <div className={styles.dayTopRow}>
                     <span
-                      className={`${styles.dayNumber} ${
-                        day.isToday ? styles.dayNumberToday : ""
-                      }`}
+                      className={`${styles.dayNumber} ${day.isToday ? styles.dayNumberToday : ""
+                        }`}
                     >
                       {day.dayNumber}
                     </span>
@@ -636,9 +633,8 @@ export default function ProfessionalSchoolCalendar({
                     <button
                       type="button"
                       onClick={() => setEditStatus("WORKING_DAY")}
-                      className={`${styles.statusOptionBtn} ${
-                        editStatus === "WORKING_DAY" ? styles.statusOptionWorkingActive : ""
-                      }`}
+                      className={`${styles.statusOptionBtn} ${editStatus === "WORKING_DAY" ? styles.statusOptionWorkingActive : ""
+                        }`}
                     >
                       <CheckCircle2
                         size={24}
@@ -653,9 +649,8 @@ export default function ProfessionalSchoolCalendar({
                     <button
                       type="button"
                       onClick={() => setEditStatus("LEAVE_DAY")}
-                      className={`${styles.statusOptionBtn} ${
-                        editStatus === "LEAVE_DAY" ? styles.statusOptionLeaveActive : ""
-                      }`}
+                      className={`${styles.statusOptionBtn} ${editStatus === "LEAVE_DAY" ? styles.statusOptionLeaveActive : ""
+                        }`}
                     >
                       <CalendarOff
                         size={24}
@@ -678,18 +673,16 @@ export default function ProfessionalSchoolCalendar({
                         <button
                           type="button"
                           onClick={() => setEditTargetClassType("ALL")}
-                          className={`${styles.classScopeToggleBtn} ${
-                            editTargetClassType === "ALL" ? styles.classScopeToggleBtnActive : ""
-                          }`}
+                          className={`${styles.classScopeToggleBtn} ${editTargetClassType === "ALL" ? styles.classScopeToggleBtnActive : ""
+                            }`}
                         >
                           All Classes
                         </button>
                         <button
                           type="button"
                           onClick={() => setEditTargetClassType("SPECIFIC")}
-                          className={`${styles.classScopeToggleBtn} ${
-                            editTargetClassType === "SPECIFIC" ? styles.classScopeToggleBtnActive : ""
-                          }`}
+                          className={`${styles.classScopeToggleBtn} ${editTargetClassType === "SPECIFIC" ? styles.classScopeToggleBtnActive : ""
+                            }`}
                         >
                           Specific Classes
                         </button>
@@ -740,9 +733,8 @@ export default function ProfessionalSchoolCalendar({
                               return (
                                 <label
                                   key={c.id}
-                                  className={`${styles.classItemLabel} ${
-                                    isChecked ? styles.classItemLabelChecked : ""
-                                  }`}
+                                  className={`${styles.classItemLabel} ${isChecked ? styles.classItemLabelChecked : ""
+                                    }`}
                                 >
                                   <input
                                     type="checkbox"
@@ -851,11 +843,10 @@ export default function ProfessionalSchoolCalendar({
                       selectedDay.status === "WORKING_DAY"
                         ? "rgba(16, 185, 129, 0.1)"
                         : "rgba(239, 68, 68, 0.1)",
-                    border: `1px solid ${
-                      selectedDay.status === "WORKING_DAY"
-                        ? "rgba(16, 185, 129, 0.3)"
-                        : "rgba(239, 68, 68, 0.3)"
-                    }`,
+                    border: `1px solid ${selectedDay.status === "WORKING_DAY"
+                      ? "rgba(16, 185, 129, 0.3)"
+                      : "rgba(239, 68, 68, 0.3)"
+                      }`,
                     display: "flex",
                     alignItems: "center",
                     gap: "0.75rem",

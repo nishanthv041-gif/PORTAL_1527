@@ -7,11 +7,11 @@ import { useState, useEffect } from "react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import SrtLogo from "@/frontend/components/ui/SrtLogo";
 import styles from "./Sidebar.module.css";
-import { 
+import {
   Menu,
-  Users, 
-  GraduationCap, 
-  BookOpen, 
+  Users,
+  GraduationCap,
+  BookOpen,
   Calendar,
   MessageSquare,
   Settings,
@@ -32,6 +32,7 @@ import {
   Star,
   AlertOctagon,
   Layers,
+  Bus,
   X
 } from "lucide-react";
 
@@ -53,6 +54,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     { href: "/dashboard/admin/main-roles", label: "Main Roles", icon: <Users size={20} /> },
     { href: "/dashboard/admin/batches", label: "Batches & Promotion", icon: <Layers size={20} /> },
     { href: "/dashboard/admin/teacher-attendance", label: "Teacher Attendance", icon: <UserCheck size={20} /> },
+    { href: "/dashboard/admin/transport", label: "Bus Details & Alerts", icon: <Bus size={20} /> },
     { href: "/dashboard/admin/activity-centre", label: "Activity Centre", icon: <Star size={20} /> },
     { href: "/dashboard/admin/users", label: "User Management", icon: <UserCheck size={20} /> },
     { href: "/dashboard/admin/create-roles", label: "Create New Roles", icon: <UserPlus size={20} /> },
@@ -93,6 +95,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     { href: "/dashboard/parent/programs", label: "School Programs", icon: <Star size={20} /> },
     { href: "/dashboard/parent/classes", label: "Classes", icon: <GraduationCap size={20} /> },
     { href: "/dashboard/parent/attendance", label: "Attendance", icon: <Users size={20} /> },
+    { href: "/dashboard/parent/transport", label: "Bus & Transport", icon: <Bus size={20} /> },
     { href: "/dashboard/parent/exams", label: "Exams", icon: <BookOpen size={20} /> },
     { href: "/dashboard/parent/assignments", label: "Home Work", icon: <BookOpen size={20} /> },
     { href: "/dashboard/parent/report-cards", label: "Report Cards", icon: <BookOpen size={20} /> },
@@ -122,8 +125,8 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
   return (
     <aside className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ""}`}>
       <div className={styles.logo}>
-        <button 
-          onClick={() => setIsCollapsed(!isCollapsed)} 
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
           className={styles.toggleBtn}
           title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
@@ -182,7 +185,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
         })}
       </nav>
       <div className={styles.logoutWrapper}>
-        <button 
+        <button
           onClick={async () => {
             const ok = await confirm({
               title: "Sign out of School Portal?",
@@ -196,9 +199,9 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
             try {
               sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
               sessionStorage.removeItem("srt_portal_fresh_login");
-            } catch {}
+            } catch { }
             signOut({ callbackUrl: '/' });
-          }} 
+          }}
           className={styles.logoutBtn}
           title={isCollapsed ? "Logout" : undefined}
         >

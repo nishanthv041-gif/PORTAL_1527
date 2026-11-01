@@ -54,6 +54,11 @@ const ROUTE_MAP: Record<string, BreadcrumbInfo> = {
     parentLabel: "Dashboard",
     currentLabel: "Batches & Promotion"
   },
+  "/dashboard/admin/transport": {
+    parentHref: "/dashboard/admin",
+    parentLabel: "Dashboard",
+    currentLabel: "Bus Details & Alerts"
+  },
   "/dashboard/admin/timetable": {
     parentHref: "/dashboard/admin",
     parentLabel: "Dashboard",
@@ -277,6 +282,11 @@ const ROUTE_MAP: Record<string, BreadcrumbInfo> = {
     parentHref: "/dashboard/parent",
     parentLabel: "Dashboard",
     currentLabel: "Attendance Record"
+  },
+  "/dashboard/parent/transport": {
+    parentHref: "/dashboard/parent",
+    parentLabel: "Dashboard",
+    currentLabel: "Bus & Transport"
   },
   "/dashboard/parent/assignments": {
     parentHref: "/dashboard/parent",

@@ -31,7 +31,7 @@ export async function generateMetadata(): Promise<Metadata> {
     const settings = await getSystemSettings();
     if (settings.SCHOOL_NAME) schoolName = settings.SCHOOL_NAME;
     if (settings.SCHOOL_LOGO) schoolLogo = settings.SCHOOL_LOGO;
-  } catch (err) {}
+  } catch (err) { }
 
   const dynamicTitle = DEFAULT_TITLE;
 
@@ -122,7 +122,7 @@ export default async function RootLayout({
     if (rawMode === "Dark") defaultThemeMode = "dark";
     if (rawMode === "Light") defaultThemeMode = "light";
     if (rawMode === "System") defaultThemeMode = "system";
-  } catch (err) {}
+  } catch (err) { }
 
   const flashPreventionScript = `
   (function() {
@@ -176,11 +176,11 @@ export default async function RootLayout({
       ...(settings.SCHOOL_CONTACT ? { "telephone": settings.SCHOOL_CONTACT } : {}),
       ...(settings.SCHOOL_ADDRESS
         ? {
-            "address": {
-              "@type": "PostalAddress",
-              "streetAddress": settings.SCHOOL_ADDRESS,
-            },
-          }
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": settings.SCHOOL_ADDRESS,
+          },
+        }
         : {}),
     },
     {

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SRT Universal School</string>
+    <string name="title_activity_main">SRT Universal School</string>
+    <string name="package_name">com.srtuniversalschool.portal</string>
+    <string name="custom_url_scheme">com.srtuniversalschool.portal</string>
+</resources>
