@@ -49,4 +49,5 @@ next-env.d.ts
 .agent/
 *.traineddata
 scratch/
+backups/
 *.traineddata.gz

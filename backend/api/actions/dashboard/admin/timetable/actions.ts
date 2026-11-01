@@ -29,46 +29,28 @@ export async function createTimetableSlotAction(formData: FormData) {
     let finalSubjectId: string | null = isBreak ? null : subjectId;
 
     if (finalSubjectId) {
-      if (finalSubjectId.startsWith("fallback-")) {
-        const subName = finalSubjectId.replace("fallback-", "").toUpperCase();
-        let sub = await prisma.subject.findFirst({
-          where: { classId, name: { equals: subName, mode: "insensitive" } }
+      const sub = await prisma.subject.findUnique({
+        where: { id: finalSubjectId },
+        select: { id: true, teacherId: true, name: true, code: true, classId: true }
+      });
+      if (!sub) {
+        return { error: "Subject not found in database." };
+      }
+      if (sub.classId !== classId) {
+        let classSub = await prisma.subject.findFirst({
+          where: { classId, name: { equals: sub.name, mode: "insensitive" } }
         });
-        if (!sub) {
-          sub = await prisma.subject.create({
+        if (!classSub) {
+          classSub = await prisma.subject.create({
             data: {
-              name: subName,
-              code: subName.slice(0, 3) + "001",
+              name: sub.name,
+              code: sub.code || (sub.name.slice(0, 3) + "001"),
               classId,
               isActive: true
             }
           });
         }
-        finalSubjectId = sub.id;
-      } else {
-        const sub = await prisma.subject.findUnique({
-          where: { id: finalSubjectId },
-          select: { id: true, teacherId: true, name: true, code: true, classId: true }
-        });
-        if (!sub) {
-          const fallbackSub = await prisma.subject.findFirst({ where: { classId } });
-          finalSubjectId = fallbackSub ? fallbackSub.id : null;
-        } else if (sub.classId !== classId) {
-          let classSub = await prisma.subject.findFirst({
-            where: { classId, name: { equals: sub.name, mode: "insensitive" } }
-          });
-          if (!classSub) {
-            classSub = await prisma.subject.create({
-              data: {
-                name: sub.name,
-                code: sub.code || (sub.name.slice(0, 3) + "001"),
-                classId,
-                isActive: true
-              }
-            });
-          }
-          finalSubjectId = classSub.id;
-        }
+        finalSubjectId = classSub.id;
       }
     }
 

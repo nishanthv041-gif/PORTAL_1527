@@ -235,17 +235,7 @@ export default function TimetableClient({
       });
     }
 
-    // 4. Default school subjects safety fallback
-    if (list.length === 0) {
-      list = [
-        { id: "fallback-tamil", name: "TAMIL", code: "TAM001", classId: selectedClass, teacherId: null, teacher: null },
-        { id: "fallback-english", name: "ENGLISH", code: "ENG002", classId: selectedClass, teacherId: null, teacher: null },
-        { id: "fallback-maths", name: "MATHEMATICS", code: "MAT001", classId: selectedClass, teacherId: null, teacher: null },
-        { id: "fallback-science", name: "SCIENCE", code: "SCI002", classId: selectedClass, teacherId: null, teacher: null },
-        { id: "fallback-social", name: "SOCIAL SCIENCE", code: "SOCI001", classId: selectedClass, teacherId: null, teacher: null },
-      ];
-    }
-
+    // 4. If no subjects found in database for class, keep empty list
     return list;
   }, [allSubjects, availableSubjects, selectedClass]);
 

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Bus,
   Phone,
@@ -12,7 +13,10 @@ import {
   Bell,
   User,
   ShieldAlert,
+  Send,
+  MessageSquare,
 } from "lucide-react";
+import { sendParentBusInquiryAction } from "@/backend/api/actions/dashboard/admin/transport/actions";
 
 interface ChildTransportItem {
   studentId: string;
@@ -46,7 +50,19 @@ interface ParentBusClientProps {
 }
 
 export default function ParentBusClient({ childrenTransport }: ParentBusClientProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [selectedChildIndex, setSelectedChildIndex] = useState(0);
+
+  const [inquirySubject, setInquirySubject] = useState("Child Absent / Not Taking Bus Today");
+  const [inquiryMessage, setInquiryMessage] = useState("");
+  const [inquiryUrgent, setInquiryUrgent] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const showToast = (type: "success" | "error", message: string) => {
+    setFeedback({ type, message });
+    setTimeout(() => setFeedback(null), 6000);
+  };
 
   if (!childrenTransport || childrenTransport.length === 0) {
     return (
@@ -409,6 +425,182 @@ export default function ParentBusClient({ childrenTransport }: ParentBusClientPr
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Toast Notification Banner */}
+          {feedback && (
+            <div
+              style={{
+                padding: "0.85rem 1.25rem",
+                borderRadius: "8px",
+                backgroundColor: feedback.type === "success" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                border: `1px solid ${feedback.type === "success" ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+                color: feedback.type === "success" ? "var(--success)" : "var(--danger)",
+                fontSize: "0.9rem",
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              {feedback.type === "success" ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+              <span>{feedback.message}</span>
+            </div>
+          )}
+
+          {/* PARENT TO TEACHER & ADMIN BUS MESSAGE CARD */}
+          <div
+            style={{
+              backgroundColor: "var(--card)",
+              borderRadius: "12px",
+              border: "1px solid var(--border)",
+              padding: "1.5rem",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <MessageSquare size={20} style={{ color: "var(--primary)" }} />
+                  <h3 style={{ margin: 0, color: "var(--foreground)", fontSize: "1.1rem" }}>
+                    Send Message to Bus In-Charge &amp; Administration
+                  </h3>
+                </div>
+                <p style={{ margin: "4px 0 0", color: "var(--text-secondary)", fontSize: "0.84rem" }}>
+                  Your message will immediately alert both the assigned bus teacher (<strong>{bus.inChargeStaffName}</strong>) and school administrators.
+                </p>
+              </div>
+
+              <span
+                style={{
+                  fontSize: "0.72rem",
+                  padding: "3px 8px",
+                  borderRadius: "6px",
+                  backgroundColor: "rgba(37, 99, 235, 0.1)",
+                  color: "var(--primary)",
+                  fontWeight: 600,
+                }}
+              >
+                Bus {bus.busNumber} • {currentChild.studentName}
+              </span>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!inquiryMessage.trim()) {
+                  showToast("error", "Please write a message before sending.");
+                  return;
+                }
+                startTransition(async () => {
+                  const res = await sendParentBusInquiryAction({
+                    busId: bus.busId,
+                    studentId: currentChild.studentId,
+                    subject: inquirySubject,
+                    message: inquiryMessage.trim(),
+                    urgency: inquiryUrgent ? "URGENT" : "NORMAL",
+                  });
+
+                  if (res.error) {
+                    showToast("error", res.error);
+                  } else {
+                    showToast("success", res.message || "Message delivered successfully!");
+                    setInquiryMessage("");
+                    router.refresh();
+                  }
+                });
+              }}
+              style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}
+            >
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "var(--foreground)", marginBottom: "4px" }}>
+                    Topic / Reason
+                  </label>
+                  <select
+                    value={inquirySubject}
+                    onChange={(e) => setInquirySubject(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.55rem",
+                      borderRadius: "6px",
+                      border: "1px solid var(--border)",
+                      backgroundColor: "var(--card)",
+                      color: "var(--foreground)",
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    <option value="Child Absent / Not Taking Bus Today">Child Absent / Not Taking Bus Today</option>
+                    <option value="Delayed Pickup / Drop Question">Delayed Pickup / Drop Question</option>
+                    <option value="Stop Change / Landmark Query">Stop Change / Landmark Query</option>
+                    <option value="Bus Driver / Transit Inquiry">Bus Driver / Transit Inquiry</option>
+                    <option value="Urgent Transit Issue / Emergency">Urgent Transit Issue / Emergency</option>
+                    <option value="Other Message">Other Message</option>
+                  </select>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: "6px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.45rem", cursor: "pointer", fontSize: "0.84rem", color: "var(--foreground)" }}>
+                    <input
+                      type="checkbox"
+                      checked={inquiryUrgent}
+                      onChange={(e) => setInquiryUrgent(e.target.checked)}
+                      style={{ cursor: "pointer" }}
+                    />
+                    <strong style={{ color: inquiryUrgent ? "#ef4444" : "var(--foreground)" }}>
+                      Mark as Urgent High-Priority Alert
+                    </strong>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "var(--foreground)", marginBottom: "4px" }}>
+                  Message Details
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={inquiryMessage}
+                  onChange={(e) => setInquiryMessage(e.target.value)}
+                  placeholder={`Write your message for ${currentChild.studentName}'s bus in-charge... (e.g. My child will not take the bus this evening; we are picking them up from school directly).`}
+                  style={{
+                    width: "100%",
+                    padding: "0.6rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--card)",
+                    color: "var(--foreground)",
+                    fontSize: "0.88rem",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  type="submit"
+                  disabled={isPending || !inquiryMessage.trim()}
+                  style={{
+                    padding: "0.55rem 1.25rem",
+                    borderRadius: "6px",
+                    backgroundColor: inquiryUrgent ? "#ef4444" : "var(--primary)",
+                    color: "#fff",
+                    border: "none",
+                    fontWeight: 600,
+                    fontSize: "0.88rem",
+                    cursor: isPending || !inquiryMessage.trim() ? "not-allowed" : "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    opacity: isPending || !inquiryMessage.trim() ? 0.6 : 1,
+                  }}
+                >
+                  <Send size={15} />
+                  <span>{isPending ? "Sending..." : "Send Note to Teacher & Admin"}</span>
+                </button>
+              </div>
+            </form>
           </div>
 
           {/* Live Alerts & Messages Feed for this Bus */}

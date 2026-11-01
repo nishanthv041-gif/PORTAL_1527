@@ -220,44 +220,52 @@ export default function AdminBusManagement({
   const [pickupPointInput, setPickupPointInput] = useState("");
   const [dropPointInput, setDropPointInput] = useState("");
 
+  const [residenceFilter, setResidenceFilter] = useState<"ALL" | "DAYSCHOLAR" | "HOSTEL">("ALL");
+
   const handleOpenAssignStudents = (bus: any) => {
     setTargetBusForAssign(bus);
     setSelectedClassId("ALL");
+    setResidenceFilter("ALL");
     setStudentSearchQuery("");
     setSelectedStudentIds([]);
-    setPickupPointInput(bus.routeDescription || "Main Gate (07:30 AM)");
-    setDropPointInput(bus.routeDescription || "Main Gate (04:15 PM)");
+    setPickupPointInput(bus.routeDescription || "");
+    setDropPointInput(bus.routeDescription || "");
     setIsAssignModalOpen(true);
   };
 
-  // Extract all Day Scholar students across all classes
-  const dayScholarStudentsByClass = useMemo(() => {
-    const map = new Map<string, any[]>();
+  // Extract all real students across all classes with metadata and assignment status
+  const allAvailableStudents = useMemo(() => {
+    const list: any[] = [];
     classes.forEach((cls) => {
-      // Day scholars only (residenceType !== "HOSTEL")
-      const dayScholars = (cls.students || []).filter(
-        (st: any) => st.residenceType !== "HOSTEL"
-      );
-      map.set(cls.id, dayScholars);
+      (cls.students || []).forEach((st: any) => {
+        const activeAssignment = (st.busAssignments || []).find((ba: any) => ba.academicYear === "2025-2026" || !ba.academicYear);
+        const assignedBusNumber = activeAssignment?.bus?.busNumber || (st.busAssignments?.[0]?.bus?.busNumber);
+        list.push({
+          ...st,
+          className: `${cls.name} - ${cls.section}`,
+          classObjId: cls.id,
+          isAssigned: !!assignedBusNumber,
+          assignedBusNumber: assignedBusNumber || null,
+          isDayScholar: st.residenceType !== "HOSTEL",
+        });
+      });
     });
-    return map;
+    return list;
   }, [classes]);
 
-  // Current filtered list of Day Scholar students based on Class & search
-  const availableDayScholars = useMemo(() => {
-    let list: any[] = [];
-    classes.forEach((cls) => {
-      if (selectedClassId === "ALL" || cls.id === selectedClassId) {
-        const scholars = dayScholarStudentsByClass.get(cls.id) || [];
-        scholars.forEach((st: any) => {
-          list.push({
-            ...st,
-            className: `${cls.name} - ${cls.section}`,
-            classObjId: cls.id,
-          });
-        });
-      }
-    });
+  // Current filtered list of real students based on Class, Residence & search
+  const availableStudentsList = useMemo(() => {
+    let list = allAvailableStudents;
+
+    if (selectedClassId !== "ALL") {
+      list = list.filter((st) => st.classObjId === selectedClassId);
+    }
+
+    if (residenceFilter === "DAYSCHOLAR") {
+      list = list.filter((st) => st.isDayScholar);
+    } else if (residenceFilter === "HOSTEL") {
+      list = list.filter((st) => !st.isDayScholar);
+    }
 
     if (studentSearchQuery.trim()) {
       const q = studentSearchQuery.toLowerCase();
@@ -265,18 +273,20 @@ export default function AdminBusManagement({
         (st) =>
           st.firstName.toLowerCase().includes(q) ||
           st.lastName.toLowerCase().includes(q) ||
-          st.rollNumber.toLowerCase().includes(q) ||
-          st.admissionNo.toLowerCase().includes(q)
+          (st.rollNumber && st.rollNumber.toLowerCase().includes(q)) ||
+          (st.admissionNo && st.admissionNo.toLowerCase().includes(q)) ||
+          st.className.toLowerCase().includes(q)
       );
     }
 
     return list;
-  }, [classes, selectedClassId, studentSearchQuery, dayScholarStudentsByClass]);
+  }, [allAvailableStudents, selectedClassId, residenceFilter, studentSearchQuery]);
 
-  // Select all Day Scholars currently visible in selected class
+  // Select all unassigned students currently visible in selected view
   const handleSelectAllInClass = () => {
-    if (availableDayScholars.length === 0) return;
-    const allIds = availableDayScholars.map((s) => s.id);
+    const selectable = availableStudentsList.filter((s) => !s.isAssigned);
+    if (selectable.length === 0) return;
+    const allIds = selectable.map((s) => s.id);
     const allSelected = allIds.every((id) => selectedStudentIds.includes(id));
 
     if (allSelected) {
@@ -287,11 +297,12 @@ export default function AdminBusManagement({
     }
   };
 
-  const toggleStudentSelection = (studentId: string) => {
+  const toggleStudentSelection = (st: any) => {
+    if (st.isAssigned) return;
     setSelectedStudentIds((prev) =>
-      prev.includes(studentId)
-        ? prev.filter((id) => id !== studentId)
-        : [...prev, studentId]
+      prev.includes(st.id)
+        ? prev.filter((id) => id !== st.id)
+        : [...prev, st.id]
     );
   };
 
@@ -300,7 +311,7 @@ export default function AdminBusManagement({
     if (!targetBusForAssign) return;
 
     if (selectedStudentIds.length === 0) {
-      showToast("error", "Please select at least one Day Scholar student to assign.");
+      showToast("error", "Please select at least one student to assign.");
       return;
     }
 
@@ -319,8 +330,8 @@ export default function AdminBusManagement({
       academicYear: "2025-2026",
       students: selectedStudentIds.map((studentId) => ({
         studentId,
-        pickupPoint: pickupPointInput.trim() || "Main Stop",
-        dropPoint: dropPointInput.trim() || "Main Stop",
+        pickupPoint: pickupPointInput.trim() || undefined,
+        dropPoint: dropPointInput.trim() || undefined,
       })),
     };
 
@@ -431,6 +442,61 @@ export default function AdminBusManagement({
   };
 
   // ==========================================
+  // MODAL 5: SEND MESSAGE TO PARENTS
+  // ==========================================
+  const [isMsgModalOpen, setIsMsgModalOpen] = useState(false);
+  const [msgBusTarget, setMsgBusTarget] = useState<any | null>(null);
+  const [msgAudienceType, setMsgAudienceType] = useState<"COMMON" | "INDIVIDUAL">("COMMON");
+  const [msgTargetStudentId, setMsgTargetStudentId] = useState("");
+  const [msgTitleInput, setMsgTitleInput] = useState("");
+  const [msgContentInput, setMsgContentInput] = useState("");
+  const [msgPriorityInput, setMsgPriorityInput] = useState<"NORMAL" | "URGENT">("NORMAL");
+
+  const handleOpenSendMessage = async (bus: any) => {
+    setMsgBusTarget(bus);
+    setMsgAudienceType("COMMON");
+    setMsgTargetStudentId("");
+    setMsgTitleInput(`Bus ${bus.busNumber} Notice`);
+    setMsgContentInput("");
+    setMsgPriorityInput("NORMAL");
+    setIsMsgModalOpen(true);
+
+    // Fetch fresh student list for individual selection
+    const detail = await getBusDetailAction(bus.id);
+    if (detail.bus) {
+      setMsgBusTarget(detail.bus);
+    }
+  };
+
+  const handleSendBusMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!msgBusTarget) return;
+
+    if (!msgTitleInput.trim() || !msgContentInput.trim()) {
+      showToast("error", "Message title and content are required.");
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await sendBusMessageAction(msgBusTarget.id, {
+        type: msgAudienceType,
+        targetStudentId: msgAudienceType === "INDIVIDUAL" ? msgTargetStudentId : undefined,
+        title: msgTitleInput.trim(),
+        message: msgContentInput.trim(),
+        priority: msgPriorityInput,
+      });
+
+      if (res.error) {
+        showToast("error", res.error);
+      } else {
+        showToast("success", res.message || "Message dispatched successfully to parents!");
+        setIsMsgModalOpen(false);
+        router.refresh();
+      }
+    });
+  };
+
+  // ==========================================
   // FILTERING & METRICS
   // ==========================================
   const filteredBuses = useMemo(() => {
@@ -457,7 +523,7 @@ export default function AdminBusManagement({
   const totalEnrolled = buses.reduce((acc, b) => acc + (b._count?.students || 0), 0);
 
   return (
-    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <div style={{ width: "100%", maxWidth: "1400px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.1rem", boxSizing: "border-box" }}>
       {/* Toast Feedback */}
       {feedback && (
         <div
@@ -1004,127 +1070,160 @@ export default function AdminBusManagement({
                   </div>
                 </div>
 
-                {/* ACTION BUTTONS (LIKE CLASSES) */}
+                {/* ACTION BUTTONS (USER-FRIENDLY ADMIN CONTROLS) */}
                 <div
                   style={{
                     display: "flex",
-                    gap: "0.4rem",
-                    flexWrap: "wrap",
-                    paddingTop: "0.6rem",
+                    flexDirection: "column",
+                    gap: "0.45rem",
+                    paddingTop: "0.75rem",
                     borderTop: "1px solid var(--border)",
                   }}
                 >
-                  {/* + Add Students (Day Scholars) */}
-                  <button
-                    type="button"
-                    onClick={() => handleOpenAssignStudents(bus)}
-                    style={{
-                      flex: "1 1 120px",
-                      padding: "0.45rem 0.65rem",
-                      borderRadius: "6px",
-                      backgroundColor: "var(--primary)",
-                      color: "#fff",
-                      border: "none",
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "0.3rem",
-                    }}
-                  >
-                    <UserPlus size={14} />
-                    <span>+ Add Students</span>
-                  </button>
+                  {/* Primary Row: Add Students, View Roster, Message Parents */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.15fr 1.25fr", gap: "0.35rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAssignStudents(bus)}
+                      style={{
+                        padding: "0.5rem 0.35rem",
+                        borderRadius: "7px",
+                        backgroundColor: "var(--primary)",
+                        color: "#fff",
+                        border: "none",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.25rem",
+                        boxShadow: "0 1px 3px rgba(37, 99, 235, 0.2)",
+                      }}
+                      title="Add Day Scholar Students to this bus"
+                    >
+                      <UserPlus size={14} />
+                      <span>+ Add</span>
+                    </button>
 
-                  {/* View Roster */}
-                  <button
-                    type="button"
-                    onClick={() => handleOpenRoster(bus)}
-                    style={{
-                      flex: "1 1 90px",
-                      padding: "0.45rem 0.65rem",
-                      borderRadius: "6px",
-                      backgroundColor: "rgba(37, 99, 235, 0.08)",
-                      color: "var(--primary)",
-                      border: "1px solid rgba(37, 99, 235, 0.2)",
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "0.3rem",
-                    }}
-                  >
-                    <Users size={14} />
-                    <span>Roster ({assigned})</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenRoster(bus)}
+                      style={{
+                        padding: "0.5rem 0.35rem",
+                        borderRadius: "7px",
+                        backgroundColor: "rgba(37, 99, 235, 0.08)",
+                        color: "var(--primary)",
+                        border: "1px solid rgba(37, 99, 235, 0.2)",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.25rem",
+                      }}
+                      title="View & Delete Individual Enrolled Students"
+                    >
+                      <Users size={14} />
+                      <span>Roster ({assigned})</span>
+                    </button>
 
-                  {/* Status / Alert */}
-                  <button
-                    type="button"
-                    onClick={() => handleOpenStatusModal(bus)}
-                    title="Update Status & Issue Alerts"
-                    style={{
-                      padding: "0.45rem 0.65rem",
-                      borderRadius: "6px",
-                      backgroundColor: isRunning ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.12)",
-                      color: isRunning ? "var(--success)" : "#ef4444",
-                      border: `1px solid ${isRunning ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.3)"}`,
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "0.3rem",
-                    }}
-                  >
-                    <AlertTriangle size={14} />
-                    <span>Status</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSendMessage(bus)}
+                      style={{
+                        padding: "0.5rem 0.35rem",
+                        borderRadius: "7px",
+                        backgroundColor: "rgba(139, 92, 246, 0.09)",
+                        color: "#8b5cf6",
+                        border: "1px solid rgba(139, 92, 246, 0.25)",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.25rem",
+                      }}
+                      title="Send Announcement / Notice to Bus Student Parents"
+                    >
+                      <Send size={13} />
+                      <span>Message</span>
+                    </button>
+                  </div>
 
-                  {/* Edit */}
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEditBus(bus)}
-                    title="Edit Bus Details"
-                    style={{
-                      padding: "0.45rem 0.55rem",
-                      borderRadius: "6px",
-                      backgroundColor: "transparent",
-                      color: "var(--text-secondary)",
-                      border: "1px solid var(--border)",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Edit size={14} />
-                  </button>
+                  {/* Secondary Row: Status, Edit Bus, Delete Bus */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.15fr 1fr", gap: "0.35rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenStatusModal(bus)}
+                      style={{
+                        padding: "0.45rem 0.35rem",
+                        borderRadius: "7px",
+                        backgroundColor: isRunning ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.1)",
+                        color: isRunning ? "var(--success)" : "#ef4444",
+                        border: `1px solid ${isRunning ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.3)"}`,
+                        fontSize: "0.76rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.25rem",
+                      }}
+                      title="Update Operational Status & Broadcast Delays/Issues"
+                    >
+                      <AlertTriangle size={13} />
+                      <span>Status</span>
+                    </button>
 
-                  {/* Delete */}
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteBus(bus)}
-                    title="Delete Bus"
-                    style={{
-                      padding: "0.45rem 0.55rem",
-                      borderRadius: "6px",
-                      backgroundColor: "transparent",
-                      color: "var(--danger)",
-                      border: "1px solid rgba(239, 68, 68, 0.3)",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditBus(bus)}
+                      style={{
+                        padding: "0.45rem 0.35rem",
+                        borderRadius: "7px",
+                        backgroundColor: "rgba(0,0,0,0.03)",
+                        color: "var(--foreground)",
+                        border: "1px solid var(--border)",
+                        fontSize: "0.76rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.25rem",
+                      }}
+                      title="Edit Bus Details (Route, Driver, In-Charge, Capacity)"
+                    >
+                      <Edit size={13} />
+                      <span>Edit</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteBus(bus)}
+                      style={{
+                        padding: "0.45rem 0.35rem",
+                        borderRadius: "7px",
+                        backgroundColor: "rgba(239, 68, 68, 0.06)",
+                        color: "var(--danger)",
+                        border: "1px solid rgba(239, 68, 68, 0.25)",
+                        fontSize: "0.76rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.25rem",
+                      }}
+                      title="Delete this Bus"
+                    >
+                      <Trash2 size={13} />
+                      <span>Delete</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -1389,11 +1488,48 @@ export default function AdminBusManagement({
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
               <label style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--foreground)" }}>
-                Step 1: Select Class to View Day Scholars
+                Step 1: Filter by Class &amp; Student Type
               </label>
               <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>
-                Class-wise selection
+                Total: {allAvailableStudents.length} Students
               </span>
+            </div>
+
+            {/* Residence Type Tabs */}
+            <div style={{ display: "flex", gap: "0.3rem", marginBottom: "0.4rem" }}>
+              {(["ALL", "DAYSCHOLAR", "HOSTEL"] as const).map((mode) => {
+                const isSelected = residenceFilter === mode;
+                const label = mode === "ALL" ? "All Students" : mode === "DAYSCHOLAR" ? "Day Scholars" : "Hostellers";
+                const count = mode === "ALL"
+                  ? allAvailableStudents.length
+                  : mode === "DAYSCHOLAR"
+                  ? allAvailableStudents.filter((s) => s.isDayScholar).length
+                  : allAvailableStudents.filter((s) => !s.isDayScholar).length;
+
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setResidenceFilter(mode)}
+                    style={{
+                      padding: "0.25rem 0.6rem",
+                      borderRadius: "6px",
+                      fontSize: "0.74rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      border: isSelected ? "1px solid var(--primary)" : "1px solid var(--border)",
+                      backgroundColor: isSelected ? "rgba(37, 99, 235, 0.1)" : "transparent",
+                      color: isSelected ? "var(--primary)" : "var(--text-secondary)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.3rem",
+                    }}
+                  >
+                    <span>{label}</span>
+                    <span style={{ fontSize: "0.68rem", opacity: 0.8 }}>({count})</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Class Selection Pills / Grid */}
@@ -1423,11 +1559,11 @@ export default function AdminBusManagement({
                   flexShrink: 0,
                 }}
               >
-                All Classes
+                All Classes ({allAvailableStudents.length})
               </button>
 
               {classes.map((cls) => {
-                const count = (dayScholarStudentsByClass.get(cls.id) || []).length;
+                const count = allAvailableStudents.filter((s) => s.classObjId === cls.id).length;
                 const isSelected = selectedClassId === cls.id;
 
                 return (
@@ -1468,7 +1604,7 @@ export default function AdminBusManagement({
             </div>
           </div>
 
-          {/* STEP 2: SEARCH & DAY SCHOLARS LIST */}
+          {/* STEP 2: SEARCH & STUDENT LIST */}
           <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
               <div style={{ flex: 1, position: "relative" }}>
@@ -1477,7 +1613,7 @@ export default function AdminBusManagement({
                   type="text"
                   value={studentSearchQuery}
                   onChange={(e) => setStudentSearchQuery(e.target.value)}
-                  placeholder="Filter student name or roll..."
+                  placeholder="Filter student name, roll or admission no..."
                   style={{
                     width: "100%",
                     padding: "0.4rem 0.5rem 0.4rem 1.8rem",
@@ -1491,7 +1627,7 @@ export default function AdminBusManagement({
                 />
               </div>
 
-              {availableDayScholars.length > 0 && (
+              {availableStudentsList.filter((s) => !s.isAssigned).length > 0 && (
                 <button
                   type="button"
                   onClick={handleSelectAllInClass}
@@ -1508,7 +1644,7 @@ export default function AdminBusManagement({
                     flexShrink: 0,
                   }}
                 >
-                  Select All
+                  Select All Available
                 </button>
               )}
             </div>
@@ -1527,19 +1663,19 @@ export default function AdminBusManagement({
                 backgroundColor: "rgba(0,0,0,0.01)",
               }}
             >
-              {availableDayScholars.length === 0 ? (
+              {availableStudentsList.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
-                  No Day Scholar students found for this class filter.
+                  No students found.
                 </div>
               ) : (
-                availableDayScholars.map((st) => {
+                availableStudentsList.map((st) => {
                   const isSelected = selectedStudentIds.includes(st.id);
-                  const currentBus = st.busAssignments?.[0]?.bus?.busNumber;
+                  const isAssigned = st.isAssigned;
 
                   return (
                     <div
                       key={st.id}
-                      onClick={() => toggleStudentSelection(st.id)}
+                      onClick={() => toggleStudentSelection(st)}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -1547,16 +1683,18 @@ export default function AdminBusManagement({
                         padding: "0.45rem 0.65rem",
                         borderRadius: "6px",
                         border: isSelected ? "1px solid var(--primary)" : "1px solid var(--border)",
-                        backgroundColor: isSelected ? "rgba(37, 99, 235, 0.08)" : "var(--card)",
-                        cursor: "pointer",
+                        backgroundColor: isSelected ? "rgba(37, 99, 235, 0.08)" : isAssigned ? "rgba(0,0,0,0.02)" : "var(--card)",
+                        cursor: isAssigned ? "not-allowed" : "pointer",
+                        opacity: isAssigned ? 0.65 : 1,
                         fontSize: "0.82rem",
                       }}
                     >
                       <input
                         type="checkbox"
                         checked={isSelected}
+                        disabled={isAssigned}
                         onChange={() => {}}
-                        style={{ cursor: "pointer" }}
+                        style={{ cursor: isAssigned ? "not-allowed" : "pointer" }}
                       />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
@@ -1571,17 +1709,17 @@ export default function AdminBusManagement({
                               fontSize: "0.68rem",
                               padding: "1px 5px",
                               borderRadius: "4px",
-                              backgroundColor: "rgba(16, 185, 129, 0.12)",
-                              color: "var(--success)",
+                              backgroundColor: st.isDayScholar ? "rgba(16, 185, 129, 0.12)" : "rgba(99, 102, 241, 0.12)",
+                              color: st.isDayScholar ? "var(--success)" : "#6366f1",
                               fontWeight: 600,
                             }}
                           >
-                            Day Scholar
+                            {st.isDayScholar ? "Day Scholar" : "Hosteller"}
                           </span>
                         </div>
                       </div>
 
-                      {currentBus ? (
+                      {isAssigned ? (
                         <span
                           style={{
                             fontSize: "0.7rem",
@@ -1593,7 +1731,7 @@ export default function AdminBusManagement({
                             whiteSpace: "nowrap",
                           }}
                         >
-                          On {currentBus}
+                          Assigned to Bus {st.assignedBusNumber}
                         </span>
                       ) : (
                         <span style={{ fontSize: "0.7rem", color: "var(--success)", fontWeight: 500, whiteSpace: "nowrap" }}>
@@ -1714,19 +1852,63 @@ export default function AdminBusManagement({
       <Modal
         isOpen={isRosterModalOpen}
         onClose={() => setIsRosterModalOpen(false)}
-        title={rosterBusData ? `Enrolled Day Scholars: ${rosterBusData.busNumber}` : "Bus Roster"}
+        title={rosterBusData ? `Enrolled Day Scholars: ${rosterBusData.busNumber} (${rosterBusData.name})` : "Bus Roster"}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          {/* Top action bar */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "0.5rem 0.75rem",
+              borderRadius: "8px",
+              backgroundColor: "rgba(37, 99, 235, 0.06)",
+              border: "1px solid rgba(37, 99, 235, 0.15)",
+              flexWrap: "wrap",
+              gap: "0.5rem",
+            }}
+          >
+            <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--foreground)" }}>
+              Enrolled: <span style={{ color: "var(--primary)" }}>{rosterBusData?.students?.length || 0}</span> Day Scholar(s)
+            </div>
+            {rosterBusData && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRosterModalOpen(false);
+                  handleOpenAssignStudents(rosterBusData);
+                }}
+                style={{
+                  padding: "0.35rem 0.75rem",
+                  borderRadius: "6px",
+                  backgroundColor: "var(--primary)",
+                  color: "#fff",
+                  border: "none",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.3rem",
+                }}
+              >
+                <UserPlus size={13} />
+                <span>+ Add More Students</span>
+              </button>
+            )}
+          </div>
+
           {isLoadingRoster ? (
             <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-secondary)", fontSize: "0.9rem" }}>
               Loading student roster...
             </div>
           ) : !rosterBusData?.students || rosterBusData.students.length === 0 ? (
             <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
-              No students currently assigned to this bus. Click "+ Add Students" to enroll Day Scholars.
+              No students currently assigned to this bus. Click "+ Add More Students" above to enroll Day Scholars.
             </div>
           ) : (
-            <div style={{ maxHeight: "320px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+            <div style={{ maxHeight: "340px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
               {rosterBusData.students.map((item: any) => {
                 const student = item.student;
                 if (!student) return null;
@@ -1739,20 +1921,47 @@ export default function AdminBusManagement({
                       alignItems: "center",
                       justifyContent: "space-between",
                       gap: "0.5rem",
-                      padding: "0.5rem 0.75rem",
-                      borderRadius: "6px",
+                      padding: "0.6rem 0.75rem",
+                      borderRadius: "8px",
                       border: "1px solid var(--border)",
                       backgroundColor: "var(--card)",
                       fontSize: "0.82rem",
                     }}
                   >
-                    <div>
-                      <div style={{ fontWeight: 600, color: "var(--foreground)" }}>
-                        {student.firstName} {student.lastName}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0 }}>
+                      <div
+                        style={{
+                          width: "32px",
+                          height: "32px",
+                          borderRadius: "50%",
+                          backgroundColor: "rgba(37, 99, 235, 0.12)",
+                          color: "var(--primary)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: 700,
+                          fontSize: "0.75rem",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {student.firstName[0]}
+                        {student.lastName[0] || ""}
                       </div>
-                      <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginTop: "1px" }}>
-                        {student.class ? `${student.class.name} - ${student.class.section}` : "Class"} • Roll: {student.rollNumber}
-                        {item.pickupPoint && ` • Stop: ${item.pickupPoint}`}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {student.firstName} {student.lastName}
+                        </div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginTop: "1px", display: "flex", alignItems: "center", gap: "0.3rem", flexWrap: "wrap" }}>
+                          <span>{student.class ? `${student.class.name} - ${student.class.section}` : "Class"}</span>
+                          <span>•</span>
+                          <span>Roll: {student.rollNumber}</span>
+                          {item.pickupPoint && (
+                            <>
+                              <span>•</span>
+                              <span style={{ color: "var(--primary)" }}>📍 {item.pickupPoint}</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -1760,17 +1969,23 @@ export default function AdminBusManagement({
                       type="button"
                       onClick={() => handleRemoveStudentFromRoster(student.id, `${student.firstName} ${student.lastName}`)}
                       style={{
-                        padding: "0.3rem 0.65rem",
-                        borderRadius: "4px",
-                        backgroundColor: "rgba(239, 68, 68, 0.1)",
+                        padding: "0.35rem 0.65rem",
+                        borderRadius: "6px",
+                        backgroundColor: "rgba(239, 68, 68, 0.08)",
                         color: "var(--danger)",
                         border: "1px solid rgba(239, 68, 68, 0.25)",
-                        fontSize: "0.74rem",
+                        fontSize: "0.75rem",
                         fontWeight: 600,
                         cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.3rem",
+                        flexShrink: 0,
                       }}
+                      title="Remove this student from bus"
                     >
-                      Remove
+                      <Trash2 size={13} />
+                      <span>Remove</span>
                     </button>
                   </div>
                 );
@@ -1934,6 +2149,261 @@ export default function AdminBusManagement({
               }}
             >
               {isPending ? "Updating..." : "Update & Alert Parents"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* MODAL 5: SEND MESSAGE TO PARENTS                        */}
+      {/* ======================================================== */}
+      <Modal
+        isOpen={isMsgModalOpen}
+        onClose={() => setIsMsgModalOpen(false)}
+        title={msgBusTarget ? `Send Notice to Parents • Bus ${msgBusTarget.busNumber}` : "Send Bus Notice"}
+      >
+        <form onSubmit={handleSendBusMessage} style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+          <div
+            style={{
+              padding: "0.6rem 0.75rem",
+              borderRadius: "8px",
+              backgroundColor: "rgba(37, 99, 235, 0.08)",
+              border: "1px solid rgba(37, 99, 235, 0.2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "0.82rem",
+            }}
+          >
+            <div>
+              <strong style={{ color: "var(--foreground)" }}>Bus {msgBusTarget?.busNumber}</strong> ({msgBusTarget?.name})
+              <div style={{ color: "var(--text-secondary)", fontSize: "0.74rem" }}>
+                Driver: {msgBusTarget?.driverName} • In-Charge: {msgBusTarget?.inChargeStaff?.user?.name || "Staff Member"}
+              </div>
+            </div>
+            <span
+              style={{
+                fontSize: "0.72rem",
+                padding: "2px 8px",
+                borderRadius: "12px",
+                backgroundColor: "var(--primary)",
+                color: "#fff",
+                fontWeight: 600,
+              }}
+            >
+              {msgBusTarget?._count?.students ?? msgBusTarget?.students?.length ?? 0} Enrolled
+            </span>
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, marginBottom: "4px" }}>
+              Message Audience
+            </label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+              <button
+                type="button"
+                onClick={() => setMsgAudienceType("COMMON")}
+                style={{
+                  padding: "0.5rem",
+                  borderRadius: "6px",
+                  border: msgAudienceType === "COMMON" ? "2px solid var(--primary)" : "1px solid var(--border)",
+                  backgroundColor: msgAudienceType === "COMMON" ? "rgba(37, 99, 235, 0.1)" : "transparent",
+                  color: msgAudienceType === "COMMON" ? "var(--primary)" : "var(--foreground)",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Broadcast (All Bus Parents)
+              </button>
+              <button
+                type="button"
+                onClick={() => setMsgAudienceType("INDIVIDUAL")}
+                style={{
+                  padding: "0.5rem",
+                  borderRadius: "6px",
+                  border: msgAudienceType === "INDIVIDUAL" ? "2px solid var(--primary)" : "1px solid var(--border)",
+                  backgroundColor: msgAudienceType === "INDIVIDUAL" ? "rgba(37, 99, 235, 0.1)" : "transparent",
+                  color: msgAudienceType === "INDIVIDUAL" ? "var(--primary)" : "var(--foreground)",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Specific Student's Parents
+              </button>
+            </div>
+          </div>
+
+          {msgAudienceType === "INDIVIDUAL" && (
+            <div>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, marginBottom: "4px" }}>
+                Select Student *
+              </label>
+              <select
+                value={msgTargetStudentId}
+                onChange={(e) => setMsgTargetStudentId(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border)",
+                  backgroundColor: "var(--card)",
+                  color: "var(--foreground)",
+                  fontSize: "0.82rem",
+                }}
+              >
+                <option value="">-- Choose student on this bus --</option>
+                {(msgBusTarget?.students || []).map((item: any) => {
+                  const s = item.student;
+                  if (!s) return null;
+                  return (
+                    <option key={s.id} value={s.id}>
+                      {s.firstName} {s.lastName} (Roll: {s.rollNumber})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, marginBottom: "4px" }}>
+              Priority Level
+            </label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+              <button
+                type="button"
+                onClick={() => setMsgPriorityInput("NORMAL")}
+                style={{
+                  padding: "0.45rem",
+                  borderRadius: "6px",
+                  border: msgPriorityInput === "NORMAL" ? "2px solid var(--primary)" : "1px solid var(--border)",
+                  backgroundColor: msgPriorityInput === "NORMAL" ? "rgba(37, 99, 235, 0.1)" : "transparent",
+                  color: msgPriorityInput === "NORMAL" ? "var(--primary)" : "var(--foreground)",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Normal Notice
+              </button>
+              <button
+                type="button"
+                onClick={() => setMsgPriorityInput("URGENT")}
+                style={{
+                  padding: "0.45rem",
+                  borderRadius: "6px",
+                  border: msgPriorityInput === "URGENT" ? "2px solid #ef4444" : "1px solid var(--border)",
+                  backgroundColor: msgPriorityInput === "URGENT" ? "rgba(239, 68, 68, 0.12)" : "transparent",
+                  color: msgPriorityInput === "URGENT" ? "#ef4444" : "var(--foreground)",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                🚨 Urgent Alert
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, marginBottom: "4px" }}>
+              Subject / Title *
+            </label>
+            <input
+              type="text"
+              value={msgTitleInput}
+              onChange={(e) => setMsgTitleInput(e.target.value)}
+              placeholder="e.g. Schedule Update / Route Notice"
+              required
+              style={{
+                width: "100%",
+                padding: "0.45rem 0.6rem",
+                borderRadius: "6px",
+                border: "1px solid var(--border)",
+                backgroundColor: "var(--card)",
+                color: "var(--foreground)",
+                fontSize: "0.82rem",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, marginBottom: "4px" }}>
+              Notice Message *
+            </label>
+            <textarea
+              rows={3}
+              value={msgContentInput}
+              onChange={(e) => setMsgContentInput(e.target.value)}
+              placeholder="Write the message that will be dispatched to parent notifications and portal..."
+              required
+              style={{
+                width: "100%",
+                padding: "0.45rem 0.6rem",
+                borderRadius: "6px",
+                border: "1px solid var(--border)",
+                backgroundColor: "var(--card)",
+                color: "var(--foreground)",
+                fontSize: "0.82rem",
+                boxSizing: "border-box",
+                fontFamily: "inherit",
+              }}
+            />
+          </div>
+
+          <div
+            style={{
+              padding: "0.5rem 0.75rem",
+              borderRadius: "6px",
+              backgroundColor: "rgba(16, 185, 129, 0.08)",
+              border: "1px solid rgba(16, 185, 129, 0.25)",
+              color: "var(--success)",
+              fontSize: "0.74rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem",
+            }}
+          >
+            <Bell size={14} />
+            <span>Connected to parent notification database with immediate alert notification.</span>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", paddingTop: "0.4rem", borderTop: "1px solid var(--border)" }}>
+            <button
+              type="button"
+              onClick={() => setIsMsgModalOpen(false)}
+              style={{
+                padding: "0.45rem 0.85rem",
+                borderRadius: "6px",
+                border: "1px solid var(--border)",
+                backgroundColor: "transparent",
+                color: "var(--foreground)",
+                fontSize: "0.8rem",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isPending || (msgAudienceType === "INDIVIDUAL" && !msgTargetStudentId)}
+              style={{
+                padding: "0.45rem 1.1rem",
+                borderRadius: "6px",
+                backgroundColor: msgPriorityInput === "URGENT" ? "#ef4444" : "var(--primary)",
+                color: "#fff",
+                border: "none",
+                fontWeight: 600,
+                fontSize: "0.82rem",
+                cursor: isPending || (msgAudienceType === "INDIVIDUAL" && !msgTargetStudentId) ? "not-allowed" : "pointer",
+                opacity: isPending || (msgAudienceType === "INDIVIDUAL" && !msgTargetStudentId) ? 0.6 : 1,
+              }}
+            >
+              {isPending ? "Sending..." : "Dispatch to Parents"}
             </button>
           </div>
         </form>

@@ -608,7 +608,7 @@ export default function StudentEditDrawer({
                       required
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
-                      placeholder="e.g. Aarav"
+                      placeholder="First Name"
                       style={{
                         width: "100%",
                         padding: "0.65rem 0.85rem",

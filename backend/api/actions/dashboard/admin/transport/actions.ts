@@ -1163,6 +1163,145 @@ export async function getParentBusOverviewAction() {
 }
 
 // ==========================================
+// 10. PARENT BUS INQUIRY / MESSAGE (NOTIFIES TEACHER & ADMIN)
+// ==========================================
+export async function sendParentBusInquiryAction(payload: {
+  busId: string;
+  studentId: string;
+  subject: string;
+  message: string;
+  urgency?: "NORMAL" | "URGENT";
+}) {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session || session.user.role !== "PARENT") {
+      return { error: "Unauthorized: Only parents can send bus inquiries." };
+    }
+
+    if (!payload.busId || !payload.studentId || !payload.subject?.trim() || !payload.message?.trim()) {
+      return { error: "Bus, student, subject, and message content are required." };
+    }
+
+    // 1. Verify parent owns this student
+    const student = await prisma.student.findFirst({
+      where: {
+        id: payload.studentId,
+        parents: {
+          some: {
+            parent: {
+              userId: session.user.id,
+            },
+          },
+        },
+      },
+      include: {
+        class: true,
+      },
+    });
+
+    if (!student) {
+      return { error: "Student not found or not associated with your parent account." };
+    }
+
+    // 2. Fetch Bus and in-charge staff
+    const bus = await prisma.bus.findUnique({
+      where: { id: payload.busId },
+      include: {
+        inChargeStaff: {
+          include: {
+            user: { select: { id: true, name: true, email: true } },
+          },
+        },
+      },
+    });
+
+    if (!bus) {
+      return { error: "Bus not found." };
+    }
+
+    const priority = payload.urgency === "URGENT" ? "URGENT" : "NORMAL";
+    const parentName = session.user.name || "Student Parent";
+    const studentFullName = `${student.firstName} ${student.lastName}`;
+    const classNameStr = student.class ? `${student.class.name} - ${student.class.section}` : "";
+
+    // 3. Create BusMessage record
+    const busMessage = await prisma.busMessage.create({
+      data: {
+        busId: bus.id,
+        senderStaffId: bus.inChargeStaffId,
+        type: "INDIVIDUAL",
+        title: `Parent Note: ${payload.subject.trim()}`,
+        message: `${payload.message.trim()} (Sent by ${parentName} for student ${studentFullName})`,
+        priority,
+        targetStudentId: student.id,
+      },
+    });
+
+    // 4. Create Notification for Assigned Teacher (In-Charge Staff)
+    const notificationUserIds: string[] = [];
+
+    if (bus.inChargeStaff?.user?.id) {
+      const teacherUserId = bus.inChargeStaff.user.id;
+      notificationUserIds.push(teacherUserId);
+
+      await prisma.notification.create({
+        data: {
+          userId: teacherUserId,
+          title: `🚌 Parent Message: ${studentFullName} (${bus.busNumber})`,
+          content: `${parentName} (${studentFullName}, ${classNameStr}): "${payload.message.trim()}" - Topic: ${payload.subject.trim()}`,
+          type: "BUS",
+          category: "BUS",
+          priority: priority === "URGENT" ? "HIGH" : "NORMAL",
+          link: "/staff/my-bus",
+        },
+      });
+      invalidateUserNotifCache(teacherUserId);
+    }
+
+    // 5. Create Notification for ALL Administrators
+    const admins = await prisma.user.findMany({
+      where: { role: "ADMIN", status: "ACTIVE" },
+      select: { id: true },
+    });
+
+    for (const admin of admins) {
+      if (!notificationUserIds.includes(admin.id)) {
+        notificationUserIds.push(admin.id);
+        await prisma.notification.create({
+          data: {
+            userId: admin.id,
+            title: `🚌 Parent Message: Bus ${bus.busNumber} (${studentFullName})`,
+            content: `${parentName} (${studentFullName}, ${classNameStr}): "${payload.message.trim()}" - Topic: ${payload.subject.trim()}`,
+            type: "BUS",
+            category: "BUS",
+            priority: priority === "URGENT" ? "HIGH" : "NORMAL",
+            link: "/admin/buses",
+          },
+        });
+        invalidateUserNotifCache(admin.id);
+      }
+    }
+
+    revalidatePath("/admin/buses");
+    revalidatePath("/dashboard/admin/transport");
+    revalidatePath("/staff/my-bus");
+    revalidatePath("/parent/bus");
+    revalidatePath("/dashboard/parent/transport");
+    revalidatePath("/dashboard/admin/notifications");
+    revalidatePath("/dashboard/teacher/notifications");
+
+    return {
+      success: true,
+      message: `Your message has been delivered to Bus In-Charge (${bus.inChargeStaff?.user?.name || "Faculty"}) and School Administration.`,
+      busMessageId: busMessage.id,
+    };
+  } catch (error: any) {
+    console.error("Error sending parent bus inquiry:", error);
+    return { error: error?.message || "Failed to send message to bus in-charge and admin." };
+  }
+}
+
+// ==========================================
 // LEGACY COMPATIBILITY HELPERS
 // ==========================================
 export async function getBusStudentsAction(busId: string) {
