@@ -54,6 +54,48 @@
   overflow-y: auto;
 }
 
+.nav::-webkit-scrollbar {
+  width: 5px;
+}
+
+.nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+.nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.sectionGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.sectionHeader {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.65rem 1.5rem 0.25rem;
+  margin-top: 0.35rem;
+  user-select: none;
+}
+
+.collapsed .sectionGroup {
+  align-items: center;
+}
+
+.collapsed .sectionHeader {
+  display: none;
+}
+
 .navItemWrapper {
   position: relative;
   display: flex;
@@ -63,7 +105,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem 1.5rem;
+  padding: 0.6rem 1.5rem;
   color: var(--text-muted);
   text-decoration: none;
   transition: all 0.2s;

@@ -36,6 +36,17 @@ import {
   X
 } from "lucide-react";
 
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+}
+
+interface NavSection {
+  title?: string;
+  items: NavItem[];
+}
+
 export default function Sidebar({ role, settings = {} }: { role: string; settings?: Record<string, string> }) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -49,7 +60,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     }
   }, [pathname]);
 
-  const adminLinks = [
+  const adminLinks: NavItem[] = [
     { href: "/dashboard/admin", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
     { href: "/dashboard/admin/main-roles", label: "Main Roles", icon: <Users size={20} /> },
     { href: "/dashboard/admin/teacher-attendance", label: "Teacher Attendance", icon: <UserCheck size={20} /> },
@@ -62,7 +73,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     { href: "/dashboard/admin/settings", label: "Settings", icon: <Settings size={20} /> },
   ];
 
-  let teacherLinks = [
+  let teacherLinks: NavItem[] = [
     { href: "/dashboard/teacher", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
     { href: "/dashboard/teacher/programs", label: "School Programs", icon: <Star size={20} /> },
     { href: "/dashboard/teacher/classes", label: "My Classes", icon: <GraduationCap size={20} /> },
@@ -90,34 +101,68 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     teacherLinks = teacherLinks.filter(l => !["/dashboard/teacher/exams", "/dashboard/teacher/assignments", "/dashboard/teacher/report-cards"].includes(l.href));
   }
 
-  let parentLinks = [
-    { href: "/dashboard/parent", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
-    { href: "/dashboard/parent/programs", label: "School Programs", icon: <Star size={20} /> },
-    { href: "/dashboard/parent/classes", label: "Classes", icon: <GraduationCap size={20} /> },
-    { href: "/dashboard/parent/attendance", label: "Attendance", icon: <Users size={20} /> },
-    { href: "/parent/bus", label: "Child's Bus & Alerts", icon: <Bus size={20} /> },
-    { href: "/dashboard/parent/exams", label: "Exams", icon: <BookOpen size={20} /> },
-    { href: "/dashboard/parent/assignments", label: "Home Work", icon: <BookOpen size={20} /> },
-    { href: "/dashboard/parent/report-cards", label: "Report Cards", icon: <BookOpen size={20} /> },
-    { href: "/dashboard/parent/announcements", label: "Announcements", icon: <Megaphone size={20} /> },
-    { href: "/dashboard/parent/notifications", label: "Notifications", icon: <Bell size={20} /> },
-    { href: "/dashboard/parent/messages", label: "Messages", icon: <MessageSquare size={20} /> },
-    { href: "/dashboard/parent/calendar", label: "Calendar", icon: <Calendar size={20} /> },
-    { href: "/dashboard/parent/meetings", label: "Meetings", icon: <Video size={20} /> },
-    { href: "/dashboard/parent/complaints", label: "Complaints", icon: <FileWarning size={20} /> },
-    { href: "/dashboard/parent/settings", label: "Settings", icon: <Settings size={20} /> },
+  const parentSections: NavSection[] = [
+    {
+      items: [
+        { href: "/dashboard/parent", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
+      ],
+    },
+    {
+      title: "MY CHILD",
+      items: [
+        { href: "/dashboard/parent/attendance", label: "Attendance", icon: <Users size={20} /> },
+        { href: "/dashboard/parent/report-cards", label: "Report Cards", icon: <BookOpen size={20} /> },
+        { href: "/dashboard/parent/assignments", label: "Home Work", icon: <BookOpen size={20} /> },
+        { href: "/dashboard/parent/exams", label: "Exams", icon: <BookOpen size={20} /> },
+        { href: "/dashboard/parent/classes", label: "Classes", icon: <GraduationCap size={20} /> },
+      ],
+    },
+    {
+      title: "SCHOOL",
+      items: [
+        { href: "/dashboard/parent/programs", label: "School Programs", icon: <Star size={20} /> },
+        { href: "/parent/bus", label: "Child's Bus & Alerts", icon: <Bus size={20} /> },
+        { href: "/dashboard/parent/announcements", label: "Announcements", icon: <Megaphone size={20} /> },
+        { href: "/dashboard/parent/calendar", label: "Calendar", icon: <Calendar size={20} /> },
+      ],
+    },
+    {
+      title: "COMMUNICATION",
+      items: [
+        { href: "/dashboard/parent/notifications", label: "Notifications", icon: <Bell size={20} /> },
+        { href: "/dashboard/parent/messages", label: "Messages", icon: <MessageSquare size={20} /> },
+        { href: "/dashboard/parent/meetings", label: "Meetings", icon: <Video size={20} /> },
+        { href: "/dashboard/parent/complaints", label: "Complaints", icon: <FileWarning size={20} /> },
+      ],
+    },
+    {
+      title: "ACCOUNT",
+      items: [
+        { href: "/dashboard/parent/settings", label: "Settings", icon: <Settings size={20} /> },
+      ],
+    },
   ];
 
-  if (settings.PARENT_ATTENDANCE_VISIBILITY === "false") {
-    parentLinks = parentLinks.filter(l => l.href !== "/dashboard/parent/attendance");
-  }
-  if (settings.RESULT_VISIBILITY === "false") {
-    parentLinks = parentLinks.filter(l => !["/dashboard/parent/exams", "/dashboard/parent/report-cards"].includes(l.href));
-  }
+  const filteredParentSections: NavSection[] = parentSections.map(sec => ({
+    ...sec,
+    items: sec.items.filter(item => {
+      if (settings.PARENT_ATTENDANCE_VISIBILITY === "false" && item.href === "/dashboard/parent/attendance") {
+        return false;
+      }
+      if (settings.RESULT_VISIBILITY === "false" && ["/dashboard/parent/exams", "/dashboard/parent/report-cards"].includes(item.href)) {
+        return false;
+      }
+      return true;
+    }),
+  })).filter(sec => sec.items.length > 0);
 
-  let links = parentLinks;
-  if (role === "ADMIN") links = adminLinks;
-  if (role === "TEACHER") links = teacherLinks;
+  let sections: NavSection[] = filteredParentSections;
+  const userRole = (role || "").toUpperCase();
+  if (userRole === "ADMIN") {
+    sections = [{ items: adminLinks }];
+  } else if (userRole === "TEACHER") {
+    sections = [{ items: teacherLinks }];
+  }
 
   const schoolName = settings.SCHOOL_NAME || "SRT UNIVERSAL SCHOOL";
   const schoolLogo = settings.SCHOOL_LOGO || null;
@@ -162,27 +207,42 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
         </label>
       </div>
       <nav className={styles.nav}>
-        {links.map((link) => {
-          const isActive = pathname === link.href ||
-            (link.href === "/admin/buses" && pathname === "/dashboard/admin/transport") ||
-            (link.href === "/staff/my-bus" && pathname === "/dashboard/teacher/transport") ||
-            (link.href === "/parent/bus" && pathname === "/dashboard/parent/transport");
+        {sections.map((section, sIdx) => {
+          if (section.items.length === 0) return null;
           return (
-            <div key={link.href} className={styles.navItemWrapper}>
-              <Link
-                href={link.href}
-                onClick={() => {
-                  const checkbox = document.getElementById("mobile-menu-toggle") as HTMLInputElement | null;
-                  if (checkbox && checkbox.checked) {
-                    checkbox.checked = false;
-                  }
-                }}
-                className={`${styles.navItem} ${isActive ? styles.navItemActive : ""}`}
-                title={isCollapsed ? link.label : undefined}
-              >
-                <div className={styles.iconWrapper}>{link.icon}</div>
-                {!isCollapsed && <span className={styles.linkLabel}>{link.label}</span>}
-              </Link>
+            <div key={section.title || `sec-${sIdx}`} className={styles.sectionGroup}>
+              {!isCollapsed && section.title && (
+                <div className={styles.sectionHeader}>{section.title}</div>
+              )}
+              {section.items.map((link) => {
+                const isActive =
+                  pathname === link.href ||
+                  (link.href !== "/dashboard/parent" &&
+                    link.href !== "/dashboard/teacher" &&
+                    link.href !== "/dashboard/admin" &&
+                    pathname.startsWith(link.href + "/")) ||
+                  (link.href === "/admin/buses" && pathname === "/dashboard/admin/transport") ||
+                  (link.href === "/staff/my-bus" && pathname === "/dashboard/teacher/transport") ||
+                  (link.href === "/parent/bus" && pathname === "/dashboard/parent/transport");
+                return (
+                  <div key={link.href} className={styles.navItemWrapper}>
+                    <Link
+                      href={link.href}
+                      onClick={() => {
+                        const checkbox = document.getElementById("mobile-menu-toggle") as HTMLInputElement | null;
+                        if (checkbox && checkbox.checked) {
+                          checkbox.checked = false;
+                        }
+                      }}
+                      className={`${styles.navItem} ${isActive ? styles.navItemActive : ""}`}
+                      title={isCollapsed ? link.label : undefined}
+                    >
+                      <div className={styles.iconWrapper}>{link.icon}</div>
+                      {!isCollapsed && <span className={styles.linkLabel}>{link.label}</span>}
+                    </Link>
+                  </div>
+                );
+              })}
             </div>
           );
         })}
