@@ -85,3 +85,4 @@ main().catch((err) => {
   console.error("❌ Fatal error executing reset-settings-password:", err);
   process.exit(1);
 });
+
