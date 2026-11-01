@@ -5,12 +5,23 @@ import {
   Percent, CheckCircle2, AlertCircle, CalendarCheck,
   GraduationCap, BookOpen, ArrowRight, CalendarDays, Clock
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import ParentChildBanner from "./ParentChildBanner";
 import Link from "next/link";
-import ExamClassPerformancePieChart from "./ExamClassPerformancePieChart";
 import { getSchoolCalendarStats } from "@/backend/api/actions/dashboard/attendance/calendarStats";
 import { isForenoonRecord, calculateAttendancePercentage } from "@/backend/lib/services/attendanceCalculation";
 import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
+
+const ExamClassPerformancePieChart = dynamic(
+  () => import("./ExamClassPerformancePieChart"),
+  {
+    loading: () => (
+      <div style={{ height: "260px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>
+        Loading performance chart...
+      </div>
+    ),
+  }
+);
 
 export default async function ParentDashboard({
   searchParams

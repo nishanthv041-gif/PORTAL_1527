@@ -58,6 +58,17 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
         userId,
         ...(options?.unreadOnly ? { isRead: false } : {})
       },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        type: true,
+        category: true,
+        priority: true,
+        link: true,
+        isRead: true,
+        createdAt: true,
+      },
       orderBy: { createdAt: "desc" },
       take: 20
     });

@@ -42,6 +42,8 @@ model User {
 
   @@index([role, status])
   @@index([googleEmail])
+  @@index([status])
+  @@index([createdAt])
 }
 
 // UserSession model for Single-Device Login & Auto-Logout Session Enforcement
@@ -105,6 +107,8 @@ model Student {
   @@index([classId, isActive])
   @@index([isActive])
   @@index([enrollmentStatus])
+  @@index([createdAt])
+  @@index([residenceType, isActive])
 }
 
 model Teacher {
@@ -241,6 +245,8 @@ model Attendance {
   class     Class?  @relation(fields: [classId], references: [id])
 
   @@unique([studentId, date])
+  @@index([studentId])
+  @@index([classId])
   @@index([classId, date])
   @@index([date])
   @@index([date, status])
@@ -261,9 +267,11 @@ model TeacherAttendance {
   updatedAt DateTime @updatedAt
 
   @@unique([teacherId, date])
+  @@index([teacherId])
   @@index([date])
   @@index([date, status])
   @@index([teacherId, status])
+  @@index([createdAt])
 }
 
 model Exam {
@@ -279,6 +287,8 @@ model Exam {
   reportCards ReportCard[]
 
   @@index([classId])
+  @@index([date])
+  @@index([isPublished])
 }
 
 model Mark {
@@ -298,6 +308,7 @@ model Mark {
   history MarkHistory[]
 
   @@unique([studentId, examId, subjectId])
+  @@index([studentId])
   @@index([examId])
   @@index([subjectId])
 }
@@ -331,6 +342,7 @@ model ReportCard {
   exam      Exam    @relation(fields: [examId], references: [id])
 
   @@unique([studentId, examId])
+  @@index([studentId])
   @@index([studentId, published])
   @@index([examId, published])
 }
@@ -461,6 +473,7 @@ model Assignment {
   @@index([classId, deadline])
   @@index([teacherId])
   @@index([subjectId])
+  @@index([createdAt])
 }
 
 model HomeworkComment {
@@ -493,6 +506,8 @@ model Submission {
 
   @@index([assignmentId])
   @@index([studentId])
+  @@index([status])
+  @@index([submittedAt])
 }
 
 model Complaint {
@@ -524,6 +539,7 @@ model Complaint {
   @@index([parentId])
   @@index([authorId])
   @@index([status])
+  @@index([createdAt])
 }
 
 model ComplaintMessage {
@@ -555,6 +571,7 @@ model DisciplineRecord {
   student   Student @relation(fields: [studentId], references: [id])
 
   @@index([studentId])
+  @@index([date])
 }
 
 model Achievement {
@@ -571,6 +588,7 @@ model Achievement {
   student   Student @relation(fields: [studentId], references: [id])
 
   @@index([studentId])
+  @@index([date])
 }
 
 model LeaveRequest {
@@ -586,6 +604,8 @@ model LeaveRequest {
   student   Student @relation(fields: [studentId], references: [id])
 
   @@index([studentId])
+  @@index([status])
+  @@index([studentId, status])
 }
 
 model Meeting {
@@ -892,6 +912,7 @@ model Bus {
   @@index([status])
   @@index([inChargeStaffId])
   @@index([isActive])
+  @@index([isActive, status])
 }
 
 model BusStudent {
@@ -909,6 +930,7 @@ model BusStudent {
   @@index([busId])
   @@index([studentId])
   @@index([assignedAt])
+  @@index([busId, academicYear])
 }
 
 model BusStatusLog {
@@ -923,7 +945,9 @@ model BusStatusLog {
   createdAt         DateTime @default(now())
 
   @@index([busId])
+  @@index([status])
   @@index([createdAt])
+  @@index([busId, createdAt])
   @@index([reportedByStaffId])
 }
 
@@ -944,6 +968,8 @@ model BusMessage {
 
   @@index([busId])
   @@index([createdAt])
+  @@index([busId, createdAt])
+  @@index([busId, type])
   @@index([targetStudentId])
   @@index([senderStaffId])
 }

@@ -1,8 +1,19 @@
+import dynamic from "next/dynamic";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
-import ProfessionalSchoolCalendar from "@/frontend/components/calendar/ProfessionalSchoolCalendar";
 import { getMonthCalendarData } from "@/backend/lib/services/calendarDataService";
 import { getParentAndSelectedChild } from "../parentChildHelper";
+
+const ProfessionalSchoolCalendar = dynamic(
+  () => import("@/frontend/components/calendar/ProfessionalSchoolCalendar"),
+  {
+    loading: () => (
+      <div style={{ height: "400px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>
+        Loading school calendar...
+      </div>
+    ),
+  }
+);
 
 export default async function ParentCalendarPage({
   searchParams,

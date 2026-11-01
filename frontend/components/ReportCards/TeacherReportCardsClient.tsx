@@ -8,14 +8,21 @@ import {
   Search, Check, X, ShieldAlert, FileText, ChevronRight,
   Sliders, Settings2, Target, Upload
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import styles from "./TeacherReportCardsClient.module.css";
 import {
   createAndSendReportCardAction,
   deleteReportCardAction
 } from "@/backend/lib/services/reportCardActions";
-import ReportCardDocumentStudio from "./ReportCardDocumentStudio";
-import ReportCardDocumentScanModal from "./ReportCardDocumentScanModal";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+
+const ReportCardDocumentStudio = dynamic(() => import("./ReportCardDocumentStudio"), {
+  ssr: false,
+});
+
+const ReportCardDocumentScanModal = dynamic(() => import("./ReportCardDocumentScanModal"), {
+  ssr: false,
+});
 
 export type ClassSubject = {
   id: string;

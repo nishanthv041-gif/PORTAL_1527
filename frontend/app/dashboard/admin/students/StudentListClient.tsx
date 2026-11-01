@@ -8,11 +8,16 @@ import {
   ArrowUpDown, FileText
 } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { toggleStudentStatusAction } from "@/backend/api/actions/dashboard/admin/students/studentManagementActions";
-import StudentEditDrawer, { StudentData } from "./StudentEditDrawer";
+import type { StudentData } from "./StudentEditDrawer";
 import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 import { SingleSelect } from "@/frontend/components/ui/form";
+
+const StudentEditDrawer = dynamic(() => import("./StudentEditDrawer"), {
+  ssr: false,
+});
 
 interface ClassItem {
   id: string;
@@ -159,6 +164,20 @@ export default function StudentListClient({ students, classes }: StudentListClie
         return 0;
       });
   }, [students, debouncedSearch, selectedClassId, statusFilter, residenceFilter, sortBy]);
+
+  // Pagination (20 per page)
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, selectedClassId, statusFilter, residenceFilter, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
+  const paginatedStudents = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredStudents.slice(start, start + pageSize);
+  }, [filteredStudents, currentPage, pageSize]);
 
   const handleOpenAdd = () => {
     setEditingStudent(null);
@@ -552,7 +571,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
                 </tr>
               </thead>
               <tbody>
-                {filteredStudents.map((student) => {
+                {paginatedStudents.map((student) => {
                   const parent = student.parents?.[0]?.parent;
                   const parentName = parent?.user?.name || "None Linked";
                   const parentPhone = parent?.phone || "-";
@@ -668,7 +687,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
             gap: "1.25rem",
           }}
         >
-          {filteredStudents.map((student) => {
+          {paginatedStudents.map((student) => {
             const parent = student.parents?.[0]?.parent;
             const initials = `${student.firstName?.[0] || ""}${student.lastName?.[0] || ""}`.toUpperCase() || "S";
 
@@ -831,6 +850,67 @@ export default function StudentListClient({ students, classes }: StudentListClie
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Pagination Controls (Limit 20) */}
+      {totalPages > 1 && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "1rem",
+            marginTop: "1rem",
+            background: "var(--card-bg, #0f172a)",
+            border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+            borderRadius: "12px",
+            flexWrap: "wrap",
+            gap: "0.75rem",
+          }}
+        >
+          <span style={{ fontSize: "0.85rem", color: "var(--text-secondary, #94a3b8)" }}>
+            Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, filteredStudents.length)} of {filteredStudents.length} students
+          </span>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              style={{
+                padding: "0.45rem 0.9rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                background: currentPage <= 1 ? "rgba(255, 255, 255, 0.03)" : "rgba(255, 255, 255, 0.08)",
+                color: currentPage <= 1 ? "var(--text-secondary, #64748b)" : "var(--text-primary, #f8fafc)",
+                cursor: currentPage <= 1 ? "not-allowed" : "pointer",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+              }}
+            >
+              Previous
+            </button>
+            <span style={{ fontSize: "0.85rem", color: "var(--text-secondary, #94a3b8)", padding: "0 0.5rem" }}>
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              style={{
+                padding: "0.45rem 0.9rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                background: currentPage >= totalPages ? "rgba(255, 255, 255, 0.03)" : "rgba(255, 255, 255, 0.08)",
+                color: currentPage >= totalPages ? "var(--text-secondary, #64748b)" : "var(--text-primary, #f8fafc)",
+                cursor: currentPage >= totalPages ? "not-allowed" : "pointer",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+              }}
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
       </ResultsContainer>

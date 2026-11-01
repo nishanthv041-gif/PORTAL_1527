@@ -1,24 +1,48 @@
+import dynamic from "next/dynamic";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../dashboard.module.css";
 import { Users, GraduationCap, BookOpen, Briefcase, Mail, Phone, CheckCircle2, XCircle, UserCheck } from "lucide-react";
 import ClassSelector from "./ClassSelector";
-import PassFailChart from "./PassFailChart";
-import EditClassModal from "./EditClassModal";
 import Link from "next/link";
 
-import { Student, Attendance, Parent, User, Teacher } from "@prisma/client";
+const PassFailChart = dynamic(() => import("./PassFailChart"), {
+  loading: () => (
+    <div style={{ height: "200px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>
+      Loading test performance chart...
+    </div>
+  ),
+});
 
-type StudentWithRelations = Student & {
-  parents: { parent: Parent & { user: User } }[];
+const EditClassModal = dynamic(() => import("./EditClassModal"), {
+  loading: () => <div style={{ height: "36px" }} />,
+});
+
+type StudentWithRelations = {
+  id: string;
+  rollNumber: string;
+  firstName: string;
+  lastName: string;
+  isActive: boolean;
+  parents: {
+    parent: {
+      id: string;
+      phone: string | null;
+      user: {
+        id: string;
+        name: string;
+        email: string;
+      };
+    };
+  }[];
   attendances: { status: string }[];
 };
 
 export default async function AdminDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ classId?: string }>;
+  searchParams: Promise<{ classId?: string; page?: string }>;
 }) {
   const session = await getServerSession(getAuthOptions());
   if (!session || session.user.role !== "ADMIN") return null;
@@ -45,22 +69,41 @@ export default async function AdminDashboardPage({
 
   let selectedClassData = null;
   let studentsData: StudentWithRelations[] = [];
-  let teachersData: (Teacher & { user: User })[] = [];
+  let teachersData: any[] = [];
   let passFailStats = null;
   const attendanceStats = { present: 0, absent: 0, total: 0 };
   let sectionCount = 0;
   let classParentsCount = 0;
+  let totalClassStudents = 0;
+  let currentPage = 1;
+  const pageSize = 20;
+  let totalPages = 1;
 
   if (resolvedSearchParams.classId) {
     const classId = resolvedSearchParams.classId;
+    currentPage = Math.max(1, parseInt(resolvedSearchParams.page || "1", 10));
 
     selectedClassData = await prisma.class.findUnique({
       where: { id: classId },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        section: true,
+        teacherId: true,
         teacher: {
-          include: { user: true, subjects: true }
-        }
-      }
+          select: {
+            id: true,
+            phone: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (selectedClassData) {
@@ -69,44 +112,80 @@ export default async function AdminDashboardPage({
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      const [sectionCountRes, studentsDataRes, teachersDataRes, todaysAttendancesRes, marksRes] = await Promise.all([
+      const [sectionCountRes, totalClassStudentsRes, studentsDataRes, teachersDataRes, todaysAttendancesRes, marksRes] = await Promise.all([
         prisma.class.count({ where: { name: selectedClassData.name, isActive: true } }),
+        prisma.student.count({ where: { classId, isActive: true } }),
         prisma.student.findMany({
           where: { classId, isActive: true },
           orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-          include: {
-            parents: { include: { parent: { include: { user: true } } } },
-            attendances: { select: { status: true } }
-          }
+          take: pageSize,
+          skip: (currentPage - 1) * pageSize,
+          select: {
+            id: true,
+            rollNumber: true,
+            firstName: true,
+            lastName: true,
+            isActive: true,
+            parents: {
+              select: {
+                parent: {
+                  select: {
+                    id: true,
+                    phone: true,
+                    user: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            attendances: { select: { status: true } },
+          },
         }),
         prisma.teacher.findMany({
           where: { isActive: true },
-          include: { user: true },
-          orderBy: { user: { name: 'asc' } }
+          select: {
+            id: true,
+            userId: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+          orderBy: { user: { name: 'asc' } },
         }),
         prisma.attendance.findMany({
           where: {
             OR: [
               { classId },
-              { student: { classId } }
+              { student: { classId } },
             ],
-            date: { gte: today, lt: tomorrow }
+            date: { gte: today, lt: tomorrow },
           },
-          select: { status: true }
+          select: { status: true },
         }),
         prisma.mark.findMany({
           where: { student: { classId } },
-          select: { studentId: true, examId: true, score: true, maxScore: true }
-        })
+          select: { studentId: true, examId: true, score: true, maxScore: true },
+        }),
       ]);
 
       sectionCount = sectionCountRes;
-      studentsData = studentsDataRes;
+      totalClassStudents = totalClassStudentsRes;
+      totalPages = Math.max(1, Math.ceil(totalClassStudents / pageSize));
+      studentsData = studentsDataRes as any;
       teachersData = teachersDataRes;
       const todaysAttendances = todaysAttendancesRes;
       const marks = marksRes;
 
-      attendanceStats.total = studentsData.length;
+      attendanceStats.total = totalClassStudents;
       todaysAttendances.forEach(att => {
         if (att.status === 'PRESENT' || att.status === 'LATE') attendanceStats.present++;
         if (att.status === 'ABSENT' || att.status === 'LEAVE') attendanceStats.absent++;
@@ -221,7 +300,7 @@ export default async function AdminDashboardPage({
       <div style={{ marginTop: "2rem", display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'center', marginBottom: "1rem" }}>
         <h2 style={{ fontSize: "1.25rem", fontWeight: 600, margin: 0 }}>Class Overview</h2>
         {selectedClassData && (
-          <EditClassModal classData={selectedClassData} teachers={teachersData} />
+          <EditClassModal classData={selectedClassData as any} teachers={teachersData as any} />
         )}
       </div>
       <div style={{ marginBottom: "2rem" }}>
@@ -242,7 +321,7 @@ export default async function AdminDashboardPage({
             </div>
             <div>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Total Strength</p>
-              <p style={{ fontSize: '1.5rem', fontWeight: 600 }}>{studentsData.length}</p>
+              <p style={{ fontSize: '1.5rem', fontWeight: 600 }}>{totalClassStudents}</p>
             </div>
             <div>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Class Parents</p>
@@ -390,6 +469,93 @@ export default async function AdminDashboardPage({
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingTop: "1rem",
+                  marginTop: "1rem",
+                  borderTop: "1px solid var(--border-color)",
+                  flexWrap: "wrap",
+                  gap: "0.75rem",
+                }}
+              >
+                <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                  Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalClassStudents)} of {totalClassStudents} students
+                </span>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  {currentPage > 1 ? (
+                    <Link
+                      href={`/dashboard/admin?classId=${selectedClassData.id}&page=${currentPage - 1}`}
+                      style={{
+                        padding: "0.4rem 0.8rem",
+                        borderRadius: "6px",
+                        background: "var(--card-bg)",
+                        border: "1px solid var(--border-color)",
+                        color: "var(--text-primary)",
+                        textDecoration: "none",
+                        fontSize: "0.82rem",
+                      }}
+                    >
+                      Previous
+                    </Link>
+                  ) : (
+                    <span
+                      style={{
+                        padding: "0.4rem 0.8rem",
+                        borderRadius: "6px",
+                        background: "rgba(255, 255, 255, 0.03)",
+                        border: "1px solid var(--border-color)",
+                        color: "var(--text-secondary)",
+                        opacity: 0.5,
+                        fontSize: "0.82rem",
+                        cursor: "not-allowed",
+                      }}
+                    >
+                      Previous
+                    </span>
+                  )}
+                  <span style={{ fontSize: "0.82rem", color: "var(--text-secondary)", padding: "0 0.5rem" }}>
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  {currentPage < totalPages ? (
+                    <Link
+                      href={`/dashboard/admin?classId=${selectedClassData.id}&page=${currentPage + 1}`}
+                      style={{
+                        padding: "0.4rem 0.8rem",
+                        borderRadius: "6px",
+                        background: "var(--card-bg)",
+                        border: "1px solid var(--border-color)",
+                        color: "var(--text-primary)",
+                        textDecoration: "none",
+                        fontSize: "0.82rem",
+                      }}
+                    >
+                      Next
+                    </Link>
+                  ) : (
+                    <span
+                      style={{
+                        padding: "0.4rem 0.8rem",
+                        borderRadius: "6px",
+                        background: "rgba(255, 255, 255, 0.03)",
+                        border: "1px solid var(--border-color)",
+                        color: "var(--text-secondary)",
+                        opacity: 0.5,
+                        fontSize: "0.82rem",
+                        cursor: "not-allowed",
+                      }}
+                    >
+                      Next
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

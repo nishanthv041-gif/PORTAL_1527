@@ -3,9 +3,6 @@
 import { prisma } from "@/backend/db/prisma";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
-import * as XLSX from "xlsx";
-import mammoth from "mammoth";
-import { extractText, getDocumentProxy } from "unpdf";
 import type { ScannedSlot, ScanResult } from "./scanTimetableTypes";
 import type { PeriodSlotData, PeriodType } from "@/backend/lib/timetable/timetableTypes";
 import { extractTimetableWithGemini, type GeminiTimetableOutput } from "./extractTimetableGemini";
@@ -313,6 +310,7 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
       // ────────────────────────────────────────────────────────────────
       else if (extension === "xlsx" || extension === "xls" || extension === "csv") {
         fileType = "Spreadsheet";
+        const XLSX = await import("xlsx");
         const workbook = XLSX.read(buffer, { type: "buffer" });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
@@ -333,6 +331,8 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
       // ────────────────────────────────────────────────────────────────
       else if (extension === "docx" || extension === "doc") {
         fileType = "Word Document";
+        const mammothModule = await import("mammoth");
+        const mammoth = mammothModule.default || mammothModule;
         const htmlResult = await mammoth.convertToHtml({ buffer });
         const html = htmlResult.value;
 
@@ -371,6 +371,7 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
         fileType = "PDF Document";
         try {
           const uint8 = new Uint8Array(buffer);
+          const { extractText, getDocumentProxy } = await import("unpdf");
           const pdf = await getDocumentProxy(uint8);
           const { text } = await extractText(pdf, { mergePages: true });
           parseRawTextToSlots({

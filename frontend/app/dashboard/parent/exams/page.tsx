@@ -1,10 +1,21 @@
+import dynamic from "next/dynamic";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import { BookOpen, Calendar as CalendarIcon } from "lucide-react";
 import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
 import { getParentAndSelectedChild } from "../parentChildHelper";
 import ParentChildBanner from "../ParentChildBanner";
-import ExamClassPerformancePieChart from "../ExamClassPerformancePieChart";
+
+const ExamClassPerformancePieChart = dynamic(
+  () => import("../ExamClassPerformancePieChart"),
+  {
+    loading: () => (
+      <div style={{ height: "260px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>
+        Loading performance chart...
+      </div>
+    ),
+  }
+);
 
 export default async function ParentExamsPage({
   searchParams

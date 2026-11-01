@@ -16,8 +16,16 @@ export default async function AdminNotificationsPage() {
     where: {
       userId: adminUser?.id
     },
+    take: 20,
     include: {
-      user: true
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      },
     },
     orderBy: { createdAt: 'desc' }
   }) : [];
@@ -32,7 +40,7 @@ export default async function AdminNotificationsPage() {
       <h1 className={styles.title} style={{ margin: 0, marginBottom: '1.5rem' }}>Notifications</h1>
 
       <NotificationsClient 
-        notifications={notifications} 
+        notifications={notifications as any} 
         adminUserId={adminUser?.id ?? ''} 
         initialEnabled={isEnabled}
         classes={classes}

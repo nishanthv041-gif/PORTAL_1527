@@ -7,7 +7,6 @@ import {
   FileCheck, AlertTriangle, X, Check, RefreshCw, Trash2, Plus,
   Clock, MapPin, Loader2, AlertCircle, Zap
 } from "lucide-react";
-import * as XLSX from "xlsx";
 import type { ScannedSlot } from "@/backend/api/actions/dashboard/admin/timetable/scanTimetableTypes";
 import { bulkCreateTimetableSlotsAction } from "@/backend/api/actions/dashboard/admin/timetable/actions";
 
@@ -67,6 +66,7 @@ export default function TimetableScanModal({
   const parseExcelClientSide = async (file: File): Promise<ScannedSlot[] | null> => {
     try {
       const buffer = await file.arrayBuffer();
+      const XLSX = await import("xlsx");
       const wb = XLSX.read(buffer, { type: "array" });
       const wsName = wb.SheetNames[0];
       const ws = wb.Sheets[wsName];

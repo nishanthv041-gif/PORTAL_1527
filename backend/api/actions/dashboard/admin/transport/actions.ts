@@ -339,19 +339,25 @@ export async function getBusDetailAction(busId: string) {
         },
         statusLogs: {
           orderBy: { createdAt: "desc" },
-          take: 50,
+          take: 20,
           include: {
             reportedByStaff: {
-              include: { user: { select: { name: true } } },
+              select: {
+                id: true,
+                user: { select: { id: true, name: true } },
+              },
             },
           },
         },
         messages: {
           orderBy: { createdAt: "desc" },
-          take: 50,
+          take: 20,
           include: {
             senderStaff: {
-              include: { user: { select: { name: true } } },
+              select: {
+                id: true,
+                user: { select: { id: true, name: true } },
+              },
             },
             targetStudent: {
               select: {

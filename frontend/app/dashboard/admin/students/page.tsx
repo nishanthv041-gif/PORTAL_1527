@@ -12,21 +12,52 @@ export default async function AdminStudentsPage() {
 
   const students = await prisma.student.findMany({
     orderBy: { firstName: 'asc' },
-    include: {
-      class: true,
-      parents: {
-        include: {
-          parent: {
-            include: {
-              user: true
-            }
-          }
-        }
+    select: {
+      id: true,
+      rollNumber: true,
+      admissionNo: true,
+      firstName: true,
+      lastName: true,
+      dateOfBirth: true,
+      gender: true,
+      bloodGroup: true,
+      address: true,
+      photo: true,
+      isActive: true,
+      batch: true,
+      residenceType: true,
+      classId: true,
+      class: {
+        select: {
+          id: true,
+          name: true,
+          section: true,
+        },
       },
-      attendances: {
-        select: { status: true }
-      }
-    }
+      parents: {
+        select: {
+          parent: {
+            select: {
+              id: true,
+              userId: true,
+              phone: true,
+              alternatePhone: true,
+              occupation: true,
+              isActive: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  googleEmail: true,
+                  status: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   });
 
   const classes = await prisma.class.findMany({

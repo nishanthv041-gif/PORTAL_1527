@@ -49,9 +49,13 @@ import type {
   TimetableSlotEntry,
   PeriodType
 } from "@/backend/lib/timetable/timetableTypes";
-import TimetableScanModal from "./TimetableScanModal";
+import dynamic from "next/dynamic";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { Modal } from "@/frontend/components/ui";
+
+const TimetableScanModal = dynamic(() => import("./TimetableScanModal"), {
+  ssr: false,
+});
 
 const DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 const SHORT_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];

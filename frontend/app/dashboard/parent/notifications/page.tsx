@@ -19,6 +19,16 @@ export default async function ParentNotificationsPage() {
 
   const notifications = isEnabled ? await prisma.notification.findMany({
     where: { userId: session.user.id },
+    take: 20,
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      type: true,
+      category: true,
+      isRead: true,
+      createdAt: true,
+    },
     orderBy: { createdAt: 'desc' }
   }) : [];
 

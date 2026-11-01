@@ -7,12 +7,17 @@ import {
   Calendar, CheckCircle2, XCircle, MoreVertical, Edit2, ShieldAlert,
   ArrowUpDown, ExternalLink, Download, Eye
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { toggleTeacherStatusAction } from "@/backend/api/actions/dashboard/admin/teachers/teacherManagementActions";
-import TeacherEditDrawer, { TeacherData } from "./TeacherEditDrawer";
+import type { TeacherData } from "./TeacherEditDrawer";
 import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 import { MultiSelect, SingleSelect } from "@/frontend/components/ui/form";
+
+const TeacherEditDrawer = dynamic(() => import("./TeacherEditDrawer"), {
+  ssr: false,
+});
 
 interface ClassItem {
   id: string;
