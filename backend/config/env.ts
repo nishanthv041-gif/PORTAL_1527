@@ -14,6 +14,6 @@ export const env = {
     if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
     return requireEnv('NEXTAUTH_URL'); 
   },
-  get GOOGLE_CLIENT_ID() { return requireEnv('GOOGLE_CLIENT_ID'); },
-  get GOOGLE_CLIENT_SECRET() { return requireEnv('GOOGLE_CLIENT_SECRET'); },
+  get GOOGLE_CLIENT_ID() { return process.env.GOOGLE_CLIENT_ID || ""; },
+  get GOOGLE_CLIENT_SECRET() { return process.env.GOOGLE_CLIENT_SECRET || ""; },
 };

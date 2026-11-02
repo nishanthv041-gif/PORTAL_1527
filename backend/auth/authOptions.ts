@@ -15,9 +15,7 @@ import {
 } from "@/backend/lib/session-config";
 
 export function getAuthOptions(): NextAuthOptions {
-  return {
-  providers: [
-    googleProviderConfig,
+  const providers: any[] = [
     CredentialsProvider({
       name: "Credentials",
       credentials: {
@@ -110,8 +108,15 @@ export function getAuthOptions(): NextAuthOptions {
         return null;
       },
     }),
-  ],
-  callbacks: {
+  ];
+
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    providers.unshift(googleProviderConfig);
+  }
+
+  return {
+    providers,
+    callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "google") {
         return await verifyGoogleSignIn(user, account);
