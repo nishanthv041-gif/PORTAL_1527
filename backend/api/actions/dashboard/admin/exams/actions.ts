@@ -55,8 +55,8 @@ export async function acceptExamRequest(requestId: string) {
 
     if (!request) return { error: "Request not found." };
 
-    const examName = `${request.subject.name} Exam`;
-    const targetDate = normalizeDateToUTC(request.date);
+    const examName = request.title || (request.subject?.name ? `${request.subject.name} Exam` : "Examination");
+    const targetDate = normalizeDateToUTC(request.date || new Date());
     const formattedDate = formatSchoolDate(targetDate);
     const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
     const dayOfWeek = days[targetDate.getUTCDay()];
@@ -98,12 +98,13 @@ export async function acceptExamRequest(requestId: string) {
       });
 
       // 4. Send notification to teacher
+      const subjectName = request.subject?.name || request.title || "Examination";
       if (request.teacher?.user?.id) {
         await tx.notification.create({
           data: {
             userId: request.teacher.user.id,
             title: "Exam Request Approved",
-            content: `Your exam request for ${request.subject.name} (${request.class.name}-${request.class.section}) on ${formattedDate} has been approved and added to the schedule.`,
+            content: `Your exam request for ${subjectName} (${request.class.name}-${request.class.section}) on ${formattedDate} has been approved and added to the schedule.`,
             type: "EXAM",
             link: "/dashboard/teacher/exams",
             isRead: false
@@ -119,7 +120,7 @@ export async function acceptExamRequest(requestId: string) {
               data: {
                 userId: ps.parent.userId,
                 title: "Exam Scheduled",
-                content: `${request.subject.name} Exam for ${request.class.name}-${request.class.section} is scheduled on ${formattedDate} (${request.startTime || "09:00"} - ${request.endTime || "12:00"}).`,
+                content: `${subjectName} Exam for ${request.class.name}-${request.class.section} is scheduled on ${formattedDate} (${request.startTime || "09:00"} - ${request.endTime || "12:00"}).`,
                 type: "EXAM",
                 link: "/dashboard/parent/exams",
                 isRead: false
@@ -166,11 +167,13 @@ export async function declineExamRequest(requestId: string, reason: string) {
     });
 
     if (request?.teacher?.user?.id) {
+      const subjectName = request.subject?.name || request.title || "Examination";
+      const dateStr = request.date ? new Date(request.date).toLocaleDateString() : "Scheduled date";
       await prisma.notification.create({
         data: {
           userId: request.teacher.user.id,
           title: "Exam Request Declined",
-          content: `Your exam request for ${request.subject.name} on ${new Date(request.date).toLocaleDateString()} was declined. Reason: ${reason || "Not specified"}`,
+          content: `Your exam request for ${subjectName} on ${dateStr} was declined. Reason: ${reason || "Not specified"}`,
           type: "EXAM",
           link: "/dashboard/teacher/exams",
           isRead: false

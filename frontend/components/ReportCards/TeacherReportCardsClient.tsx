@@ -496,6 +496,16 @@ export default function TeacherReportCardsClient({
               <span>Sent History</span>
               <span className={styles.tabBadge}>{history.length}</span>
             </button>
+
+            <button
+              type="button"
+              className={styles.tabBtn}
+              onClick={() => router.push("/dashboard/teacher/exams/requests")}
+              title="Propose new exams for your classes"
+            >
+              <Send size={16} />
+              <span>Exam Requests</span>
+            </button>
           </div>
         </div>
       </div>

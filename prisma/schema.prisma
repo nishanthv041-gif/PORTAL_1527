@@ -102,6 +102,7 @@ model Student {
   busAssignments BusStudent[]
   busMessages    BusMessage[]
   busMessageTargets BusMessageTarget[]
+  markAuditLogs MarkAuditLog[]
 
   @@index([classId])
   @@index([classId, isActive])
@@ -132,6 +133,10 @@ model Teacher {
   meetings              Meeting[]
   classTeacherOf        Class?              @relation("ClassTeacher")
   examRequests          ExamRequest[]
+  staffExamRequests     ExamRequest[]       @relation("StaffExamRequests")
+  examSubjects          ExamSubject[]
+  enteredMarks          Mark[]              @relation("EnteredByStaff")
+  requestSubjects       ExamRequestSubject[]
   attendances           TeacherAttendance[]
   timetableSlots        Timetable[]
   absences              TeacherAbsence[]
@@ -226,6 +231,8 @@ model Subject {
   marks        Mark[]
   timetable    Timetable[]
   examRequests ExamRequest[]
+  examSubjects ExamSubject[]
+  examRequestSubjects ExamRequestSubject[]
   assignments  Assignment[]
 
   @@index([classId])
@@ -275,42 +282,114 @@ model TeacherAttendance {
 }
 
 model Exam {
-  id          String   @id @default(cuid())
-  name        String
-  date        DateTime
-  isPublished Boolean  @default(false)
+  id             String         @id @default(cuid())
+  name           String
+  date           DateTime       @default(now())
+  isPublished    Boolean        @default(false)
+  requestId      String?        @unique
+  request        ExamRequest?   @relation(fields: [requestId], references: [id])
+  classId        String
+  class          Class          @relation(fields: [classId], references: [id])
+  sectionId      String?
+  academicYearId String?
+  academicYear   AcademicBatch? @relation(fields: [academicYearId], references: [id])
+  status         String         @default("MARKS_IN_PROGRESS") // MARKS_IN_PROGRESS | SUBMITTED | VERIFIED | PUBLISHED
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @default(now()) @updatedAt
 
-  // Relationships
-  classId     String
-  class       Class        @relation(fields: [classId], references: [id])
-  marks       Mark[]
-  reportCards ReportCard[]
+  marks          Mark[]
+  reportCards    ReportCard[]
+  examSubjects   ExamSubject[]
 
   @@index([classId])
   @@index([date])
+  @@index([status])
   @@index([isPublished])
+  @@index([academicYearId])
+}
+
+model ExamSubject {
+  id           String         @id @default(cuid())
+  examId       String
+  exam         Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
+  subjectId    String
+  subject      Subject        @relation(fields: [subjectId], references: [id])
+  teacherId    String?
+  teacher      Teacher?       @relation(fields: [teacherId], references: [id])
+  maxMarks     Int            @default(100)
+  passMark     Int            @default(35)
+  examDate     DateTime?
+  status       String         @default("PENDING") // PENDING | DRAFT | SUBMITTED | RETURNED | VERIFIED
+  submittedAt  DateTime?
+  verifiedAt   DateTime?
+  returnRemark String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @default(now()) @updatedAt
+
+  marks        Mark[]
+  auditLogs    MarkAuditLog[]
+
+  @@unique([examId, subjectId])
+  @@index([examId])
+  @@index([subjectId])
+  @@index([teacherId])
+  @@index([status])
 }
 
 model Mark {
-  id       String  @id @default(cuid())
-  score    Float
-  maxScore Float
-  remarks  String?
+  id               String        @id @default(cuid())
+  score            Float         @default(0)
+  maxScore         Float         @default(100)
+  remarks          String?
+  marksObtained    Float?        // Nullable per requirement
+  isAbsent         Boolean       @default(false)
+  remark           String?       // Per requirement
 
   // Relationships
-  studentId String
-  student   Student @relation(fields: [studentId], references: [id])
-  examId    String
-  exam      Exam    @relation(fields: [examId], references: [id])
-  subjectId String
-  subject   Subject @relation(fields: [subjectId], references: [id])
+  examSubjectId    String?
+  examSubject      ExamSubject?  @relation(fields: [examSubjectId], references: [id], onDelete: Cascade)
+  studentId        String
+  student          Student       @relation(fields: [studentId], references: [id])
+  examId           String
+  exam             Exam          @relation(fields: [examId], references: [id])
+  subjectId        String
+  subject          Subject       @relation(fields: [subjectId], references: [id])
+  enteredByStaffId String?
+  enteredByStaff   Teacher?      @relation("EnteredByStaff", fields: [enteredByStaffId], references: [id])
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @default(now()) @updatedAt
 
-  history MarkHistory[]
+  history          MarkHistory[]
+  auditLogs        MarkAuditLog[]
 
   @@unique([studentId, examId, subjectId])
+  @@index([examSubjectId])
   @@index([studentId])
   @@index([examId])
   @@index([subjectId])
+  @@index([enteredByStaffId])
+  @@index([isAbsent])
+}
+
+model MarkAuditLog {
+  id            String       @id @default(cuid())
+  markId        String?
+  mark          Mark?        @relation(fields: [markId], references: [id], onDelete: Cascade)
+  examSubjectId String?
+  examSubject   ExamSubject? @relation(fields: [examSubjectId], references: [id], onDelete: Cascade)
+  studentId     String?
+  student       Student?     @relation(fields: [studentId], references: [id])
+  oldValue      Float?
+  newValue      Float?
+  changedBy     String       // User ID or Staff ID
+  reason        String
+  createdAt     DateTime     @default(now())
+
+  @@index([markId])
+  @@index([examSubjectId])
+  @@index([studentId])
+  @@index([changedBy])
+  @@index([createdAt])
 }
 
 model MarkHistory {
@@ -791,24 +870,59 @@ model Rating {
 }
 
 model ExamRequest {
-  id            String   @id @default(cuid())
-  classId       String
-  class         Class    @relation(fields: [classId], references: [id])
-  subjectId     String
-  subject       Subject  @relation(fields: [subjectId], references: [id])
-  teacherId     String
-  teacher       Teacher  @relation(fields: [teacherId], references: [id])
-  date          DateTime
-  startTime     String
-  endTime       String
-  maxMarks      Int      @default(100)
-  status        String   @default("PENDING") // PENDING, APPROVED, DECLINED
-  declineReason String?
-  createdAt     DateTime @default(now())
+  id                 String               @id @default(cuid())
+  title              String               @default("Examination")
+  examType           String               @default("UNIT_TEST") // UNIT_TEST, QUARTERLY, HALF_YEARLY, ANNUAL, MODEL, OTHER
+  classId            String
+  class              Class                @relation(fields: [classId], references: [id])
+  sectionId          String?
+  subjectId          String?              // Kept for backward compatibility
+  subject            Subject?             @relation(fields: [subjectId], references: [id])
+  teacherId          String?              // Kept for backward compatibility
+  teacher            Teacher?             @relation(fields: [teacherId], references: [id])
+  requestedByStaffId String?
+  requestedByStaff   Teacher?             @relation("StaffExamRequests", fields: [requestedByStaffId], references: [id])
+  date               DateTime             @default(now())
+  startTime          String?
+  endTime            String?
+  maxMarks           Int                  @default(100)
+  passMark           Int                  @default(35)
+  examDates          String?
+  remarks            String?
+  status             String               @default("PENDING_ADMIN") // PENDING_ADMIN, APPROVED, REJECTED, CANCELLED
+  adminRemark        String?
+  declineReason      String?              // Kept for backward compatibility
+  decidedBy          String?              // User ID of admin
+  decidedAt          DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @default(now()) @updatedAt
+
+  exam               Exam?
+  requestSubjects    ExamRequestSubject[]
 
   @@index([classId])
   @@index([teacherId])
+  @@index([requestedByStaffId])
   @@index([status])
+  @@index([createdAt])
+}
+
+model ExamRequestSubject {
+  id        String      @id @default(cuid())
+  requestId String
+  request   ExamRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject     @relation(fields: [subjectId], references: [id])
+  teacherId String?
+  teacher   Teacher?    @relation(fields: [teacherId], references: [id])
+  maxMarks  Int         @default(100)
+  passMark  Int         @default(35)
+  examDate  DateTime?
+
+  @@unique([requestId, subjectId])
+  @@index([requestId])
+  @@index([subjectId])
+  @@index([teacherId])
 }
 
 model LoginAttempt {
@@ -856,6 +970,7 @@ model AcademicBatch {
   updatedAt       DateTime         @updatedAt
 
   classes         Class[]
+  exams           Exam[]
   promotionsFrom  PromotionAudit[] @relation("FromBatch")
   promotionsTo    PromotionAudit[] @relation("ToBatch")
 

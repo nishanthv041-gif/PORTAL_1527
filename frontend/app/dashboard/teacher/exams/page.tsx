@@ -113,18 +113,34 @@ export default async function TeacherExamsPage() {
 
           {/* 2. My Submitted Exam Requests */}
           <div className={styles.card}>
-            <h3 className={styles.cardHeader}>
-              <FileText size={20} className="text-primary" />
-              <span>My Exam Requests ({examRequests.length})</span>
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+              <h3 className={styles.cardHeader} style={{ margin: 0 }}>
+                <FileText size={20} className="text-primary" />
+                <span>My Exam Requests ({examRequests.length})</span>
+              </h3>
+              <Link
+                href="/dashboard/teacher/exams/requests"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: 'var(--primary, #3b82f6)',
+                  textDecoration: 'none',
+                }}
+              >
+                Propose New Exam →
+              </Link>
+            </div>
             
             <div className={styles.examList}>
               {examRequests.map((req) => (
                 <div key={req.id} className={styles.requestItem}>
                   <div className={styles.requestLeft}>
-                    <h4 className={styles.requestTitle}>{req.subject.name} Exam</h4>
+                    <h4 className={styles.requestTitle}>{req.subject?.name ? `${req.subject.name} Exam` : (req.title || "Examination")}</h4>
                     <p className={styles.requestSub}>
-                      Class {req.class.name} - {req.class.section} • {new Date(req.date).toLocaleDateString()} ({req.startTime} - {req.endTime})
+                      Class {req.class.name} - {req.class.section} • {new Date(req.date || new Date()).toLocaleDateString()} ({req.startTime || "09:00"} - {req.endTime || "12:00"})
                     </p>
                   </div>
                   <div className={styles.requestRight}>

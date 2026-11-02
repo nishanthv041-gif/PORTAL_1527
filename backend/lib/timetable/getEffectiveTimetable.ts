@@ -186,7 +186,8 @@ export async function getEffectiveTimetable(
     examByClassMap.set(ex.classId, ex.name);
   }
   for (const req of examRequestsOnDate) {
-    examByClassMap.set(req.classId, `${req.subject.name} Exam`);
+    const examLabel = req.subject?.name ? `${req.subject.name} Exam` : (req.title || "Exam");
+    examByClassMap.set(req.classId, examLabel);
   }
 
   // 6. Index substitutions by timetableEntryId

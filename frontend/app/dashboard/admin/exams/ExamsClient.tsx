@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Book, Eye, EyeOff, CheckCircle2, Circle, AlertTriangle } from "lucide-react";
 import { toggleExamPublishAction } from "@/backend/api/actions/dashboard/admin/exams/actions";
 import { Exam, Class, Student, Subject, Mark, ExamRequest, Teacher, User } from "@prisma/client";
@@ -17,8 +18,8 @@ type ExamWithRelations = Exam & {
 
 type ExamRequestWithRelations = ExamRequest & {
   class: Class;
-  subject: Subject;
-  teacher: Teacher & { user: User };
+  subject?: Subject | null;
+  teacher?: (Teacher & { user: User }) | null;
 };
 
 export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRelations[], examRequests: ExamRequestWithRelations[] }) {
@@ -34,6 +35,34 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
 
   return (
     <div className={styles.container}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", background: "var(--card-bg, #1e293b)", padding: "1rem 1.25rem", borderRadius: "12px", border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))" }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "var(--foreground, #fff)" }}>
+            Examinations & Results Hub
+          </h2>
+          <p style={{ margin: "0.25rem 0 0", fontSize: "0.825rem", color: "var(--text-secondary, #94a3b8)" }}>
+            Manage school examinations, publish report card marks, and review teacher exam requests.
+          </p>
+        </div>
+        <Link
+          href="/dashboard/admin/exams/requests"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            background: "var(--primary, #3b82f6)",
+            color: "#ffffff",
+            padding: "0.55rem 1rem",
+            borderRadius: "8px",
+            fontSize: "0.875rem",
+            fontWeight: 600,
+            textDecoration: "none",
+          }}
+        >
+          <AlertTriangle size={16} /> Review Exam Requests ({examRequests?.length || 0})
+        </Link>
+      </div>
+
       {examRequests && examRequests.length > 0 && (
         <div className={styles.requestsCard}>
           <h2 className={styles.requestsTitle}>
@@ -42,19 +71,19 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
           <div className={styles.requestsGrid}>
             {examRequests.map((req) => (
               <div key={req.id} className={styles.requestItem}>
-                <h4 className={styles.requestItemTitle}>{req.subject.name} Exam</h4>
+                <h4 className={styles.requestItemTitle}>{req.subject?.name ? `${req.subject.name} Exam` : (req.title || "Examination")}</h4>
                 <p className={styles.requestItemSub}>{req.class.name} - {req.class.section}</p>
-                <p className={styles.requestItemTeacher}>Requested by: {req.teacher.user.name}</p>
+                <p className={styles.requestItemTeacher}>Requested by: {req.teacher?.user?.name || "Teacher"}</p>
                 <div className={styles.requestMeta}>
-                  <span className={styles.requestMetaBadge}>Date: {new Date(req.date).toLocaleDateString()}</span>
-                  <span className={styles.requestMetaBadge}>Time: {req.startTime} - {req.endTime}</span>
+                  <span className={styles.requestMetaBadge}>Date: {new Date(req.date || new Date()).toLocaleDateString()}</span>
+                  <span className={styles.requestMetaBadge}>Time: {req.startTime || "09:00"} - {req.endTime || "12:00"}</span>
                 </div>
                 <div className={styles.requestActions}>
                   <button 
                     onClick={async () => {
                       const ok = await confirm({
                         title: "Approve Exam Request?",
-                        message: `Approve the exam request for ${req.subject.name} (Class: ${req.class.name}) requested by ${req.teacher.user.name}?`,
+                        message: `Approve the exam request for ${req.subject?.name || req.title || "Exam"} (Class: ${req.class.name}) requested by ${req.teacher?.user?.name || "Teacher"}?`,
                         confirmText: "Approve",
                         cancelText: "Cancel",
                         variant: "primary"
