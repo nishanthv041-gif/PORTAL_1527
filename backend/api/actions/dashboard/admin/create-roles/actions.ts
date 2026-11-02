@@ -2,6 +2,9 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { getServerSession } from "next-auth/next";
+import { getAuthOptions } from "@/backend/auth/authOptions";
+import { isSuperAdmin } from "@/backend/lib/auth/superAdmin";
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -309,6 +312,13 @@ export async function createParentStudentAction(formData: FormData) {
 
 export async function createAdminAction(formData: FormData) {
   try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session || !isSuperAdmin(session.user?.email)) {
+      return {
+        error: "Unauthorized: Only Super Admins (jpranav116@gmail.com, nishanthv041@gmail.com) can create new Admin accounts."
+      };
+    }
+
     const name = formData.get("name") as string;
     const email = formData.get("email") as string;
     

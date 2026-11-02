@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { revokeAllUserSessions, getUserActiveSessions } from "@/backend/lib/session-manager";
+import { isSuperAdmin } from "@/backend/lib/auth/superAdmin";
 
 export async function deactivateUser(id: string) {
   await prisma.user.update({
@@ -83,7 +84,19 @@ export async function deleteUser(id: string) {
     });
 
     if (!user) return { error: "User not found." };
-    if (user.role === 'ADMIN') return { error: "Cannot delete ADMIN users." };
+    
+    // Super Admins are permanent and cannot be deleted
+    if (isSuperAdmin(user.email)) {
+      return { error: "Super Admin accounts (jpranav116@gmail.com, nishanthv041@gmail.com) are permanent and cannot be deleted." };
+    }
+
+    // Only Super Admins can delete or remove other Admin accounts
+    if (user.role === 'ADMIN') {
+      const session = await getServerSession(getAuthOptions());
+      if (!session || !isSuperAdmin(session.user?.email)) {
+        return { error: "Unauthorized: Only Super Admins (jpranav116@gmail.com, nishanthv041@gmail.com) can remove Admin accounts." };
+      }
+    }
 
     // Define all dependency cleanup operations
     const runCleanup = async (db: any) => {
@@ -160,6 +173,9 @@ export async function deleteUser(id: string) {
       await Promise.all([
         db.message.deleteMany({ where: { OR: [{ senderId: id }, { receiverId: id }] } }),
         db.notification.deleteMany({ where: { userId: id } }),
+        db.userSession.deleteMany({ where: { userId: id } }),
+        db.complaintMessage.deleteMany({ where: { userId: id } }).catch(() => {}),
+        db.homeworkComment.deleteMany({ where: { userId: id } }).catch(() => {}),
         db.rating.deleteMany({ where: { userId: id } }),
         db.auditLog.deleteMany({ where: { OR: [{ userId: id }, { targetId: id }] } }),
         db.announcement.deleteMany({ where: { authorId: id } }),

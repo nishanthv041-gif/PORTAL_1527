@@ -15,9 +15,6 @@ const PROTECTED_STUDENT_ROLLS = [
 
 const PROTECTED_USER_EMAILS = [
   "jpranav116@gmail.com",
-  "nishanthr.ad25@bitsathy.ac.in",
-  "vivinkg.ad25@bitsathy.ac.in",
-  "gowsikagowsika81@gmail.com",
   "nishanthv041@gmail.com",
   "mounithavenkatesan@gmail.com",
   "deepikaviswanathan2007@gmail.com",

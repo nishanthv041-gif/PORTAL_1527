@@ -25,7 +25,13 @@ type UserWithRelations = User & {
   sessions?: SessionSummary[];
 };
 
-export default function UserListClient({ users }: { users: (UserWithRelations & { expiresAt: Date | null })[] }) {
+export default function UserListClient({
+  users,
+  isCurrentUserSuperAdmin = false,
+}: {
+  users: (UserWithRelations & { expiresAt: Date | null })[];
+  isCurrentUserSuperAdmin?: boolean;
+}) {
   const [userList, setUserList] = useState(users);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -195,20 +201,44 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
                   <div style={{ opacity: 0.6, fontSize: '0.75rem' }}>{user.teacher?.phone || user.parent?.phone || "No phone"}</div>
                 </td>
                 <td style={{ padding: "1rem" }}>
-                  <span style={{ 
-                    fontSize: '0.75rem', 
-                    padding: '4px 8px', 
-                    borderRadius: '12px', 
-                    backgroundColor: user.role === 'ADMIN' ? 'var(--danger-bg)' : user.role === 'TEACHER' ? 'var(--primary-bg)' : 'var(--success-bg)', 
-                    color: user.role === 'ADMIN' ? "var(--danger)" : user.role === 'TEACHER' ? "var(--primary)" : "var(--success)",
-                    fontWeight: 500,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}>
-                    {user.role === 'ADMIN' && <Shield size={12} />}
-                    {user.role}
-                  </span>
+                  {(() => {
+                    const isSuper = user.role === 'ADMIN' && (user.email === 'jpranav116@gmail.com' || user.email === 'nishanthv041@gmail.com');
+                    if (isSuper) {
+                      return (
+                        <span style={{ 
+                          fontSize: '0.75rem', 
+                          padding: '4px 8px', 
+                          borderRadius: '12px', 
+                          backgroundColor: 'rgba(234, 179, 8, 0.15)', 
+                          color: '#eab308', 
+                          fontWeight: 700,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          border: '1px solid rgba(234, 179, 8, 0.35)'
+                        }}>
+                          <Shield size={12} />
+                          SUPER ADMIN
+                        </span>
+                      );
+                    }
+                    return (
+                      <span style={{ 
+                        fontSize: '0.75rem', 
+                        padding: '4px 8px', 
+                        borderRadius: '12px', 
+                        backgroundColor: user.role === 'ADMIN' ? 'var(--danger-bg)' : user.role === 'TEACHER' ? 'var(--primary-bg)' : 'var(--success-bg)', 
+                        color: user.role === 'ADMIN' ? "var(--danger)" : user.role === 'TEACHER' ? "var(--primary)" : "var(--success)",
+                        fontWeight: 500,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        {user.role === 'ADMIN' && <Shield size={12} />}
+                        {user.role}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td style={{ padding: "1rem" }}>
                   {user.status === 'ACTIVE' ? (
@@ -346,36 +376,46 @@ export default function UserListClient({ users }: { users: (UserWithRelations & 
                           <Shield size={16} /> Delete in 84 hrs
                         </button>
                       )}
-                      {user.role !== 'ADMIN' && (
-                        <button 
-                          onClick={async () => {
-                            const ok = await confirm({
-                              title: `Delete User "${user.name}"?`,
-                              message: `WARNING: This will permanently delete user "${user.name}". This cannot be undone. All credentials and sessions will be revoked.`,
-                              confirmText: "Delete User",
-                              cancelText: "Cancel",
-                              variant: "danger"
-                            });
-                            if (!ok) return;
+                      {/* Delete Action: Super Admins can never be deleted; other admins can only be deleted by Super Admins */}
+                      {(() => {
+                        const isThisUserSuperAdmin = user.role === 'ADMIN' && (user.email === 'jpranav116@gmail.com' || user.email === 'nishanthv041@gmail.com');
+                        if (isThisUserSuperAdmin) return null;
 
-                            setOpenMenuId(null);
-                            const previousUsers = [...userList];
-                            // 0ms optimistic removal
-                            setUserList(prev => prev.filter(u => u.id !== user.id));
+                        const canDelete = user.role !== 'ADMIN' || isCurrentUserSuperAdmin;
+                        if (!canDelete) return null;
 
-                            const res = await deleteUser(user.id);
-                            if (res?.error) {
-                              alert(res.error);
-                              setUserList(previousUsers); // Rollback if error
-                            } else {
-                              router.refresh();
-                            }
-                          }}
-                          style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--danger)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
-                        >
-                          <Trash2 size={16} /> Delete
-                        </button>
-                      )}
+                        return (
+                          <button 
+                            onClick={async () => {
+                              const isTargetAdmin = user.role === 'ADMIN';
+                              const ok = await confirm({
+                                title: `Delete ${isTargetAdmin ? 'Admin' : 'User'} "${user.name}"?`,
+                                message: `WARNING: This will permanently delete ${isTargetAdmin ? 'Admin account' : 'user'} "${user.name}" (${user.email}). All access and active sessions will be revoked.`,
+                                confirmText: `Delete ${isTargetAdmin ? 'Admin' : 'User'}`,
+                                cancelText: "Cancel",
+                                variant: "danger"
+                              });
+                              if (!ok) return;
+
+                              setOpenMenuId(null);
+                              const previousUsers = [...userList];
+                              // 0ms optimistic removal
+                              setUserList(prev => prev.filter(u => u.id !== user.id));
+
+                              const res = await deleteUser(user.id);
+                              if (res?.error) {
+                                alert(res.error);
+                                setUserList(previousUsers); // Rollback if error
+                              } else {
+                                router.refresh();
+                              }
+                            }}
+                            style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--danger)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
+                          >
+                            <Trash2 size={16} /> Delete {user.role === 'ADMIN' ? 'Admin' : ''}
+                          </button>
+                        );
+                      })()}
                     </div>
                   )}
                 </td>
