@@ -500,6 +500,16 @@ export default function TeacherReportCardsClient({
             <button
               type="button"
               className={styles.tabBtn}
+              onClick={() => router.push("/dashboard/teacher/exams/tasks")}
+              title="Open your assigned subject marks tasks"
+            >
+              <BookOpen size={16} />
+              <span>Marks Tasks</span>
+            </button>
+
+            <button
+              type="button"
+              className={styles.tabBtn}
               onClick={() => router.push("/dashboard/teacher/exams/requests")}
               title="Propose new exams for your classes"
             >

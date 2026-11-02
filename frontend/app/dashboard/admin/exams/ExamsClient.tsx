@@ -174,9 +174,28 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
             
             return (
               <div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
-                  {exam.name} Status
-                </h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 600, margin: 0 }}>
+                    {exam.name} Status
+                  </h3>
+                  <Link
+                    href={`/dashboard/teacher/exams/${exam.id}/review`}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      padding: '0.45rem 0.9rem',
+                      borderRadius: '6px',
+                      background: '#3b82f6',
+                      color: '#ffffff',
+                      textDecoration: 'none',
+                      fontSize: '0.825rem',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span>Consolidated Marks Review</span>
+                  </Link>
+                </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {exam.class.subjects.map((subj) => {

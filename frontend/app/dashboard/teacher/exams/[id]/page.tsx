@@ -30,7 +30,7 @@ export default async function TeacherExamDetailsPage({ params }: { params: Promi
 
   return (
     <div className={styles.dashboard}>
-      <div style={{ marginBottom: '1rem' }}>
+      <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 className={styles.title} style={{ margin: 0 }}>
             {exam.name}
@@ -38,6 +38,26 @@ export default async function TeacherExamDetailsPage({ params }: { params: Promi
           <p style={{ margin: 0, opacity: 0.7, fontSize: '0.875rem' }}>
             Class: {exam.class.name} - {exam.class.section} | Date: {new Date(exam.date).toLocaleDateString()}
           </p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <Link
+            href={`/dashboard/teacher/exams/${exam.id}/review`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              padding: '0.55rem 1.1rem',
+              borderRadius: '8px',
+              background: '#3b82f6',
+              color: '#ffffff',
+              textDecoration: 'none',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)',
+            }}
+          >
+            <span>Consolidated Marks Review (Class Teacher)</span>
+          </Link>
         </div>
       </div>
 

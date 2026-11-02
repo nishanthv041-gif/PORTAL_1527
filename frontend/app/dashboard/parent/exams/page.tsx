@@ -45,10 +45,10 @@ export default async function ParentExamsPage({
     );
   }
 
-  // Helper to fetch latest exam with marks
+  // Helper to fetch latest exam with verified & published marks
   const fetchLastExamWithMarks = async (classId: string) => {
     const withMarks = await prisma.exam.findFirst({
-      where: { classId, marks: { some: {} } },
+      where: { classId, isPublished: true, marks: { some: {} } },
       orderBy: { date: 'desc' },
       include: {
         marks: {
@@ -59,7 +59,7 @@ export default async function ParentExamsPage({
     if (withMarks) return withMarks;
 
     return prisma.exam.findFirst({
-      where: { classId },
+      where: { classId, isPublished: true },
       orderBy: { date: 'desc' },
       include: {
         marks: {
@@ -69,10 +69,10 @@ export default async function ParentExamsPage({
     });
   };
 
-  // 1. Fetch exams for this child and the last exam concurrently
+  // 1. Fetch exams for this child and the last exam concurrently (only published results)
   const [exams, lastExamWithMarks] = await Promise.all([
     selectedChild.classId ? prisma.exam.findMany({
-      where: { classId: selectedChild.classId },
+      where: { classId: selectedChild.classId, isPublished: true },
       include: {
         marks: {
           where: { studentId: selectedChild.id },
