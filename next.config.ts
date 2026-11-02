@@ -25,6 +25,20 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  async redirects() {
+    return [
+      {
+        source: '/dashboard/teacher/homework',
+        destination: '/dashboard/teacher/assignments',
+        permanent: true,
+      },
+      {
+        source: '/dashboard/parent/homework',
+        destination: '/dashboard/parent/assignments',
+        permanent: true,
+      },
+    ];
+  },
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts', 'date-fns', 'xlsx'],
     serverActions: {

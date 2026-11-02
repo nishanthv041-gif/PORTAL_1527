@@ -168,6 +168,12 @@
   }
 }
 
+@media (max-width: 768px) {
+  .contentWrapper {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
 @media (max-width: 480px) {
   .topbarContainer {
     height: 56px;
@@ -175,5 +181,6 @@
 
   .contentWrapper {
     padding: 0.75rem 0.5rem;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }

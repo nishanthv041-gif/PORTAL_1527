@@ -9,6 +9,10 @@ import { useEffect, useState, useCallback } from "react";
 // Matches the key used in NotificationPopupModal
 const CLEARED_KEY = "srt_portal_notif_cleared_v1";
 
+// Module-level in-flight request deduplicator to prevent parallel calls
+let inFlightUnreadPromise: Promise<{ unreadCount: number; hasBusAlert: boolean } | null> | null = null;
+let lastUnreadFetchTime = 0;
+
 export default function Topbar({
   user,
 }: {
@@ -18,53 +22,79 @@ export default function Topbar({
   const [showRedDot, setShowRedDot] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [hasBusAlert, setHasBusAlert] = useState<boolean>(false);
-  const [retryDelay, setRetryDelay] = useState<number>(20000);
 
-  // Smart Function to poll unread count & bus alerts
-  const checkNotifications = useCallback(async () => {
-    // Pause polling when browser tab is hidden to save mobile battery and network
+  // Smart Function to poll unread count & bus alerts with request deduplication
+  const checkNotifications = useCallback(async (signal?: AbortSignal) => {
     if (typeof document !== "undefined" && document.hidden) return;
 
-    try {
-      const res = await fetch("/api/notifications/unread-count", {
-        cache: "no-store",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setUnreadCount(data.unreadCount || 0);
-          setHasBusAlert(!!data.hasBusAlert);
-          const isClearedForever = localStorage.getItem(CLEARED_KEY) === "true";
-          setShowRedDot(!isClearedForever && (data.unreadCount > 0 || data.hasBusAlert));
-          setRetryDelay(20000); // Reset backoff on success
-        }
-      } else {
-        // Backoff on server errors
-        setRetryDelay((prev) => Math.min(prev * 1.5, 60000));
+    const now = Date.now();
+    // Throttle to at most once every 10 seconds unless forced
+    if (now - lastUnreadFetchTime < 10000 && inFlightUnreadPromise) {
+      const data = await inFlightUnreadPromise;
+      if (data) {
+        setUnreadCount(data.unreadCount);
+        setHasBusAlert(data.hasBusAlert);
+        const isClearedForever = localStorage.getItem(CLEARED_KEY) === "true";
+        setShowRedDot(!isClearedForever && (data.unreadCount > 0 || data.hasBusAlert));
       }
-    } catch {
-      // Quietly backoff on network failures
-      setRetryDelay((prev) => Math.min(prev * 1.5, 60000));
+      return;
+    }
+
+    if (!inFlightUnreadPromise) {
+      lastUnreadFetchTime = now;
+      inFlightUnreadPromise = (async () => {
+        try {
+          const res = await fetch("/api/notifications/unread-count", {
+            cache: "no-store",
+            signal,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) {
+              return {
+                unreadCount: data.unreadCount || 0,
+                hasBusAlert: !!data.hasBusAlert,
+              };
+            }
+          }
+          return null;
+        } catch {
+          return null;
+        } finally {
+          inFlightUnreadPromise = null;
+        }
+      })();
+    }
+
+    const data = await inFlightUnreadPromise;
+    if (data) {
+      setUnreadCount(data.unreadCount);
+      setHasBusAlert(data.hasBusAlert);
+      const isClearedForever = localStorage.getItem(CLEARED_KEY) === "true";
+      setShowRedDot(!isClearedForever && (data.unreadCount > 0 || data.hasBusAlert));
     }
   }, []);
 
-  // Smart polling lifecycle: window focus, tab visibility, and interval
+  // Smart polling lifecycle: window focus, tab visibility, and 60s interval
   useEffect(() => {
-    checkNotifications();
+    const abortController = new AbortController();
+    checkNotifications(abortController.signal);
 
     const interval = setInterval(() => {
-      checkNotifications();
-    }, retryDelay);
+      checkNotifications(abortController.signal);
+    }, 60000); // 60s polling interval
 
-    // Immediate refetch when user switches back to the tab
+    // Immediate refetch when user switches back to the tab (throttled)
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        checkNotifications();
+      if (!document.hidden && Date.now() - lastUnreadFetchTime >= 15000) {
+        checkNotifications(abortController.signal);
       }
     };
 
     const handleWindowFocus = () => {
-      checkNotifications();
+      if (Date.now() - lastUnreadFetchTime >= 15000) {
+        checkNotifications(abortController.signal);
+      }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -79,12 +109,13 @@ export default function Topbar({
 
     window.addEventListener("notifications-cleared", handleCleared);
     return () => {
+      abortController.abort();
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleWindowFocus);
       window.removeEventListener("notifications-cleared", handleCleared);
     };
-  }, [checkNotifications, retryDelay]);
+  }, [checkNotifications]);
 
   return (
     <header className={styles.topbar}>

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getToken } from "next-auth/jwt";
 import { validateSession, recordSessionActivity } from "@/backend/lib/session-manager";
 import { REVOCATION_MESSAGES, SessionRevocationReason } from "@/backend/lib/session-config";
+import { ServerTimer } from "@/lib/perf/serverTimer";
 
 export const dynamic = "force-dynamic";
 
@@ -24,38 +24,62 @@ function mapReasonToParam(reason: string): string {
 }
 
 export async function GET(req: NextRequest) {
-  try {
-    const session = await getServerSession(getAuthOptions());
+  const timer = new ServerTimer("/api/auth/session-status", "GET");
 
-    if (!session?.user?.id) {
+  try {
+    const token = await timer.measure("auth-token", () =>
+      getToken({
+        req,
+        secret: process.env.NEXTAUTH_SECRET,
+      })
+    );
+
+    if (!token?.id || token.isRevoked) {
+      timer.logSummary(401);
       return NextResponse.json(
         {
           authenticated: false,
-          reason: "logout",
-          rawReason: "LOGOUT",
-          message: REVOCATION_MESSAGES.LOGOUT,
+          reason: token?.revokedReason ? mapReasonToParam(token.revokedReason as string) : "logout",
+          rawReason: token?.revokedReason || "LOGOUT",
+          message: REVOCATION_MESSAGES[token?.revokedReason as string] || REVOCATION_MESSAGES.LOGOUT,
         },
-        { status: 401 }
+        {
+          status: 401,
+          headers: { "Server-Timing": timer.getHeaderValue() },
+        }
       );
     }
 
-    const sessionId = (session.user as any).sessionId;
+    const sessionId = token.sessionId as string | undefined;
 
     if (!sessionId) {
-      return NextResponse.json({
-        authenticated: true,
-        userId: session.user.id,
-        role: session.user.role,
-      });
+      timer.logSummary(200, token.role as string);
+      return NextResponse.json(
+        {
+          authenticated: true,
+          userId: token.id,
+          role: token.role,
+        },
+        {
+          headers: {
+            "Server-Timing": timer.getHeaderValue(),
+            "Cache-Control": "private, no-cache, no-store, must-revalidate",
+          },
+        }
+      );
     }
 
-    const validation = await validateSession(sessionId);
+    // Validate against database exactly once
+    const validation = await timer.measure("db-validate-session", () =>
+      validateSession(sessionId)
+    );
 
     if (!validation.valid) {
       const rawReason = (validation.reason as SessionRevocationReason) || "IDLE_TIMEOUT";
       const mappedReason = mapReasonToParam(rawReason);
       const message = REVOCATION_MESSAGES[rawReason] || "Session has expired.";
 
+      timer.logSummary(401);
       return NextResponse.json(
         {
           authenticated: false,
@@ -63,65 +87,120 @@ export async function GET(req: NextRequest) {
           rawReason,
           message,
         },
-        { status: 401 }
+        {
+          status: 401,
+          headers: { "Server-Timing": timer.getHeaderValue() },
+        }
       );
     }
 
-    return NextResponse.json({
-      authenticated: true,
-      userId: session.user.id,
-      role: session.user.role,
-      expiresAt: validation.session?.expiresAt,
-      lastActiveAt: validation.session?.lastActiveAt,
-    });
+    timer.logSummary(200, token.role as string);
+    return NextResponse.json(
+      {
+        authenticated: true,
+        userId: token.id,
+        role: token.role,
+        expiresAt: validation.session?.expiresAt,
+        lastActiveAt: validation.session?.lastActiveAt,
+      },
+      {
+        headers: {
+          "Server-Timing": timer.getHeaderValue(),
+          "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        },
+      }
+    );
   } catch (error) {
     console.error("[API session-status GET] Error:", error);
+    timer.logSummary(500);
     return NextResponse.json(
       { authenticated: false, reason: "error", message: "Server check error" },
-      { status: 500 }
+      {
+        status: 500,
+        headers: { "Server-Timing": timer.getHeaderValue() },
+      }
     );
   }
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const session = await getServerSession(getAuthOptions());
+  const timer = new ServerTimer("/api/auth/session-status", "POST");
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ ok: false, error: "Unauthenticated" }, { status: 401 });
+  try {
+    const token = await timer.measure("auth-token", () =>
+      getToken({
+        req,
+        secret: process.env.NEXTAUTH_SECRET,
+      })
+    );
+
+    if (!token?.id || token.isRevoked) {
+      timer.logSummary(401);
+      return NextResponse.json(
+        { ok: false, error: "Unauthenticated" },
+        {
+          status: 401,
+          headers: { "Server-Timing": timer.getHeaderValue() },
+        }
+      );
     }
 
-    const sessionId = (session.user as any).sessionId;
+    const sessionId = token.sessionId as string | undefined;
 
     if (!sessionId) {
-      return NextResponse.json({ ok: true, skipped: true });
+      timer.logSummary(200, token.role as string);
+      return NextResponse.json(
+        { ok: true, skipped: true },
+        { headers: { "Server-Timing": timer.getHeaderValue() } }
+      );
     }
 
-    const validation = await validateSession(sessionId);
+    const validation = await timer.measure("db-validate-session", () =>
+      validateSession(sessionId)
+    );
 
     if (!validation.valid) {
       const rawReason = (validation.reason as SessionRevocationReason) || "IDLE_TIMEOUT";
       const mappedReason = mapReasonToParam(rawReason);
+      const message = REVOCATION_MESSAGES[rawReason] || "Session has expired.";
+
+      timer.logSummary(401);
       return NextResponse.json(
         {
           ok: false,
           reason: mappedReason,
-          message: REVOCATION_MESSAGES[rawReason],
+          rawReason,
+          message,
         },
-        { status: 401 }
+        {
+          status: 401,
+          headers: { "Server-Timing": timer.getHeaderValue() },
+        }
       );
     }
 
-    // Throttled activity recording
-    await recordSessionActivity(sessionId);
+    // Record activity (throttled)
+    timer.measure("db-record-activity", () => recordSessionActivity(sessionId)).catch(() => {});
 
-    return NextResponse.json({
-      ok: true,
-      activeAt: new Date().toISOString(),
-    });
+    timer.logSummary(200, token.role as string);
+    return NextResponse.json(
+      { ok: true, timestamp: Date.now() },
+      {
+        headers: {
+          "Server-Timing": timer.getHeaderValue(),
+          "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        },
+      }
+    );
   } catch (error) {
     console.error("[API session-status POST] Error:", error);
-    return NextResponse.json({ ok: false, error: "Internal error" }, { status: 500 });
+    timer.logSummary(500);
+    return NextResponse.json(
+      { ok: false, error: "Internal Server Error" },
+      {
+        status: 500,
+        headers: { "Server-Timing": timer.getHeaderValue() },
+      }
+    );
   }
 }
-

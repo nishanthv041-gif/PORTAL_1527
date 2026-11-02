@@ -26,6 +26,8 @@ export default function SessionGuard() {
   const lastActivityPingRef = useRef<number>(Date.now());
   const isRevokedRef = useRef<boolean>(false);
   const isHandlingRevokeRef = useRef<boolean>(false);
+  const isCheckingRef = useRef<boolean>(false);
+  const lastCheckTimeRef = useRef<number>(0);
 
   // Check if current route is a public route
   const isPublicRoute =
@@ -125,9 +127,14 @@ export default function SessionGuard() {
     };
   }, [handleSessionRevocation]);
 
-  // Periodic and Event-Driven Session Status Polling
+  // Periodic and Event-Driven Session Status Polling with Deduplication & Throttling
   const checkStatus = useCallback(async () => {
-    if (isPublicRoute || isRevokedRef.current) return;
+    if (isPublicRoute || isRevokedRef.current || isCheckingRef.current) return;
+    const now = Date.now();
+    if (now - lastCheckTimeRef.current < 10000) return; // At most once per 10s
+
+    isCheckingRef.current = true;
+    lastCheckTimeRef.current = now;
 
     try {
       const res = await fetch("/api/auth/session-status", {
@@ -144,6 +151,8 @@ export default function SessionGuard() {
       }
     } catch (err) {
       // Network hiccup: don't immediately revoke on temporary offline
+    } finally {
+      isCheckingRef.current = false;
     }
   }, [isPublicRoute, handleSessionRevocation]);
 

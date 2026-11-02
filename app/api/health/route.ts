@@ -52,6 +52,10 @@ export async function GET() {
   const memory = process.memoryUsage();
 
   return NextResponse.json({
+    ok: dbStatus === 'connected',
+    db: dbStatus === 'connected',
+    uptimeSeconds: Math.floor(process.uptime()),
+    version: '0.1.0',
     status: 'healthy',
     message: 'System is fully operational and ready for production traffic.',
     database: {

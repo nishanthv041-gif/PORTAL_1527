@@ -1448,23 +1448,30 @@ export default function TeacherReportCardsClient({
                     {isExpanded && (
                       <div style={{ padding: "1rem" }}>
                         <div style={{
-                          width: "100%",
-                          maxWidth: "100%",
-                          overflowX: "auto",
-                          WebkitOverflowScrolling: "touch",
-                          borderRadius: "10px",
-                          border: "1px solid var(--border-color)",
-                          background: "var(--card-bg, #ffffff)",
-                          position: "relative"
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          marginBottom: "0.5rem",
+                          gap: "0.5rem"
                         }}>
-                          <table style={{
-                            width: "100%",
-                            minWidth: `${Math.max(980, 580 + grp.uniqueSubjects.length * 110)}px`,
-                            borderCollapse: "collapse",
-                            fontSize: "0.85rem",
-                            textAlign: "left",
-                            tableLayout: "auto"
+                          <span style={{
+                            fontSize: "0.75rem",
+                            color: "var(--text-secondary)",
+                            fontWeight: 600,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem"
                           }}>
+                            👉 Swipe horizontally to view full class marks & actions
+                          </span>
+                        </div>
+                        <div className={styles.historyTableContainer}>
+                          <table
+                            className={styles.historyTable}
+                            style={{
+                              minWidth: `${Math.max(980, 580 + grp.uniqueSubjects.length * 110)}px`,
+                            }}
+                          >
                             <thead>
                               <tr style={{ background: "rgba(0, 0, 0, 0.03)", borderBottom: "1.5px solid var(--border-color)", whiteSpace: "nowrap" }}>
                                 <th style={{ padding: "0.75rem 0.65rem", width: 50, minWidth: 50, textAlign: "center", whiteSpace: "nowrap", wordBreak: "keep-all" }}>S.No</th>

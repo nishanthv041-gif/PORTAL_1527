@@ -66,7 +66,7 @@ export function TeacherBottomNav() {
     },
     {
       label: "Home Work",
-      href: "/dashboard/teacher/homework",
+      href: "/dashboard/teacher/assignments",
       icon: <BookOpen size={22} />,
     },
     {
@@ -106,7 +106,7 @@ export function TeacherBottomNav() {
     moreItems.some(
       (item) =>
         pathname?.startsWith(item.href) ||
-        (item.href === "/dashboard/teacher/homework" && pathname?.startsWith("/dashboard/teacher/assignments"))
+        (item.href === "/dashboard/teacher/assignments" && pathname?.startsWith("/dashboard/teacher/homework"))
     );
 
   if (!mounted) return null;
@@ -118,6 +118,7 @@ export function TeacherBottomNav() {
           <Link
             key={item.href}
             href={item.href}
+            prefetch={false}
             className={`${styles.navItem} ${item.isActive ? styles.navItemActive : ""}`}
             aria-current={item.isActive ? "page" : undefined}
           >
@@ -154,6 +155,7 @@ export function TeacherBottomNav() {
             <Link
               key={item.href}
               href={item.href}
+              prefetch={false}
               className={styles.moreItem}
               onClick={() => setIsMoreOpen(false)}
             >

@@ -1306,3 +1306,31 @@
     font-size: 0.8rem;
   }
 }
+
+/* History Consolidated Mark Sheet Table */
+.historyTableContainer {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg, #ffffff);
+  position: relative;
+  display: block;
+}
+
+.historyTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  text-align: left;
+  table-layout: auto !important;
+}
+
+.historyTable th,
+.historyTable td {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow: visible !important;
+}
