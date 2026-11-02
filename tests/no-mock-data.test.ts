@@ -23,6 +23,9 @@ const FORBIDDEN_PATTERNS = [
   { name: "Hardcoded Main Gate default", regex: /"Main Gate \(07:30 AM\)"/ },
   { name: "Hardcoded Main Gate drop", regex: /"Main Gate \(04:15 PM\)"/ },
   { name: "Fallback Subject ID", regex: /["']fallback-(tamil|maths|english|science|social)["']/ },
+  { name: "Hardcoded Sample Marks for layout preview", regex: /Sample marks for layout preview/i },
+  { name: "Hardcoded Total marks 500 maximum", regex: /Total marks: 500 maximum/i },
+  { name: "SAMPLE_PREVIEW_STUDENTS", regex: /\bSAMPLE_PREVIEW_STUDENTS\b/ },
 ];
 
 function scanDirectory(dir: string, violations: string[]) {
