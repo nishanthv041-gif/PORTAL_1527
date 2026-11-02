@@ -60,3 +60,4 @@ runScanVerification().catch((err) => {
   console.error("❌ Scan verification failed:", err);
   process.exit(1);
 });
+

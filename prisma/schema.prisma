@@ -142,6 +142,7 @@ model Teacher {
   absences              TeacherAbsence[]
   absentSubstitutions   Substitution[]      @relation("AbsentTeacher")
   assignedSubstitutions Substitution[]      @relation("SubstituteTeacher")
+  dispatchedExams       Exam[]              @relation("ExamDispatchedBy")
 }
 
 model Staff {
@@ -234,6 +235,7 @@ model Subject {
   examSubjects ExamSubject[]
   examRequestSubjects ExamRequestSubject[]
   assignments  Assignment[]
+  reportCardSubjects ReportCardSubject[]
 
   @@index([classId])
   @@index([teacherId])
@@ -293,19 +295,26 @@ model Exam {
   sectionId      String?
   academicYearId String?
   academicYear   AcademicBatch? @relation(fields: [academicYearId], references: [id])
-  status         String         @default("MARKS_IN_PROGRESS") // MARKS_IN_PROGRESS | SUBMITTED | VERIFIED | PUBLISHED
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @default(now()) @updatedAt
+  status              String         @default("MARKS_IN_PROGRESS") // MARKS_IN_PROGRESS | SUBMITTED | VERIFIED | PUBLISHED
+  dispatchedByStaffId String?
+  dispatchedByStaff   Teacher?       @relation("ExamDispatchedBy", fields: [dispatchedByStaffId], references: [id])
+  dispatchedAt        DateTime?
+  studentCount        Int?
+  normalizedName      String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @default(now()) @updatedAt
 
   marks          Mark[]
   reportCards    ReportCard[]
   examSubjects   ExamSubject[]
 
   @@index([classId])
+  @@index([classId, name])
   @@index([date])
   @@index([status])
   @@index([isPublished])
   @@index([academicYearId])
+  @@index([dispatchedAt])
 }
 
 model ExamSubject {
@@ -405,14 +414,23 @@ model MarkHistory {
 }
 
 model ReportCard {
-  id             String  @id @default(cuid())
-  totalMarks     Float
-  percentage     Float
-  grade          String
-  rank           Int?
-  remarks        String?
-  published      Boolean @default(false)
-  parentVerified Boolean @default(false)
+  id               String    @id @default(cuid())
+  totalMarks       Float
+  maxTotal         Float?
+  percentage       Float
+  grade            String
+  overallGrade     String?
+  result           String?   // PASS | FAIL
+  rank             Int?
+  attendance       String?
+  remarks          String?
+  revision         Int       @default(1)
+  published        Boolean   @default(false)
+  dispatchedAt     DateTime?
+  parentNotifiedAt DateTime?
+  parentVerified   Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
 
   // Relationships
   studentId String
@@ -420,10 +438,53 @@ model ReportCard {
   examId    String
   exam      Exam    @relation(fields: [examId], references: [id])
 
+  subjectMarks ReportCardSubject[]
+  auditLogs    ReportCardAuditLog[]
+
   @@unique([studentId, examId])
   @@index([studentId])
   @@index([studentId, published])
   @@index([examId, published])
+  @@index([dispatchedAt])
+  @@index([createdAt])
+}
+
+model ReportCardSubject {
+  id           String     @id @default(cuid())
+  reportCardId String
+  reportCard   ReportCard @relation(fields: [reportCardId], references: [id], onDelete: Cascade)
+  subjectId    String?
+  subject      Subject?   @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  subjectName  String
+  marks        Float?     // Nullable per rule
+  maxMarks     Float      @default(100)
+  passMark     Float      @default(35)
+  grade        String?
+  status       String?    // PASS | FAIL | ABSENT | NEEDS_REVIEW
+  absent       Boolean    @default(false)
+  remark       String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @default(now()) @updatedAt
+
+  @@index([reportCardId])
+  @@index([subjectId])
+}
+
+model ReportCardAuditLog {
+  id            String     @id @default(cuid())
+  reportCardId  String
+  reportCard    ReportCard @relation(fields: [reportCardId], references: [id], onDelete: Cascade)
+  revision      Int
+  changedBy     String     // User ID or Staff ID
+  changedByName String?
+  reason        String
+  oldValues     Json?
+  newValues     Json?
+  createdAt     DateTime   @default(now())
+
+  @@index([reportCardId])
+  @@index([changedBy])
+  @@index([createdAt])
 }
 
 model Timetable {

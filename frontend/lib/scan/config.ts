@@ -14,3 +14,4 @@ export const SELF_HOSTED_OCR_PATHS = {
 };
 
 export const MAX_DOCUMENT_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+

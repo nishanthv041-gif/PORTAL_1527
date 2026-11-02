@@ -10,9 +10,11 @@ export interface ConsolidatedExportSubject {
 export interface ConsolidatedExportStudent {
   rollNumber: string;
   fullName: string;
-  subjectScores: Record<string, { marksObtained: number | null; isAbsent: boolean }>;
+  attendance?: string | null;
+  subjectScores: Record<string, { marksObtained: number | null; isAbsent: boolean; grade?: string }>;
   totalObtained: number;
   percentage: number;
+  grade?: string;
   rank: number;
   result: string;
 }
@@ -22,29 +24,44 @@ export function exportConsolidatedMarksToExcel(
   className: string,
   section: string,
   subjects: ConsolidatedExportSubject[],
-  students: ConsolidatedExportStudent[]
+  students: ConsolidatedExportStudent[],
+  academicYear: string = "2025-2026"
 ) {
   const wb = XLSX.utils.book_new();
 
-  // Header rows
+  // 1. School Header block (Standardized)
   const header: any[] = [
-    ["SRT SCHOOL PORTAL - OFFICIAL CONSOLIDATED MARKS SHEET"],
-    [`Exam: ${examName}`, `Class: ${className}-${section}`, `Date: ${new Date().toLocaleDateString()}`],
+    ["SRT Universal School"],
+    ["Seeing Righteousness & Truth"],
+    [
+      `Exam / Term: ${examName}`,
+      `Class & Section: ${className} - ${section}`,
+      `Academic Year: ${academicYear}`,
+      `Date of Issue: ${new Date().toLocaleDateString()}`
+    ],
     [],
   ];
 
-  // Column headers
-  const colHeaders: string[] = ["Roll No", "Student Name"];
+  // 2. Table Column Headers
+  const colHeaders: string[] = ["S.No", "Roll No", "Student Name"];
   for (const sub of subjects) {
-    colHeaders.push(`${sub.subjectName} (Max: ${sub.maxMarks})`);
+    colHeaders.push(`${sub.subjectName} (${sub.maxMarks})`);
   }
-  colHeaders.push("Total Marks", "Percentage (%)", "Rank", "Result");
+  colHeaders.push("Total", "%", "Grade", "Result", "Rank", "Attendance");
   header.push(colHeaders);
 
-  // Data rows
+  // 3. Data Rows
   const dataRows: any[][] = [];
-  for (const s of students) {
-    const row: any[] = [s.rollNumber, s.fullName];
+  let totalScoreSum = 0;
+  let highestScore = 0;
+  let passedCount = 0;
+  let failedCount = 0;
+  let appearedCount = 0;
+
+  students.forEach((s, idx) => {
+    const row: any[] = [idx + 1, s.rollNumber || "-", s.fullName];
+    let studentAppeared = false;
+
     for (const sub of subjects) {
       const entry = s.subjectScores[sub.id];
       if (!entry) {
@@ -53,28 +70,67 @@ export function exportConsolidatedMarksToExcel(
         row.push("ABSENT");
       } else if (entry.marksObtained !== null && entry.marksObtained !== undefined) {
         row.push(entry.marksObtained);
+        studentAppeared = true;
       } else {
         row.push("-");
       }
     }
-    row.push(s.totalObtained, `${s.percentage}%`, s.rank, s.result);
+
+    if (studentAppeared) appearedCount++;
+    if (s.result === "PASS") passedCount++;
+    else failedCount++;
+
+    totalScoreSum += s.totalObtained;
+    if (s.totalObtained > highestScore) highestScore = s.totalObtained;
+
+    row.push(
+      s.totalObtained,
+      Number(s.percentage.toFixed(1)),
+      s.grade || "-",
+      s.result,
+      s.rank > 0 ? s.rank : "-",
+      s.attendance || "-"
+    );
     dataRows.push(row);
-  }
+  });
 
-  const allRows = [...header, ...dataRows];
-  const ws = XLSX.utils.aoa_to_sheet(allRows);
+  // 4. Footer Block Statistics
+  const passPercent = students.length > 0 ? ((passedCount / students.length) * 100).toFixed(1) + "%" : "0%";
+  const classAvg = students.length > 0 ? (totalScoreSum / students.length).toFixed(1) : "0";
 
-  ws["!cols"] = [
-    { wch: 12 }, // Roll
-    { wch: 25 }, // Name
-    ...subjects.map(() => ({ wch: 20 })),
-    { wch: 15 }, // Total
-    { wch: 16 }, // Percentage
-    { wch: 10 }, // Rank
-    { wch: 12 }, // Result
+  const footer: any[] = [
+    [],
+    ["--- CLASS PERFORMANCE SUMMARY ---"],
+    ["Total Students", students.length],
+    ["Appeared", appearedCount],
+    ["Passed", passedCount],
+    ["Failed", failedCount],
+    ["Pass Percentage", passPercent],
+    ["Class Highest Score", highestScore],
+    ["Class Average Score", classAvg],
   ];
 
-  XLSX.utils.book_append_sheet(wb, ws, "Consolidated Marks");
+  const allRows = [...header, ...dataRows, ...footer];
+  const ws = XLSX.utils.aoa_to_sheet(allRows);
+
+  // Column widths
+  ws["!cols"] = [
+    { wch: 8 },  // S.No
+    { wch: 16 }, // Roll No
+    { wch: 28 }, // Student Name
+    ...subjects.map(() => ({ wch: 18 })),
+    { wch: 12 }, // Total
+    { wch: 10 }, // %
+    { wch: 10 }, // Grade
+    { wch: 12 }, // Result
+    { wch: 10 }, // Rank
+    { wch: 14 }, // Attendance
+  ];
+
+  // Freeze header rows
+  ws["!freeze"] = { xSplit: 0, ySplit: 5 };
+
+  XLSX.utils.book_append_sheet(wb, ws, "Class Mark Sheet");
 
   const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
   const blob = new Blob([wbOut], {
@@ -83,7 +139,8 @@ export function exportConsolidatedMarksToExcel(
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `Consolidated_Marks_${className}-${section}_${examName}.xlsx`.replace(/\s+/g, "_");
+  const cleanName = `SRT_${className.replace(/\s+/g, "")}${section.replace(/\s+/g, "")}_${examName.replace(/\s+/g, "")}_MarkSheet.xlsx`;
+  a.download = cleanName;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

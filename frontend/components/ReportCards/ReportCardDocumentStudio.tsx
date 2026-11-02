@@ -26,6 +26,13 @@ import {
 import { matchScanResultToDatabase } from "@/frontend/lib/scan/match-students";
 import { generateClassReportCardExcelTemplate } from "@/frontend/lib/exams/excelMarksUtil";
 import { calculateReportCardGrade } from "@/frontend/lib/constants";
+import {
+  dispatchSingleStudentReportCardAction,
+  dispatchBulkReadyStudentsAction,
+  type DispatchSubjectInput,
+  type BulkDispatchSummary,
+} from "@/backend/lib/services/dispatchReportCardService";
+import { exportConsolidatedMarksToExcel } from "@/frontend/lib/exams/exportConsolidatedMarks";
 import styles from "./ReportCardDocumentStudio.module.css";
 
 export interface QueuedFile {
@@ -52,6 +59,7 @@ interface ReportCardDocumentStudioProps {
   onReportCardCreated: (newCard: HistoryItem, recipients: string[]) => void;
   onCloseModal?: () => void;
   isModalView?: boolean;
+  onSwitchToHistory?: () => void;
 }
 
 const SUPPORTED_EXTS = ["xlsx", "xls", "csv", "pdf", "jpg", "jpeg", "png", "webp", "bmp"];
@@ -69,6 +77,7 @@ export default function ReportCardDocumentStudio({
   onClassChange,
   onReportCardCreated,
   onCloseModal,
+  onSwitchToHistory,
   isModalView = false
 }: ReportCardDocumentStudioProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -122,6 +131,28 @@ export default function ReportCardDocumentStudio({
   // Debug Panel toggle (dev only)
   const [showDevDebug, setShowDevDebug] = useState<boolean>(false);
 
+  // Bulk Dispatch Modals & Live Progress
+  const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState<boolean>(false);
+  const [isBulkProgressOpen, setIsBulkProgressOpen] = useState<boolean>(false);
+  const [bulkProgressText, setBulkProgressText] = useState<string>("");
+  const [bulkProgressPercent, setBulkProgressPercent] = useState<number>(0);
+  const [bulkSummary, setBulkSummary] = useState<BulkDispatchSummary | null>(null);
+  const [isBulkSummaryOpen, setIsBulkSummaryOpen] = useState<boolean>(false);
+  const [hasCheckedBulkMarks, setHasCheckedBulkMarks] = useState<boolean>(false);
+
+  // Revision & Correction Flow Modal State
+  const [isRevisionModalOpen, setIsRevisionModalOpen] = useState<boolean>(false);
+  const [revisionStudent, setRevisionStudent] = useState<{
+    studentId: string;
+    studentName: string;
+    rollNumber: string;
+    revision: number;
+  } | null>(null);
+  const [revisionReasonText, setRevisionReasonText] = useState<string>("");
+
+  // Re-scan / Remove confirmation dialog
+  const [isRescanConfirmOpen, setIsRescanConfirmOpen] = useState<boolean>(false);
+
   // Cleanup object URLs on unmount to free browser memory
   useEffect(() => {
     return () => {
@@ -142,6 +173,64 @@ export default function ReportCardDocumentStudio({
   const detectedStudentsList: DetectedStudentEntry[] = useMemo(() => {
     return activeQueuedFile?.result?.allDetectedStudents || [];
   }, [activeQueuedFile]);
+
+  // Live calculation of all students and their Ready/Dispatched/NeedsReview status
+  const readyStudentsList = useMemo(() => {
+    return detectedStudentsList.map((entry, idx) => {
+      const isCurrentActive = idx === activeStudentIndex;
+      const edits = studentEditsRef.current[idx];
+      const targetStudentId = isCurrentActive ? selectedStudentId : (edits?.studentId || entry.studentId);
+      const targetSubjects = isCurrentActive ? subjects : (edits?.subjects || entry.subjects || []);
+      const targetRemarks = isCurrentActive ? generalRemarks : (edits?.generalRemarks !== undefined ? edits.generalRemarks : entry.remarks);
+      const targetAttendance = isCurrentActive ? attendance : (edits?.attendance !== undefined ? edits.attendance : entry.attendance);
+      const studentObj = classStudents.find(s => s.id === targetStudentId);
+
+      const isReady =
+        !!targetStudentId &&
+        targetSubjects.length > 0 &&
+        targetSubjects.every(
+          s => s.score === "AB" || (typeof s.score === "number" && !s.isInvalid)
+        );
+
+      let totalScore = 0;
+      let maxTotal = 0;
+      let hasFail = false;
+      targetSubjects.forEach(s => {
+        const isAbsent = s.score === "AB";
+        const num = typeof s.score === "number" ? s.score : null;
+        if (num !== null) totalScore += num;
+        if (isAbsent || (num !== null && num < (s.passMarks || 35))) hasFail = true;
+        maxTotal += s.maxScore || 100;
+      });
+
+      const percentage = maxTotal > 0 ? parseFloat(((totalScore / maxTotal) * 100).toFixed(1)) : 0;
+      const grade = calculateReportCardGrade(percentage, hasFail);
+      const result: "PASS" | "FAIL" = hasFail ? "FAIL" : "PASS";
+
+      return {
+        index: idx,
+        studentId: targetStudentId,
+        studentName: studentObj?.name || entry.studentName || `Student ${idx + 1}`,
+        rollNumber: studentObj?.rollNumber || entry.rollNumber || "",
+        attendance: targetAttendance,
+        generalRemarks: targetRemarks,
+        subjects: targetSubjects,
+        totalScore,
+        maxTotal,
+        percentage,
+        grade,
+        result,
+        isReady,
+        isVerified: verifiedIndices.has(idx),
+        hasLinkedParent: (studentObj?.parents || []).length > 0,
+        parentCount: (studentObj?.parents || []).length,
+      };
+    });
+  }, [detectedStudentsList, activeStudentIndex, selectedStudentId, subjects, generalRemarks, attendance, classStudents, verifiedIndices]);
+
+  const readyCount = useMemo(() => {
+    return readyStudentsList.filter(s => s.isReady).length;
+  }, [readyStudentsList]);
 
   // Detect duplicate subjects in the active student's table
   const duplicateSubjectIds = useMemo(() => {
@@ -716,7 +805,7 @@ export default function ReportCardDocumentStudio({
   };
 
   // Verify & Dispatch: Saves reviewed final values directly to database (No file storage)
-  const handleVerifyAndDispatchStudent = async () => {
+  const handleVerifyAndDispatchStudent = async (providedRevisionReason?: string) => {
     setGlobalError(null);
     setSaveSuccess(null);
 
@@ -761,7 +850,7 @@ export default function ReportCardDocumentStudio({
     setIsSaving(true);
 
     try {
-      const formattedMarks = subjects.map(s => {
+      const formattedSubjects: DispatchSubjectInput[] = subjects.map(s => {
         let finalSubjectId = s.subjectId;
         if (!finalSubjectId) {
           const match = classSubjects.find(
@@ -771,37 +860,55 @@ export default function ReportCardDocumentStudio({
         }
         return {
           subjectId: finalSubjectId,
-          score: s.score === "AB" ? 0 : Number(s.score),
-          maxScore: s.maxScore,
-          passMarks: s.passMarks,
-          remarks: s.score === "AB" ? "Absent" : (s.remarks || undefined)
+          subjectName: s.subjectName,
+          score: s.score === "AB" ? "AB" : Number(s.score),
+          maxScore: s.maxScore || 100,
+          passMarks: s.passMarks || 35,
+          remarks: s.remarks || undefined,
+          absent: s.score === "AB",
         };
       });
 
-      const res = await createAndSendReportCardAction({
+      const res = await dispatchSingleStudentReportCardAction({
         studentId: selectedStudentId,
         classId: activeClassId,
         examName: examName.trim(),
         examDate,
-        marks: formattedMarks,
-        remarks: generalRemarks.trim() || undefined
+        academicYear,
+        attendance: attendance.trim() || undefined,
+        generalRemarks: generalRemarks.trim() || undefined,
+        subjects: formattedSubjects,
+        revisionReason: providedRevisionReason || undefined,
       });
+
+      if (res.needsRevisionReason) {
+        setIsSaving(false);
+        setRevisionStudent({
+          studentId: selectedStudentId,
+          studentName: res.studentName || "Student",
+          rollNumber: res.rollNumber || "",
+          revision: res.previousRevision || 1,
+        });
+        setRevisionReasonText("");
+        setIsRevisionModalOpen(true);
+        return;
+      }
 
       if (res.success && res.reportCardId) {
         const studentObj = classStudents.find(s => s.id === selectedStudentId);
         const newHistoryItem: HistoryItem = {
           id: res.reportCardId,
           studentId: selectedStudentId,
-          studentName: studentObj?.name || "Student",
-          rollNumber: studentObj?.rollNumber || "",
+          studentName: studentObj?.name || res.studentName || "Student",
+          rollNumber: studentObj?.rollNumber || res.rollNumber || "",
           className: currentClass ? `${currentClass.name} - ${currentClass.section}` : "Class",
           classId: activeClassId,
           examId: `exam-${Date.now()}`,
           examName: examName.trim(),
           examDate: new Date(examDate).toISOString(),
-          totalMarks: res.totalMarks || totals.obtained,
-          percentage: res.percentage || totals.percentage,
-          grade: res.grade || totals.grade,
+          totalMarks: totals.obtained,
+          percentage: totals.percentage,
+          grade: totals.grade,
           remarks: generalRemarks.trim() || null,
           published: true,
           parentVerified: false,
@@ -816,9 +923,15 @@ export default function ReportCardDocumentStudio({
           }))
         };
 
-        const successMsg = `Report card verified and dispatched for ${studentObj?.name || "Student"}! Parent notified.`;
+        const notifMsg = (res.parentsNotifiedCount || 0) > 0
+          ? `${res.parentsNotifiedCount} parent(s) notified.`
+          : `No parent linked (saved to history).`;
+        const rankMsg = res.rank ? ` [Rank #${res.rank}]` : "";
+        const revisionMsg = (res.revision || 1) > 1 ? ` (Revision ${res.revision})` : "";
+        const successMsg = `Verified and dispatched for ${studentObj?.name || "Student"}${rankMsg}${revisionMsg}! ${notifMsg}`;
+
         setSaveSuccess(successMsg);
-        onReportCardCreated(newHistoryItem, res.recipients || []);
+        onReportCardCreated(newHistoryItem, []);
 
         const updatedVerified = new Set(verifiedIndices).add(activeStudentIndex);
         setVerifiedIndices(updatedVerified);
@@ -847,30 +960,44 @@ export default function ReportCardDocumentStudio({
     }
   };
 
-  // Bulk Verify & Dispatch All Ready Students
-  const handleVerifyAllReadyStudents = async () => {
+  // Open Bulk Confirmation Modal
+  const handleOpenBulkConfirm = () => {
+    setGlobalError(null);
+    setSaveSuccess(null);
+
     if (!activeClassId) {
       setGlobalError("Please select a target class before dispatching.");
       return;
     }
-    if (detectedStudentsList.length === 0) {
-      setGlobalError("No students available to dispatch.");
-      return;
-    }
     if (!examName.trim()) {
+      setHasAttemptedDispatch(true);
       setGlobalError("Examination / Term name is required before dispatching.");
       return;
     }
     if (!examDate) {
+      setHasAttemptedDispatch(true);
       setGlobalError("Examination Date is required before dispatching.");
       return;
     }
 
-    setIsSaving(true);
-    setGlobalError(null);
-    setSaveSuccess(null);
+    if (readyCount === 0) {
+      setGlobalError("No students have complete, error-free marks ready for dispatch.");
+      return;
+    }
 
-    // Cache current active student edits
+    setHasCheckedBulkMarks(false);
+    setIsBulkConfirmOpen(true);
+  };
+
+  // Execute Bulk Dispatch across all ready students
+  const handleExecuteBulkDispatch = async () => {
+    setIsBulkConfirmOpen(false);
+    setIsBulkProgressOpen(true);
+    setBulkProgressPercent(15);
+    setBulkProgressText(`Preparing ${readyStudentsList.filter(s => s.isReady).length} ready students...`);
+    setIsSaving(true);
+
+    // Cache active student's edits first
     studentEditsRef.current[activeStudentIndex] = {
       studentId: selectedStudentId,
       subjects: [...subjects],
@@ -878,67 +1005,144 @@ export default function ReportCardDocumentStudio({
       generalRemarks
     };
 
-    const readyStudents = detectedStudentsList
-      .map((entry, idx) => {
-        const edits = studentEditsRef.current[idx];
-        const targetStudentId = edits?.studentId || entry.studentId;
-        const targetSubjects = edits?.subjects || entry.subjects || [];
-        const targetRemarks = edits?.generalRemarks || entry.remarks || generalRemarks;
-
-        const hasInvalid = targetSubjects.some(s => s.isInvalid || s.score === "" || s.score === null);
-        if (hasInvalid || !targetStudentId) return null;
-
-        const marks = targetSubjects.map(s => {
-          let finalSubjectId = s.subjectId;
-          if (!finalSubjectId) {
-            const match = classSubjects.find(cs => cs.name.toLowerCase() === s.subjectName.toLowerCase());
-            finalSubjectId = match?.id || classSubjects[0]?.id || "";
-          }
-          return {
-            subjectId: finalSubjectId,
-            score: s.score === "AB" ? 0 : Number(s.score) || 0,
-            maxScore: s.maxScore || 100,
-            passMarks: s.passMarks || 35,
-            remarks: s.score === "AB" ? "Absent" : (s.remarks || undefined)
-          };
-        });
-
+    const targetReady = readyStudentsList.filter(s => s.isReady);
+    const studentPayloads = targetReady.map((st) => {
+      const formattedSubjects: DispatchSubjectInput[] = st.subjects.map(s => {
+        let finalSubjectId = s.subjectId;
+        if (!finalSubjectId) {
+          const match = classSubjects.find(cs => cs.name.toLowerCase() === s.subjectName.toLowerCase());
+          finalSubjectId = match?.id || classSubjects[0]?.id || "";
+        }
         return {
-          studentId: targetStudentId,
-          marks,
-          remarks: targetRemarks
+          subjectId: finalSubjectId,
+          subjectName: s.subjectName,
+          score: s.score === "AB" ? "AB" : Number(s.score),
+          maxScore: s.maxScore || 100,
+          passMarks: s.passMarks || 35,
+          remarks: s.remarks || undefined,
+          absent: s.score === "AB",
         };
-      })
-      .filter(Boolean) as Array<{ studentId: string; marks: any[]; remarks?: string }>;
+      });
 
-    if (readyStudents.length === 0) {
-      setIsSaving(false);
-      setGlobalError("No students have complete, error-free marks ready for dispatch. Please review missing entries.");
-      return;
-    }
+      return {
+        studentId: st.studentId,
+        attendance: st.attendance ? String(st.attendance) : undefined,
+        generalRemarks: st.generalRemarks || undefined,
+        subjects: formattedSubjects,
+      };
+    });
+
+    setBulkProgressPercent(45);
+    setBulkProgressText(`Dispatching marks and notifying parents in individual transactions...`);
 
     try {
-      const res = await bulkSaveReportCardsAction({
+      const summary = await dispatchBulkReadyStudentsAction({
         classId: activeClassId,
         examName: examName.trim(),
         examDate,
-        students: readyStudents
+        academicYear,
+        students: studentPayloads,
       });
 
-      if (res.success) {
-        const allIndices = new Set(detectedStudentsList.map((_, i) => i));
-        setVerifiedIndices(allIndices);
-        setSaveSuccess(`Successfully verified and dispatched ${res.savedCount} student report card(s)! All linked parents notified.`);
-        if (res.errors && res.errors.length > 0) {
-          setGlobalError(`Some students could not be dispatched: ${res.errors.join("; ")}`);
+      setBulkProgressPercent(100);
+      setBulkProgressText(`Dispatch completed!`);
+
+      // Update verified indices
+      const newlyVerified = new Set(verifiedIndices);
+      summary.results.forEach((r) => {
+        if (r.success) {
+          const idx = detectedStudentsList.findIndex(d => d.studentId === r.studentId);
+          if (idx !== -1) newlyVerified.add(idx);
         }
-      } else {
-        setGlobalError(res.error || "Failed to bulk dispatch report cards.");
+      });
+      setVerifiedIndices(newlyVerified);
+
+      setBulkSummary(summary);
+      setIsBulkProgressOpen(false);
+      setIsBulkSummaryOpen(true);
+
+      if (summary.dispatchedCount > 0) {
+        setSaveSuccess(`Verified and dispatched ${summary.dispatchedCount} student report card(s)! ${summary.parentsNotifiedCount} parent(s) notified.`);
+      }
+      if (summary.failedCount > 0) {
+        setGlobalError(`${summary.failedCount} student(s) could not be dispatched. See summary for details.`);
       }
     } catch (err: any) {
+      console.error("Bulk dispatch error:", err);
+      setIsBulkProgressOpen(false);
       setGlobalError(err?.message || "Server error while bulk dispatching report cards.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Generate and Download Excel Class Mark Sheet from Summary
+  const handleExportExcelFromSummary = () => {
+    if (!currentClass || !examName.trim()) return;
+
+    const exportSubjects = classSubjects.map(s => ({
+      id: s.id,
+      subjectName: s.name,
+      maxMarks: s.maxMarks || 100,
+      passMark: s.passMarks || 35,
+    }));
+
+    const exportStudents = detectedStudentsList.map((st, idx) => {
+      const edits = studentEditsRef.current[idx];
+      const targetStudentId = edits?.studentId || st.studentId;
+      const targetSubjects = edits?.subjects || st.subjects || [];
+      const studentObj = classStudents.find(s => s.id === targetStudentId);
+
+      const subjectScores: Record<string, { marksObtained: number | null; isAbsent: boolean }> = {};
+      let totalObtained = 0;
+      let hasFail = false;
+
+      targetSubjects.forEach(s => {
+        const isAbsent = s.score === "AB";
+        const score = typeof s.score === "number" ? s.score : null;
+        if (score !== null) totalObtained += score;
+        if (isAbsent || (score !== null && score < (s.passMarks || 35))) hasFail = true;
+        subjectScores[s.subjectId] = {
+          marksObtained: score,
+          isAbsent,
+        };
+      });
+
+      const maxTotal = targetSubjects.reduce((acc, s) => acc + (s.maxScore || 100), 0);
+      const percentage = maxTotal > 0 ? parseFloat(((totalObtained / maxTotal) * 100).toFixed(1)) : 0;
+
+      return {
+        rollNumber: studentObj?.rollNumber || st.rollNumber || "",
+        fullName: studentObj?.name || st.studentName || `Student ${idx + 1}`,
+        subjectScores,
+        totalObtained,
+        percentage,
+        rank: idx + 1,
+        result: hasFail ? "FAIL" : "PASS",
+      };
+    });
+
+    exportConsolidatedMarksToExcel(
+      examName.trim(),
+      currentClass.name,
+      currentClass.section,
+      exportSubjects,
+      exportStudents
+    );
+  };
+
+  // Confirm Revision Submission
+  const handleConfirmRevision = async () => {
+    if (!revisionReasonText.trim()) return;
+    setIsRevisionModalOpen(false);
+    await handleVerifyAndDispatchStudent(revisionReasonText.trim());
+  };
+
+  // Confirm and Execute Re-scan / Remove
+  const handleExecuteRescanAndRemove = () => {
+    setIsRescanConfirmOpen(false);
+    if (activeQueuedFile) {
+      handleRemoveFile(activeQueuedFile.id);
     }
   };
 
@@ -1084,25 +1288,26 @@ export default function ReportCardDocumentStudio({
             <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
               <button
                 type="button"
-                onClick={handleVerifyAllReadyStudents}
-                disabled={isSaving}
+                onClick={handleOpenBulkConfirm}
+                disabled={isSaving || readyCount === 0}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "0.45rem",
                   padding: "0.45rem 1rem",
-                  background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                  background: readyCount > 0 ? "linear-gradient(135deg, #10b981 0%, #059669 100%)" : "rgba(100, 116, 139, 0.4)",
                   color: "#ffffff",
                   border: "none",
                   borderRadius: "8px",
                   fontWeight: 800,
                   fontSize: "0.82rem",
-                  cursor: "pointer",
-                  boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)"
+                  cursor: readyCount > 0 && !isSaving ? "pointer" : "not-allowed",
+                  boxShadow: readyCount > 0 ? "0 2px 8px rgba(16, 185, 129, 0.3)" : "none",
+                  opacity: readyCount > 0 ? 1 : 0.6
                 }}
               >
                 <CheckCircle2 size={15} />
-                <span>{isSaving ? "Dispatching..." : `Verify All Ready Students (${detectedStudentsList.length})`}</span>
+                <span>{isSaving ? "Dispatching..." : `Verify All Ready Students (${readyCount})`}</span>
               </button>
             </div>
           )}
@@ -2141,68 +2346,48 @@ export default function ReportCardDocumentStudio({
                 />
               </div>
 
-              {/* Action Buttons */}
-              <div style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: "1rem",
-                marginTop: "0.5rem"
-              }}>
+              {/* Responsive Action Buttons (Desktop one row right-aligned, Mobile sticky stacked) */}
+              <div className={styles.buttonBar}>
                 <button
                   type="button"
-                  onClick={() => handleRemoveFile(activeQueuedFile.id)}
+                  onClick={() => setIsRescanConfirmOpen(true)}
                   disabled={isSaving}
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.45rem",
-                    padding: "0.75rem 1.15rem",
-                    borderRadius: "10px",
-                    border: "1px solid var(--border-color)",
+                    border: "1.5px solid var(--border-color)",
                     background: "transparent",
                     color: "var(--foreground)",
-                    fontWeight: 700,
-                    fontSize: "0.88rem",
-                    cursor: "pointer"
                   }}
-                  title="Remove this file and clear form"
+                  title="Remove this scan and clear memory"
                 >
                   <RotateCcw size={16} />
                   <span>Re-scan / Remove</span>
                 </button>
 
-                {detectedStudentsList.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={handleVerifyAllReadyStudents}
-                    disabled={isSaving}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                      padding: "0.75rem 1.25rem",
-                      background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                      color: "#ffffff",
-                      border: "none",
-                      borderRadius: "10px",
-                      fontWeight: 800,
-                      fontSize: "0.92rem",
-                      cursor: "pointer",
-                      boxShadow: "0 4px 12px rgba(16, 185, 129, 0.35)",
-                      transition: "all 0.15s ease"
-                    }}
-                    title="Verify and dispatch all ready students to parents"
-                  >
-                    <CheckCircle2 size={18} />
-                    <span>{isSaving ? "Dispatching..." : `Verify All Ready Students (${detectedStudentsList.length})`}</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleOpenBulkConfirm}
+                  disabled={isSaving || readyCount === 0 || !examName.trim() || !examDate}
+                  style={{
+                    background: readyCount > 0 ? "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)" : "rgba(255, 255, 255, 0.05)",
+                    color: readyCount > 0 ? "#ffffff" : "var(--text-secondary)",
+                    border: "none",
+                    boxShadow: readyCount > 0 ? "0 4px 12px rgba(59, 130, 246, 0.35)" : "none",
+                    opacity: readyCount === 0 ? 0.6 : 1,
+                    cursor: readyCount > 0 ? "pointer" : "not-allowed",
+                  }}
+                  title={
+                    readyCount === 0
+                      ? "No students currently ready for bulk dispatch"
+                      : `Verify and dispatch all ${readyCount} ready students to parents`
+                  }
+                >
+                  <CheckCircle2 size={18} />
+                  <span>{isSaving ? "Dispatching..." : `Verify All Ready Students (${readyCount})`}</span>
+                </button>
 
                 <button
                   type="button"
-                  onClick={handleVerifyAndDispatchStudent}
+                  onClick={() => handleVerifyAndDispatchStudent()}
                   disabled={isSaving || totals.hasValidationErrors || !selectedStudentId || !examName.trim() || !examDate}
                   className={styles.sendBtn}
                   title={
@@ -2278,6 +2463,522 @@ export default function ReportCardDocumentStudio({
                 boxShadow: "0 10px 40px rgba(0,0,0,0.6)"
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* 1. Bulk Dispatch Confirmation Modal */}
+      {isBulkConfirmOpen && (
+        <div className={styles.modalOverlay} onClick={() => !isSaving && setIsBulkConfirmOpen(false)}>
+          <div className={styles.modalCard} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h3 className={styles.modalTitle}>Confirm Bulk Dispatch to Parents</h3>
+                <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                  {examName} &bull; Class {currentClass?.name} - {currentClass?.section} &bull; {readyStudentsList.filter(s => s.isReady).length} Student(s) Ready
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBulkConfirmOpen(false)}
+                disabled={isSaving}
+                style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              {/* Warnings Section */}
+              {(() => {
+                const targetReady = readyStudentsList.filter(s => s.isReady);
+                const missingParents = targetReady.filter(s => !s.hasLinkedParent);
+                const skippedCount = readyStudentsList.length - targetReady.length;
+
+                return (
+                  <>
+                    {missingParents.length > 0 && (
+                      <div style={{
+                        background: "rgba(245, 158, 11, 0.12)",
+                        border: "1px solid #f59e0b",
+                        borderRadius: "10px",
+                        padding: "0.75rem 1rem",
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: "0.6rem",
+                        fontSize: "0.84rem",
+                        color: "#fbbf24"
+                      }}>
+                        <AlertCircle size={18} style={{ flexShrink: 0, marginTop: "2px" }} />
+                        <div>
+                          <strong>{missingParents.length} student(s) have no linked parents:</strong>
+                          <div style={{ marginTop: "0.25rem", color: "var(--foreground)" }}>
+                            {missingParents.map(s => `${s.studentName} (${s.rollNumber || "No Roll"})`).join(", ")}
+                          </div>
+                          <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.2rem" }}>
+                            These report cards will be securely saved to history, but no parent notifications can be delivered.
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {skippedCount > 0 && (
+                      <div style={{
+                        background: "rgba(59, 130, 246, 0.1)",
+                        border: "1px solid rgba(59, 130, 246, 0.3)",
+                        borderRadius: "10px",
+                        padding: "0.6rem 0.85rem",
+                        fontSize: "0.82rem",
+                        color: "var(--text-secondary)"
+                      }}>
+                        ℹ️ <strong>{skippedCount} student(s)</strong> are incomplete or have unverified marks and will be skipped. You can review and dispatch them individually.
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
+              {/* Ready Students Preview Table */}
+              <div style={{ border: "1px solid var(--border-color)", borderRadius: "10px", overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                  <thead style={{ background: "rgba(255, 255, 255, 0.04)" }}>
+                    <tr>
+                      <th style={{ padding: "0.5rem 0.75rem", textAlign: "left", fontWeight: 700 }}>Student Name</th>
+                      <th style={{ padding: "0.5rem 0.75rem", textAlign: "left", fontWeight: 700 }}>Roll No</th>
+                      <th style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 700 }}>Total</th>
+                      <th style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 700 }}>%</th>
+                      <th style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 700, minWidth: "85px", whiteSpace: "nowrap" }}>Grade</th>
+                      <th style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 700 }}>Result</th>
+                      <th style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 700 }}>Parents</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {readyStudentsList.filter(s => s.isReady).map((st) => (
+                      <tr key={st.studentId} style={{ borderTop: "1px solid var(--border-color)" }}>
+                        <td style={{ padding: "0.5rem 0.75rem", fontWeight: 700 }}>{st.studentName}</td>
+                        <td style={{ padding: "0.5rem 0.75rem", color: "var(--text-secondary)" }}>{st.rollNumber || "-"}</td>
+                        <td style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 800 }}>{st.totalScore}/{st.maxTotal}</td>
+                        <td style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 700 }}>{st.percentage}%</td>
+                        <td style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 900, color: st.grade === "F" ? "#ef4444" : "#10b981", minWidth: "85px", whiteSpace: "nowrap" }}>{st.grade}</td>
+                        <td style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>
+                          <span style={{
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            fontSize: "0.72rem",
+                            fontWeight: 800,
+                            background: st.result === "PASS" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                            color: st.result === "PASS" ? "#10b981" : "#ef4444"
+                          }}>
+                            {st.result}
+                          </span>
+                        </td>
+                        <td style={{ padding: "0.5rem 0.75rem", textAlign: "center", color: st.hasLinkedParent ? "#10b981" : "#f59e0b" }}>
+                          {st.parentCount > 0 ? `${st.parentCount} linked` : "None"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Required Verification Checkbox */}
+              <label style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.65rem",
+                cursor: "pointer",
+                padding: "0.75rem 1rem",
+                borderRadius: "10px",
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid var(--border-color)",
+                fontSize: "0.86rem",
+                fontWeight: 700,
+                color: "var(--foreground)"
+              }}>
+                <input
+                  type="checkbox"
+                  checked={hasCheckedBulkMarks}
+                  onChange={e => setHasCheckedBulkMarks(e.target.checked)}
+                  style={{ width: "18px", height: "18px", accentColor: "#10b981", cursor: "pointer" }}
+                />
+                <span>I have checked these marks and verify they are accurate for official dispatch.</span>
+              </label>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                type="button"
+                onClick={() => setIsBulkConfirmOpen(false)}
+                disabled={isSaving}
+                style={{
+                  padding: "0.55rem 1.15rem",
+                  borderRadius: "10px",
+                  background: "transparent",
+                  border: "1px solid var(--border-color)",
+                  color: "var(--foreground)",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteBulkDispatch}
+                disabled={!hasCheckedBulkMarks || isSaving}
+                style={{
+                  padding: "0.55rem 1.35rem",
+                  borderRadius: "10px",
+                  background: hasCheckedBulkMarks ? "linear-gradient(135deg, #10b981 0%, #059669 100%)" : "rgba(255, 255, 255, 0.05)",
+                  color: hasCheckedBulkMarks ? "#ffffff" : "var(--text-secondary)",
+                  border: "none",
+                  fontWeight: 800,
+                  cursor: hasCheckedBulkMarks ? "pointer" : "not-allowed",
+                  boxShadow: hasCheckedBulkMarks ? "0 4px 12px rgba(16, 185, 129, 0.35)" : "none",
+                }}
+              >
+                Confirm &amp; Dispatch ({readyStudentsList.filter(s => s.isReady).length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Bulk Dispatch Progress Modal */}
+      {isBulkProgressOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modalCard} style={{ maxWidth: "480px" }}>
+            <div className={styles.modalHeader}>
+              <h3 className={styles.modalTitle}>Dispatching Report Cards...</h3>
+            </div>
+            <div className={styles.modalBody} style={{ padding: "2rem 1.5rem", textAlign: "center" }}>
+              <div className={styles.progressBarContainer}>
+                <div className={styles.progressBarFill} style={{ width: `${bulkProgressPercent}%` }} />
+              </div>
+              <p style={{ marginTop: "1rem", fontSize: "0.9rem", color: "var(--foreground)", fontWeight: 700 }}>
+                {bulkProgressText}
+              </p>
+              <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                Processing individual student transactions. Please keep this window open.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Bulk Dispatch Summary Modal */}
+      {isBulkSummaryOpen && bulkSummary && (
+        <div className={styles.modalOverlay} onClick={() => setIsBulkSummaryOpen(false)}>
+          <div className={styles.modalCard} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h3 className={styles.modalTitle}>Dispatch Complete</h3>
+                <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                  {examName} &bull; Class {currentClass?.name} - {currentClass?.section}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBulkSummaryOpen(false)}
+                style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              {/* Summary Stats Grid */}
+              <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                <div className={styles.summaryStatCard}>
+                  <div className={styles.summaryStatNumber} style={{ color: "#10b981" }}>
+                    {bulkSummary.dispatchedCount}
+                  </div>
+                  <div className={styles.summaryStatLabel}>Dispatched</div>
+                </div>
+                <div className={styles.summaryStatCard}>
+                  <div className={styles.summaryStatNumber} style={{ color: "#3b82f6" }}>
+                    {bulkSummary.parentsNotifiedCount}
+                  </div>
+                  <div className={styles.summaryStatLabel}>Parents Notified</div>
+                </div>
+                {bulkSummary.missingParentsCount > 0 && (
+                  <div className={styles.summaryStatCard}>
+                    <div className={styles.summaryStatNumber} style={{ color: "#f59e0b" }}>
+                      {bulkSummary.missingParentsCount}
+                    </div>
+                    <div className={styles.summaryStatLabel}>No Parent Linked</div>
+                  </div>
+                )}
+                {bulkSummary.failedCount > 0 && (
+                  <div className={styles.summaryStatCard}>
+                    <div className={styles.summaryStatNumber} style={{ color: "#ef4444" }}>
+                      {bulkSummary.failedCount}
+                    </div>
+                    <div className={styles.summaryStatLabel}>Failed</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Missing Parents Warning Banner */}
+              {bulkSummary.missingParentStudentNames.length > 0 && (
+                <div style={{
+                  background: "rgba(245, 158, 11, 0.12)",
+                  border: "1px solid #f59e0b",
+                  borderRadius: "10px",
+                  padding: "0.75rem 1rem",
+                  fontSize: "0.82rem",
+                  color: "#fbbf24"
+                }}>
+                  <strong>Note:</strong> The following students have no linked parents: {bulkSummary.missingParentStudentNames.join(", ")}. Their marks are stored in history and accessible to school staff.
+                </div>
+              )}
+
+              {/* Failed Students Details if any */}
+              {bulkSummary.failedCount > 0 && (
+                <div style={{
+                  background: "rgba(239, 68, 68, 0.12)",
+                  border: "1px solid #ef4444",
+                  borderRadius: "10px",
+                  padding: "0.75rem 1rem",
+                  fontSize: "0.82rem",
+                  color: "#ef4444"
+                }}>
+                  {bulkSummary.results.filter(r => !r.success).map((r, i) => (
+                    <div key={i}>{r.studentName}: {r.error}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className={styles.modalFooter} style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+                <a
+                  href={`/api/pdf/report-card?examId=${bulkSummary.examId || ""}&classId=${activeClassId}&type=class&download=true`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.45rem",
+                    padding: "0.55rem 1rem",
+                    borderRadius: "10px",
+                    background: "rgba(255, 255, 255, 0.05)",
+                    border: "1px solid var(--border-color)",
+                    color: "var(--foreground)",
+                    fontSize: "0.84rem",
+                    fontWeight: 700,
+                    textDecoration: "none",
+                  }}
+                >
+                  <Download size={15} />
+                  <span>Download PDF</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={handleExportExcelFromSummary}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.45rem",
+                    padding: "0.55rem 1rem",
+                    borderRadius: "10px",
+                    background: "rgba(255, 255, 255, 0.05)",
+                    border: "1px solid var(--border-color)",
+                    color: "var(--foreground)",
+                    fontSize: "0.84rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  <FileSpreadsheet size={15} />
+                  <span>Download Excel</span>
+                </button>
+              </div>
+
+              <div style={{ display: "flex", gap: "0.6rem" }}>
+                {onSwitchToHistory && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsBulkSummaryOpen(false);
+                      onSwitchToHistory();
+                    }}
+                    style={{
+                      padding: "0.55rem 1.15rem",
+                      borderRadius: "10px",
+                      background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+                      color: "#ffffff",
+                      border: "none",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                  >
+                    View in History
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsBulkSummaryOpen(false)}
+                  style={{
+                    padding: "0.55rem 1.15rem",
+                    borderRadius: "10px",
+                    background: "var(--border-color)",
+                    color: "var(--foreground)",
+                    border: "none",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Revision Reason Modal */}
+      {isRevisionModalOpen && revisionStudent && (
+        <div className={styles.modalOverlay} onClick={() => !isSaving && setIsRevisionModalOpen(false)}>
+          <div className={styles.modalCard} style={{ maxWidth: "520px" }} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3 className={styles.modalTitle}>Update Dispatched Report Card</h3>
+              <button
+                type="button"
+                onClick={() => setIsRevisionModalOpen(false)}
+                disabled={isSaving}
+                style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--foreground)" }}>
+                A report card for <strong>{revisionStudent.studentName}</strong> ({revisionStudent.rollNumber}) has already been dispatched (Revision {revisionStudent.revision}).
+              </p>
+              <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                To record this modification with full audit integrity and notify the parent of the update, please enter the reason for this revision:
+              </p>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem", color: "var(--text-secondary)" }}>
+                  Reason for Update / Correction (Required):
+                </label>
+                <textarea
+                  rows={3}
+                  value={revisionReasonText}
+                  onChange={e => setRevisionReasonText(e.target.value)}
+                  placeholder="e.g., Re-evaluation of Mathematics answer sheet; recalculated marks."
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "10px",
+                    border: "1px solid var(--border-color)",
+                    background: "var(--input-bg, #0f172a)",
+                    color: "var(--foreground)",
+                    fontSize: "0.88rem",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                type="button"
+                onClick={() => setIsRevisionModalOpen(false)}
+                disabled={isSaving}
+                style={{
+                  padding: "0.55rem 1.15rem",
+                  borderRadius: "10px",
+                  background: "transparent",
+                  border: "1px solid var(--border-color)",
+                  color: "var(--foreground)",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRevision}
+                disabled={!revisionReasonText.trim() || isSaving}
+                style={{
+                  padding: "0.55rem 1.35rem",
+                  borderRadius: "10px",
+                  background: revisionReasonText.trim() ? "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)" : "rgba(255, 255, 255, 0.05)",
+                  color: revisionReasonText.trim() ? "#ffffff" : "var(--text-secondary)",
+                  border: "none",
+                  fontWeight: 800,
+                  cursor: revisionReasonText.trim() ? "pointer" : "not-allowed",
+                }}
+              >
+                Confirm &amp; Update Revision {revisionStudent.revision + 1}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Re-scan / Remove Confirmation Modal */}
+      {isRescanConfirmOpen && (
+        <div className={styles.modalOverlay} onClick={() => setIsRescanConfirmOpen(false)}>
+          <div className={styles.modalCard} style={{ maxWidth: "460px" }} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3 className={styles.modalTitle}>Remove Scanned Document?</h3>
+              <button
+                type="button"
+                onClick={() => setIsRescanConfirmOpen(false)}
+                style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--foreground)" }}>
+                Are you sure you want to remove the uploaded document and re-scan?
+              </p>
+              <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                All unsaved extracted marks and student entries will be immediately released from memory. Dispatched records in the database remain safe.
+              </p>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                type="button"
+                onClick={() => setIsRescanConfirmOpen(false)}
+                style={{
+                  padding: "0.55rem 1.15rem",
+                  borderRadius: "10px",
+                  background: "transparent",
+                  border: "1px solid var(--border-color)",
+                  color: "var(--foreground)",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteRescanAndRemove}
+                style={{
+                  padding: "0.55rem 1.35rem",
+                  borderRadius: "10px",
+                  background: "#ef4444",
+                  color: "#ffffff",
+                  border: "none",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                Remove &amp; Re-scan
+              </button>
+            </div>
           </div>
         </div>
       )}

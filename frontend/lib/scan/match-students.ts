@@ -1,6 +1,6 @@
 import type { ScanStudent, ScanResult } from "./types";
 import type { ClassStudent, ClassSubject } from "@/frontend/components/ReportCards/TeacherReportCardsClient";
-import type { DetectedStudentEntry, ScannedReportCardSubject } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardTypes";
+import type { DetectedStudentEntry } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardTypes";
 import { calculateReportCardGrade } from "@/frontend/lib/constants";
 
 const SUBJECT_NAME_ALIASES: Record<string, string[]> = {
@@ -26,31 +26,31 @@ export function matchScanResultToDatabase(
     const matched = findBestStudentMatch(st, classStudents);
 
     // 2. Map subjects to class subjects
-    const subjects: ScannedReportCardSubject[] = st.subjects.map((sub, sIdx) => {
+    const subjects = st.subjects.map((sub, sIdx) => {
       const matchedSub = findBestSubjectMatch(sub.name, classSubjects);
-      const scoreVal: number | "" | "AB" = typeof sub.marks === "number" ? sub.marks : sub.absent ? "AB" : "";
+      const scoreVal: number | "" | "AB" = sub.marks !== null ? sub.marks : sub.absent ? "AB" : "";
       const maxScore = sub.maxMarks || matchedSub?.maxMarks || scanResult.maxMarksDefault || 100;
       const passMarks = sub.passMark || matchedSub?.passMarks || scanResult.passMarksDefault || 35;
 
       const isNum = typeof sub.marks === "number";
       const isInvalid = isNum && (sub.marks! < 0 || sub.marks! > maxScore);
       const grade = isNum ? calculateReportCardGrade((sub.marks! / maxScore) * 100) : sub.absent ? "F" : "-";
-      const status: "PASS" | "FAIL" | "ABSENT" | "NEEDS_REVIEW" = sub.absent ? "ABSENT" : isNum ? (sub.marks! >= passMarks ? "PASS" : "FAIL") : "NEEDS_REVIEW";
+      const status = sub.absent ? "ABSENT" : isNum ? (sub.marks! >= passMarks ? "PASS" : "FAIL") : "NEEDS_REVIEW";
 
       return {
         id: `sub-st-${idx}-${sIdx}`,
         subjectId: matchedSub?.id || (classSubjects[sIdx]?.id || ""),
         subjectName: matchedSub?.name || sub.name,
         score: scoreVal,
-        marksScored: scoreVal,
         maxScore,
         passMarks,
         grade,
-        status,
+        status: status as any,
         remarks: "",
         confidence: (sub.confidence >= 0.85 ? "HIGH" : "LOW") as "HIGH" | "LOW",
         originalExtractedValue: sub.rawText || (isNum ? String(sub.marks) : ""),
         isInvalid,
+        bbox: sub.bbox,
       };
     });
 
@@ -165,3 +165,4 @@ function findBestSubjectMatch(
 
   return classSubjects.find((s) => s.name.toLowerCase().includes(norm) || norm.includes(s.name.toLowerCase())) || null;
 }
+

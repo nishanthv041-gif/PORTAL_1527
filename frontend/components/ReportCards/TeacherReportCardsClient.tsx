@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Send, Trash2, Eye, CheckCircle2, Clock, Calculator,
   BookOpen, Users, Award, AlertCircle, Calendar,
-  Search, Check, X, ShieldAlert, FileText, ChevronRight,
+  Search, Check, X, ShieldAlert, FileText, ChevronRight, ChevronDown, Download,
   Sliders, Settings2, Target, Upload
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -15,6 +15,7 @@ import {
   deleteReportCardAction
 } from "@/backend/lib/services/reportCardActions";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { exportConsolidatedMarksToExcel } from "@/frontend/lib/exams/exportConsolidatedMarks";
 
 const ReportCardDocumentStudio = dynamic(() => import("./ReportCardDocumentStudio"), {
   ssr: false,
@@ -464,6 +465,131 @@ export default function TeacherReportCardsClient({
       );
     });
   }, [history, historySearch, historyExamFilter, historyStatusFilter]);
+
+  const [expandedExamKeys, setExpandedExamKeys] = useState<Set<string>>(new Set());
+
+  const groupedExams = useMemo(() => {
+    const map = new Map<string, {
+      key: string;
+      examName: string;
+      className: string;
+      classId: string | null;
+      examDate: string;
+      examId: string;
+      students: HistoryItem[];
+    }>();
+
+    filteredHistory.forEach(item => {
+      const key = `${item.examName}__${item.className || "Class"}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          examName: item.examName,
+          className: item.className || "Class",
+          classId: item.classId,
+          examDate: item.examDate,
+          examId: item.examId,
+          students: []
+        });
+      }
+      map.get(key)!.students.push(item);
+    });
+
+    return Array.from(map.values()).map(grp => {
+      const totalStudents = grp.students.length;
+      let passCount = 0;
+      let totalScoreSum = 0;
+      let highestScore = 0;
+      let topper = "-";
+
+      grp.students.forEach(st => {
+        if (st.percentage >= 35) passCount++;
+        totalScoreSum += st.percentage;
+        if (st.totalMarks > highestScore) {
+          highestScore = st.totalMarks;
+          topper = st.studentName;
+        }
+      });
+
+      const avgPercentage = totalStudents > 0 ? (totalScoreSum / totalStudents).toFixed(1) : "0";
+      const passPercentage = totalStudents > 0 ? ((passCount / totalStudents) * 100).toFixed(1) : "0";
+
+      // Collect unique subjects
+      const subMap = new Map<string, { id: string; name: string; maxMarks: number; passMarks: number }>();
+      grp.students.forEach(st => {
+        st.marks.forEach(m => {
+          if (!subMap.has(m.subjectName)) {
+            subMap.set(m.subjectName, {
+              id: m.subjectId || m.subjectName,
+              name: m.subjectName,
+              maxMarks: m.maxScore || 100,
+              passMarks: m.passMarks || 35
+            });
+          }
+        });
+      });
+
+      return {
+        ...grp,
+        totalStudents,
+        passCount,
+        avgPercentage,
+        passPercentage,
+        highestScore,
+        topper,
+        uniqueSubjects: Array.from(subMap.values())
+      };
+    });
+  }, [filteredHistory]);
+
+  const toggleExamGroup = (key: string) => {
+    setExpandedExamKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleExportGroupExcel = (grp: typeof groupedExams[0]) => {
+    const exportSubjects = grp.uniqueSubjects.map(sub => ({
+      id: sub.id,
+      subjectName: sub.name,
+      maxMarks: sub.maxMarks,
+      passMark: sub.passMarks,
+    }));
+
+    const exportStudents = grp.students.map((st, idx) => {
+      const scores: Record<string, { marksObtained: number | null; isAbsent: boolean; grade?: string }> = {};
+      st.marks.forEach(m => {
+        const key = m.subjectId || m.subjectName;
+        scores[key] = {
+          marksObtained: m.score,
+          isAbsent: m.remarks === "Absent",
+          grade: undefined
+        };
+      });
+
+      return {
+        rollNumber: st.rollNumber,
+        fullName: st.studentName,
+        subjectScores: scores,
+        totalObtained: st.totalMarks,
+        percentage: st.percentage,
+        grade: st.grade,
+        rank: idx + 1,
+        result: st.percentage >= 35 ? "PASS" : "FAIL"
+      };
+    });
+
+    exportConsolidatedMarksToExcel(
+      grp.examName,
+      grp.className,
+      "",
+      exportSubjects,
+      exportStudents
+    );
+  };
 
   return (
     <div className={styles.container}>
@@ -1124,6 +1250,7 @@ export default function TeacherReportCardsClient({
           classes={classes}
           selectedClassId={selectedClassId}
           onClassChange={setSelectedClassId}
+          onSwitchToHistory={() => setActiveTab("HISTORY")}
           onReportCardCreated={(newCard, recipients) => {
             setHistory(prev => [newCard, ...prev]);
             setSuccessBanner({
@@ -1205,128 +1332,297 @@ export default function TeacherReportCardsClient({
             </span>
           </div>
 
-          {/* Cards List */}
+          {/* Cards List Grouped by Examination / Term Accordion */}
           {filteredHistory.length === 0 ? (
             <div className={styles.emptyState}>
               <Clock size={44} style={{ opacity: 0.3, margin: "0 auto 0.75rem" }} />
-              <h3 style={{ margin: "0 0 0.25rem 0", fontSize: "1.1rem" }}>No Report Cards in History</h3>
+              <h3 style={{ margin: "0 0 0.25rem 0", fontSize: "1.1rem" }}>No Report Cards Dispatched Yet</h3>
               <p style={{ margin: 0, fontSize: "0.875rem" }}>
-                {historySearch ? "No records match your search filter." : "Create and send your first student report card in the Create tab above."}
+                {historySearch ? "No records match your search filter." : "Upload a mark sheet in OCR Studio or use Create & Send to dispatch report cards to parents."}
               </p>
             </div>
           ) : (
-            <div className={styles.historyCardsList}>
-              {filteredHistory.map((item) => (
-                <div key={item.id} className={styles.historyCard}>
-                  {/* Student & Class Row */}
-                  <div className={styles.cardHeaderRow}>
-                    <div className={styles.cardStudentInfo}>
-                      <div className={styles.studentAvatar} style={{ width: 38, height: 38, fontSize: "0.85rem" }}>
-                        {item.studentName.charAt(0)}
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              {groupedExams.map((grp, gIdx) => {
+                const isExpanded = !expandedExamKeys.has(grp.key); // Expanded by default
+
+                return (
+                  <div
+                    key={grp.key}
+                    style={{
+                      background: "var(--card-bg, #ffffff)",
+                      border: "1px solid var(--border-color, #e2e8f0)",
+                      borderRadius: "16px",
+                      overflow: "hidden",
+                      boxShadow: "0 4px 15px rgba(0, 0, 0, 0.04)"
+                    }}
+                  >
+                    {/* Accordion Header */}
+                    <div
+                      style={{
+                        padding: "1rem 1.25rem",
+                        background: "linear-gradient(135deg, rgba(99, 102, 241, 0.06) 0%, rgba(14, 165, 233, 0.06) 100%)",
+                        borderBottom: isExpanded ? "1px solid var(--border-color, #e2e8f0)" : "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: "0.75rem",
+                        cursor: "pointer"
+                      }}
+                      onClick={() => toggleExamGroup(grp.key)}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flex: "1 1 340px" }}>
+                        <div style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: "8px",
+                          background: "var(--primary)",
+                          color: "#ffffff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0
+                        }}>
+                          {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: "1rem", color: "var(--foreground)" }}>
+                            {grp.examName} &nbsp;|&nbsp; {grp.className} &nbsp;|&nbsp; {new Date(grp.examDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                          </div>
+                          <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginTop: "0.2rem", fontWeight: 600 }}>
+                            {grp.totalStudents} student{grp.totalStudents > 1 ? "s" : ""} &nbsp;•&nbsp; Average: <strong style={{ color: "var(--foreground)" }}>{grp.avgPercentage}%</strong> &nbsp;•&nbsp; Pass Rate: <strong style={{ color: Number(grp.passPercentage) >= 75 ? "#10b981" : "#f59e0b" }}>{grp.passPercentage}%</strong>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className={styles.cardStudentName}>{item.studentName}</h3>
-                        <span className={styles.cardClassBadge}>
-                          Roll: {item.rollNumber} • {item.className}
-                        </span>
+
+                      {/* Bulk Actions for Exam Group */}
+                      <div
+                        style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = `/api/pdf/report-card?type=class&examId=${grp.examId}&classId=${grp.classId || ""}`;
+                            window.open(url, "_blank");
+                          }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            padding: "0.45rem 0.85rem",
+                            borderRadius: "8px",
+                            border: "1px solid var(--border-color)",
+                            background: "var(--card-bg, #ffffff)",
+                            color: "var(--foreground)",
+                            fontSize: "0.8rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+                          }}
+                          title="Download Consolidated Class Mark Sheet PDF"
+                        >
+                          <Download size={14} />
+                          <span>Class PDF</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleExportGroupExcel(grp)}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            padding: "0.45rem 0.85rem",
+                            borderRadius: "8px",
+                            border: "1px solid #10b981",
+                            background: "rgba(16, 185, 129, 0.08)",
+                            color: "#059669",
+                            fontSize: "0.8rem",
+                            fontWeight: 700,
+                            cursor: "pointer"
+                          }}
+                          title="Download Class Mark Sheet as Excel (.xlsx)"
+                        >
+                          <Download size={14} />
+                          <span>Class Excel</span>
+                        </button>
                       </div>
                     </div>
 
-                    {/* Parent Verification Status Pill */}
-                    <div>
-                      {item.parentVerified ? (
-                        <span className={`${styles.verificationPill} ${styles.verifiedGreen}`}>
-                          <CheckCircle2 size={13} /> Verified by Parent
-                        </span>
-                      ) : (
-                        <span className={`${styles.verificationPill} ${styles.unverifiedAmber}`}>
-                          <Clock size={13} /> Awaiting Parent Verification
-                        </span>
-                      )}
-                    </div>
+                    {/* Accordion Content: Class Mark Sheet Table & Statistics */}
+                    {isExpanded && (
+                      <div style={{ padding: "1rem" }}>
+                        <div style={{ overflowX: "auto", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", textAlign: "left" }}>
+                            <thead>
+                              <tr style={{ background: "rgba(0, 0, 0, 0.03)", borderBottom: "1px solid var(--border-color)" }}>
+                                <th style={{ padding: "0.65rem 0.85rem", width: 45 }}>S.No</th>
+                                <th style={{ padding: "0.65rem 0.85rem" }}>Roll No</th>
+                                <th style={{ padding: "0.65rem 0.85rem" }}>Student Name</th>
+                                {grp.uniqueSubjects.map(sub => (
+                                  <th key={sub.id} style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>
+                                    {sub.name} <span style={{ fontSize: "0.72rem", opacity: 0.7 }}>({sub.maxMarks})</span>
+                                  </th>
+                                ))}
+                                <th style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>Total</th>
+                                <th style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>%</th>
+                                <th style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>Grade</th>
+                                <th style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>Result</th>
+                                <th style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>Rank</th>
+                                <th style={{ padding: "0.65rem 0.85rem", textAlign: "right" }}>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {grp.students.map((st, idx) => {
+                                const isPass = st.percentage >= 35;
+                                return (
+                                  <tr
+                                    key={st.id}
+                                    style={{
+                                      borderBottom: "1px solid var(--border-color)",
+                                      background: idx % 2 === 0 ? "transparent" : "rgba(0, 0, 0, 0.015)"
+                                    }}
+                                  >
+                                    <td style={{ padding: "0.65rem 0.85rem", color: "var(--text-secondary)" }}>{idx + 1}</td>
+                                    <td style={{ padding: "0.65rem 0.85rem", fontWeight: 700 }}>{st.rollNumber}</td>
+                                    <td style={{ padding: "0.65rem 0.85rem", fontWeight: 600 }}>{st.studentName}</td>
+                                    {grp.uniqueSubjects.map(sub => {
+                                      const m = st.marks.find(sm => (sm.subjectId && sm.subjectId === sub.id) || sm.subjectName.toLowerCase() === sub.name.toLowerCase());
+                                      const val = m ? (m.remarks === "Absent" ? "AB" : `${m.score}`) : "-";
+                                      return (
+                                        <td key={sub.id} style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>
+                                          <span style={{ fontWeight: 600 }}>{val}</span>
+                                        </td>
+                                      );
+                                    })}
+                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "center", fontWeight: 800 }}>{st.totalMarks}</td>
+                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "center", fontWeight: 700 }}>{st.percentage}%</td>
+                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>
+                                      <span style={{
+                                        fontWeight: 800,
+                                        color: "var(--primary)",
+                                        background: "rgba(99, 102, 241, 0.1)",
+                                        padding: "0.15rem 0.45rem",
+                                        borderRadius: "4px",
+                                        fontSize: "0.78rem"
+                                      }}>
+                                        {st.grade}
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>
+                                      <span style={{
+                                        fontSize: "0.72rem",
+                                        fontWeight: 800,
+                                        padding: "0.2rem 0.55rem",
+                                        borderRadius: "6px",
+                                        background: isPass ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
+                                        color: isPass ? "#10b981" : "#ef4444"
+                                      }}>
+                                        {isPass ? "PASS" : "FAIL"}
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "center", fontWeight: 700, color: "var(--text-secondary)" }}>
+                                      #{idx + 1}
+                                    </td>
+                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "right" }}>
+                                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => setPreviewItem(st)}
+                                          title="View Report Card"
+                                          style={{
+                                            padding: "0.35rem 0.55rem",
+                                            borderRadius: "6px",
+                                            border: "1px solid var(--border-color)",
+                                            background: "var(--card-bg, #ffffff)",
+                                            cursor: "pointer",
+                                            color: "var(--foreground)"
+                                          }}
+                                        >
+                                          <Eye size={13} />
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const url = `/api/pdf/report-card?studentId=${st.studentId}&examId=${st.examId}`;
+                                            window.open(url, "_blank");
+                                          }}
+                                          title="Download Student PDF"
+                                          style={{
+                                            padding: "0.35rem 0.55rem",
+                                            borderRadius: "6px",
+                                            border: "1px solid var(--border-color)",
+                                            background: "var(--card-bg, #ffffff)",
+                                            cursor: "pointer",
+                                            color: "var(--foreground)"
+                                          }}
+                                        >
+                                          <Download size={13} />
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteHistoryItem(st.id, st.studentName)}
+                                          disabled={deletingId === st.id}
+                                          title="Delete"
+                                          style={{
+                                            padding: "0.35rem 0.55rem",
+                                            borderRadius: "6px",
+                                            border: "1px solid rgba(239, 68, 68, 0.3)",
+                                            background: "rgba(239, 68, 68, 0.08)",
+                                            cursor: "pointer",
+                                            color: "#ef4444"
+                                          }}
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Class Statistics Footer Box */}
+                        <div style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                          gap: "0.75rem",
+                          marginTop: "0.85rem",
+                          background: "rgba(0, 0, 0, 0.02)",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "10px",
+                          padding: "0.75rem 1rem"
+                        }}>
+                          <div>
+                            <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 700 }}>Class Average</span>
+                            <div style={{ fontSize: "1.1rem", fontWeight: 800 }}>{grp.avgPercentage}%</div>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 700 }}>Pass Rate</span>
+                            <div style={{ fontSize: "1.1rem", fontWeight: 800, color: Number(grp.passPercentage) >= 75 ? "#10b981" : "#f59e0b" }}>
+                              {grp.passPercentage}% ({grp.passCount}/{grp.totalStudents})
+                            </div>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 700 }}>Class Highest Score</span>
+                            <div style={{ fontSize: "1.1rem", fontWeight: 800 }}>{grp.highestScore}</div>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: 700 }}>Class Topper</span>
+                            <div style={{ fontSize: "1rem", fontWeight: 800, color: "var(--primary)" }}>{grp.topper}</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-
-                  {/* Exam & Date Info */}
-                  <div className={styles.cardExamRow}>
-                    <span>
-                      Exam: <strong>{item.examName}</strong>
-                    </span>
-                    <span>
-                      Date: <strong>{new Date(item.examDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</strong>
-                    </span>
-                  </div>
-
-                  {/* Metrics Row */}
-                  <div className={styles.metricsPillRow}>
-                    <div className={styles.metricBlock}>
-                      <span className={styles.metricBlockLabel}>Total Score</span>
-                      <span className={styles.metricBlockValue}>{item.totalMarks}</span>
-                    </div>
-
-                    <div className={styles.metricDivider} />
-
-                    <div className={styles.metricBlock}>
-                      <span className={styles.metricBlockLabel}>Percentage</span>
-                      <span className={styles.metricBlockValue}>{item.percentage}%</span>
-                    </div>
-
-                    <div className={styles.metricDivider} />
-
-                    <div className={styles.metricBlock}>
-                      <span className={styles.metricBlockLabel}>Grade</span>
-                      <span className={styles.metricBlockValue} style={{ color: "var(--primary)" }}>
-                        {item.grade}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Remarks preview if present */}
-                  {item.remarks && (
-                    <div style={{
-                      fontSize: "0.82rem",
-                      color: "var(--text-secondary)",
-                      fontStyle: "italic",
-                      background: "rgba(0,0,0,0.02)",
-                      padding: "0.45rem 0.75rem",
-                      borderRadius: "8px"
-                    }}>
-                      &ldquo;{item.remarks}&rdquo;
-                    </div>
-                  )}
-
-                  {/* Actions Footer: View Card & DELETE BUTTON FOR TEACHER */}
-                  <div className={styles.cardActionFooter}>
-                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                      Subjects graded: {item.marks.length}
-                    </span>
-
-                    <div className={styles.cardButtonGrp}>
-                      {/* View Details Modal Button */}
-                      <button
-                        type="button"
-                        className={styles.previewBtn}
-                        onClick={() => setPreviewItem(item)}
-                        title="View Full Report Card Details"
-                      >
-                        <Eye size={14} />
-                        <span>View Card</span>
-                      </button>
-
-                      {/* DELETE BUTTON (Teacher Exclusive Requirement) */}
-                      <button
-                        type="button"
-                        className={styles.deleteBtn}
-                        onClick={() => handleDeleteHistoryItem(item.id, item.studentName)}
-                        disabled={deletingId === item.id}
-                        title="Delete this report card from history"
-                      >
-                        <Trash2 size={14} />
-                        <span>{deletingId === item.id ? "Deleting..." : "Delete"}</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1453,8 +1749,31 @@ export default function TeacherReportCardsClient({
               </div>
             )}
 
-            {/* Close Button */}
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            {/* Action Buttons */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const url = `/api/pdf/report-card?studentId=${previewItem.studentId}&examId=${previewItem.examId}`;
+                  window.open(url, "_blank");
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                  padding: "0.6rem 1.2rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  background: "var(--card-bg, #ffffff)",
+                  color: "var(--foreground)",
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                <Download size={15} />
+                <span>Download PDF</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setPreviewItem(null)}

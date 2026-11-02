@@ -48,6 +48,7 @@ next-env.d.ts
 .env*
 .agent/
 # Tesseract assets in public/ are tracked for self-hosted in-browser OCR
+*.traineddata
 !public/tesseract/*.traineddata*
 scratch/
 backups/

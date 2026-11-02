@@ -97,3 +97,4 @@ export interface ScanDebugInfo {
   finalJson: ScanResult | null;
   rawWords: WordBox[];
 }
+

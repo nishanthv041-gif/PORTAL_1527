@@ -261,3 +261,4 @@ export async function scanMarksheetDocument(
     throw new ScanStageError(currentStage, err?.message || "Document scan failed unexpectedly.", err);
   }
 }
+
