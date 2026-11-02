@@ -1,0 +1,150 @@
+.triggerBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  background: var(--card-bg, #1a2234);
+  border: 1.5px solid var(--border-color, rgba(255, 255, 255, 0.15));
+  color: var(--foreground, #ffffff);
+  cursor: pointer;
+  min-height: 52px;
+  text-align: left;
+  font-family: inherit;
+  font-size: 1rem;
+  touch-action: manipulation;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.triggerBtn:focus-visible,
+.triggerBtn:hover {
+  border-color: var(--primary, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.selectedContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.selectedName {
+  font-weight: 700;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selectedRoll {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.placeholder {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.92rem;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1.5px solid var(--border-color, rgba(255, 255, 255, 0.12));
+  margin-bottom: 0.85rem;
+}
+
+.searchInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--foreground, #ffffff);
+  font-size: 16px; /* Prevents iOS auto-zoom */
+  font-family: inherit;
+}
+
+.studentList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 60dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.studentRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1.5px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  color: var(--foreground, #ffffff);
+  cursor: pointer;
+  min-height: 56px;
+  text-align: left;
+  touch-action: manipulation;
+  transition: all 0.15s ease;
+}
+
+.studentRow:hover,
+.studentRowSelected {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: var(--primary, #3b82f6);
+}
+
+.studentInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.studentName {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.studentRoll {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.statusChip {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.statusSuccess {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.statusWarning {
+  background: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+}
+
+.statusDefault {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary, #94a3b8);
+}
+
+.emptyState {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.88rem;
+}

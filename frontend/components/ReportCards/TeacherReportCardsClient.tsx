@@ -17,6 +17,8 @@ import {
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { exportConsolidatedMarksToExcel } from "@/frontend/lib/exams/exportConsolidatedMarks";
 import MobileTabs, { MobileTabItem } from "@/components/ui/MobileTabs";
+import { formatClassName } from "@/lib/teacher/formatClassName";
+import { StudentBottomSheetPicker } from "@/frontend/components/ui/StudentBottomSheetPicker";
 
 const ReportCardDocumentStudio = dynamic(() => import("./ReportCardDocumentStudio"), {
   ssr: false,
@@ -411,7 +413,7 @@ export default function TeacherReportCardsClient({
           studentId: selectedStudentId,
           studentName: currentStudent?.name || "Student",
           rollNumber: currentStudent?.rollNumber || "",
-          className: currentClass ? `${currentClass.name} - ${currentClass.section}` : "Class",
+          className: currentClass ? formatClassName(currentClass.name, currentClass.section) : "Class",
           classId: selectedClassId,
           examId: `exam-${Date.now()}`,
           examName: examName.trim(),
@@ -779,31 +781,27 @@ export default function TeacherReportCardsClient({
                 >
                   {(classes || []).map(c => (
                     <option key={c.id} value={c.id}>
-                      Class {c.name} - {c.section} ({(c.students || []).length} students)
+                      {formatClassName(c.name, c.section)} ({(c.students || []).length} students)
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Student Dropdown */}
+              {/* Student Dropdown / Mobile Bottom Sheet Picker */}
               <div className={styles.formField}>
                 <label className={styles.fieldLabel} htmlFor="select-student">
                   <Users size={14} /> Student *
                 </label>
-                <select
-                  id="select-student"
-                  className={styles.fieldSelect}
-                  value={selectedStudentId}
-                  onChange={(e) => handleStudentChange(e.target.value)}
-                  required
-                >
-                  <option value="">-- Choose Student to Grade --</option>
-                  {currentClass?.students.map(st => (
-                    <option key={st.id} value={st.id}>
-                      {st.name} (Roll: {st.rollNumber})
-                    </option>
-                  ))}
-                </select>
+                <StudentBottomSheetPicker
+                  students={(currentClass?.students || []).map(st => ({
+                    id: st.id,
+                    name: st.name,
+                    rollNumber: st.rollNumber,
+                  }))}
+                  selectedStudentId={selectedStudentId}
+                  onSelectStudent={(stId) => handleStudentChange(stId)}
+                  placeholder="-- Choose Student to Grade --"
+                />
               </div>
             </div>
 
@@ -819,7 +817,7 @@ export default function TeacherReportCardsClient({
                       {currentStudent.name}
                     </h3>
                     <p style={{ margin: "0.15rem 0 0 0", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
-                      Roll No: <strong>{currentStudent.rollNumber}</strong> • Class: <strong>{currentClass ? `${currentClass.name} - ${currentClass.section}` : "Class"}</strong>
+                      Roll No: <strong>{currentStudent.rollNumber}</strong> • Class: <strong>{currentClass ? formatClassName(currentClass.name, currentClass.section) : "Class"}</strong>
                     </p>
                   </div>
                 </div>
@@ -1461,28 +1459,28 @@ export default function TeacherReportCardsClient({
                         }}>
                           <table style={{
                             width: "100%",
-                            minWidth: `${Math.max(920, 520 + grp.uniqueSubjects.length * 95)}px`,
+                            minWidth: `${Math.max(980, 580 + grp.uniqueSubjects.length * 110)}px`,
                             borderCollapse: "collapse",
                             fontSize: "0.85rem",
                             textAlign: "left",
                             tableLayout: "auto"
                           }}>
                             <thead>
-                              <tr style={{ background: "rgba(0, 0, 0, 0.03)", borderBottom: "1.5px solid var(--border-color)" }}>
-                                <th style={{ padding: "0.75rem 0.65rem", width: 50, minWidth: 50, textAlign: "center", whiteSpace: "nowrap" }}>S.No</th>
-                                <th style={{ padding: "0.75rem 0.85rem", minWidth: 130, whiteSpace: "nowrap" }}>Roll No</th>
-                                <th style={{ padding: "0.75rem 0.85rem", minWidth: 160, whiteSpace: "nowrap" }}>Student Name</th>
+                              <tr style={{ background: "rgba(0, 0, 0, 0.03)", borderBottom: "1.5px solid var(--border-color)", whiteSpace: "nowrap" }}>
+                                <th style={{ padding: "0.75rem 0.65rem", width: 50, minWidth: 50, textAlign: "center", whiteSpace: "nowrap", wordBreak: "keep-all" }}>S.No</th>
+                                <th style={{ padding: "0.75rem 0.85rem", minWidth: 140, whiteSpace: "nowrap", wordBreak: "keep-all" }}>Roll No</th>
+                                <th style={{ padding: "0.75rem 0.85rem", minWidth: 180, whiteSpace: "nowrap", wordBreak: "keep-all" }}>Student Name</th>
                                 {grp.uniqueSubjects.map(sub => (
-                                  <th key={sub.id} style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 95, whiteSpace: "nowrap" }}>
+                                  <th key={sub.id} style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 110, whiteSpace: "nowrap", wordBreak: "keep-all" }}>
                                     {sub.name} <span style={{ fontSize: "0.72rem", opacity: 0.7 }}>({sub.maxMarks})</span>
                                   </th>
                                 ))}
-                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 75, whiteSpace: "nowrap" }}>Total</th>
-                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 65, whiteSpace: "nowrap" }}>%</th>
-                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 75, whiteSpace: "nowrap" }}>Grade</th>
-                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 85, whiteSpace: "nowrap" }}>Result</th>
-                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 65, whiteSpace: "nowrap" }}>Rank</th>
-                                <th style={{ padding: "0.75rem 0.85rem", textAlign: "right", minWidth: 125, whiteSpace: "nowrap" }}>Actions</th>
+                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 80, whiteSpace: "nowrap", wordBreak: "keep-all" }}>Total</th>
+                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 70, whiteSpace: "nowrap", wordBreak: "keep-all" }}>%</th>
+                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 80, whiteSpace: "nowrap", wordBreak: "keep-all" }}>Grade</th>
+                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 90, whiteSpace: "nowrap", wordBreak: "keep-all" }}>Result</th>
+                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 70, whiteSpace: "nowrap", wordBreak: "keep-all" }}>Rank</th>
+                                <th style={{ padding: "0.75rem 0.85rem", textAlign: "right", minWidth: 140, whiteSpace: "nowrap", wordBreak: "keep-all" }}>Actions</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -1496,21 +1494,21 @@ export default function TeacherReportCardsClient({
                                       background: idx % 2 === 0 ? "transparent" : "rgba(0, 0, 0, 0.015)"
                                     }}
                                   >
-                                    <td style={{ padding: "0.65rem 0.65rem", textAlign: "center", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{idx + 1}</td>
-                                    <td style={{ padding: "0.65rem 0.85rem", fontWeight: 700, whiteSpace: "nowrap" }}>{st.rollNumber}</td>
-                                    <td style={{ padding: "0.65rem 0.85rem", fontWeight: 600, whiteSpace: "nowrap" }}>{st.studentName}</td>
+                                    <td style={{ padding: "0.65rem 0.65rem", textAlign: "center", color: "var(--text-secondary)", whiteSpace: "nowrap", wordBreak: "keep-all" }}>{idx + 1}</td>
+                                    <td style={{ padding: "0.65rem 0.85rem", fontWeight: 700, whiteSpace: "nowrap", wordBreak: "keep-all" }}>{st.rollNumber}</td>
+                                    <td style={{ padding: "0.65rem 0.85rem", fontWeight: 600, whiteSpace: "nowrap", wordBreak: "keep-all" }}>{st.studentName}</td>
                                     {grp.uniqueSubjects.map(sub => {
                                       const m = st.marks.find(sm => (sm.subjectId && sm.subjectId === sub.id) || sm.subjectName.toLowerCase() === sub.name.toLowerCase());
                                       const val = m ? (m.remarks === "Absent" ? "AB" : `${m.score}`) : "-";
                                       return (
-                                        <td key={sub.id} style={{ padding: "0.65rem 0.75rem", textAlign: "center", whiteSpace: "nowrap" }}>
+                                        <td key={sub.id} style={{ padding: "0.65rem 0.75rem", textAlign: "center", whiteSpace: "nowrap", wordBreak: "keep-all" }}>
                                           <span style={{ fontWeight: 600 }}>{val}</span>
                                         </td>
                                       );
                                     })}
-                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", fontWeight: 800, whiteSpace: "nowrap" }}>{st.totalMarks}</td>
-                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", fontWeight: 700, whiteSpace: "nowrap" }}>{st.percentage}%</td>
-                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", whiteSpace: "nowrap" }}>
+                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", fontWeight: 800, whiteSpace: "nowrap", wordBreak: "keep-all" }}>{st.totalMarks}</td>
+                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", fontWeight: 700, whiteSpace: "nowrap", wordBreak: "keep-all" }}>{st.percentage}%</td>
+                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", whiteSpace: "nowrap", wordBreak: "keep-all" }}>
                                       <span style={{
                                         fontWeight: 800,
                                         color: "var(--primary)",
@@ -1523,7 +1521,7 @@ export default function TeacherReportCardsClient({
                                         {st.grade}
                                       </span>
                                     </td>
-                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", whiteSpace: "nowrap" }}>
+                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", whiteSpace: "nowrap", wordBreak: "keep-all" }}>
                                       <span style={{
                                         fontSize: "0.74rem",
                                         fontWeight: 800,
@@ -1537,10 +1535,10 @@ export default function TeacherReportCardsClient({
                                         {isPass ? "PASS" : "FAIL"}
                                       </span>
                                     </td>
-                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", fontWeight: 700, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", fontWeight: 700, color: "var(--text-secondary)", whiteSpace: "nowrap", wordBreak: "keep-all" }}>
                                       #{idx + 1}
                                     </td>
-                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "right", whiteSpace: "nowrap" }}>
+                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "right", whiteSpace: "nowrap", wordBreak: "keep-all" }}>
                                       <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", flexWrap: "nowrap" }}>
                                         <button
                                           type="button"
@@ -1550,17 +1548,17 @@ export default function TeacherReportCardsClient({
                                             display: "inline-flex",
                                             alignItems: "center",
                                             justifyContent: "center",
-                                            width: "30px",
-                                            height: "30px",
-                                            borderRadius: "6px",
-                                            border: "1px solid var(--border-color)",
-                                            background: "var(--card-bg, #ffffff)",
+                                            width: "32px",
+                                            height: "32px",
+                                            borderRadius: "8px",
+                                            border: "1px solid rgba(59, 130, 246, 0.3)",
+                                            background: "rgba(59, 130, 246, 0.1)",
                                             cursor: "pointer",
-                                            color: "var(--foreground)",
+                                            color: "#3b82f6",
                                             flexShrink: 0
                                           }}
                                         >
-                                          <Eye size={13} />
+                                          <Eye size={15} />
                                         </button>
 
                                         <button
@@ -1574,17 +1572,17 @@ export default function TeacherReportCardsClient({
                                             display: "inline-flex",
                                             alignItems: "center",
                                             justifyContent: "center",
-                                            width: "30px",
-                                            height: "30px",
-                                            borderRadius: "6px",
-                                            border: "1px solid var(--border-color)",
-                                            background: "var(--card-bg, #ffffff)",
+                                            width: "32px",
+                                            height: "32px",
+                                            borderRadius: "8px",
+                                            border: "1px solid rgba(16, 185, 129, 0.3)",
+                                            background: "rgba(16, 185, 129, 0.1)",
                                             cursor: "pointer",
-                                            color: "var(--foreground)",
+                                            color: "#10b981",
                                             flexShrink: 0
                                           }}
                                         >
-                                          <Download size={13} />
+                                          <Download size={15} />
                                         </button>
 
                                         <button
@@ -1596,17 +1594,17 @@ export default function TeacherReportCardsClient({
                                             display: "inline-flex",
                                             alignItems: "center",
                                             justifyContent: "center",
-                                            width: "30px",
-                                            height: "30px",
-                                            borderRadius: "6px",
+                                            width: "32px",
+                                            height: "32px",
+                                            borderRadius: "8px",
                                             border: "1px solid rgba(239, 68, 68, 0.3)",
-                                            background: "rgba(239, 68, 68, 0.08)",
+                                            background: "rgba(239, 68, 68, 0.1)",
                                             cursor: "pointer",
                                             color: "#ef4444",
                                             flexShrink: 0
                                           }}
                                         >
-                                          <Trash2 size={13} />
+                                          <Trash2 size={15} />
                                         </button>
                                       </div>
                                     </td>

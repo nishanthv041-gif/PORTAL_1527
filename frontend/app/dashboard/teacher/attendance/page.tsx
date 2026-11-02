@@ -5,6 +5,7 @@ import styles from "../../dashboard.module.css";
 import { TeacherStudentItem } from "./AttendanceForm";
 import TeacherAttendanceContainer from "./TeacherAttendanceContainer";
 import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings/actions";
+import { getTeacherClasses, formatClassName } from "@/lib/teacher/getTeacherClasses";
 import {
   getEffectiveAcademicYearRange,
   countSchoolWorkingDays,
@@ -15,7 +16,7 @@ import {
 export default async function TeacherAttendancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; tab?: string; view?: string }>;
+  searchParams: Promise<{ date?: string; tab?: string; view?: string; classId?: string }>;
 }) {
   const session = await getServerSession(getAuthOptions());
   if (!session) return null;
@@ -64,7 +65,46 @@ export default async function TeacherAttendancePage({
     );
   }
 
-  const myClass = teacher.classTeacherOf;
+  // Fetch all classes assigned to the teacher (sorted with primary Class Teacher class first)
+  const teacherClasses = await getTeacherClasses(teacher.id);
+
+  // Resolve selected class ID (prioritize URL search params, fall back to teacher's primary assigned class)
+  const selectedClassId =
+    resolvedSearchParams?.classId ||
+    teacherClasses[0]?.classId ||
+    teacher.classTeacherOf?.id ||
+    null;
+
+  let myClass = null;
+  if (selectedClassId) {
+    if (teacher.classTeacherOf && teacher.classTeacherOf.id === selectedClassId) {
+      myClass = teacher.classTeacherOf;
+    } else {
+      myClass = await prisma.class.findUnique({
+        where: { id: selectedClassId },
+        include: {
+          students: {
+            where: { isActive: true },
+            include: {
+              attendances: {
+                where: {
+                  date: {
+                    lte: endOfDay,
+                  },
+                },
+                orderBy: { date: "desc" },
+              },
+            },
+            orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+          },
+        },
+      });
+    }
+  }
+
+  if (!myClass && teacher.classTeacherOf) {
+    myClass = teacher.classTeacherOf;
+  }
 
   // Determine official school working days up to current date (starting from batch start date)
   const { start: academicStart } = await getEffectiveAcademicYearRange(startOfDay, myClass?.id);
@@ -225,6 +265,8 @@ export default async function TeacherAttendancePage({
     <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       <TeacherAttendanceContainer
         classData={classData}
+        teacherClasses={teacherClasses}
+        selectedClassId={selectedClassId || ""}
         teacherInfo={teacherInfo}
         attendanceData={teacherAttendanceData}
         initialTab={initialTab}

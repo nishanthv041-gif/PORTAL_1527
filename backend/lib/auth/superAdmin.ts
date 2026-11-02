@@ -10,3 +10,4 @@ export function isSuperAdmin(email: string | null | undefined): boolean {
     (superAdminEmail) => superAdminEmail.toLowerCase() === normalized
   );
 }
+

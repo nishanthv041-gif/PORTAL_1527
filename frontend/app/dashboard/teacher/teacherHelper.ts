@@ -2,9 +2,16 @@ import { cache } from "react";
 import { prisma } from "@/backend/db/prisma";
 
 async function queryTeacherFromDb(userId: string) {
-  return prisma.teacher.findUnique({
+  const teacher = await prisma.teacher.findUnique({
     where: { userId },
     include: {
+      classTeacherOf: {
+        include: {
+          _count: {
+            select: { students: true }
+          }
+        }
+      },
       classes: {
         include: {
           _count: {
@@ -14,6 +21,18 @@ async function queryTeacherFromDb(userId: string) {
       }
     }
   });
+
+  if (!teacher) return null;
+
+  // Merge classTeacherOf into classes if not present
+  if (teacher.classTeacherOf) {
+    const exists = teacher.classes.some(c => c.id === teacher.classTeacherOf!.id);
+    if (!exists) {
+      teacher.classes.unshift(teacher.classTeacherOf);
+    }
+  }
+
+  return teacher;
 }
 
 type TeacherWithClasses = NonNullable<Awaited<ReturnType<typeof queryTeacherFromDb>>>;
@@ -47,9 +66,16 @@ export const getTeacherByUserId = cache(async (userId: string) => {
 });
 
 async function queryTeacherWithStudentsFromDb(userId: string) {
-  return prisma.teacher.findUnique({
+  const teacher = await prisma.teacher.findUnique({
     where: { userId },
     include: {
+      classTeacherOf: {
+        include: {
+          students: {
+            orderBy: { firstName: 'asc' }
+          }
+        }
+      },
       classes: {
         include: {
           students: {
@@ -59,6 +85,17 @@ async function queryTeacherWithStudentsFromDb(userId: string) {
       }
     }
   });
+
+  if (!teacher) return null;
+
+  if (teacher.classTeacherOf) {
+    const exists = teacher.classes.some(c => c.id === teacher.classTeacherOf!.id);
+    if (!exists) {
+      teacher.classes.unshift(teacher.classTeacherOf);
+    }
+  }
+
+  return teacher;
 }
 
 type TeacherWithStudents = NonNullable<Awaited<ReturnType<typeof queryTeacherWithStudentsFromDb>>>;

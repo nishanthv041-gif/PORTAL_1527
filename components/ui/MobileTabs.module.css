@@ -51,8 +51,10 @@
 }
 
 .tabBtn {
-  flex-shrink: 0;
-  white-space: nowrap;
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
   min-height: 44px;
   padding: 0 1rem;
   display: inline-flex;
@@ -91,10 +93,14 @@
 
 .tabLabelDesktop {
   display: none;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
 }
 
 .tabLabelMobile {
   display: inline;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
 }
 
 @media (min-width: 640px) {

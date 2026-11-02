@@ -20,7 +20,7 @@ export default async function TeacherLayout({
 
   return (
     <>
-      <div style={{ paddingBottom: "calc(56px + env(safe-area-inset-bottom, 0px))" }}>
+      <div style={{ paddingBottom: "calc(56px + env(safe-area-inset-bottom, 0px) + 1.25rem)" }}>
         {children}
       </div>
       <TeacherBottomNav />

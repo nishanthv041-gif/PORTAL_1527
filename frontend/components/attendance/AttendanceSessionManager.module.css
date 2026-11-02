@@ -653,6 +653,12 @@
   backdrop-filter: blur(8px);
 }
 
+@media (max-width: 768px) {
+  .bottomActionBar {
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 0.75rem) !important;
+  }
+}
+
 .discardBtn {
   background: transparent;
   border: 1px solid var(--border-color);

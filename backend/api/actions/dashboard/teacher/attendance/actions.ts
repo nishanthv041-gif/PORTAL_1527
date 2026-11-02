@@ -7,6 +7,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 
 import { isDateInCurrentWeek } from "@/frontend/utils/attendanceDateUtils";
 import { getSessionDateTime } from "@/backend/lib/services/attendanceCalculation";
+import { verifyTeacherClassAccess } from "@/lib/teacher/getTeacherClasses";
 
 function formatRemarksWithSession(remarks: string | undefined | null, session: "FORENOON" | "AFTERNOON"): string {
   const cleanRemarks = (remarks || "").replace(/\s*\((FORENOON|AFTERNOON)\)/gi, "").trim();
@@ -43,13 +44,18 @@ export async function updateSingleAttendance(data: {
         };
       }
 
-      // Verify teacher is assigned to this class
+      // Verify teacher is authorized for this class
       const teacher = await prisma.teacher.findUnique({
         where: { userId: session.user.id },
-        include: { classTeacherOf: true },
+        select: { id: true },
       });
 
-      if (!teacher || !teacher.classTeacherOf || teacher.classTeacherOf.id !== data.classId) {
+      if (!teacher) {
+        return { success: false, error: "Teacher profile not found." };
+      }
+
+      const isAuthorized = await verifyTeacherClassAccess(teacher.id, data.classId);
+      if (!isAuthorized) {
         return { success: false, error: "You can only mark attendance for your assigned class." };
       }
     }
@@ -135,16 +141,16 @@ export async function saveBulkAttendance(
 
       const teacher = await prisma.teacher.findUnique({
         where: { userId: session.user.id },
-        include: { classTeacherOf: true },
+        select: { id: true },
       });
 
-      if (!teacher || !teacher.classTeacherOf) {
-        return { success: false, error: "Only assigned Class Teachers can mark attendance." };
+      if (!teacher) {
+        return { success: false, error: "Teacher profile not found." };
       }
 
-      const classTeacherClassId = teacher.classTeacherOf.id;
       for (const record of data) {
-        if (record.classId !== classTeacherClassId) {
+        const isAuthorized = await verifyTeacherClassAccess(teacher.id, record.classId);
+        if (!isAuthorized) {
           return { success: false, error: "You can only mark attendance for your assigned class." };
         }
       }

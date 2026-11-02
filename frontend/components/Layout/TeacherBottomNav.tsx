@@ -121,7 +121,7 @@ export function TeacherBottomNav() {
               {item.icon}
               {item.isActive && <div className={styles.activeDot} />}
             </div>
-            <span>{item.label}</span>
+            <span className={styles.navLabel}>{item.label}</span>
           </Link>
         ))}
 
@@ -136,7 +136,7 @@ export function TeacherBottomNav() {
             <Grid size={20} />
             {isMoreActive && <div className={styles.activeDot} />}
           </div>
-          <span>More</span>
+          <span className={styles.navLabel}>More</span>
         </button>
       </nav>
 
