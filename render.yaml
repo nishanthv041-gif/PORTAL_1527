@@ -1,9 +1,11 @@
 services:
   - type: web
-    name: portal-007
+    name: srt-school-portal
     env: node
-    buildCommand: npm install && npm run build
+    plan: starter
+    buildCommand: npm install && npx prisma generate && npm run build
     startCommand: npm start
+    autoDeploy: true
     envVars:
       - key: DATABASE_URL
         sync: false
@@ -11,3 +13,21 @@ services:
         generateValue: true
       - key: NEXTAUTH_URL
         sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: SETTINGS_INITIAL_PASSWORD
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SMTP_EMAIL
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CRON_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
