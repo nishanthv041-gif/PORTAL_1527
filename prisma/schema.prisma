@@ -428,6 +428,7 @@ model ReportCard {
   published        Boolean   @default(false)
   dispatchedAt     DateTime?
   parentNotifiedAt DateTime?
+  notifyStatus     String    @default("PENDING") // PENDING | SENT | FAILED
   parentVerified   Boolean   @default(false)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @default(now()) @updatedAt

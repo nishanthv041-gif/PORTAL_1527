@@ -39,7 +39,7 @@ export function matchScanResultToDatabase(
 
       return {
         id: `sub-st-${idx}-${sIdx}`,
-        subjectId: matchedSub?.id || (classSubjects[sIdx]?.id || ""),
+        subjectId: matchedSub?.id || "",
         subjectName: matchedSub?.name || sub.name,
         score: scoreVal,
         maxScore,

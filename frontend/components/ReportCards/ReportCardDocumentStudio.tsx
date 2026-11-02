@@ -31,6 +31,8 @@ import {
   dispatchBulkReadyStudentsAction,
   type DispatchSubjectInput,
   type BulkDispatchSummary,
+  type DispatchResultItem,
+  type SingleStudentDispatchInput,
 } from "@/backend/lib/services/dispatchReportCardService";
 import { exportConsolidatedMarksToExcel } from "@/frontend/lib/exams/exportConsolidatedMarks";
 import styles from "./ReportCardDocumentStudio.module.css";
@@ -989,12 +991,11 @@ export default function ReportCardDocumentStudio({
     setIsBulkConfirmOpen(true);
   };
 
-  // Execute Bulk Dispatch across all ready students
-  const handleExecuteBulkDispatch = async () => {
+  // Execute Bulk Dispatch across all ready students (pool concurrency 2 with live progress)
+  const handleExecuteBulkDispatch = async (onlyStudentIds?: string[] | unknown) => {
     setIsBulkConfirmOpen(false);
     setIsBulkProgressOpen(true);
-    setBulkProgressPercent(15);
-    setBulkProgressText(`Preparing ${readyStudentsList.filter(s => s.isReady).length} ready students...`);
+    setBulkProgressPercent(10);
     setIsSaving(true);
 
     // Cache active student's edits first
@@ -1005,8 +1006,31 @@ export default function ReportCardDocumentStudio({
       generalRemarks
     };
 
-    const targetReady = readyStudentsList.filter(s => s.isReady);
-    const studentPayloads = targetReady.map((st) => {
+    const targetList = Array.isArray(onlyStudentIds) ? onlyStudentIds : undefined;
+    let targetReady = readyStudentsList.filter(s => s.isReady);
+    if (targetList && targetList.length > 0) {
+      targetReady = targetReady.filter(s => targetList.includes(s.studentId));
+    }
+
+    const total = targetReady.length;
+    if (total === 0) {
+      setIsBulkProgressOpen(false);
+      setIsSaving(false);
+      setGlobalError("No ready students found to dispatch.");
+      return;
+    }
+
+    setBulkProgressText(`Preparing ${total} ready student(s)...`);
+
+    const results: DispatchResultItem[] = [];
+    const missingParentStudentNames: string[] = [];
+    let dispatchedCount = 0;
+    let failedCount = 0;
+    let skippedCount = 0;
+    let parentsNotifiedCount = 0;
+    let sharedExamId: string | undefined;
+
+    const dispatchOneStudent = async (st: typeof targetReady[0]): Promise<DispatchResultItem> => {
       const formattedSubjects: DispatchSubjectInput[] = st.subjects.map(s => {
         let finalSubjectId = s.subjectId;
         if (!finalSubjectId) {
@@ -1024,38 +1048,95 @@ export default function ReportCardDocumentStudio({
         };
       });
 
-      return {
+      const payload: SingleStudentDispatchInput = {
         studentId: st.studentId,
-        attendance: st.attendance ? String(st.attendance) : undefined,
-        generalRemarks: st.generalRemarks || undefined,
-        subjects: formattedSubjects,
-      };
-    });
-
-    setBulkProgressPercent(45);
-    setBulkProgressText(`Dispatching marks and notifying parents in individual transactions...`);
-
-    try {
-      const summary = await dispatchBulkReadyStudentsAction({
         classId: activeClassId,
         examName: examName.trim(),
         examDate,
         academicYear,
-        students: studentPayloads,
-      });
+        attendance: st.attendance ? String(st.attendance) : undefined,
+        generalRemarks: st.generalRemarks || undefined,
+        subjects: formattedSubjects,
+      };
+
+      try {
+        const response = await fetch("/api/teacher/report-cards/dispatch-one", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const res: DispatchResultItem = await response.json();
+        return res;
+      } catch (err: any) {
+        return {
+          studentId: st.studentId,
+          studentName: st.studentName,
+          rollNumber: st.rollNumber,
+          success: false,
+          error: err?.message || "Network error",
+        };
+      }
+    };
+
+    let completed = 0;
+    let queueIdx = 0;
+    const concurrency = 2;
+
+    const worker = async () => {
+      while (queueIdx < total) {
+        const currentIdx = queueIdx++;
+        const currentStudent = targetReady[currentIdx];
+        setBulkProgressText(`Dispatching ${completed + 1} of ${total}: ${currentStudent.studentName}...`);
+        const res = await dispatchOneStudent(currentStudent);
+        results.push(res);
+        completed++;
+        setBulkProgressPercent(Math.min(95, Math.round(15 + (completed / total) * 80)));
+
+        if (res.success) {
+          dispatchedCount++;
+          parentsNotifiedCount += res.parentsNotifiedCount || 0;
+          if (res.examId) sharedExamId = res.examId;
+          if (!res.hasLinkedParents) {
+            missingParentStudentNames.push(res.studentName || currentStudent.studentName);
+          }
+        } else if (res.needsRevisionReason) {
+          skippedCount++;
+        } else {
+          failedCount++;
+        }
+      }
+    };
+
+    try {
+      await Promise.all(
+        Array.from({ length: Math.min(concurrency, total) }, () => worker())
+      );
 
       setBulkProgressPercent(100);
       setBulkProgressText(`Dispatch completed!`);
 
       // Update verified indices
       const newlyVerified = new Set(verifiedIndices);
-      summary.results.forEach((r) => {
+      results.forEach((r) => {
         if (r.success) {
           const idx = detectedStudentsList.findIndex(d => d.studentId === r.studentId);
           if (idx !== -1) newlyVerified.add(idx);
         }
       });
       setVerifiedIndices(newlyVerified);
+
+      const summary: BulkDispatchSummary = {
+        success: dispatchedCount > 0,
+        examId: sharedExamId,
+        totalRequested: total,
+        dispatchedCount,
+        failedCount,
+        skippedCount,
+        parentsNotifiedCount,
+        missingParentsCount: missingParentStudentNames.length,
+        missingParentStudentNames,
+        results,
+      };
 
       setBulkSummary(summary);
       setIsBulkProgressOpen(false);
@@ -1074,6 +1155,14 @@ export default function ReportCardDocumentStudio({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleRetryFailedOnly = () => {
+    if (!bulkSummary) return;
+    const failedIds = bulkSummary.results.filter(r => !r.success).map(r => r.studentId);
+    if (failedIds.length === 0) return;
+    setIsBulkSummaryOpen(false);
+    handleExecuteBulkDispatch(failedIds);
   };
 
   // Generate and Download Excel Class Mark Sheet from Summary
@@ -2794,6 +2883,29 @@ export default function ReportCardDocumentStudio({
                   <FileSpreadsheet size={15} />
                   <span>Download Excel</span>
                 </button>
+
+                {bulkSummary.failedCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleRetryFailedOnly}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.45rem",
+                      padding: "0.55rem 1rem",
+                      borderRadius: "10px",
+                      background: "rgba(239, 68, 68, 0.15)",
+                      border: "1px solid #ef4444",
+                      color: "#f87171",
+                      fontSize: "0.84rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <RotateCcw size={15} />
+                    <span>Retry Failed ({bulkSummary.failedCount})</span>
+                  </button>
+                )}
               </div>
 
               <div style={{ display: "flex", gap: "0.6rem" }}>

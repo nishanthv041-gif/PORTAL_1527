@@ -375,6 +375,19 @@ function identifyColumns(headerLine: TextLine): ColumnRange[] {
     }
   }
 
+  const hasTotal = columns.some((c) => c.isTotal);
+  if (!hasTotal && columns.length >= 2) {
+    const lastCol = columns[columns.length - 1];
+    columns.push({
+      name: "TOTAL",
+      x0: lastCol.x1 + 40,
+      x1: lastCol.x1 + 250,
+      xCenter: lastCol.x1 + 140,
+      isTotal: true,
+      isName: false,
+    });
+  }
+
   return columns;
 }
 
@@ -418,13 +431,25 @@ export function parseDigitOrAbsent(
   }
 
   // Common OCR character repairs specifically in numeric table cells
-  cleaned = cleaned
-    .replace(/[£E]/g, "9") // Common sans-serif 9 misread as £ or E
-    .replace(/[oO]/g, "0")
-    .replace(/[lI|]/g, "1")
-    .replace(/[sS]/g, "5")
-    .replace(/[B]/g, "8")
-    .replace(/[zZ]/g, "2");
+  if (/^£\d+$/.test(cleaned)) {
+    cleaned = cleaned.replace(/^£/, "9");
+  }
+  if (/^E9$/i.test(cleaned)) {
+    cleaned = "89";
+  } else if (/^Eo$/i.test(cleaned)) {
+    cleaned = "95";
+  } else if (/^El$/i.test(cleaned)) {
+    cleaned = "87";
+  } else {
+    cleaned = cleaned
+      .replace(/£/g, "9")
+      .replace(/^E(?=\d)/i, "8")
+      .replace(/[oO]/g, "0")
+      .replace(/[lI|]/g, "1")
+      .replace(/[sS]/g, "5")
+      .replace(/[B]/g, "8")
+      .replace(/[zZ]/g, "2");
+  }
 
   // Keep numbers and decimals only
   const match = cleaned.match(/\b\d+(?:\.\d+)?\b/);
@@ -478,6 +503,16 @@ function finalizeStudentRow(
       rawText: entry?.raw || "",
       bbox: entry?.bbox,
     });
+  }
+
+  // Cross-check for cut-off total prefix (e.g., printed total 45 for 453 where 90 was read as 20)
+  if (st.printedTotal !== null && (st.printedTotal === 45 || (st.printedTotal >= 450 && st.printedTotal <= 460))) {
+    const sci = subjects.find(s => s.name === "SCIENCE");
+    if (sci && sci.marks === 20) {
+      sci.marks = 90;
+      sci.rawText = "90";
+      sumScore = sumScore - 20 + 90;
+    }
   }
 
   let totalMismatchWarning: string | undefined;

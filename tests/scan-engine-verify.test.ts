@@ -44,6 +44,15 @@ async function runScanVerification() {
   assert.strictEqual(s1.subjects.find((s) => s.name === "SCIENCE")?.marks, 84, "Anushka Science should be 84");
   assert.strictEqual(s1.subjects.find((s) => s.name === "SOCIAL SCIENCE")?.marks, 90, "Anushka Social should be 90");
 
+  const s2 = validated.students[1];
+  assert(s2.name.toUpperCase().includes("INIYA"), `Student 2 name should be Iniya: ${s2.name}`);
+  assert.strictEqual(s2.rollNo, "7376252AD189", `Student 2 roll should match: ${s2.rollNo}`);
+  assert.strictEqual(s2.subjects.find((s) => s.name === "TAMIL")?.marks, 92, "Iniya Tamil should be 92");
+  assert.strictEqual(s2.subjects.find((s) => s.name === "ENGLISH")?.marks, 89, "Iniya English should be 89");
+  assert.strictEqual(s2.subjects.find((s) => s.name === "MATHEMATICS")?.marks, 95, "Iniya Maths should be 95");
+  assert.strictEqual(s2.subjects.find((s) => s.name === "SCIENCE")?.marks, 90, "Iniya Science should be 90");
+  assert.strictEqual(s2.subjects.find((s) => s.name === "SOCIAL SCIENCE")?.marks, 87, "Iniya Social should be 87");
+
   const s3 = validated.students[2];
   assert(s3.name.toUpperCase().includes("KARUPPUSAMY"), `Student 3 name should be Karuppusamy: ${s3.name}`);
   assert.strictEqual(s3.rollNo, "7376252AD208", `Student 3 roll should match: ${s3.rollNo}`);

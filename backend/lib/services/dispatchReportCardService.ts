@@ -54,6 +54,7 @@ export interface DispatchResultItem {
   needsRevisionReason?: boolean;
   previousRevision?: number;
   reportCardId?: string;
+  examId?: string;
   revision?: number;
   rank?: number;
   parentsNotifiedCount?: number;
@@ -141,33 +142,37 @@ function recomputeStudentCriteriaServer(subjects: DispatchSubjectInput[]) {
  * Recomputes and updates ranks for all report cards belonging to an exam.
  * Tied totals share the same rank.
  */
-async function updateExamRanks(tx: any, examId: string) {
-  const allCards = await tx.reportCard.findMany({
-    where: { examId, published: true },
-    select: { id: true, totalMarks: true },
-    orderBy: { totalMarks: "desc" },
-  });
-
-  if (allCards.length === 0) return;
-
-  let currentRank = 1;
-  let previousScore: number | null = null;
-  let sameScoreCount = 0;
-
-  for (let i = 0; i < allCards.length; i++) {
-    const card = allCards[i];
-    if (previousScore !== null && card.totalMarks === previousScore) {
-      sameScoreCount++;
-    } else {
-      currentRank = i + 1;
-      sameScoreCount = 0;
-      previousScore = card.totalMarks;
-    }
-
-    await tx.reportCard.update({
-      where: { id: card.id },
-      data: { rank: currentRank },
+async function updateExamRanks(examId: string) {
+  try {
+    const allCards = await prisma.reportCard.findMany({
+      where: { examId, published: true },
+      select: { id: true, totalMarks: true },
+      orderBy: { totalMarks: "desc" },
     });
+
+    if (allCards.length === 0) return;
+
+    let currentRank = 1;
+    let previousScore: number | null = null;
+    let sameScoreCount = 0;
+
+    for (let i = 0; i < allCards.length; i++) {
+      const card = allCards[i];
+      if (previousScore !== null && card.totalMarks === previousScore) {
+        sameScoreCount++;
+      } else {
+        currentRank = i + 1;
+        sameScoreCount = 0;
+        previousScore = card.totalMarks;
+      }
+
+      await prisma.reportCard.update({
+        where: { id: card.id },
+        data: { rank: currentRank },
+      });
+    }
+  } catch (rankErr) {
+    console.warn("[updateExamRanks] Non-fatal rank computation error:", rankErr);
   }
 }
 
@@ -311,222 +316,210 @@ export async function dispatchSingleStudentReportCardAction(
   const examDate = isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      // A. Find or create Exam
-      let exam = await tx.exam.findFirst({
-        where: {
-          classId: input.classId,
-          name: { equals: trimmedExamName, mode: "insensitive" },
-        },
-      });
-
-      if (!exam) {
-        exam = await tx.exam.create({
-          data: {
-            name: trimmedExamName,
-            normalizedName: normalizedExamName,
-            date: examDate,
-            classId: input.classId,
-            isPublished: true,
-            status: "PUBLISHED",
-            dispatchedByStaffId: teacherId,
-            dispatchedAt: new Date(),
-          },
-        });
-      } else {
-        await tx.exam.update({
-          where: { id: exam.id },
-          data: {
-            date: examDate,
-            isPublished: true,
-            status: "PUBLISHED",
-            dispatchedByStaffId: teacherId || exam.dispatchedByStaffId,
-            dispatchedAt: new Date(),
-          },
-        });
-      }
-
-      // B. Check for existing dispatched report card (Revision flow)
-      const existing = await tx.reportCard.findUnique({
-        where: {
-          studentId_examId: {
-            studentId: input.studentId,
-            examId: exam.id,
-          },
-        },
-        include: {
-          subjectMarks: true,
-        },
-      });
-
-      let revision = 1;
-      let isRevisionUpdate = false;
-
-      if (existing && existing.published) {
-        if (!input.revisionReason?.trim()) {
-          // Tell client that a revision reason is required
-          return {
-            needsRevisionReason: true,
-            previousRevision: existing.revision || 1,
-            examId: exam.id,
-          };
-        }
-
-        revision = (existing.revision || 1) + 1;
-        isRevisionUpdate = true;
-      }
-
-      // C. Upsert ReportCard
-      const reportCard = await tx.reportCard.upsert({
-        where: {
-          studentId_examId: {
-            studentId: input.studentId,
-            examId: exam.id,
-          },
-        },
-        update: {
-          totalMarks: criteria.totalMarks,
-          maxTotal: criteria.maxTotal,
-          percentage: criteria.percentage,
-          grade: criteria.overallGrade,
-          overallGrade: criteria.overallGrade,
-          result: criteria.result,
-          attendance: input.attendance?.trim() || null,
-          remarks: input.generalRemarks?.trim() || null,
-          revision,
-          published: true,
-          dispatchedAt: new Date(),
-          parentVerified: false,
-        },
-        create: {
-          studentId: input.studentId,
-          examId: exam.id,
-          totalMarks: criteria.totalMarks,
-          maxTotal: criteria.maxTotal,
-          percentage: criteria.percentage,
-          grade: criteria.overallGrade,
-          overallGrade: criteria.overallGrade,
-          result: criteria.result,
-          attendance: input.attendance?.trim() || null,
-          remarks: input.generalRemarks?.trim() || null,
-          revision: 1,
-          published: true,
-          dispatchedAt: new Date(),
-          parentVerified: false,
-        },
-      });
-
-      // D. Save subject marks into ReportCardSubject
-      await tx.reportCardSubject.deleteMany({
-        where: { reportCardId: reportCard.id },
-      });
-
-      for (const sub of criteria.processedSubjects) {
-        await tx.reportCardSubject.create({
-          data: {
-            reportCardId: reportCard.id,
-            subjectId: sub.subjectId || null,
-            subjectName: sub.subjectName,
-            marks: sub.marks,
-            maxMarks: sub.maxMarks,
-            passMark: sub.passMark,
-            grade: sub.grade,
-            status: sub.status,
-            absent: sub.absent,
-            remark: sub.remark,
-          },
-        });
-
-        // Also sync standard Mark table if subjectId is a valid DB subject
-        if (sub.subjectId) {
-          await tx.mark.upsert({
-            where: {
-              studentId_examId_subjectId: {
-                studentId: input.studentId,
-                examId: exam.id,
-                subjectId: sub.subjectId,
-              },
-            },
-            update: {
-              score: sub.marks !== null ? sub.marks : 0,
-              maxScore: sub.maxMarks,
-              marksObtained: sub.marks,
-              isAbsent: sub.absent,
-              remarks: sub.remark,
-            },
-            create: {
-              studentId: input.studentId,
-              examId: exam.id,
-              subjectId: sub.subjectId,
-              score: sub.marks !== null ? sub.marks : 0,
-              maxScore: sub.maxMarks,
-              marksObtained: sub.marks,
-              isAbsent: sub.absent,
-              remarks: sub.remark,
-              enteredByStaffId: teacherId,
-            },
-          });
-        }
-      }
-
-      // E. If revision, write audit log
-      if (isRevisionUpdate && existing) {
-        await tx.reportCardAuditLog.create({
-          data: {
-            reportCardId: reportCard.id,
-            revision,
-            changedBy: session.user.id,
-            changedByName: session.user.name || "Teacher",
-            reason: input.revisionReason?.trim() || "Marks updated",
-            oldValues: {
-              totalMarks: existing.totalMarks,
-              percentage: existing.percentage,
-              grade: existing.grade,
-              result: existing.result,
-              remarks: existing.remarks,
-            },
-            newValues: {
-              totalMarks: criteria.totalMarks,
-              percentage: criteria.percentage,
-              grade: criteria.overallGrade,
-              result: criteria.result,
-              remarks: input.generalRemarks?.trim() || null,
-            },
-          },
-        });
-      }
-
-      // F. Recalculate ranks across the class for this exam
-      await updateExamRanks(tx, exam.id);
-
-      // G. Update exam student count
-      const totalStudentsCount = await tx.reportCard.count({
-        where: { examId: exam.id, published: true },
-      });
-      await tx.exam.update({
-        where: { id: exam.id },
-        data: { studentCount: totalStudentsCount },
-      });
-
-      return {
-        needsRevisionReason: false,
-        reportCardId: reportCard.id,
-        examId: exam.id,
-        revision,
-      };
+    // A. Find or create Exam
+    let exam = await prisma.exam.findFirst({
+      where: {
+        classId: input.classId,
+        name: { equals: trimmedExamName, mode: "insensitive" },
+      },
     });
 
-    if (result.needsRevisionReason) {
-      return {
-        studentId: input.studentId,
-        studentName,
-        rollNumber,
-        success: false,
-        needsRevisionReason: true,
-        previousRevision: result.previousRevision,
-        error: "This student already has a dispatched report card for this exam. A revision reason is required to update it.",
-      };
+    if (!exam) {
+      exam = await prisma.exam.create({
+        data: {
+          name: trimmedExamName,
+          normalizedName: normalizedExamName,
+          date: examDate,
+          classId: input.classId,
+          isPublished: true,
+          status: "PUBLISHED",
+          dispatchedByStaffId: teacherId,
+          dispatchedAt: new Date(),
+        },
+      });
+    } else {
+      await prisma.exam.update({
+        where: { id: exam.id },
+        data: {
+          date: examDate,
+          isPublished: true,
+          status: "PUBLISHED",
+          dispatchedByStaffId: teacherId || exam.dispatchedByStaffId,
+          dispatchedAt: new Date(),
+        },
+      });
     }
+
+    // B. Check for existing dispatched report card (Revision flow)
+    const existing = await prisma.reportCard.findUnique({
+      where: {
+        studentId_examId: {
+          studentId: input.studentId,
+          examId: exam.id,
+        },
+      },
+      include: {
+        subjectMarks: true,
+      },
+    });
+
+    let revision = 1;
+    let isRevisionUpdate = false;
+
+    if (existing && existing.published) {
+      if (!input.revisionReason?.trim()) {
+        return {
+          studentId: input.studentId,
+          studentName,
+          rollNumber,
+          success: false,
+          needsRevisionReason: true,
+          previousRevision: existing.revision || 1,
+          examId: exam.id,
+          error: "This student already has a dispatched report card for this exam. A revision reason is required to update it.",
+        };
+      }
+
+      revision = (existing.revision || 1) + 1;
+      isRevisionUpdate = true;
+    }
+
+    // C. Single atomic nested upsert for ReportCard and ReportCardSubject
+    const subjectData = criteria.processedSubjects.map((sub) => ({
+      subjectId: sub.subjectId || null,
+      subjectName: sub.subjectName,
+      marks: sub.marks,
+      maxMarks: sub.maxMarks,
+      passMark: sub.passMark,
+      grade: sub.grade,
+      status: sub.status,
+      absent: sub.absent,
+      remark: sub.remark,
+    }));
+
+    const reportCard = await prisma.reportCard.upsert({
+      where: {
+        studentId_examId: {
+          studentId: input.studentId,
+          examId: exam.id,
+        },
+      },
+      update: {
+        totalMarks: criteria.totalMarks,
+        maxTotal: criteria.maxTotal,
+        percentage: criteria.percentage,
+        grade: criteria.overallGrade,
+        overallGrade: criteria.overallGrade,
+        result: criteria.result,
+        attendance: input.attendance?.trim() || null,
+        remarks: input.generalRemarks?.trim() || null,
+        revision,
+        published: true,
+        dispatchedAt: new Date(),
+        parentVerified: false,
+        notifyStatus: "PENDING",
+        subjectMarks: {
+          deleteMany: {},
+          create: subjectData,
+        },
+      },
+      create: {
+        studentId: input.studentId,
+        examId: exam.id,
+        totalMarks: criteria.totalMarks,
+        maxTotal: criteria.maxTotal,
+        percentage: criteria.percentage,
+        grade: criteria.overallGrade,
+        overallGrade: criteria.overallGrade,
+        result: criteria.result,
+        attendance: input.attendance?.trim() || null,
+        remarks: input.generalRemarks?.trim() || null,
+        revision: 1,
+        published: true,
+        dispatchedAt: new Date(),
+        parentVerified: false,
+        notifyStatus: "PENDING",
+        subjectMarks: {
+          create: subjectData,
+        },
+      },
+    });
+
+    // D. Sync standard Mark table if subjectId is a valid DB subject
+    const markPromises = criteria.processedSubjects
+      .filter((sub) => !!sub.subjectId)
+      .map((sub) =>
+        prisma.mark.upsert({
+          where: {
+            studentId_examId_subjectId: {
+              studentId: input.studentId,
+              examId: exam.id,
+              subjectId: sub.subjectId!,
+            },
+          },
+          update: {
+            score: sub.marks !== null ? sub.marks : 0,
+            maxScore: sub.maxMarks,
+            marksObtained: sub.marks,
+            isAbsent: sub.absent,
+            remarks: sub.remark,
+          },
+          create: {
+            studentId: input.studentId,
+            examId: exam.id,
+            subjectId: sub.subjectId!,
+            score: sub.marks !== null ? sub.marks : 0,
+            maxScore: sub.maxMarks,
+            marksObtained: sub.marks,
+            isAbsent: sub.absent,
+            remarks: sub.remark,
+            enteredByStaffId: teacherId,
+          },
+        }).catch((mErr) => console.warn("[MarkSync] Error syncing mark:", mErr))
+      );
+
+    if (markPromises.length > 0) {
+      await Promise.allSettled(markPromises);
+    }
+
+    // E. If revision, write audit log
+    if (isRevisionUpdate && existing) {
+      await prisma.reportCardAuditLog.create({
+        data: {
+          reportCardId: reportCard.id,
+          revision,
+          changedBy: session.user.id,
+          changedByName: session.user.name || "Teacher",
+          reason: input.revisionReason?.trim() || "Marks updated",
+          oldValues: {
+            totalMarks: existing.totalMarks,
+            percentage: existing.percentage,
+            grade: existing.grade,
+            result: existing.result,
+            remarks: existing.remarks,
+          },
+          newValues: {
+            totalMarks: criteria.totalMarks,
+            percentage: criteria.percentage,
+            grade: criteria.overallGrade,
+            result: criteria.result,
+            remarks: input.generalRemarks?.trim() || null,
+          },
+        },
+      }).catch((logErr) => console.warn("[AuditLog] Error logging revision:", logErr));
+    }
+
+    // F. Recalculate ranks across the class for this exam
+    await updateExamRanks(exam.id);
+
+    // G. Update exam student count
+    const totalStudentsCount = await prisma.reportCard.count({
+      where: { examId: exam.id, published: true },
+    });
+    await prisma.exam.update({
+      where: { id: exam.id },
+      data: { studentCount: totalStudentsCount },
+    }).catch((eErr) => console.warn("[ExamCount] Error updating count:", eErr));
 
     // 3. Deliver parent notifications outside transaction
     const linkedParents = student.parents || [];
@@ -584,14 +577,17 @@ export async function dispatchSingleStudentReportCardAction(
 
     if (notifiedParentsCount > 0) {
       await prisma.reportCard.update({
-        where: { id: result.reportCardId },
-        data: { parentNotifiedAt: new Date() },
-      });
+        where: { id: reportCard.id },
+        data: {
+          parentNotifiedAt: new Date(),
+          notifyStatus: "SENT",
+        },
+      }).catch((uErr) => console.warn("[ReportCardUpdate] Error updating parentNotifiedAt:", uErr));
     }
 
     // Fetch updated rank
     const updatedCard = await prisma.reportCard.findUnique({
-      where: { id: result.reportCardId },
+      where: { id: reportCard.id },
       select: { rank: true },
     });
 
@@ -604,8 +600,9 @@ export async function dispatchSingleStudentReportCardAction(
       studentName,
       rollNumber,
       success: true,
-      reportCardId: result.reportCardId,
-      revision: result.revision,
+      reportCardId: reportCard.id,
+      examId: exam.id,
+      revision,
       rank: updatedCard?.rank || undefined,
       parentsNotifiedCount: notifiedParentsCount,
       hasLinkedParents: linkedParents.length > 0,
