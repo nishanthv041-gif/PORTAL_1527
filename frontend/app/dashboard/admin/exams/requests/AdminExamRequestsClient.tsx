@@ -703,3 +703,4 @@ export default function AdminExamRequestsClient({
 function SaveIcon() {
   return <Check size={16} />;
 }
+

@@ -300,3 +300,64 @@ export async function parseAndValidateMarksExcel(
     },
   };
 }
+
+/**
+ * Generates an Excel template (.xlsx) for an entire class report card / marks sheet
+ * Pre-filled with real student names, roll numbers, and subject columns.
+ */
+export function generateClassReportCardExcelTemplate(params: {
+  className: string;
+  section: string;
+  examName: string;
+  subjects: Array<{ id: string; name: string; maxMarks?: number; passMarks?: number }>;
+  students: Array<{ id: string; rollNumber: string; name: string }>;
+}): Uint8Array {
+  const wb = XLSX.utils.book_new();
+
+  // Header rows
+  const wsData: any[][] = [
+    ["SRT UNIVERSAL SCHOOL - CLASS MARKS & REPORT CARD CONSOLIDATED TEMPLATE"],
+    ["Class:", `${params.className} - ${params.section}`, "Exam:", params.examName, "Date:", new Date().toISOString().split("T")[0]],
+    ["Instructions:", "Enter marks for each subject. Enter 'AB' if student was absent. Leave Remarks blank if none."],
+    [], // empty line
+  ];
+
+  // Column header row
+  const headerRow: string[] = ["Roll Number", "Student Name"];
+  params.subjects.forEach(sub => {
+    headerRow.push(`${sub.name} (Max: ${sub.maxMarks || 100})`);
+  });
+  headerRow.push("Attendance (%)");
+  headerRow.push("Teacher Remarks");
+  wsData.push(headerRow);
+
+  // Student rows pre-filled with real database students
+  params.students.forEach(st => {
+    const row: any[] = [st.rollNumber, st.name];
+    params.subjects.forEach(() => {
+      row.push(""); // empty mark slot ready to be filled
+    });
+    row.push(""); // attendance
+    row.push(""); // remarks
+    wsData.push(row);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Set column widths
+  const colWidths = [
+    { wch: 18 }, // Roll Number
+    { wch: 28 }, // Student Name
+  ];
+  params.subjects.forEach(() => {
+    colWidths.push({ wch: 18 });
+  });
+  colWidths.push({ wch: 16 }); // Attendance
+  colWidths.push({ wch: 30 }); // Remarks
+  ws["!cols"] = colWidths;
+
+  XLSX.utils.book_append_sheet(wb, ws, "Class Marks");
+  return new Uint8Array(XLSX.write(wb, { bookType: "xlsx", type: "array" }));
+}
+
+

@@ -430,3 +430,153 @@
   padding: 1rem;
   user-select: none;
 }
+
+/* ========================================================
+   TOP CONSOLIDATED MARKS TABLE & EMPTY STATE
+   ======================================================== */
+.consolidatedCard {
+  background: var(--card-bg, #1e293b);
+  border: 1.5px solid var(--border-color, #334155);
+  border-radius: 16px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.consolidatedHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.consolidatedTableWrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border-color, #334155);
+  background: var(--input-bg, #0f172a);
+  position: relative;
+  max-height: 440px;
+  overflow-y: auto;
+}
+
+.consolidatedTable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.85rem;
+  min-width: 780px;
+}
+
+.consolidatedTable thead th {
+  position: sticky;
+  top: 0;
+  background: #182234;
+  color: #94a3b8;
+  font-weight: 800;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1.5px solid var(--border-color, #334155);
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.consolidatedTable th.stickyCol,
+.consolidatedTable td.stickyCol {
+  position: sticky;
+  left: 0;
+  z-index: 11;
+  background: #151d2d;
+  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.35);
+  min-width: 200px;
+  max-width: 240px;
+}
+
+.consolidatedTable thead th.stickyCol {
+  z-index: 20;
+}
+
+.consolidatedTable tbody tr {
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.consolidatedTable tbody tr:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.consolidatedTable tbody tr.activeStudentRow {
+  background: rgba(59, 130, 246, 0.16) !important;
+}
+
+.consolidatedTable tbody tr.activeStudentRow td.stickyCol {
+  background: #1a2846 !important;
+  border-left: 3px solid var(--primary);
+}
+
+.consolidatedTable td {
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--border-color, #334155);
+  white-space: nowrap;
+}
+
+.confidenceLow {
+  background: rgba(245, 158, 11, 0.18) !important;
+  color: #fbbf24 !important;
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-weight: 700;
+}
+
+.consolidatedEmptyState {
+  padding: 2.75rem 1.5rem;
+  text-align: center;
+  border: 1.5px dashed var(--border-color, #334155);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.mobileConsolidatedList {
+  display: none;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mobileConsolidatedCard {
+  background: var(--input-bg, #0f172a);
+  border: 1.5px solid var(--border-color, #334155);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.mobileConsolidatedCardActive {
+  border-color: var(--primary) !important;
+  background: rgba(59, 130, 246, 0.1) !important;
+}
+
+@media (max-width: 768px) {
+  .consolidatedTableWrapper {
+    display: none;
+  }
+  .mobileConsolidatedList {
+    display: flex;
+  }
+}

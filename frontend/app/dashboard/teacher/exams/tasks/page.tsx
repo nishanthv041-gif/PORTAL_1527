@@ -27,3 +27,4 @@ export default async function TeacherMarksTasksPage() {
 
   return <TeacherMarksTasksClient tasks={tasks} />;
 }
+

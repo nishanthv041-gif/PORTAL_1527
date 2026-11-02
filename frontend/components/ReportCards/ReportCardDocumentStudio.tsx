@@ -9,8 +9,19 @@ import {
 } from "lucide-react";
 import type { TeacherClass, ClassSubject, ClassStudent, HistoryItem } from "./TeacherReportCardsClient";
 import type { ScanReportCardResult, ScannedReportCardSubject, DetectedStudentEntry } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardTypes";
-import { generateStandardJsonTemplate } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardUtils";
 import { createAndSendReportCardAction } from "@/backend/lib/services/reportCardActions";
+import {
+  recordReportCardUploadAudit,
+  bulkSaveReportCardsAction
+} from "@/backend/api/actions/dashboard/teacher/report-cards/reportCardUploadAction";
+import {
+  extractMarksDocument,
+  ExtractionResult,
+  ExtractedStudentRow,
+  calculateStudentTotals
+} from "@/frontend/lib/marks-extractor";
+import { generateClassReportCardExcelTemplate } from "@/frontend/lib/exams/excelMarksUtil";
+import { REPORT_CARD_GRADE_SCALE, calculateReportCardGrade } from "@/frontend/lib/constants";
 import styles from "./ReportCardDocumentStudio.module.css";
 
 export interface QueuedFile {
@@ -22,6 +33,7 @@ export interface QueuedFile {
   previewUrl?: string;
   status: "QUEUED" | "PROCESSING" | "EXTRACTED" | "FAILED";
   progressText?: string;
+  progressPercent?: number;
   error?: string;
   result?: ScanReportCardResult;
 }
@@ -35,75 +47,13 @@ interface ReportCardDocumentStudioProps {
   isModalView?: boolean;
 }
 
-const SUPPORTED_EXTS = ["jpg", "jpeg", "png", "webp", "bmp", "pdf", "xlsx", "xls", "csv", "docx", "doc", "json"];
-const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
+const SUPPORTED_EXTS = ["xlsx", "xls", "csv", "pdf", "jpg", "jpeg", "png", "webp", "bmp", "json"];
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB limit as specified
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + " B";
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-}
-
-function calculateGrade(score: number, maxScore: number): string {
-  if (maxScore <= 0) return "-";
-  const pct = (score / maxScore) * 100;
-  if (pct >= 90) return "A+";
-  if (pct >= 80) return "A";
-  if (pct >= 70) return "B";
-  if (pct >= 60) return "C";
-  if (pct >= 50) return "D";
-  return "F";
-}
-
-/**
- * Compresses/downsamples large mobile phone camera photos client-side
- * to max 1600px and JPEG quality 0.82 to avoid Vercel 4.5MB request limit
- * and reduce mobile upload latency to under 1 second.
- */
-async function compressImageForUpload(file: File): Promise<Blob> {
-  if (!file.type.startsWith("image/") && !/\.(jpg|jpeg|png|webp|bmp)$/i.test(file.name)) {
-    return file;
-  }
-  return new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const MAX_DIM = 1600;
-      let width = img.width;
-      let height = img.height;
-      if (width > MAX_DIM || height > MAX_DIM) {
-        if (width > height) {
-          height = Math.round((height * MAX_DIM) / width);
-          width = MAX_DIM;
-        } else {
-          width = Math.round((width * MAX_DIM) / height);
-          height = MAX_DIM;
-        }
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        resolve(file);
-        return;
-      }
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(
-        (blob) => {
-          resolve(blob || file);
-        },
-        "image/jpeg",
-        0.82
-      );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(file);
-    };
-    img.src = url;
-  });
 }
 
 export default function ReportCardDocumentStudio({
@@ -139,33 +89,6 @@ export default function ReportCardDocumentStudio({
   const [academicYear, setAcademicYear] = useState<string>("2026-2027");
   const [subjects, setSubjects] = useState<ScannedReportCardSubject[]>([]);
   const [generalRemarks, setGeneralRemarks] = useState<string>("");
-
-  const handleApplyCriteriaToAll = (newMax?: number, newPass?: number) => {
-    const targetMax = newMax !== undefined ? Math.max(1, newMax) : examMaxMarks;
-    const targetPass = newPass !== undefined ? Math.max(0, Math.min(targetMax, newPass)) : examPassMarks;
-
-    setExamMaxMarks(targetMax);
-    setExamPassMarks(targetPass);
-
-    setSubjects(prev =>
-      prev.map(sub => {
-        const scoreNum = sub.score !== "" ? Number(sub.score) : NaN;
-        const isInvalid = !isNaN(scoreNum) && (scoreNum < 0 || scoreNum > targetMax);
-        const grade = calculateGrade(Number(sub.score) || 0, targetMax);
-        const isPass = !isNaN(scoreNum) && scoreNum >= targetPass;
-
-        return {
-          ...sub,
-          maxScore: targetMax,
-          passMarks: targetPass,
-          grade,
-          status: isInvalid ? "NEEDS_REVIEW" : isPass ? "PASS" : "FAIL",
-          isInvalid,
-          validationError: isInvalid ? `Score must be between 0 and ${targetMax}` : undefined
-        };
-      })
-    );
-  };
 
   // Review & Split Comparison State
   const [showOriginalDocPreview, setShowOriginalDocPreview] = useState<boolean>(true);
@@ -203,12 +126,12 @@ export default function ReportCardDocumentStudio({
     return fileQueue.find(f => f.id === activeFileId) || fileQueue[0] || null;
   }, [fileQueue, activeFileId]);
 
-  // Active student entry from multi-student detection
-  const detectedStudentsList = useMemo(() => {
+  // Active student entry list from multi-student detection
+  const detectedStudentsList: DetectedStudentEntry[] = useMemo(() => {
     return activeQueuedFile?.result?.allDetectedStudents || [];
   }, [activeQueuedFile]);
 
-  // Live Summary Calculations (Hooks are declared unconditionally at top level)
+  // Live Summary Calculations
   const totals = useMemo(() => {
     let obtained = 0;
     let maximum = 0;
@@ -232,17 +155,7 @@ export default function ReportCardDocumentStudio({
 
     const isAllEntered = subjects.length > 0 && emptyCount === 0;
     const percentage = maximum > 0 && hasAnyMarks ? parseFloat(((obtained / maximum) * 100).toFixed(1)) : 0;
-
-    let grade = "-";
-    if (isAllEntered) {
-      if (hasFail && percentage < 40) grade = "F";
-      else if (percentage >= 90) grade = "A+";
-      else if (percentage >= 80) grade = "A";
-      else if (percentage >= 70) grade = "B";
-      else if (percentage >= 60) grade = "C";
-      else if (percentage >= 50) grade = "D";
-      else grade = "F";
-    }
+    const grade = isAllEntered ? calculateReportCardGrade(percentage, hasFail) : "-";
 
     const invalidCount = subjects.filter(s => s.isInvalid || s.score === "").length;
     const hasValidationErrors = invalidCount > 0;
@@ -266,6 +179,34 @@ export default function ReportCardDocumentStudio({
       resultStatus
     };
   }, [subjects]);
+
+  // Handle Criteria Changes for All Subjects
+  const handleApplyCriteriaToAll = (newMax?: number, newPass?: number) => {
+    const targetMax = newMax !== undefined ? Math.max(1, newMax) : examMaxMarks;
+    const targetPass = newPass !== undefined ? Math.max(0, Math.min(targetMax, newPass)) : examPassMarks;
+
+    setExamMaxMarks(targetMax);
+    setExamPassMarks(targetPass);
+
+    setSubjects(prev =>
+      prev.map(sub => {
+        const scoreNum = sub.score !== "" ? Number(sub.score) : NaN;
+        const isInvalid = !isNaN(scoreNum) && (scoreNum < 0 || scoreNum > targetMax);
+        const grade = !isNaN(scoreNum) ? calculateReportCardGrade((scoreNum / targetMax) * 100) : "-";
+        const isPass = !isNaN(scoreNum) && scoreNum >= targetPass;
+
+        return {
+          ...sub,
+          maxScore: targetMax,
+          passMarks: targetPass,
+          grade,
+          status: isInvalid ? "NEEDS_REVIEW" : isPass ? "PASS" : "FAIL",
+          isInvalid,
+          validationError: isInvalid ? `Score must be between 0 and ${targetMax}` : undefined
+        };
+      })
+    );
+  };
 
   // Handle Target Class Change
   const handleClassChange = (newClassId: string) => {
@@ -299,6 +240,7 @@ export default function ReportCardDocumentStudio({
   const handleAddFiles = (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
     setGlobalError(null);
+    setSaveSuccess(null);
 
     const newEntries: QueuedFile[] = [];
 
@@ -307,12 +249,12 @@ export default function ReportCardDocumentStudio({
       const ext = file.name.split(".").pop()?.toLowerCase() || "";
 
       if (!SUPPORTED_EXTS.includes(ext)) {
-        setGlobalError(`File "${file.name}" has an unsupported format (.${ext}). Supported formats: ${SUPPORTED_EXTS.join(", ")}`);
+        setGlobalError(`File "${file.name}" has an unsupported format (.${ext}). Supported: ${SUPPORTED_EXTS.join(", ")}`);
         continue;
       }
 
       if (file.size > MAX_FILE_SIZE_BYTES) {
-        setGlobalError(`File "${file.name}" (${formatFileSize(file.size)}) exceeds the maximum allowed size of 25MB.`);
+        setGlobalError(`File "${file.name}" (${formatFileSize(file.size)}) exceeds the maximum allowed size of 10MB.`);
         continue;
       }
 
@@ -326,7 +268,7 @@ export default function ReportCardDocumentStudio({
         ext,
         previewUrl,
         status: "QUEUED",
-        progressText: "Waiting to scan..."
+        progressText: "Waiting to extract..."
       };
       newEntries.push(entry);
     }
@@ -340,57 +282,94 @@ export default function ReportCardDocumentStudio({
     }
   };
 
-  // Process a Queued Item via API
+  // Process a Queued Item via Browser-Based Layered Extractor
   const processQueueItem = async (entry: QueuedFile) => {
     if (!activeClassId) {
-      setGlobalError("Please select a target class before scanning documents.");
+      setGlobalError("Please select a target class before uploading documents.");
       return;
     }
 
     setFileQueue(prev =>
-      prev.map(f => (f.id === entry.id ? { ...f, status: "PROCESSING", progressText: `Scanning ${entry.ext.toUpperCase()} document...` } : f))
+      prev.map(f => (f.id === entry.id ? { ...f, status: "PROCESSING", progressText: `Reading ${entry.ext.toUpperCase()} document...`, progressPercent: 10 } : f))
     );
 
     try {
-      // 1. Client-Side Image Prep: Downscale/compress images in-memory to keep upload fast
-      const uploadBlob = await compressImageForUpload(entry.file);
-      const uploadFile = new File([uploadBlob], entry.file.name, { type: uploadBlob.type || entry.file.type });
+      // Execute layered extraction in browser
+      const extraction: ExtractionResult = await extractMarksDocument(
+        entry.file,
+        classStudents,
+        classSubjects,
+        examMaxMarks,
+        examPassMarks,
+        (percent, message) => {
+          setFileQueue(prev =>
+            prev.map(f => (f.id === entry.id ? { ...f, progressText: message, progressPercent: percent } : f))
+          );
+        }
+      );
 
-      const formData = new FormData();
-      formData.set("classId", activeClassId);
-      formData.set("file", uploadFile);
-      formData.set("defaultMaxMarks", String(examMaxMarks));
-      formData.set("defaultPassMarks", String(examPassMarks));
-      formData.set("examDate", examDate);
-      formData.set("examName", examName);
-
-      // 2. Call server extraction endpoint
-      let res = await fetch("/api/report-cards/extract", {
-        method: "POST",
-        body: formData
-      });
-
-      if (!res.ok) {
-        res = await fetch("/api/teacher/report-cards/scan", {
-          method: "POST",
-          body: formData
-        });
+      if (!extraction.success || extraction.students.length === 0) {
+        throw new Error(extraction.error || `Could not find any readable marks or student rows in ${entry.name}.`);
       }
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || `Server returned ${res.status} while processing ${entry.name}`);
-      }
+      // Convert extraction to ScanReportCardResult format
+      const detectedStudents: DetectedStudentEntry[] = extraction.students.map((st: ExtractedStudentRow, idx: number) => ({
+        studentId: st.matchedStudentId || (classStudents[idx]?.id || ""),
+        studentName: st.matchedStudentName || st.rawName || `Student ${idx + 1}`,
+        rollNumber: st.matchedRollNumber || st.rawRollNumber || "",
+        extractedName: st.rawName,
+        className: currentClass ? `${currentClass.name} - ${currentClass.section}` : null,
+        attendance: st.attendance || null,
+        subjects: st.subjects.map((sub, sIdx) => {
+          const scoreNum: number | "" = typeof sub.score === "number" ? sub.score : "";
+          const isInvalid = scoreNum === "" ? true : (scoreNum < 0 || scoreNum > sub.maxScore);
+          return {
+            id: `sub-st-${idx}-${sIdx}`,
+            subjectId: sub.matchedSubjectId || classSubjects[sIdx]?.id || "",
+            subjectName: sub.subjectName,
+            score: scoreNum,
+            maxScore: sub.maxScore,
+            passMarks: sub.passMarks,
+            grade: sub.grade,
+            status: sub.status === "PASS" || sub.status === "FAIL" ? sub.status : "NEEDS_REVIEW",
+            remarks: sub.remarks || "",
+            confidence: sub.confidence,
+            originalExtractedValue: sub.rawText,
+            isInvalid
+          };
+        }),
+        totalMarks: st.totalMarks,
+        percentage: st.percentage,
+        grade: st.grade,
+        remarks: st.generalRemarks,
+        confidence: st.confidence
+      }));
 
-      const result: ScanReportCardResult = await res.json();
-      if (!result.success) {
-        throw new Error(result.error || `Failed to extract data from ${entry.name}`);
-      }
+      const firstStudent = detectedStudents[0];
+
+      const result: ScanReportCardResult = {
+        success: true,
+        fileDetails: extraction.fileDetails,
+        studentId: firstStudent.studentId,
+        studentName: firstStudent.studentName,
+        rollNumber: firstStudent.rollNumber,
+        extractedName: firstStudent.extractedName,
+        studentConfidence: firstStudent.confidence === "HIGH" ? "HIGH" : firstStudent.confidence === "MEDIUM" ? "MEDIUM" : "LOW",
+        examName: extraction.examName || examName || "Midterm Examination",
+        examDate: extraction.examDate || examDate || new Date().toISOString().split("T")[0],
+        defaultMaxMarks: examMaxMarks,
+        defaultPassMarks: examPassMarks,
+        generalRemarks: firstStudent.remarks || "",
+        subjects: firstStudent.subjects,
+        allDetectedStudents: detectedStudents,
+        detectedStudents,
+        rawTextPreview: extraction.rawTextPreview
+      };
 
       setFileQueue(prev =>
         prev.map(f =>
           f.id === entry.id
-            ? { ...f, status: "EXTRACTED", progressText: "Extracted successfully", result }
+            ? { ...f, status: "EXTRACTED", progressText: `Extracted ${detectedStudents.length} student(s) successfully`, progressPercent: 100, result }
             : f
         )
       );
@@ -399,70 +378,30 @@ export default function ReportCardDocumentStudio({
         setActiveFileId(entry.id);
         applyScanResultToEditor(result);
       }
-    } catch (err: any) {
-      console.warn("Scanning notice for file:", entry.name, err);
 
-      // Provide a ready editable template so teacher can immediately edit without blocker
-      const fallbackResult: ScanReportCardResult = {
-        success: true,
-        fileDetails: { name: entry.name, type: entry.ext.toUpperCase(), size: entry.size },
-        studentId: classStudents[0]?.id || "",
-        studentName: classStudents[0]?.name || "Student",
-        rollNumber: classStudents[0]?.rollNumber || "",
-        studentConfidence: "NONE",
-        examName: examName || "Midterm Examination",
-        examDate: examDate || new Date().toISOString().split("T")[0],
-        defaultMaxMarks: examMaxMarks || 100,
-        defaultPassMarks: examPassMarks || 35,
-        generalRemarks: "",
-        subjects: classSubjects.map((sub, sIdx) => ({
-          id: `fallback-sub-${sIdx}`,
-          subjectId: sub.id,
-          subjectName: sub.name,
-          score: "",
-          maxScore: examMaxMarks || sub.maxMarks || 100,
-          passMarks: examPassMarks || sub.passMarks || 35,
-          remarks: "",
-          grade: "-",
-          status: "NEEDS_REVIEW",
-          originalExtractedValue: "Ready for manual entry",
-          isInvalid: false
-        })),
-        allDetectedStudents: [
-          {
-            studentId: classStudents[0]?.id || "",
-            studentName: classStudents[0]?.name || "Student",
-            rollNumber: classStudents[0]?.rollNumber || "",
-            subjects: classSubjects.map((sub, sIdx) => ({
-              id: `fallback-sub-${sIdx}`,
-              subjectId: sub.id,
-              subjectName: sub.name,
-              score: "",
-              maxScore: examMaxMarks || sub.maxMarks || 100,
-              passMarks: examPassMarks || sub.passMarks || 35,
-              remarks: "",
-              grade: "-",
-              status: "NEEDS_REVIEW",
-              originalExtractedValue: "Ready for manual entry",
-              isInvalid: false
-            }))
-          }
-        ],
-        rawTextPreview: "Document uploaded. Review and enter marks in the editor below."
-      };
+      // Record audit of upload asynchronously
+      recordReportCardUploadAudit({
+        classId: activeClassId,
+        fileName: entry.name,
+        fileSize: entry.size,
+        examName: result.examName,
+        status: "EXTRACTED",
+        studentCount: detectedStudents.length,
+        subjectCount: extraction.detectedSubjects.length
+      }).catch(err => console.warn("Audit record notice:", err));
+
+    } catch (err: any) {
+      console.error("Extraction error for file:", entry.name, err);
+      const errMsg = err?.message || `Failed to extract data from ${entry.name}. Please check the document layout.`;
+      setGlobalError(errMsg);
 
       setFileQueue(prev =>
         prev.map(f =>
           f.id === entry.id
-            ? { ...f, status: "EXTRACTED", progressText: "Ready for review & editing", result: fallbackResult }
+            ? { ...f, status: "FAILED", progressText: "Extraction failed", error: errMsg }
             : f
         )
       );
-
-      if (!activeFileId || activeFileId === entry.id) {
-        setActiveFileId(entry.id);
-        applyScanResultToEditor(fallbackResult);
-      }
     }
   };
 
@@ -472,8 +411,8 @@ export default function ReportCardDocumentStudio({
     setActiveStudentIndex(0);
     setVerifiedIndices(new Set());
 
-    if (result.examName && !examName) setExamName(result.examName);
-    if (result.examDate && !examDate) setExamDate(result.examDate);
+    if (result.examName) setExamName(result.examName);
+    if (result.examDate) setExamDate(result.examDate);
     setAcademicYear(result.academicYear || "2026-2027");
 
     const firstStudent = result.allDetectedStudents?.[0];
@@ -484,15 +423,11 @@ export default function ReportCardDocumentStudio({
 
     const rawSubs = firstStudent?.subjects || result.subjects || [];
     const cleanSubs: ScannedReportCardSubject[] = rawSubs.map(s => {
-      let maxScore = s.maxScore || examMaxMarks || 100;
-      let passMarks = s.passMarks || examPassMarks || 35;
-      if (passMarks === s.score || passMarks > maxScore) {
-        passMarks = examPassMarks || 35;
-      }
-
+      const maxScore = s.maxScore || examMaxMarks || 100;
+      const passMarks = s.passMarks || examPassMarks || 35;
       const scoreNum: number | "" = s.score !== "" && s.score !== undefined && !isNaN(Number(s.score)) ? Number(s.score) : "";
       const isInvalid = scoreNum === "" ? true : (scoreNum < 0 || scoreNum > maxScore);
-      const grade = scoreNum !== "" ? calculateGrade(scoreNum, maxScore) : "-";
+      const grade = scoreNum !== "" ? calculateReportCardGrade((scoreNum / maxScore) * 100) : "-";
       const status: "PASS" | "FAIL" | "NEEDS_REVIEW" = scoreNum === "" ? "NEEDS_REVIEW" : scoreNum >= passMarks ? "PASS" : "FAIL";
 
       return {
@@ -515,7 +450,7 @@ export default function ReportCardDocumentStudio({
   const handleSwitchStudent = (newIndex: number) => {
     if (newIndex === activeStudentIndex) return;
 
-    // 1. Save edits of the current student in local cache
+    // 1. Cache current student's edits
     studentEditsRef.current[activeStudentIndex] = {
       studentId: selectedStudentId,
       subjects: [...subjects],
@@ -523,7 +458,7 @@ export default function ReportCardDocumentStudio({
       generalRemarks
     };
 
-    // 2. Load the target student's cached edits or scan defaults
+    // 2. Load target student's cached edits or defaults
     const cached = studentEditsRef.current[newIndex];
     const rawSt = detectedStudentsList[newIndex];
 
@@ -538,11 +473,11 @@ export default function ReportCardDocumentStudio({
       setGeneralRemarks(rawSt.remarks || "");
 
       const cleanSubs: ScannedReportCardSubject[] = (rawSt.subjects || []).map(s => {
-        let maxScore = s.maxScore || examMaxMarks || 100;
-        let passMarks = s.passMarks || examPassMarks || 35;
+        const maxScore = s.maxScore || examMaxMarks || 100;
+        const passMarks = s.passMarks || examPassMarks || 35;
         const scoreNum: number | "" = s.score !== "" && s.score !== undefined && !isNaN(Number(s.score)) ? Number(s.score) : "";
         const isInvalid = scoreNum === "" ? true : (scoreNum < 0 || scoreNum > maxScore);
-        const grade = scoreNum !== "" ? calculateGrade(scoreNum, maxScore) : "-";
+        const grade = scoreNum !== "" ? calculateReportCardGrade((scoreNum / maxScore) * 100) : "-";
         const status: "PASS" | "FAIL" | "NEEDS_REVIEW" = scoreNum === "" ? "NEEDS_REVIEW" : scoreNum >= passMarks ? "PASS" : "FAIL";
 
         return {
@@ -571,6 +506,25 @@ export default function ReportCardDocumentStudio({
     }
   };
 
+  // Remove File from Queue
+  const handleRemoveFile = (fileId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFileQueue(prev => {
+      const filtered = prev.filter(f => f.id !== fileId);
+      if (activeFileId === fileId) {
+        const next = filtered[0];
+        setActiveFileId(next?.id || null);
+        if (next?.result) {
+          applyScanResultToEditor(next.result);
+        } else {
+          setSubjects([]);
+          setSelectedStudentId("");
+        }
+      }
+      return filtered;
+    });
+  };
+
   // Subject Table Handlers
   const handleSubjectScoreChange = (subjectId: string, val: string) => {
     setSubjects(prev =>
@@ -590,7 +544,7 @@ export default function ReportCardDocumentStudio({
 
         const num = Number(val);
         const isInvalid = isNaN(num) || num < 0 || num > sub.maxScore;
-        const grade = !isNaN(num) ? calculateGrade(num, sub.maxScore) : "-";
+        const grade = !isNaN(num) ? calculateReportCardGrade((num / sub.maxScore) * 100) : "-";
         const isPass = !isNaN(num) && num >= sub.passMarks;
 
         return {
@@ -605,97 +559,84 @@ export default function ReportCardDocumentStudio({
     );
   };
 
-  const handleSubjectMappingChange = (scannedSubId: string, newClassSubjectId: string) => {
-    const targetClassSub = classSubjects.find(cs => cs.id === newClassSubjectId);
-    if (!targetClassSub) return;
-
+  const handleSubjectMappingChange = (subjectEntryId: string, targetClassSubjectId: string) => {
+    const matchedClassSub = classSubjects.find(cs => cs.id === targetClassSubjectId);
     setSubjects(prev =>
       prev.map(sub => {
-        if (sub.id !== scannedSubId) return sub;
-
-        const scoreNum = sub.score !== "" ? Number(sub.score) : NaN;
-        const isInvalid = !isNaN(scoreNum) && (scoreNum < 0 || scoreNum > targetClassSub.maxMarks);
-        const grade = calculateGrade(Number(sub.score) || 0, targetClassSub.maxMarks);
-        const isPass = !isNaN(scoreNum) && scoreNum >= targetClassSub.passMarks;
-
+        if (sub.id !== subjectEntryId) return sub;
         return {
           ...sub,
-          subjectId: targetClassSub.id,
-          subjectName: targetClassSub.name,
-          maxScore: targetClassSub.maxMarks,
-          passMarks: targetClassSub.passMarks,
-          grade,
-          status: isInvalid ? "NEEDS_REVIEW" : isPass ? "PASS" : "FAIL",
-          isInvalid,
-          validationError: isInvalid ? `Score must be between 0 and ${targetClassSub.maxMarks}` : undefined
+          subjectId: targetClassSubjectId,
+          subjectName: matchedClassSub?.name || sub.subjectName,
+          maxScore: matchedClassSub?.maxMarks || sub.maxScore,
+          passMarks: matchedClassSub?.passMarks || sub.passMarks
         };
       })
     );
   };
 
-  const handleSubjectRemarksChange = (subjectId: string, val: string) => {
-    setSubjects(prev => prev.map(s => (s.id === subjectId ? { ...s, remarks: val } : s)));
-  };
-
-  const handleResetToExtracted = (subjectId: string) => {
+  const handleSubjectRemarksChange = (subjectEntryId: string, val: string) => {
     setSubjects(prev =>
-      prev.map(sub => {
-        if (sub.id !== subjectId) return sub;
-        const raw = sub.originalExtractedValue;
-        if (!raw) return sub;
-        const num = Number(raw);
-        if (isNaN(num)) return sub;
-
-        return {
-          ...sub,
-          score: num,
-          status: num >= sub.passMarks ? "PASS" : "FAIL",
-          grade: calculateGrade(num, sub.maxScore),
-          isInvalid: num < 0 || num > sub.maxScore
-        };
-      })
+      prev.map(sub => (sub.id === subjectEntryId ? { ...sub, remarks: val } : sub))
     );
   };
 
-  const handleDeleteSubject = (subjectId: string) => {
-    setSubjects(prev => prev.filter(s => s.id !== subjectId));
+  const handleDeleteSubject = (subjectEntryId: string) => {
+    setSubjects(prev => prev.filter(s => s.id !== subjectEntryId));
   };
 
   const handleAddSubject = () => {
-    const unmapped = classSubjects.find(cs => !subjects.some(s => s.subjectId === cs.id));
-    const newSub: ScannedReportCardSubject = {
+    const defaultSub = classSubjects[0];
+    const newSubject: ScannedReportCardSubject = {
       id: `manual-sub-${Date.now()}`,
-      subjectId: unmapped?.id || classSubjects[0]?.id || "",
-      subjectName: unmapped?.name || classSubjects[0]?.name || "New Subject",
+      subjectId: defaultSub?.id || "",
+      subjectName: defaultSub?.name || "New Subject",
       score: "",
-      maxScore: unmapped?.maxMarks || examMaxMarks || 100,
-      passMarks: unmapped?.passMarks || examPassMarks || 35,
-      remarks: "",
+      maxScore: defaultSub?.maxMarks || examMaxMarks || 100,
+      passMarks: defaultSub?.passMarks || examPassMarks || 35,
       grade: "-",
       status: "NEEDS_REVIEW",
+      remarks: "",
       isInvalid: true,
       validationError: "Score required"
     };
-    setSubjects(prev => [...prev, newSub]);
+    setSubjects(prev => [...prev, newSubject]);
   };
 
-  const handleRemoveFile = (fileId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setFileQueue(prev => prev.filter(f => f.id !== fileId));
-    if (activeFileId === fileId) {
-      const remaining = fileQueue.filter(f => f.id !== fileId);
-      if (remaining.length > 0) {
-        setActiveFileId(remaining[0].id);
-        if (remaining[0].result) applyScanResultToEditor(remaining[0].result);
-      } else {
-        setActiveFileId(null);
-        setSubjects([]);
+  // Download Pre-Filled Excel Template
+  const handleDownloadExcelTemplate = () => {
+    try {
+      if (!currentClass) {
+        setGlobalError("Please select a target class first.");
+        return;
       }
+
+      const excelBytes = generateClassReportCardExcelTemplate({
+        className: currentClass.name,
+        section: currentClass.section,
+        examName: examName || "Midterm Examination",
+        subjects: classSubjects,
+        students: classStudents
+      });
+
+      const blob = new Blob([excelBytes as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const safeClassName = `${currentClass.name}_${currentClass.section}`.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
+      a.href = url;
+      a.download = `report_card_template_${safeClassName}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error("Template error:", err);
+      setGlobalError("Failed to generate Excel template: " + (err?.message || "Unknown error"));
     }
   };
 
-  // Submit and connect to database
-  const handleConnectAndSaveToDatabase = async () => {
+  // Save Single Student Report Card to Database
+  const handleSaveCurrentStudent = async () => {
     setGlobalError(null);
     setSaveSuccess(null);
 
@@ -704,7 +645,7 @@ export default function ReportCardDocumentStudio({
       return;
     }
     if (!selectedStudentId) {
-      setGlobalError("Please select the student this report card belongs to.");
+      setGlobalError("Please select the enrolled student this report card belongs to.");
       return;
     }
     if (!examName.trim()) {
@@ -718,7 +659,7 @@ export default function ReportCardDocumentStudio({
 
     const hasErrors = subjects.some(s => s.isInvalid || s.score === "");
     if (hasErrors) {
-      setGlobalError("Please enter valid marks for all subjects before sending.");
+      setGlobalError("Please enter valid marks for all subjects before saving.");
       return;
     }
 
@@ -780,11 +721,10 @@ export default function ReportCardDocumentStudio({
           }))
         };
 
-        const successMsg = `Report card successfully created and connected to database for ${studentObj?.name || "Student"}! Linked parent(s) notified.`;
+        const successMsg = `Report card successfully created and saved to database for ${studentObj?.name || "Student"}! Linked parent(s) notified.`;
         setSaveSuccess(successMsg);
         onReportCardCreated(newHistoryItem, res.recipients || []);
 
-        // Mark student as verified
         const updatedVerified = new Set(verifiedIndices).add(activeStudentIndex);
         setVerifiedIndices(updatedVerified);
 
@@ -806,39 +746,14 @@ export default function ReportCardDocumentStudio({
       }
     } catch (saveErr: any) {
       console.error("Save error:", saveErr);
-      setGlobalError(saveErr?.message || "Failed to connect report card to database.");
+      setGlobalError(saveErr?.message || "Failed to save report card to database.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Download Standard JSON Template
-  const handleDownloadJsonTemplate = () => {
-    try {
-      const template = generateStandardJsonTemplate(
-        currentClass ? `${currentClass.name} - ${currentClass.section}` : "Class Template",
-        classSubjects,
-        classStudents
-      );
-      const jsonStr = JSON.stringify(template, null, 2);
-      const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      const sanitizedName = (currentClass?.name || "class_report_card").replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
-      a.href = url;
-      a.download = `report_card_template_${sanitizedName}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err: any) {
-      console.error("Template generation error:", err);
-      setGlobalError("Failed to generate JSON template: " + (err?.message || "Unknown error"));
-    }
-  };
-
-  // Bulk Save all detected students in JSON / Multi-student sheet to database
-  const handleSaveAllStudentsToDatabase = async () => {
+  // Bulk Save all detected students in class sheet to database
+  const handleSaveAllStudents = async () => {
     if (!activeClassId) {
       setGlobalError("Please select a target class before saving.");
       return;
@@ -852,10 +767,7 @@ export default function ReportCardDocumentStudio({
     setGlobalError(null);
     setSaveSuccess(null);
 
-    let savedCount = 0;
-    const errors: string[] = [];
-
-    // Save active student's current edits in studentEditsRef first
+    // Cache current active student edits
     studentEditsRef.current[activeStudentIndex] = {
       studentId: selectedStudentId,
       subjects: [...subjects],
@@ -863,24 +775,16 @@ export default function ReportCardDocumentStudio({
       generalRemarks
     };
 
-    for (let idx = 0; idx < detectedStudentsList.length; idx++) {
-      const entry = detectedStudentsList[idx];
+    const studentsToSave = detectedStudentsList.map((entry, idx) => {
       const edits = studentEditsRef.current[idx];
       const targetStudentId = edits?.studentId || entry.studentId;
       const targetSubjects = edits?.subjects || entry.subjects || [];
       const targetRemarks = edits?.generalRemarks || entry.remarks || generalRemarks;
 
-      if (!targetStudentId) {
-        errors.push(`Student #${idx + 1} (${entry.studentName}) is not matched to an enrolled student.`);
-        continue;
-      }
-
-      const formattedMarks = targetSubjects.map(s => {
+      const marks = targetSubjects.map(s => {
         let finalSubjectId = s.subjectId;
         if (!finalSubjectId) {
-          const match = classSubjects.find(
-            cs => cs.name.toLowerCase() === s.subjectName.toLowerCase()
-          );
+          const match = classSubjects.find(cs => cs.name.toLowerCase() === s.subjectName.toLowerCase());
           finalSubjectId = match?.id || classSubjects[0]?.id || "";
         }
         return {
@@ -892,280 +796,375 @@ export default function ReportCardDocumentStudio({
         };
       });
 
-      try {
-        const res = await createAndSendReportCardAction({
-          studentId: targetStudentId,
-          classId: activeClassId,
-          examName: examName.trim(),
-          examDate,
-          marks: formattedMarks,
-          remarks: targetRemarks?.trim() || undefined
-        });
+      return {
+        studentId: targetStudentId,
+        marks,
+        remarks: targetRemarks
+      };
+    });
 
-        if (res.success && res.reportCardId) {
-          savedCount++;
-          const studentObj = classStudents.find(s => s.id === targetStudentId);
-          const newHistoryItem: HistoryItem = {
-            id: res.reportCardId,
-            studentId: targetStudentId,
-            studentName: studentObj?.name || entry.studentName || "Student",
-            rollNumber: studentObj?.rollNumber || entry.rollNumber || "",
-            className: currentClass ? `${currentClass.name} - ${currentClass.section}` : "Class",
-            classId: activeClassId,
-            examId: `exam-${Date.now()}-${idx}`,
-            examName: examName.trim(),
-            examDate: new Date(examDate).toISOString(),
-            totalMarks: res.totalMarks || 0,
-            percentage: res.percentage || 0,
-            grade: res.grade || "-",
-            remarks: targetRemarks?.trim() || null,
-            published: true,
-            parentVerified: false,
-            marks: targetSubjects.map(s => ({
-              id: `m-${s.id}`,
-              subjectId: s.subjectId,
-              subjectName: s.subjectName,
-              score: Number(s.score) || 0,
-              maxScore: s.maxScore || 100,
-              passMarks: s.passMarks || 35,
-              remarks: s.remarks || null
-            }))
-          };
-          onReportCardCreated(newHistoryItem, res.recipients || []);
-        } else {
-          errors.push(`Failed to save ${entry.studentName}: ${res.error || "Unknown error"}`);
+    try {
+      const res = await bulkSaveReportCardsAction({
+        classId: activeClassId,
+        examName: examName.trim(),
+        examDate,
+        students: studentsToSave
+      });
+
+      if (res.success) {
+        const allIndices = new Set(detectedStudentsList.map((_, i) => i));
+        setVerifiedIndices(allIndices);
+        setSaveSuccess(`Successfully saved all ${res.savedCount} student report card(s) to database! All linked parents have been notified.`);
+        if (res.errors && res.errors.length > 0) {
+          setGlobalError(`Some students could not be saved: ${res.errors.join("; ")}`);
         }
-      } catch (err: any) {
-        errors.push(`Error saving ${entry.studentName}: ${err?.message || "Server error"}`);
+      } else {
+        setGlobalError(res.error || "Failed to bulk save report cards.");
       }
-    }
-
-    setIsSaving(false);
-    if (savedCount > 0) {
-      const allIndices = new Set(detectedStudentsList.map((_, i) => i));
-      setVerifiedIndices(allIndices);
-      setSaveSuccess(`Successfully saved ${savedCount} student report card(s) to database! All linked parents have been notified.`);
-    }
-    if (errors.length > 0) {
-      setGlobalError(errors.join(" | "));
+    } catch (err: any) {
+      setGlobalError(err?.message || "Server error while bulk saving report cards.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
     <div className={styles.studioContainer}>
-      {/* Target Class & Header Bar */}
+      {/* Studio Header Bar */}
       <div className={styles.headerBar}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0, flex: "1 1 260px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
           <div style={{
-            width: "40px",
-            height: "40px",
-            borderRadius: "12px",
-            background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+            width: "36px",
+            height: "36px",
+            borderRadius: "10px",
+            background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
             color: "#ffffff",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            boxShadow: "0 4px 12px rgba(59, 130, 246, 0.3)"
+            justifyContent: "center"
           }}>
-            <FileCheck size={20} />
+            <FileSpreadsheet size={20} />
           </div>
-          <div style={{ minWidth: 0 }}>
-            <h2 style={{ margin: 0, fontSize: "clamp(1rem, 2.8vw, 1.15rem)", fontWeight: 800 }}>
-              Report Card Document &amp; OCR Scanner
+          <div>
+            <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 800 }}>
+              Report Cards Marks Extractor &amp; Gradebook Studio
             </h2>
+            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+              Upload any mark sheet (Excel, CSV, PDF, or Photo) to automatically extract marks and generate official report cards.
+            </p>
           </div>
         </div>
 
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          {/* Class Selector Dropdown */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-secondary)" }}>Target Class:</span>
+            <select
+              value={activeClassId}
+              onChange={e => handleClassChange(e.target.value)}
+              style={{
+                padding: "0.5rem 0.85rem",
+                borderRadius: "10px",
+                border: "1.5px solid var(--border-color, #334155)",
+                background: "var(--card-bg, #1e293b)",
+                color: "var(--foreground)",
+                fontWeight: 700,
+                fontSize: "0.88rem",
+                cursor: "pointer"
+              }}
+            >
+              {classes.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name} - Section {c.section} ({c.students?.length || 0} Students)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Download Excel Template Button */}
+          <button
+            type="button"
+            onClick={handleDownloadExcelTemplate}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.5rem 0.9rem",
+              borderRadius: "10px",
+              border: "1.5px solid rgba(16, 185, 129, 0.4)",
+              background: "rgba(16, 185, 129, 0.12)",
+              color: "#34d399",
+              fontWeight: 700,
+              fontSize: "0.82rem",
+              cursor: "pointer"
+            }}
+            title="Download blank Excel template pre-filled with this class's students"
+          >
+            <Download size={15} />
+            <span>Download Excel Template</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Global Alerts */}
+      {globalError && (
         <div style={{
           display: "flex",
           alignItems: "center",
           gap: "0.75rem",
-          flexWrap: "wrap",
-          width: "auto"
+          padding: "0.85rem 1.15rem",
+          borderRadius: "12px",
+          background: "rgba(239, 68, 68, 0.1)",
+          border: "1.5px solid rgba(239, 68, 68, 0.3)",
+          color: "#ef4444",
+          fontSize: "0.88rem"
         }}>
-          <label style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
-            Target Class:
-          </label>
-          <select
-            value={activeClassId}
-            onChange={e => handleClassChange(e.target.value)}
-            style={{
-              padding: "0.55rem 0.85rem",
-              borderRadius: "10px",
-              border: "1.5px solid var(--border-color, #334155)",
-              background: "var(--input-bg, #0f172a)",
-              color: "var(--foreground)",
-              fontWeight: 700,
-              fontSize: "0.88rem",
-              cursor: "pointer",
-              maxWidth: "100%"
-            }}
-          >
-            {classes.map(c => (
-              <option key={c.id} value={c.id}>
-                {c.name} - Section {c.section} ({c.students?.length || 0} Students)
-              </option>
-            ))}
-          </select>
+          <AlertCircle size={20} style={{ flexShrink: 0 }} />
+          <span>{globalError}</span>
+        </div>
+      )}
 
-          {isModalView && onCloseModal && (
-            <button
-              type="button"
-              onClick={onCloseModal}
-              title="Close Scanner"
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "var(--text-secondary)",
-                cursor: "pointer",
-                padding: "0.25rem",
-                display: "flex",
-                alignItems: "center"
-              }}
-            >
-              <X size={20} />
-            </button>
+      {saveSuccess && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          padding: "0.85rem 1.15rem",
+          borderRadius: "12px",
+          background: "rgba(16, 185, 129, 0.1)",
+          border: "1.5px solid rgba(16, 185, 129, 0.3)",
+          color: "#10b981",
+          fontSize: "0.88rem"
+        }}>
+          <CheckCircle2 size={20} style={{ flexShrink: 0 }} />
+          <span>{saveSuccess}</span>
+        </div>
+      )}
+
+      {/* ========================================================
+          STEP 2 & 5: TOP CONSOLIDATED CLASS MARKS TABLE
+          Shows ONLY data from the uploaded document or saved records.
+          Clear empty state when no document is uploaded.
+          ======================================================== */}
+      <div className={styles.consolidatedCard}>
+        <div className={styles.consolidatedHeader}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <Award size={20} color="var(--primary)" />
+            <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800 }}>
+              Consolidated Student Marks
+            </h3>
+            {detectedStudentsList.length > 0 && (
+              <span style={{
+                fontSize: "0.75rem",
+                padding: "2px 8px",
+                borderRadius: "10px",
+                background: "rgba(59, 130, 246, 0.15)",
+                color: "#60a5fa",
+                fontWeight: 700
+              }}>
+                {detectedStudentsList.length} Students Extracted
+              </span>
+            )}
+          </div>
+
+          {detectedStudentsList.length > 1 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+              <button
+                type="button"
+                onClick={handleSaveAllStudents}
+                disabled={isSaving}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                  padding: "0.45rem 1rem",
+                  background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontWeight: 800,
+                  fontSize: "0.82rem",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)"
+                }}
+              >
+                <CheckCircle2 size={15} />
+                <span>{isSaving ? "Saving..." : `Save All Students (${detectedStudentsList.length})`}</span>
+              </button>
+            </div>
           )}
         </div>
-      </div>
 
-      {/* Global Exam Criteria Bar */}
-      <div className={styles.criteriaCard}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <Sliders size={18} color="var(--primary)" />
-            <span style={{ fontWeight: 800, fontSize: "0.95rem" }}>
-              Exam Details &amp; Base Criteria
-            </span>
+        {detectedStudentsList.length === 0 ? (
+          <div className={styles.consolidatedEmptyState}>
+            <FileSpreadsheet size={40} color="var(--primary)" style={{ opacity: 0.7 }} />
+            <h4 style={{ margin: "0.3rem 0", fontSize: "1.05rem", fontWeight: 800 }}>
+              Consolidated Class Marks Grid
+            </h4>
+            <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--text-secondary)" }}>
+              Upload a marks document to see the consolidated marks here.
+            </p>
           </div>
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <div className={styles.consolidatedTableWrapper}>
+              <table className={styles.consolidatedTable}>
+                <thead>
+                  <tr>
+                    <th className={styles.stickyCol}>Student Name &amp; ID</th>
+                    {detectedStudentsList[0]?.subjects?.map(s => (
+                      <th key={s.id || s.subjectName} style={{ textAlign: "center" }}>
+                        {s.subjectName.toUpperCase()}
+                      </th>
+                    ))}
+                    <th style={{ textAlign: "center" }}>Total</th>
+                    <th style={{ textAlign: "center" }}>%</th>
+                    <th style={{ textAlign: "center" }}>Grade</th>
+                    <th style={{ textAlign: "center" }}>Result</th>
+                    <th style={{ textAlign: "center" }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detectedStudentsList.map((st, sIdx) => {
+                    const isSelected = activeStudentIndex === sIdx;
+                    const stTotals = calculateStudentTotals(st.subjects as any);
+                    const isPass = stTotals.resultStatus === "PASSED";
 
-        </div>
+                    return (
+                      <tr
+                        key={sIdx}
+                        className={isSelected ? styles.activeStudentRow : ""}
+                        onClick={() => handleSwitchStudent(sIdx)}
+                        title="Click to review and edit this student in the form below"
+                      >
+                        <td className={styles.stickyCol}>
+                          <div style={{ fontWeight: 800, fontSize: "0.88rem", color: "var(--foreground)" }}>
+                            {st.studentName}
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                            Roll: <strong>{st.rollNumber || "Not Provided"}</strong>
+                          </div>
+                        </td>
 
-        <div className={styles.criteriaGrid}>
-          <div>
-            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, marginBottom: "0.25rem", color: "var(--text-secondary)" }}>
-              Exam / Term:
-            </label>
-            <input
-              type="text"
-              value={examName}
-              placeholder="e.g. Midterm Examination"
-              onChange={e => setExamName(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.45rem 0.65rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color, #334155)",
-                background: "var(--input-bg, #0f172a)",
-                color: "var(--foreground)",
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                boxSizing: "border-box"
-              }}
-            />
-          </div>
+                        {st.subjects.map((sub, subIdx) => (
+                          <td key={subIdx} style={{ textAlign: "center" }}>
+                            <span className={sub.confidence === "LOW" ? styles.confidenceLow : ""}>
+                              {sub.score !== "" && sub.score !== undefined ? sub.score : "-"}
+                            </span>
+                          </td>
+                        ))}
 
-          <div>
-            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, marginBottom: "0.25rem", color: "var(--text-secondary)" }}>
-              Exam Date:
-            </label>
-            <input
-              type="date"
-              value={examDate}
-              onChange={e => setExamDate(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.45rem 0.65rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color, #334155)",
-                background: "var(--input-bg, #0f172a)",
-                color: "var(--foreground)",
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                boxSizing: "border-box"
-              }}
-            />
-          </div>
+                        <td style={{ textAlign: "center", fontWeight: 800 }}>
+                          {stTotals.totalMarks} / {stTotals.maxTotalMarks}
+                        </td>
+                        <td style={{ textAlign: "center", fontWeight: 700, color: "var(--primary)" }}>
+                          {stTotals.percentage}%
+                        </td>
+                        <td style={{ textAlign: "center", fontWeight: 800, color: stTotals.grade === "F" ? "#ef4444" : "#10b981" }}>
+                          {stTotals.grade}
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <span
+                            className={styles.statusBadgeNoWrap}
+                            style={{
+                              padding: "2px 8px",
+                              borderRadius: "6px",
+                              fontWeight: 800,
+                              fontSize: "0.72rem",
+                              background: isPass ? "rgba(16, 185, 129, 0.15)" : stTotals.resultStatus === "NEEDS SUPPORT" ? "rgba(239, 68, 68, 0.15)" : "rgba(245, 158, 11, 0.15)",
+                              color: isPass ? "#10b981" : stTotals.resultStatus === "NEEDS SUPPORT" ? "#ef4444" : "#f59e0b"
+                            }}
+                          >
+                            {stTotals.resultStatus}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSwitchStudent(sIdx);
+                            }}
+                            style={{
+                              padding: "0.25rem 0.6rem",
+                              borderRadius: "6px",
+                              border: isSelected ? "1px solid var(--primary)" : "1px solid var(--border-color)",
+                              background: isSelected ? "rgba(59, 130, 246, 0.15)" : "transparent",
+                              color: isSelected ? "var(--primary)" : "var(--foreground)",
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              cursor: "pointer"
+                            }}
+                          >
+                            {isSelected ? "Editing" : "Select"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-          <div>
-            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, marginBottom: "0.25rem", color: "var(--text-secondary)" }}>
-              Max Mark (Base):
-            </label>
-            <input
-              type="number"
-              min={1}
-              value={examMaxMarks}
-              onChange={e => handleApplyCriteriaToAll(Number(e.target.value), examPassMarks)}
-              style={{
-                width: "100%",
-                padding: "0.45rem 0.65rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color, #334155)",
-                background: "var(--input-bg, #0f172a)",
-                color: "var(--foreground)",
-                fontWeight: 700,
-                fontSize: "0.85rem",
-                boxSizing: "border-box"
-              }}
-            />
-          </div>
+            {/* Mobile Card List View (< 768px) */}
+            <div className={styles.mobileConsolidatedList}>
+              {detectedStudentsList.map((st, sIdx) => {
+                const isSelected = activeStudentIndex === sIdx;
+                const stTotals = calculateStudentTotals(st.subjects as any);
+                return (
+                  <div
+                    key={sIdx}
+                    className={`${styles.mobileConsolidatedCard} ${isSelected ? styles.mobileConsolidatedCardActive : ""}`}
+                    onClick={() => handleSwitchStudent(sIdx)}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: "0.95rem" }}>{st.studentName}</div>
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                          Roll: <strong>{st.rollNumber}</strong>
+                        </div>
+                      </div>
+                      <span style={{
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                        fontSize: "0.75rem",
+                        fontWeight: 800,
+                        background: stTotals.resultStatus === "PASSED" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                        color: stTotals.resultStatus === "PASSED" ? "#10b981" : "#ef4444"
+                      }}>
+                        {stTotals.resultStatus}
+                      </span>
+                    </div>
 
-          <div>
-            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, marginBottom: "0.25rem", color: "var(--text-secondary)" }}>
-              Pass Mark:
-            </label>
-            <input
-              type="number"
-              min={0}
-              max={examMaxMarks}
-              value={examPassMarks}
-              onChange={e => handleApplyCriteriaToAll(examMaxMarks, Number(e.target.value))}
-              style={{
-                width: "100%",
-                padding: "0.45rem 0.65rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color, #334155)",
-                background: "var(--input-bg, #0f172a)",
-                color: "var(--foreground)",
-                fontWeight: 700,
-                fontSize: "0.85rem",
-                boxSizing: "border-box"
-              }}
-            />
-          </div>
-        </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", margin: "0.3rem 0" }}>
+                      {st.subjects.map((sub, subIdx) => (
+                        <span
+                          key={subIdx}
+                          style={{
+                            fontSize: "0.75rem",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            background: sub.confidence === "LOW" ? "rgba(245, 158, 11, 0.2)" : "rgba(255, 255, 255, 0.05)",
+                            color: sub.confidence === "LOW" ? "#fbbf24" : "var(--foreground)"
+                          }}
+                        >
+                          {sub.subjectName}: <strong>{sub.score !== "" ? sub.score : "-"}</strong>
+                        </span>
+                      ))}
+                    </div>
 
-        {/* Quick Presets */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.2rem" }}>
-          <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 700 }}>
-            Presets:
-          </span>
-          {[
-            { label: "100 / 35 (Standard)", max: 100, pass: 35 },
-            { label: "50 / 20 (Midterm)", max: 50, pass: 20 },
-            { label: "75 / 30 (Quarterly)", max: 75, pass: 30 },
-            { label: "25 / 10 (Unit Test)", max: 25, pass: 10 }
-          ].map(p => (
-            <button
-              key={p.label}
-              type="button"
-              onClick={() => handleApplyCriteriaToAll(p.max, p.pass)}
-              style={{
-                padding: "0.3rem 0.65rem",
-                borderRadius: "8px",
-                border: examMaxMarks === p.max && examPassMarks === p.pass ? "1px solid var(--primary)" : "1px solid var(--border-color)",
-                background: examMaxMarks === p.max && examPassMarks === p.pass ? "rgba(59, 130, 246, 0.15)" : "transparent",
-                color: examMaxMarks === p.max && examPassMarks === p.pass ? "var(--primary)" : "var(--foreground)",
-                fontSize: "0.75rem",
-                fontWeight: 700,
-                cursor: "pointer"
-              }}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                      <span>Total: <strong>{stTotals.totalMarks}/{stTotals.maxTotalMarks}</strong></span>
+                      <span>Pct: <strong>{stTotals.percentage}%</strong></span>
+                      <span>Grade: <strong>{stTotals.grade}</strong></span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Drag & Drop Upload Zone */}
@@ -1179,7 +1178,7 @@ export default function ReportCardDocumentStudio({
         style={{
           border: "2px dashed rgba(59, 130, 246, 0.4)",
           borderRadius: "16px",
-          padding: "clamp(1.5rem, 4vw, 2.5rem)",
+          padding: "clamp(1.5rem, 4vw, 2.2rem)",
           textAlign: "center",
           background: "rgba(59, 130, 246, 0.03)",
           cursor: "pointer",
@@ -1191,97 +1190,35 @@ export default function ReportCardDocumentStudio({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".jpg,.jpeg,.png,.webp,.bmp,.pdf,.xlsx,.xls,.csv,.docx,.doc,.json,application/json"
+          accept=".xlsx,.xls,.csv,.pdf,.jpg,.jpeg,.png,.webp,.bmp,.json"
           multiple
           style={{ display: "none" }}
           onChange={e => handleAddFiles(e.target.files)}
         />
         <div style={{
-          width: "52px",
-          height: "52px",
-          borderRadius: "16px",
+          width: "50px",
+          height: "50px",
+          borderRadius: "14px",
           background: "rgba(59, 130, 246, 0.15)",
           color: "var(--primary)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          margin: "0 auto 1rem"
+          margin: "0 auto 0.75rem"
         }}>
-          <Upload size={26} />
+          <Upload size={24} />
         </div>
-        <h3 style={{ margin: "0 0 0.4rem 0", fontSize: "1.1rem", fontWeight: 800 }}>
+        <h3 style={{ margin: "0 0 0.35rem 0", fontSize: "1.05rem", fontWeight: 800 }}>
           Drag &amp; drop document, or click to browse
         </h3>
-        <p style={{ margin: "0 0 0.85rem 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-          Supports JPG, PNG, PDF, Excel, Word, and JSON (.json) files up to 25MB
+        <p style={{ margin: "0 0 0.75rem 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+          Accepts Excel (.xlsx / .xls), CSV, Text PDF, Photos &amp; Scans (JPG / PNG) up to 10MB
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "0.5rem" }}>
-          <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(59, 130, 246, 0.12)", color: "#60a5fa", border: "1px solid rgba(59, 130, 246, 0.25)" }}>📷 Photos (OCR)</span>
-          <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(239, 68, 68, 0.12)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.25)" }}>📕 PDF</span>
           <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(16, 185, 129, 0.12)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.25)" }}>📊 Excel / CSV</span>
-          <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(168, 85, 247, 0.12)", color: "#c084fc", border: "1px solid rgba(168, 85, 247, 0.25)" }}>📄 JSON Data</span>
+          <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(239, 68, 68, 0.12)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.25)" }}>📕 PDF</span>
+          <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(59, 130, 246, 0.12)", color: "#60a5fa", border: "1px solid rgba(59, 130, 246, 0.25)" }}>📷 Photo / Scanned Mark Sheet</span>
         </div>
-      </div>
-
-      {/* JSON Template Download Helper */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        flexWrap: "wrap",
-        gap: "0.75rem",
-        padding: "0.75rem 1rem",
-        background: "rgba(59, 130, 246, 0.05)",
-        border: "1px dashed rgba(59, 130, 246, 0.3)",
-        borderRadius: "12px",
-        marginTop: "-0.5rem"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-          <div style={{
-            width: "32px",
-            height: "32px",
-            borderRadius: "8px",
-            background: "rgba(59, 130, 246, 0.15)",
-            color: "#60a5fa",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}>
-            <FileText size={16} />
-          </div>
-          <div>
-            <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--foreground)" }}>
-              Need a standard JSON format to fill marks?
-            </div>
-            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-              Download pre-filled template with enrolled students and subjects for {currentClass ? `${currentClass.name} - ${currentClass.section}` : "selected class"}.
-            </div>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleDownloadJsonTemplate}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.45rem",
-            padding: "0.45rem 0.9rem",
-            background: "#2563eb",
-            border: "none",
-            borderRadius: "8px",
-            color: "#ffffff",
-            fontSize: "0.8rem",
-            fontWeight: 700,
-            cursor: "pointer",
-            boxShadow: "0 2px 8px rgba(37, 99, 235, 0.35)",
-            transition: "all 0.15s ease"
-          }}
-          title="Download report card JSON template"
-        >
-          <Download size={14} />
-          <span>Download JSON Template</span>
-        </button>
       </div>
 
       {/* Document Queue Bar */}
@@ -1354,42 +1291,7 @@ export default function ReportCardDocumentStudio({
         </div>
       )}
 
-      {/* Global Alerts */}
-      {globalError && (
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.75rem",
-          padding: "0.85rem 1.15rem",
-          borderRadius: "12px",
-          background: "rgba(239, 68, 68, 0.1)",
-          border: "1.5px solid rgba(239, 68, 68, 0.3)",
-          color: "#ef4444",
-          fontSize: "0.88rem"
-        }}>
-          <AlertCircle size={20} style={{ flexShrink: 0 }} />
-          <span>{globalError}</span>
-        </div>
-      )}
-
-      {saveSuccess && (
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.75rem",
-          padding: "0.85rem 1.15rem",
-          borderRadius: "12px",
-          background: "rgba(16, 185, 129, 0.1)",
-          border: "1.5px solid rgba(16, 185, 129, 0.3)",
-          color: "#10b981",
-          fontSize: "0.88rem"
-        }}>
-          <CheckCircle2 size={20} style={{ flexShrink: 0 }} />
-          <span>{saveSuccess}</span>
-        </div>
-      )}
-
-      {/* Multi-Student Stepper Bar (When marksheet has 2 or more students) */}
+      {/* Multi-Student Stepper Bar (When class sheet has 2+ students) */}
       {detectedStudentsList.length > 1 && (
         <div style={{
           background: "var(--card-bg, #1e293b)",
@@ -1402,10 +1304,10 @@ export default function ReportCardDocumentStudio({
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
             <span style={{ fontSize: "0.9rem", fontWeight: 800 }}>
-              Multi-Student Gradebook Detected ({detectedStudentsList.length} Students)
+              Multi-Student Gradebook ({detectedStudentsList.length} Students)
             </span>
             <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontWeight: 700 }}>
-              {verifiedIndices.size} of {detectedStudentsList.length} Verified &amp; Dispatched
+              {verifiedIndices.size} of {detectedStudentsList.length} Saved
             </span>
           </div>
 
@@ -1468,18 +1370,6 @@ export default function ReportCardDocumentStudio({
               </span>
             </div>
           </div>
-
-          {/* Document Mark Discrepancy Alert */}
-          {activeQueuedFile.result?.docTotal !== undefined && totals.isAllEntered && totals.obtained !== activeQueuedFile.result.docTotal && (
-            <div className={styles.discrepancyBanner}>
-              <AlertCircle size={20} style={{ flexShrink: 0, marginTop: 1 }} />
-              <div>
-                <strong>Document Mark Discrepancy:</strong> Printed document total is{" "}
-                <strong>{activeQueuedFile.result.docTotal}</strong>, but sum of entered marks is{" "}
-                <strong>{totals.obtained}</strong>. Please check each subject mark against the original document.
-              </div>
-            </div>
-          )}
 
           {/* Split View */}
           <div className={showOriginalDocPreview && activeQueuedFile.previewUrl ? styles.splitView : styles.splitViewSingle}>
@@ -1558,7 +1448,7 @@ export default function ReportCardDocumentStudio({
                       width: "100%",
                       padding: "0.55rem 0.75rem",
                       borderRadius: "8px",
-                      border: "1.5px solid var(--border-color, #334155)",
+                      border: "1px solid var(--border-color)",
                       background: "var(--input-bg, #0f172a)",
                       color: "var(--foreground)",
                       fontWeight: 700,
@@ -1569,7 +1459,7 @@ export default function ReportCardDocumentStudio({
                     <option value="">-- Select Enrolled Student --</option>
                     {classStudents.map(st => (
                       <option key={st.id} value={st.id}>
-                        {st.name} ({st.rollNumber})
+                        {st.name} (Roll: {st.rollNumber})
                       </option>
                     ))}
                   </select>
@@ -1895,12 +1785,6 @@ export default function ReportCardDocumentStudio({
                         </div>
                       </div>
 
-                      {sub.isInvalid && (
-                        <span style={{ fontSize: "0.75rem", color: "#ef4444", fontWeight: 700 }}>
-                          {sub.validationError || "Invalid score"}
-                        </span>
-                      )}
-
                       <input
                         type="text"
                         value={sub.remarks || ""}
@@ -1974,7 +1858,7 @@ export default function ReportCardDocumentStudio({
                 <textarea
                   rows={2}
                   value={generalRemarks}
-                  placeholder="Enter positive remarks, recommendations, or academic encouragement for parents..."
+                  placeholder="Enter remarks or academic encouragement for parents..."
                   onChange={e => setGeneralRemarks(e.target.value)}
                   style={{
                     width: "100%",
@@ -2001,7 +1885,7 @@ export default function ReportCardDocumentStudio({
                 {detectedStudentsList.length > 1 && (
                   <button
                     type="button"
-                    onClick={handleSaveAllStudentsToDatabase}
+                    onClick={handleSaveAllStudents}
                     disabled={isSaving}
                     style={{
                       display: "inline-flex",
@@ -2027,19 +1911,19 @@ export default function ReportCardDocumentStudio({
 
                 <button
                   type="button"
-                  onClick={handleConnectAndSaveToDatabase}
+                  onClick={handleSaveCurrentStudent}
                   disabled={isSaving || totals.hasValidationErrors || !selectedStudentId}
                   className={styles.sendBtn}
                   title={
                     !selectedStudentId
-                      ? "Select an enrolled student before sending"
+                      ? "Select an enrolled student before saving"
                       : totals.hasValidationErrors
-                        ? "Fill in all subject marks before sending"
-                        : "Send Report Card to Parent"
+                        ? "Fill in all subject marks before saving"
+                        : "Save and send report card to parent"
                   }
                 >
                   <Send size={18} />
-                  <span>{isSaving ? "Sending to Parent..." : detectedStudentsList.length > 1 ? "Save Current Student" : "Send Report Card to Parent"}</span>
+                  <span>{isSaving ? "Saving..." : detectedStudentsList.length > 1 ? "Save Current Student" : "Save Report Card"}</span>
                 </button>
               </div>
             </div>

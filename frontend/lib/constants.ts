@@ -50,3 +50,37 @@ export const NOTIFICATION_CATEGORIES = {
   ANNOUNCEMENT: "ANNOUNCEMENT",
 } as const;
 
+/**
+ * Standard Grade Scale for Report Cards
+ * Configurable single source of truth across all report cards & mark evaluations.
+ * Default:
+ * A+: 90 - 100%
+ * A:  80 - 89%
+ * B:  70 - 79%
+ * C:  60 - 69%
+ * D:  50 - 59%
+ * E:  35 - 49%
+ * F:  Below 35%
+ */
+export const REPORT_CARD_GRADE_SCALE = [
+  { grade: "A+", min: 90, max: 100, label: "Outstanding" },
+  { grade: "A",  min: 80, max: 89.99, label: "Excellent" },
+  { grade: "B",  min: 70, max: 79.99, label: "Very Good" },
+  { grade: "C",  min: 60, max: 69.99, label: "Good" },
+  { grade: "D",  min: 50, max: 59.99, label: "Satisfactory" },
+  { grade: "E",  min: 35, max: 49.99, label: "Pass / Fair" },
+  { grade: "F",  min: 0,  max: 34.99, label: "Needs Improvement" },
+] as const;
+
+export function calculateReportCardGrade(percentage: number, hasFailSubject: boolean = false): string {
+  if (isNaN(percentage)) return "-";
+  if (hasFailSubject && percentage < 40) return "F";
+  for (const item of REPORT_CARD_GRADE_SCALE) {
+    if (percentage >= item.min) {
+      return item.grade;
+    }
+  }
+  return "F";
+}
+
+

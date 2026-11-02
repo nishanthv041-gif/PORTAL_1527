@@ -611,3 +611,4 @@ export async function submitMarksToClassTeacherAction(
     };
   }
 }
+

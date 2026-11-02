@@ -15,6 +15,7 @@ export interface ScannedReportCardSubject {
   isInvalid?: boolean;
   validationError?: string;
   isCustomSubject?: boolean;
+  confidence?: "HIGH" | "MEDIUM" | "LOW";
 }
 
 export interface DetectedStudentEntry {

@@ -89,3 +89,4 @@ export function exportConsolidatedMarksToExcel(
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
