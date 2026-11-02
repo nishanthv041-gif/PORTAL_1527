@@ -17,6 +17,13 @@ import {
   ExtractedStudentRow,
   calculateStudentTotals
 } from "@/frontend/lib/marks-extractor";
+import {
+  scanMarksheetDocument,
+  ScanStageError,
+  ScanStage,
+  ScanDebugInfo
+} from "@/frontend/lib/scan";
+import { matchScanResultToDatabase } from "@/frontend/lib/scan/match-students";
 import { generateClassReportCardExcelTemplate } from "@/frontend/lib/exams/excelMarksUtil";
 import { calculateReportCardGrade } from "@/frontend/lib/constants";
 import styles from "./ReportCardDocumentStudio.module.css";
@@ -31,9 +38,11 @@ export interface QueuedFile {
   status: "QUEUED" | "PROCESSING" | "EXTRACTED" | "FAILED";
   progressText?: string;
   progressPercent?: number;
+  stage?: ScanStage;
   error?: string;
+  errorStage?: ScanStage;
   result?: ScanReportCardResult;
-  debugInfo?: any;
+  debugInfo?: ScanDebugInfo;
 }
 
 interface ReportCardDocumentStudioProps {
@@ -94,6 +103,7 @@ export default function ReportCardDocumentStudio({
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [hasAttemptedDispatch, setHasAttemptedDispatch] = useState<boolean>(false);
 
   // Multi-Student Stepper & Verification State
   const [activeStudentIndex, setActiveStudentIndex] = useState<number>(0);
@@ -236,6 +246,7 @@ export default function ReportCardDocumentStudio({
     studentEditsRef.current = {};
     setActiveStudentIndex(0);
     setVerifiedIndices(new Set());
+    setHasAttemptedDispatch(false);
 
     const targetClass = (classes || []).find(c => c.id === newClassId);
     if (targetClass && subjects.length > 0) {
@@ -302,7 +313,7 @@ export default function ReportCardDocumentStudio({
     }
   };
 
-  // Process a Queued Item via Browser-Based Layered Extractor (No server upload)
+  // Process a Queued Item via Self-Hosted In-Browser Scan Engine (No server upload)
   const processQueueItem = async (entry: QueuedFile) => {
     if (!activeClassId) {
       setGlobalError("Please select a target class before scanning documents.");
@@ -310,83 +321,51 @@ export default function ReportCardDocumentStudio({
     }
 
     setFileQueue(prev =>
-      prev.map(f => (f.id === entry.id ? { ...f, status: "PROCESSING", progressText: `Reading ${entry.ext.toUpperCase()} document...`, progressPercent: 10 } : f))
+      prev.map(f => (f.id === entry.id ? { ...f, status: "PROCESSING", stage: "image-load", progressText: `Reading ${entry.ext.toUpperCase()} document...`, progressPercent: 10 } : f))
     );
 
     try {
-      const extraction: ExtractionResult = await extractMarksDocument(
-        entry.file,
-        classStudents,
-        classSubjects,
-        examMaxMarks,
-        examPassMarks,
-        (percent, message) => {
+      const { result: scanResult, debugInfo } = await scanMarksheetDocument(entry.file, {
+        defaultMaxMarks: examMaxMarks,
+        defaultPassMarks: examPassMarks,
+        onProgress: (p) => {
           setFileQueue(prev =>
-            prev.map(f => (f.id === entry.id ? { ...f, progressText: message, progressPercent: percent } : f))
+            prev.map(f => (f.id === entry.id ? { ...f, stage: p.stage, progressText: p.message, progressPercent: p.percent } : f))
           );
         }
-      );
+      });
 
-      if (!extraction.success || extraction.students.length === 0) {
-        throw new Error(extraction.error || `Could not find any readable marks or student rows in ${entry.name}. Try the Excel template or a clearer image.`);
+      if (!scanResult || scanResult.students.length === 0) {
+        throw new ScanStageError("table-parse", `Could not find any readable marks or student rows in ${entry.name}. Try the Excel template or a clearer image.`);
       }
 
-      // Convert extraction to ScanReportCardResult format
-      const detectedStudents: DetectedStudentEntry[] = extraction.students.map((st: ExtractedStudentRow, idx: number) => ({
-        studentId: st.matchedStudentId || (classStudents[idx]?.id || ""),
-        studentName: st.matchedStudentName || st.rawName || `Student ${idx + 1}`,
-        rollNumber: st.matchedRollNumber || st.rawRollNumber || "",
-        extractedName: st.rawName,
-        className: currentClass ? `${currentClass.name} - ${currentClass.section}` : null,
-        attendance: st.attendance || null,
-        subjects: st.subjects.map((sub, sIdx) => {
-          const scoreVal: number | "" | "AB" = sub.score === "AB" ? "AB" : (typeof sub.score === "number" ? sub.score : "");
-          const isNum = typeof sub.score === "number";
-          const isInvalid = scoreVal === "" || (isNum && (sub.score as number < 0 || sub.score as number > sub.maxScore));
-
-          return {
-            id: `sub-st-${idx}-${sIdx}`,
-            subjectId: sub.matchedSubjectId || classSubjects[sIdx]?.id || "",
-            subjectName: sub.subjectName,
-            score: scoreVal,
-            maxScore: sub.maxScore,
-            passMarks: sub.passMarks,
-            grade: sub.grade,
-            status: sub.status,
-            remarks: sub.remarks || "",
-            confidence: sub.confidence,
-            originalExtractedValue: sub.rawText,
-            isInvalid
-          };
-        }),
-        totalMarks: st.totalMarks,
-        percentage: st.percentage,
-        grade: st.grade,
-        remarks: st.generalRemarks,
-        confidence: st.confidence,
-        printedTotal: st.printedTotal,
-        totalMismatchWarning: st.totalMismatchWarning
-      }));
+      // Match extracted students to real database students
+      const detectedStudents: DetectedStudentEntry[] = matchScanResultToDatabase(
+        scanResult,
+        classStudents,
+        classSubjects,
+        currentClass ? `${currentClass.name} - ${currentClass.section}` : null
+      );
 
       const firstStudent = detectedStudents[0];
 
       const result: ScanReportCardResult = {
         success: true,
-        fileDetails: extraction.fileDetails,
+        fileDetails: scanResult.fileDetails || { name: entry.name, type: entry.file.type || "application/octet-stream", size: entry.size },
         studentId: firstStudent.studentId,
         studentName: firstStudent.studentName,
         rollNumber: firstStudent.rollNumber,
         extractedName: firstStudent.extractedName,
         studentConfidence: firstStudent.confidence === "HIGH" ? "HIGH" : firstStudent.confidence === "MEDIUM" ? "MEDIUM" : "LOW",
-        examName: extraction.examName || "", // Leave EMPTY if not in document
-        examDate: extraction.examDate || "", // Leave EMPTY if not in document
-        defaultMaxMarks: examMaxMarks,
-        defaultPassMarks: examPassMarks,
+        examName: scanResult.examination || "",
+        examDate: scanResult.examDate || "",
+        defaultMaxMarks: scanResult.maxMarksDefault || examMaxMarks,
+        defaultPassMarks: scanResult.passMarksDefault || examPassMarks,
         generalRemarks: firstStudent.remarks || "",
         subjects: firstStudent.subjects,
         allDetectedStudents: detectedStudents,
         detectedStudents,
-        rawTextPreview: extraction.rawTextPreview,
+        rawTextPreview: scanResult.rawTextPreview,
         docTotal: firstStudent.printedTotal
       };
 
@@ -396,10 +375,11 @@ export default function ReportCardDocumentStudio({
             ? {
                 ...f,
                 status: "EXTRACTED",
+                stage: "json-validate",
                 progressText: `Extracted ${detectedStudents.length} student(s) successfully`,
                 progressPercent: 100,
                 result,
-                debugInfo: extraction.debugInfo
+                debugInfo
               }
             : f
         )
@@ -412,15 +392,48 @@ export default function ReportCardDocumentStudio({
 
     } catch (err: any) {
       console.error("Scan error for file:", entry.name, err);
-      const errMsg = err?.message || `Could not read the marks from ${entry.name}. Try the Excel template or a clearer photo.`;
+      const stage = err?.stage || "ocr-recognize";
+      const errMsg = err?.message || `Scan failed at [${stage}]. Try the Excel template or a clearer photo.`;
       setGlobalError(errMsg);
 
       setFileQueue(prev =>
         prev.map(f =>
           f.id === entry.id
-            ? { ...f, status: "FAILED", progressText: "Scan failed", error: errMsg }
+            ? {
+                ...f,
+                status: "FAILED",
+                stage,
+                errorStage: stage,
+                progressText: `Scan failed at [${stage}]`,
+                error: errMsg
+              }
             : f
         )
+      );
+    }
+  };
+
+  const handleEnterManually = () => {
+    setGlobalError(null);
+    setHasAttemptedDispatch(false);
+    if (!selectedStudentId && classStudents[0]) {
+      setSelectedStudentId(classStudents[0].id);
+    }
+    if (subjects.length === 0 && classSubjects.length > 0) {
+      setSubjects(
+        classSubjects.map((cs, idx) => ({
+          id: `manual-sub-${idx}`,
+          subjectId: cs.id,
+          subjectName: cs.name,
+          score: "",
+          maxScore: cs.maxMarks || examMaxMarks || 100,
+          passMarks: cs.passMarks || examPassMarks || 35,
+          grade: "-",
+          status: "NEEDS_REVIEW",
+          remarks: "",
+          confidence: "HIGH",
+          isInvalid: false
+        }))
       );
     }
   };
@@ -430,6 +443,7 @@ export default function ReportCardDocumentStudio({
     studentEditsRef.current = {};
     setActiveStudentIndex(0);
     setVerifiedIndices(new Set());
+    setHasAttemptedDispatch(false);
 
     // Only set exam name and date if found in the document; otherwise leave empty and required
     if (result.examName) setExamName(result.examName);
@@ -711,29 +725,35 @@ export default function ReportCardDocumentStudio({
       return;
     }
     if (!selectedStudentId) {
+      setHasAttemptedDispatch(true);
       setGlobalError("Please select the enrolled student this report card belongs to.");
       return;
     }
     if (!examName.trim()) {
+      setHasAttemptedDispatch(true);
       setGlobalError("Examination / Term name is required before dispatching.");
       return;
     }
     if (!examDate) {
+      setHasAttemptedDispatch(true);
       setGlobalError("Examination Date is required before dispatching.");
       return;
     }
     if (subjects.length === 0) {
+      setHasAttemptedDispatch(true);
       setGlobalError("Please enter at least one subject mark before dispatching.");
       return;
     }
 
     if (duplicateSubjectIds.size > 0) {
+      setHasAttemptedDispatch(true);
       setGlobalError("Duplicate subjects found. Please ensure each subject is included only once.");
       return;
     }
 
     const hasMissingOrInvalid = subjects.some(s => s.isInvalid || s.score === "" || s.score === null);
     if (hasMissingOrInvalid) {
+      setHasAttemptedDispatch(true);
       setGlobalError("All subject marks must be entered (or marked Absent) before dispatching.");
       return;
     }
@@ -1364,12 +1384,60 @@ export default function ReportCardDocumentStudio({
                 >
                   <FileText size={16} color="var(--primary)" />
                   <div style={{ textAlign: "left" }}>
-                    <div style={{ fontSize: "0.85rem", fontWeight: 700, maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <div style={{ fontSize: "0.85rem", fontWeight: 700, maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {item.name}
                     </div>
                     <div style={{ fontSize: "0.72rem", color: item.status === "EXTRACTED" ? "#10b981" : item.status === "FAILED" ? "#ef4444" : "var(--text-secondary)" }}>
                       {formatFileSize(item.size)} • {item.progressText || item.status}
                     </div>
+                    {item.status === "FAILED" && (
+                      <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.35rem" }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            processQueueItem(item);
+                          }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.25rem",
+                            padding: "0.2rem 0.5rem",
+                            borderRadius: "4px",
+                            border: "1px solid #ef4444",
+                            background: "rgba(239, 68, 68, 0.15)",
+                            color: "#f87171",
+                            fontSize: "0.7rem",
+                            fontWeight: 700,
+                            cursor: "pointer"
+                          }}
+                        >
+                          <RotateCcw size={11} /> Try Again
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEnterManually();
+                          }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.25rem",
+                            padding: "0.2rem 0.5rem",
+                            borderRadius: "4px",
+                            border: "1px solid var(--border-color)",
+                            background: "transparent",
+                            color: "var(--foreground)",
+                            fontSize: "0.7rem",
+                            fontWeight: 700,
+                            cursor: "pointer"
+                          }}
+                        >
+                          Enter Manually
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -1386,7 +1454,7 @@ export default function ReportCardDocumentStudio({
         </div>
       )}
 
-      {/* Dev-Only Collapsible Debug Panel */}
+      {/* Dev-Only Collapsible Scan Debug Panel */}
       {process.env.NODE_ENV !== "production" && activeQueuedFile?.debugInfo && (
         <details
           style={{
@@ -1399,23 +1467,45 @@ export default function ReportCardDocumentStudio({
           }}
         >
           <summary style={{ cursor: "pointer", fontWeight: 700, color: "#60a5fa" }}>
-            Dev Debug: Show Raw Extracted Text &amp; Column Mapping
+            Dev Scan Debug: Stage, Layout, Words with Boxes &amp; Final JSON
           </summary>
-          <div style={{ marginTop: "0.65rem", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-            <div><strong>Header Line:</strong> {activeQueuedFile.debugInfo.headerLine || "Not detected"}</div>
-            <div><strong>Columns Detected:</strong> {activeQueuedFile.debugInfo.columnsDetected?.join(", ") || "None"}</div>
-            <div><strong>Raw Lines Count:</strong> {activeQueuedFile.debugInfo.rawLinesCount}</div>
-            <pre style={{
-              background: "#090d16",
-              padding: "0.5rem",
-              borderRadius: "6px",
-              overflow: "auto",
-              maxHeight: "200px",
-              fontSize: "0.72rem",
-              whiteSpace: "pre-wrap"
-            }}>
-              {activeQueuedFile.debugInfo.rawText}
-            </pre>
+          <div style={{ marginTop: "0.65rem", display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+            <div><strong>Processing Stage:</strong> <span style={{ color: "#34d399", fontWeight: 700 }}>{activeQueuedFile.debugInfo.stage}</span></div>
+            <div><strong>Layout Detected:</strong> <span style={{ color: "#60a5fa", fontWeight: 700 }}>Layout {activeQueuedFile.debugInfo.layout}</span></div>
+            <div><strong>Word Count:</strong> {activeQueuedFile.debugInfo.wordCount}</div>
+            <div><strong>Header Words:</strong> {activeQueuedFile.debugInfo.headerWords?.join(", ") || "None"}</div>
+            
+            {activeQueuedFile.debugInfo.finalJson && (
+              <div>
+                <strong>Final Extracted JSON Output:</strong>
+                <pre style={{
+                  background: "#090d16",
+                  padding: "0.5rem",
+                  borderRadius: "6px",
+                  overflow: "auto",
+                  maxHeight: "180px",
+                  fontSize: "0.72rem"
+                }}>
+                  {JSON.stringify(activeQueuedFile.debugInfo.finalJson, null, 2)}
+                </pre>
+              </div>
+            )}
+
+            {activeQueuedFile.debugInfo.rawWords && activeQueuedFile.debugInfo.rawWords.length > 0 && (
+              <details style={{ marginTop: "0.3rem" }}>
+                <summary style={{ cursor: "pointer", color: "#94a3b8" }}>Raw OCR Words with Bounding Boxes ({activeQueuedFile.debugInfo.rawWords.length})</summary>
+                <pre style={{
+                  background: "#090d16",
+                  padding: "0.5rem",
+                  borderRadius: "6px",
+                  overflow: "auto",
+                  maxHeight: "150px",
+                  fontSize: "0.7rem"
+                }}>
+                  {JSON.stringify(activeQueuedFile.debugInfo.rawWords.slice(0, 40), null, 2)}
+                </pre>
+              </details>
+            )}
           </div>
         </details>
       )}
@@ -1551,22 +1641,29 @@ export default function ReportCardDocumentStudio({
                   onClick={() => setIsZoomModalOpen(true)}
                   style={{
                     borderRadius: "10px",
-                    overflow: "hidden",
+                    overflowX: "auto",
+                    overflowY: "hidden",
                     border: "1px solid var(--border-color)",
                     cursor: "zoom-in",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    background: "#000000"
+                    background: "#000000",
+                    position: "relative",
+                    width: "100%",
+                    maxWidth: "100%",
+                    boxSizing: "border-box"
                   }}
+                  title="Click to zoom and inspect full document"
                 >
                   <img
                     src={activeQueuedFile.previewUrl}
                     alt="Document Scan"
                     style={{
                       width: "100%",
+                      maxWidth: "100%",
                       height: "auto",
-                      maxHeight: "440px",
+                      maxHeight: "480px",
                       objectFit: "contain",
                       display: "block"
                     }}
@@ -1590,7 +1687,7 @@ export default function ReportCardDocumentStudio({
                       width: "100%",
                       padding: "0.55rem 0.75rem",
                       borderRadius: "8px",
-                      border: !selectedStudentId ? "1.5px solid #ef4444" : "1px solid var(--border-color)",
+                      border: (hasAttemptedDispatch && !selectedStudentId) ? "1.5px solid #ef4444" : "1px solid var(--border-color)",
                       background: "var(--input-bg, #0f172a)",
                       color: "var(--foreground)",
                       fontWeight: 700,
@@ -1605,7 +1702,7 @@ export default function ReportCardDocumentStudio({
                       </option>
                     ))}
                   </select>
-                  {!selectedStudentId && (
+                  {hasAttemptedDispatch && !selectedStudentId && (
                     <span style={{ fontSize: "0.72rem", color: "#ef4444", marginTop: "2px", display: "block" }}>
                       Please select the enrolled student
                     </span>
@@ -1625,7 +1722,7 @@ export default function ReportCardDocumentStudio({
                       width: "100%",
                       padding: "0.55rem 0.75rem",
                       borderRadius: "8px",
-                      border: !examName.trim() ? "1.5px solid #ef4444" : "1px solid var(--border-color)",
+                      border: (hasAttemptedDispatch && !examName.trim()) ? "1.5px solid #ef4444" : "1px solid var(--border-color)",
                       background: "var(--input-bg, #0f172a)",
                       color: "var(--foreground)",
                       fontWeight: 600,
@@ -1633,7 +1730,7 @@ export default function ReportCardDocumentStudio({
                       boxSizing: "border-box"
                     }}
                   />
-                  {!examName.trim() && (
+                  {hasAttemptedDispatch && !examName.trim() && (
                     <span style={{ fontSize: "0.72rem", color: "#ef4444", marginTop: "2px", display: "block" }}>
                       Examination name required
                     </span>
@@ -1652,7 +1749,7 @@ export default function ReportCardDocumentStudio({
                       width: "100%",
                       padding: "0.55rem 0.75rem",
                       borderRadius: "8px",
-                      border: !examDate ? "1.5px solid #ef4444" : "1px solid var(--border-color)",
+                      border: (hasAttemptedDispatch && !examDate) ? "1.5px solid #ef4444" : "1px solid var(--border-color)",
                       background: "var(--input-bg, #0f172a)",
                       color: "var(--foreground)",
                       fontWeight: 600,
@@ -1660,7 +1757,7 @@ export default function ReportCardDocumentStudio({
                       boxSizing: "border-box"
                     }}
                   />
-                  {!examDate && (
+                  {hasAttemptedDispatch && !examDate && (
                     <span style={{ fontSize: "0.72rem", color: "#ef4444", marginTop: "2px", display: "block" }}>
                       Exam date required
                     </span>
@@ -1726,7 +1823,7 @@ export default function ReportCardDocumentStudio({
                       <th style={{ padding: "0.65rem 0.85rem", textAlign: "center", width: "110px" }}>Marks Scored</th>
                       <th style={{ padding: "0.65rem 0.85rem", textAlign: "center", width: "90px" }}>Max Mark</th>
                       <th style={{ padding: "0.65rem 0.85rem", textAlign: "center", width: "90px" }}>Pass Mark</th>
-                      <th style={{ padding: "0.65rem 0.85rem", textAlign: "center", width: "70px" }}>Grade</th>
+                      <th style={{ padding: "0.65rem 0.5rem", textAlign: "center", minWidth: "85px", whiteSpace: "nowrap" }}>Grade</th>
                       <th style={{ padding: "0.65rem 0.85rem", textAlign: "center", width: "110px" }}>Status</th>
                       <th style={{ padding: "0.65rem 0.85rem", minWidth: "150px" }}>Remarks</th>
                       <th style={{ padding: "0.65rem 0.85rem", textAlign: "center", width: "45px" }}></th>
@@ -1783,17 +1880,17 @@ export default function ReportCardDocumentStudio({
                                 width: "75px",
                                 padding: "0.35rem 0.45rem",
                                 borderRadius: "6px",
-                                border: sub.isInvalid ? "1.5px solid #ef4444" : "1px solid var(--border-color)",
-                                background: sub.isInvalid ? "rgba(239, 68, 68, 0.12)" : "var(--card-bg, #1e293b)",
-                                color: sub.isInvalid ? "#ef4444" : "var(--foreground)",
+                                border: sub.isInvalid || (hasAttemptedDispatch && (sub.score === null || sub.score === "")) ? "1.5px solid #ef4444" : "1px solid var(--border-color)",
+                                background: sub.isInvalid || (hasAttemptedDispatch && (sub.score === null || sub.score === "")) ? "rgba(239, 68, 68, 0.12)" : "var(--card-bg, #1e293b)",
+                                color: sub.isInvalid || (hasAttemptedDispatch && (sub.score === null || sub.score === "")) ? "#ef4444" : "var(--foreground)",
                                 fontWeight: 800,
                                 fontSize: "0.95rem",
                                 textAlign: "center"
                               }}
                             />
-                            {sub.validationError && (
+                            {(sub.validationError || (hasAttemptedDispatch && (sub.score === null || sub.score === ""))) && (
                               <span style={{ fontSize: "0.68rem", color: "#ef4444", display: "block", marginTop: "2px", lineHeight: "1.2" }}>
-                                {sub.validationError}
+                                {sub.validationError || "Mark required"}
                               </span>
                             )}
                           </td>
@@ -1806,7 +1903,7 @@ export default function ReportCardDocumentStudio({
                             {sub.passMarks}
                           </td>
 
-                          <td style={{ padding: "0.6rem 0.85rem", textAlign: "center", fontWeight: 800, color: sub.grade === "F" ? "#ef4444" : "#10b981" }}>
+                          <td style={{ padding: "0.6rem 0.5rem", textAlign: "center", minWidth: "85px", whiteSpace: "nowrap", fontWeight: 800, color: sub.grade === "F" ? "#ef4444" : "#10b981" }}>
                             {sub.grade || "-"}
                           </td>
 

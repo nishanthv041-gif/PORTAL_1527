@@ -47,7 +47,7 @@ next-env.d.ts
 .vercel
 .env*
 .agent/
-*.traineddata
+# Tesseract assets in public/ are tracked for self-hosted in-browser OCR
+!public/tesseract/*.traineddata*
 scratch/
 backups/
-*.traineddata.gz

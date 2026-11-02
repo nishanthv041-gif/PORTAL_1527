@@ -15,6 +15,7 @@ const eslintConfig = defineConfig([
     "tests/**",
     "scripts/**",
     "scratch/**",
+    "public/**",
     "*.js",
   ]),
   {

@@ -125,7 +125,7 @@
 /* Split view: Original Document + Form */
 .splitView {
   display: grid;
-  grid-template-columns: minmax(320px, 420px) 1fr;
+  grid-template-columns: minmax(320px, 480px) 1fr;
   gap: 1.25rem;
   width: 100%;
   max-width: 100%;
@@ -143,7 +143,7 @@
   box-sizing: border-box;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .splitView {
     grid-template-columns: 1fr !important;
   }
