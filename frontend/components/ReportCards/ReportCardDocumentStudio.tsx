@@ -119,7 +119,7 @@ export default function ReportCardDocumentStudio({
   // Multi-Student Stepper & Verification State
   const [activeStudentIndex, setActiveStudentIndex] = useState<number>(0);
   const [verifiedIndices, setVerifiedIndices] = useState<Set<number>>(new Set());
-  const studentEditsRef = useRef<Record<number, {
+  const [studentEdits, setStudentEdits] = useState<Record<number, {
     studentId: string;
     subjects: ScannedReportCardSubject[];
     attendance: string;
@@ -180,7 +180,7 @@ export default function ReportCardDocumentStudio({
   const readyStudentsList = useMemo(() => {
     return detectedStudentsList.map((entry, idx) => {
       const isCurrentActive = idx === activeStudentIndex;
-      const edits = studentEditsRef.current[idx];
+      const edits = studentEdits[idx];
       const targetStudentId = isCurrentActive ? selectedStudentId : (edits?.studentId || entry.studentId);
       const targetSubjects = isCurrentActive ? subjects : (edits?.subjects || entry.subjects || []);
       const targetRemarks = isCurrentActive ? generalRemarks : (edits?.generalRemarks !== undefined ? edits.generalRemarks : entry.remarks);
@@ -228,7 +228,7 @@ export default function ReportCardDocumentStudio({
         parentCount: (studentObj?.parents || []).length,
       };
     });
-  }, [detectedStudentsList, activeStudentIndex, selectedStudentId, subjects, generalRemarks, attendance, classStudents, verifiedIndices]);
+  }, [detectedStudentsList, activeStudentIndex, selectedStudentId, subjects, generalRemarks, attendance, classStudents, verifiedIndices, studentEdits]);
 
   const readyCount = useMemo(() => {
     return readyStudentsList.filter(s => s.isReady).length;
@@ -334,7 +334,7 @@ export default function ReportCardDocumentStudio({
     setActiveClassId(newClassId);
     if (onClassChange) onClassChange(newClassId);
     setSelectedStudentId("");
-    studentEditsRef.current = {};
+    setStudentEdits({});
     setActiveStudentIndex(0);
     setVerifiedIndices(new Set());
     setHasAttemptedDispatch(false);
@@ -531,7 +531,7 @@ export default function ReportCardDocumentStudio({
 
   // Populate Editor State from Result
   const applyScanResultToEditor = (result: ScanReportCardResult) => {
-    studentEditsRef.current = {};
+    setStudentEdits({});
     setActiveStudentIndex(0);
     setVerifiedIndices(new Set());
     setHasAttemptedDispatch(false);
@@ -584,15 +584,19 @@ export default function ReportCardDocumentStudio({
     if (newIndex === activeStudentIndex) return;
 
     // 1. Cache current student's edits
-    studentEditsRef.current[activeStudentIndex] = {
-      studentId: selectedStudentId,
-      subjects: [...subjects],
-      attendance,
-      generalRemarks
+    const newEdits = {
+      ...studentEdits,
+      [activeStudentIndex]: {
+        studentId: selectedStudentId,
+        subjects: [...subjects],
+        attendance,
+        generalRemarks
+      }
     };
+    setStudentEdits(newEdits);
 
     // 2. Load target student's cached edits or scan defaults
-    const cached = studentEditsRef.current[newIndex];
+    const cached = newEdits[newIndex];
     const rawSt = detectedStudentsList[newIndex];
 
     if (cached) {
@@ -680,7 +684,7 @@ export default function ReportCardDocumentStudio({
     setGeneralRemarks("");
     setSaveSuccess(null);
     setGlobalError(null);
-    studentEditsRef.current = {};
+    setStudentEdits({});
     setVerifiedIndices(new Set());
   };
 
@@ -999,12 +1003,16 @@ export default function ReportCardDocumentStudio({
     setIsSaving(true);
 
     // Cache active student's edits first
-    studentEditsRef.current[activeStudentIndex] = {
-      studentId: selectedStudentId,
-      subjects: [...subjects],
-      attendance,
-      generalRemarks
+    const currentEdits = {
+      ...studentEdits,
+      [activeStudentIndex]: {
+        studentId: selectedStudentId,
+        subjects: [...subjects],
+        attendance,
+        generalRemarks
+      }
     };
+    setStudentEdits(currentEdits);
 
     const targetList = Array.isArray(onlyStudentIds) ? onlyStudentIds : undefined;
     let targetReady = readyStudentsList.filter(s => s.isReady);
@@ -1177,7 +1185,7 @@ export default function ReportCardDocumentStudio({
     }));
 
     const exportStudents = detectedStudentsList.map((st, idx) => {
-      const edits = studentEditsRef.current[idx];
+      const edits = studentEdits[idx];
       const targetStudentId = edits?.studentId || st.studentId;
       const targetSubjects = edits?.subjects || st.subjects || [];
       const studentObj = classStudents.find(s => s.id === targetStudentId);
