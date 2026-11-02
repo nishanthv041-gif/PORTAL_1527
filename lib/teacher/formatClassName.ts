@@ -15,3 +15,4 @@ export function formatClassName(name: string, section?: string | null): string {
 }
 
 export default formatClassName;
+

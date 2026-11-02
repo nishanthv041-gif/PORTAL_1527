@@ -255,6 +255,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
                   (link.href === "/staff/my-bus" && pathname === "/dashboard/teacher/transport") ||
                   (link.href === "/parent/bus" && pathname === "/dashboard/parent/transport") ||
                   (link.href === "/dashboard/teacher/assignments" && (pathname === "/dashboard/teacher/homework" || pathname.startsWith("/dashboard/teacher/homework/"))) ||
+                  (link.href === "/dashboard/teacher/homework" && (pathname === "/dashboard/teacher/assignments" || pathname.startsWith("/dashboard/teacher/assignments/"))) ||
                   (link.href === "/dashboard/parent/assignments" && (pathname === "/dashboard/parent/homework" || pathname.startsWith("/dashboard/parent/homework/")));
                 return (
                   <div key={link.href} className={styles.navItemWrapper}>

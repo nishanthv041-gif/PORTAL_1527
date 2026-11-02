@@ -65,8 +65,8 @@ export function TeacherBottomNav() {
       icon: <Calendar size={22} />,
     },
     {
-      label: "Assignments",
-      href: "/dashboard/teacher/assignments",
+      label: "Home Work",
+      href: "/dashboard/teacher/homework",
       icon: <BookOpen size={22} />,
     },
     {
@@ -103,7 +103,11 @@ export function TeacherBottomNav() {
 
   const isMoreActive =
     !navItems.some((item) => item.isActive) &&
-    moreItems.some((item) => pathname?.startsWith(item.href));
+    moreItems.some(
+      (item) =>
+        pathname?.startsWith(item.href) ||
+        (item.href === "/dashboard/teacher/homework" && pathname?.startsWith("/dashboard/teacher/assignments"))
+    );
 
   if (!mounted) return null;
 
