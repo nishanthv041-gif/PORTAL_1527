@@ -104,6 +104,7 @@ export default async function TeacherAssignmentDetailsPage({ params }: { params:
         id: assignment.id,
         title: assignment.title,
         description: assignment.description,
+        fileUrl: assignment.fileUrl,
         deadline: assignment.deadline.toISOString(),
         createdAt: assignment.createdAt.toISOString(),
         class: assignment.class,

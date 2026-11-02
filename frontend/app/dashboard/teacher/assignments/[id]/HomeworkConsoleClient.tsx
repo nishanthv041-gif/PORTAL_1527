@@ -14,7 +14,10 @@ import {
   Send,
   RefreshCw,
   HeartHandshake,
-  AlertCircle
+  AlertCircle,
+  Paperclip,
+  Download,
+  FileText
 } from "lucide-react";
 import {
   deleteAssignment,
@@ -39,6 +42,7 @@ interface HomeworkConsoleClientProps {
     id: string;
     title: string;
     description: string | null;
+    fileUrl?: string | null;
     deadline: string;
     createdAt: string;
     class: {
@@ -336,6 +340,61 @@ export default function HomeworkConsoleClient({
             {assignment.description || "No specific instructions provided. Complete the assigned homework for this subject."}
           </div>
         </div>
+
+        {/* Attached Homework File (Optional) */}
+        {assignment.fileUrl && (
+          <div
+            style={{
+              padding: "1rem 1.25rem",
+              borderRadius: "10px",
+              backgroundColor: "rgba(59, 130, 246, 0.06)",
+              border: "1px solid rgba(59, 130, 246, 0.25)",
+              marginTop: "0.75rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "0.75rem"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <div style={{ width: 38, height: 38, borderRadius: "8px", backgroundColor: "rgba(59, 130, 246, 0.15)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Paperclip size={20} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--foreground)" }}>
+                  Attached Homework Document / Worksheet
+                </div>
+                <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                  Uploaded by subject staff for student & parent reference
+                </div>
+              </div>
+            </div>
+
+            <a
+              href={assignment.fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              download={`${assignment.title.replace(/[^a-zA-Z0-9_-]/g, "_")}_worksheet`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                padding: "0.55rem 1.15rem",
+                borderRadius: "8px",
+                backgroundColor: "var(--primary)",
+                color: "#ffffff",
+                fontSize: "0.85rem",
+                fontWeight: 700,
+                textDecoration: "none",
+                cursor: "pointer"
+              }}
+            >
+              <Download size={15} />
+              <span>View / Download File</span>
+            </a>
+          </div>
+        )}
       </div>
 
       {/* ===================================================

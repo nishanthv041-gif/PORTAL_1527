@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import {
   BookOpen,
@@ -21,10 +21,15 @@ import {
   LayoutDashboard,
   ShieldCheck,
   Check,
-  UserCheck
+  UserCheck,
+  Paperclip,
+  UploadCloud,
+  X,
+  Download
 } from "lucide-react";
 import { createAssignment, deleteAssignment } from "@/backend/api/actions/dashboard/teacher/assignments/actions";
 import WorkConversationModal from "@/frontend/components/homework/WorkConversationModal";
+import { formatClassName } from "@/lib/teacher/formatClassName";
 import styles from "../../dashboard.module.css";
 
 export type ClassWithSubjects = {
@@ -96,10 +101,53 @@ export default function HomeworkClientPage({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [startConversation, setStartConversation] = useState(true);
   const [shareWithParents, setShareWithParents] = useState(true);
   const [creating, setCreating] = useState(false);
   const [createFeedback, setCreateFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+
+    if (f.size > 25 * 1024 * 1024) {
+      setCreateFeedback({
+        type: "error",
+        text: "File size exceeds 25MB limit. Please choose a smaller file."
+      });
+      return;
+    }
+
+    setAttachedFile(f);
+    setCreateFeedback(null);
+
+    if (f.type.startsWith("image/")) {
+      const previewUrl = URL.createObjectURL(f);
+      setFilePreview(previewUrl);
+    } else {
+      setFilePreview(null);
+    }
+  };
+
+  const removeAttachedFile = () => {
+    if (filePreview) {
+      URL.revokeObjectURL(filePreview);
+    }
+    setAttachedFile(null);
+    setFilePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   // Deleting state & modal
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -130,8 +178,8 @@ export default function HomeworkClientPage({
     const cls = classes.find(c => c.id === selectedClassId);
     if (!cls) return [];
 
-    // Strict isolation: only return subjects where this teacher is the assigned teacher
-    return cls.subjects.filter(s => s.teacherId === teacher.id);
+    // Return subjects assigned to this teacher
+    return cls.subjects.filter(s => !s.teacherId || s.teacherId === teacher.id);
   }, [selectedClassId, classes, teacher.id]);
 
   // Handle Class change in Creator
@@ -139,7 +187,7 @@ export default function HomeworkClientPage({
     setSelectedClassId(classId);
     const cls = classes.find(c => c.id === classId);
     if (cls) {
-      const teacherSubjects = cls.subjects.filter(s => s.teacherId === teacher.id);
+      const teacherSubjects = cls.subjects.filter(s => !s.teacherId || s.teacherId === teacher.id);
       if (teacherSubjects.length > 0) {
         setSelectedSubjectId(teacherSubjects[0].id);
       } else {
@@ -190,6 +238,9 @@ export default function HomeworkClientPage({
     formData.append("subjectId", selectedSubjectId);
     formData.append("teacherId", teacher.id);
     formData.append("startConversation", String(startConversation));
+    if (attachedFile) {
+      formData.append("file", attachedFile);
+    }
 
     const res = await createAssignment(formData);
 
@@ -203,7 +254,7 @@ export default function HomeworkClientPage({
         description: description.trim() || null,
         deadline: new Date(deadline.includes("T") ? deadline : `${deadline}T23:59:59`).toISOString(),
         createdAt: new Date().toISOString(),
-        fileUrl: null,
+        fileUrl: res.fileUrl || null,
         class: {
           id: selectedClassId,
           name: cls?.name || "Class",
@@ -232,6 +283,7 @@ export default function HomeworkClientPage({
       setTitle("");
       setDescription("");
       setDeadline("");
+      removeAttachedFile();
 
       // Switch to Today's Portal tab after a moment so teacher sees it
       setTimeout(() => {
@@ -718,6 +770,35 @@ export default function HomeworkClientPage({
                       {item.description || "No specific instructions provided."}
                     </p>
 
+                    {item.fileUrl && (
+                      <div style={{ marginTop: "0.5rem", marginBottom: "0.6rem" }}>
+                        <a
+                          href={item.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download={`${item.title.replace(/[^a-zA-Z0-9_-]/g, "_")}_worksheet`}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.45rem",
+                            padding: "6px 12px",
+                            borderRadius: "8px",
+                            backgroundColor: "rgba(99, 102, 241, 0.08)",
+                            border: "1px solid rgba(99, 102, 241, 0.25)",
+                            color: "var(--primary)",
+                            fontSize: "0.8rem",
+                            fontWeight: 700,
+                            textDecoration: "none",
+                            cursor: "pointer"
+                          }}
+                        >
+                          <Paperclip size={14} />
+                          <span>Attached Worksheet / Document</span>
+                          <Download size={13} style={{ opacity: 0.8 }} />
+                        </a>
+                      </div>
+                    )}
+
                     <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
                         <CalendarIcon size={13} />
@@ -903,7 +984,7 @@ export default function HomeworkClientPage({
                 Assign New Home Work
               </h3>
               <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-                Strict Subject Control: You can only create homework for subjects and classes assigned to you. When staff assignments change in Admin, control transfers automatically.
+                Subject Staff Assignment: Send homework for subjects assigned to you in each class. (Not restricted to class teachers; subject staff send homework for their assigned subjects).
               </p>
             </div>
 
@@ -914,7 +995,7 @@ export default function HomeworkClientPage({
                   No Assigned Subjects Found
                 </h4>
                 <p style={{ margin: 0, fontSize: "0.9rem", maxWidth: "500px", marginLeft: "auto", marginRight: "auto" }}>
-                  You are not currently assigned as the subject staff for any class subjects. Only assigned subject teachers can send homework. Please contact the administrator to assign your subjects.
+                  You are not currently assigned as the subject staff for any class subjects. Only assigned subject staff can send homework. Please contact the administrator to assign your subjects.
                 </p>
               </div>
             ) : (
@@ -963,7 +1044,7 @@ export default function HomeworkClientPage({
                       <option value="">-- Choose Assigned Class --</option>
                       {classes.map(c => (
                         <option key={c.id} value={c.id}>
-                          {c.name} - Section {c.section} ({c.subjects.length} assigned subject{c.subjects.length > 1 ? "s" : ""})
+                          {formatClassName(c.name, c.section)} ({c.subjects.length} assigned subject{c.subjects.length > 1 ? "s" : ""})
                         </option>
                       ))}
                     </select>
@@ -1111,6 +1192,132 @@ export default function HomeworkClientPage({
                   />
                 </div>
 
+                {/* 6. Optional File Upload */}
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                    <label style={{ fontSize: "0.875rem", fontWeight: 700, color: "var(--foreground)", margin: 0, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <Paperclip size={15} style={{ color: "var(--primary)" }} />
+                      6. Attach Homework Document / Worksheet (Optional)
+                    </label>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                      Optional • Max 25MB
+                    </span>
+                  </div>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.png,.jpg,.jpeg,.webp"
+                    onChange={handleFileChange}
+                    style={{ display: "none" }}
+                    id="homework-file-upload"
+                  />
+
+                  {!attachedFile ? (
+                    <label
+                      htmlFor="homework-file-upload"
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "1.25rem 1rem",
+                        borderRadius: "10px",
+                        border: "1.5px dashed var(--border)",
+                        backgroundColor: "rgba(99, 102, 241, 0.02)",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                        textAlign: "center"
+                      }}
+                    >
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", backgroundColor: "rgba(99, 102, 241, 0.1)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "0.5rem" }}>
+                        <UploadCloud size={20} />
+                      </div>
+                      <span style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--foreground)" }}>
+                        Click to browse or drag & drop a file to attach
+                      </span>
+                      <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
+                        Attach PDF worksheet, Word document, Excel sheet, or question photo (Optional)
+                      </span>
+                    </label>
+                  ) : (
+                    <div
+                      style={{
+                        padding: "0.85rem 1rem",
+                        borderRadius: "10px",
+                        border: "1px solid rgba(99, 102, 241, 0.3)",
+                        backgroundColor: "rgba(99, 102, 241, 0.06)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "0.75rem",
+                        flexWrap: "wrap"
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
+                        {filePreview ? (
+                          <img
+                            src={filePreview}
+                            alt="Preview"
+                            style={{ width: 44, height: 44, objectFit: "cover", borderRadius: "8px", border: "1px solid var(--border)" }}
+                          />
+                        ) : (
+                          <div style={{ width: 40, height: 40, borderRadius: "8px", backgroundColor: "rgba(99, 102, 241, 0.15)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            {attachedFile.name.toLowerCase().endsWith(".pdf") ? <FileText size={20} /> : <Paperclip size={20} />}
+                          </div>
+                        )}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "260px" }}>
+                            {attachedFile.name}
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                            {formatFileSize(attachedFile.size)} • Ready to send
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          style={{
+                            padding: "5px 10px",
+                            borderRadius: "6px",
+                            border: "1px solid var(--border)",
+                            backgroundColor: "var(--background)",
+                            color: "var(--foreground)",
+                            fontSize: "0.78rem",
+                            fontWeight: 600,
+                            cursor: "pointer"
+                          }}
+                        >
+                          Change
+                        </button>
+                        <button
+                          type="button"
+                          onClick={removeAttachedFile}
+                          title="Remove attached file"
+                          style={{
+                            padding: "5px 8px",
+                            borderRadius: "6px",
+                            border: "1px solid rgba(239, 68, 68, 0.3)",
+                            backgroundColor: "rgba(239, 68, 68, 0.08)",
+                            color: "var(--danger)",
+                            fontSize: "0.78rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.25rem"
+                          }}
+                        >
+                          <X size={14} /> Remove
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Conversation Switch */}
                 <div
                   style={{
@@ -1167,7 +1374,11 @@ export default function HomeworkClientPage({
                   }}
                 >
                   <Send size={18} />
-                  <span>{creating ? "Sending Home Work..." : "Send Home Work to Class & Parents"}</span>
+                  <span>
+                    {creating
+                      ? (attachedFile ? "Uploading File & Assigning..." : "Sending Home Work...")
+                      : "Send Home Work to Class & Parents"}
+                  </span>
                 </button>
               </form>
             )}
@@ -1324,6 +1535,35 @@ export default function HomeworkClientPage({
                   <p style={{ margin: "0.25rem 0 0.5rem 0", fontSize: "0.875rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
                     {item.description || "No specific instructions provided."}
                   </p>
+
+                  {item.fileUrl && (
+                    <div style={{ marginTop: "0.5rem", marginBottom: "0.6rem" }}>
+                      <a
+                        href={item.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download={`${item.title.replace(/[^a-zA-Z0-9_-]/g, "_")}_worksheet`}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.45rem",
+                          padding: "6px 12px",
+                          borderRadius: "8px",
+                          backgroundColor: "rgba(99, 102, 241, 0.08)",
+                          border: "1px solid rgba(99, 102, 241, 0.25)",
+                          color: "var(--primary)",
+                          fontSize: "0.8rem",
+                          fontWeight: 700,
+                          textDecoration: "none",
+                          cursor: "pointer"
+                        }}
+                      >
+                        <Paperclip size={14} />
+                        <span>Attached Worksheet / Document</span>
+                        <Download size={13} style={{ opacity: 0.8 }} />
+                      </a>
+                    </div>
+                  )}
 
                   <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>

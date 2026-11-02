@@ -4,6 +4,68 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import path from "path";
+import fs from "fs/promises";
+
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
+
+const ALLOWED_EXTENSIONS = new Set([
+  // Documents
+  "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv",
+  // Images
+  "jpg", "jpeg", "png", "gif", "webp"
+]);
+
+async function saveHomeworkFile(file: File): Promise<string> {
+  const originalName = file.name || "homework_file";
+  const ext = (path.extname(originalName).slice(1) || "bin").toLowerCase();
+
+  const cleanBaseName = path.basename(originalName, path.extname(originalName))
+    .replace(/[^a-zA-Z0-9_-]/g, "_")
+    .slice(0, 40);
+  const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}-${cleanBaseName}.${ext}`;
+
+  // 1. Try Vercel Blob if configured
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      const { put } = await import("@vercel/blob");
+      const blob = await put(`homework/${uniqueFileName}`, file, {
+        access: "public",
+        contentType: file.type || undefined,
+      });
+      return blob.url;
+    } catch (blobErr) {
+      console.warn("Vercel Blob upload failed, falling back to local/data-uri storage:", blobErr);
+    }
+  }
+
+  // 2. Local filesystem write if not serverless
+  const isServerless = Boolean(
+    process.env.VERCEL ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.LAMBDA_TASK_ROOT
+  );
+
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const mime = file.type || "application/octet-stream";
+
+  if (!isServerless) {
+    try {
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "homework");
+      await fs.mkdir(uploadDir, { recursive: true });
+      const filePath = path.join(uploadDir, uniqueFileName);
+      await fs.writeFile(filePath, buffer);
+      return `/uploads/homework/${uniqueFileName}`;
+    } catch (localErr) {
+      console.warn("Local filesystem write failed, using data URI fallback:", localErr);
+    }
+  }
+
+  // 3. Universal serverless Data URI fallback (safe for images & PDF)
+  const base64 = buffer.toString("base64");
+  return `data:${mime};base64,${base64}`;
+}
 
 /**
  * Automatically deletes all homework records whose deadline has passed.
@@ -57,6 +119,7 @@ export async function createAssignment(formData: FormData) {
   const subjectId = (formData.get("subjectId") as string) || null;
   const teacherId = formData.get("teacherId") as string;
   const startConversation = formData.get("startConversation") !== "false";
+  const file = formData.get("file") as File | null;
 
   if (!title || !deadline || !classId || !teacherId) {
     return { success: false, error: "Missing required fields (Title, Deadline, Class, or Teacher)" };
@@ -87,17 +150,48 @@ export async function createAssignment(formData: FormData) {
     }
 
     // Strict Subject Teacher Check: Only the assigned subject staff (or ADMIN) can create homework
+    // (This page is for subject assigning staff, not class teacher concept)
     if (session.user.role !== "ADMIN") {
       const currentTeacher = await prisma.teacher.findUnique({
         where: { userId: session.user.id },
         select: { id: true }
       });
 
-      if (!currentTeacher || subject.teacherId !== currentTeacher.id) {
+      const isSubjectTeacher = subject.teacherId === currentTeacher?.id;
+      const isTimetableStaff = currentTeacher?.id ? (await prisma.timetable.count({
+        where: { subjectId: subject.id, teacherId: currentTeacher.id }
+      })) > 0 : false;
+
+      if (!currentTeacher || (!isSubjectTeacher && !isTimetableStaff)) {
         return {
           success: false,
           error: "Only the assigned subject staff can send home work for this subject. Class teachers cannot create homework for subjects taught by other teachers."
         };
+      }
+    }
+
+    // Optional File Upload Processing
+    let fileUrl: string | null = null;
+    if (file && typeof file === "object" && "size" in file && file.size > 0) {
+      if (file.size > MAX_FILE_SIZE) {
+        return { success: false, error: "Attached file exceeds the maximum size limit of 25MB." };
+      }
+
+      const originalName = file.name || "homework_file";
+      const ext = (path.extname(originalName).slice(1) || "").toLowerCase();
+
+      if (ext && !ALLOWED_EXTENSIONS.has(ext)) {
+        return {
+          success: false,
+          error: `File type .${ext} is not supported. Please upload a PDF, Word document, Excel spreadsheet, PowerPoint, text file, or image.`
+        };
+      }
+
+      try {
+        fileUrl = await saveHomeworkFile(file);
+      } catch (uploadErr) {
+        console.error("Homework file upload error:", uploadErr);
+        return { success: false, error: "Failed to upload attached homework file. Please try again." };
       }
     }
 
@@ -114,7 +208,8 @@ export async function createAssignment(formData: FormData) {
         deadline: deadlineDate,
         classId,
         subjectId: subjectId && subjectId.trim() !== "" ? subjectId : null,
-        teacherId
+        teacherId,
+        fileUrl: fileUrl || null
       },
       include: {
         class: true,
@@ -179,7 +274,7 @@ export async function createAssignment(formData: FormData) {
     revalidatePath("/dashboard/parent/assignments");
     revalidatePath("/dashboard/parent/homework");
 
-    return { success: true, assignmentId: assignment.id };
+    return { success: true, assignmentId: assignment.id, fileUrl: assignment.fileUrl };
   } catch (error: unknown) {
     console.error("Error creating homework:", error);
     if (error instanceof Error) {

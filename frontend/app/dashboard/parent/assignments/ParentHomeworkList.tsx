@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { BookOpen, Calendar as CalendarIcon, CheckCircle2, FileText, Clock } from "lucide-react";
+import { BookOpen, Calendar as CalendarIcon, CheckCircle2, FileText, Clock, Paperclip, Download } from "lucide-react";
 import OpenConversationButton from "@/frontend/components/homework/OpenConversationButton";
 
 export type ParentAssignmentItem = {
@@ -310,6 +310,60 @@ export default function ParentHomeworkList({
                     Instructions for Parents & Student:
                   </strong>
                   <span>{item.description}</span>
+                </div>
+              )}
+
+              {/* Attached Worksheet / Document */}
+              {item.fileUrl && (
+                <div
+                  style={{
+                    padding: "0.85rem 1rem",
+                    borderRadius: "8px",
+                    backgroundColor: "rgba(99, 102, 241, 0.06)",
+                    border: "1px solid rgba(99, 102, 241, 0.2)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "0.75rem"
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                    <div style={{ width: 34, height: 34, borderRadius: "8px", backgroundColor: "rgba(99, 102, 241, 0.15)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Paperclip size={18} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: "0.85rem", color: "var(--foreground)" }}>
+                        Attached Homework Worksheet / Document
+                      </div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                        Click to download or view worksheet
+                      </div>
+                    </div>
+                  </div>
+
+                  <a
+                    href={item.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download={`${item.title.replace(/[^a-zA-Z0-9_-]/g, "_")}_worksheet`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      padding: "0.45rem 0.95rem",
+                      borderRadius: "6px",
+                      backgroundColor: "var(--primary)",
+                      color: "#ffffff",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      textDecoration: "none",
+                      cursor: "pointer"
+                    }}
+                  >
+                    <Download size={14} />
+                    <span>Download Worksheet</span>
+                  </a>
                 </div>
               )}
 

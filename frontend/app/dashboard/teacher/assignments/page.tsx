@@ -36,11 +36,14 @@ export default async function TeacherAssignmentsPage() {
     );
   }
 
-  // 1. Fetch ONLY subjects where this teacher is the assigned teacher.
-  // Class teacher status does NOT allow managing or creating homework for other teachers' subjects!
+  // 1. Fetch ONLY subjects where this teacher is the assigned subject staff (directly or via Timetable).
+  // Note: This page is strictly for subject assigned staff to send homework, NOT for class teacher concept!
   const assignedSubjects = await prisma.subject.findMany({
     where: {
-      teacherId: teacher.id,
+      OR: [
+        { teacherId: teacher.id },
+        { timetable: { some: { teacherId: teacher.id } } }
+      ],
       isActive: true
     },
     include: {
