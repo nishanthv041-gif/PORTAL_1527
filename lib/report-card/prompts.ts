@@ -28,3 +28,4 @@ export const ExtractedSheetVisionSchema = z.object({
 });
 
 export type ExtractedSheetVisionOutput = z.infer<typeof ExtractedSheetVisionSchema>;
+

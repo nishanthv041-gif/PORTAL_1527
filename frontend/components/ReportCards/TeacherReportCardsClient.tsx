@@ -1454,24 +1454,40 @@ export default function TeacherReportCardsClient({
                     {/* Accordion Content: Class Mark Sheet Table & Statistics */}
                     {isExpanded && (
                       <div style={{ padding: "1rem" }}>
-                        <div style={{ overflowX: "auto", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", textAlign: "left" }}>
+                        <div style={{
+                          width: "100%",
+                          maxWidth: "100%",
+                          overflowX: "auto",
+                          WebkitOverflowScrolling: "touch",
+                          borderRadius: "10px",
+                          border: "1px solid var(--border-color)",
+                          background: "var(--card-bg, #ffffff)",
+                          position: "relative"
+                        }}>
+                          <table style={{
+                            width: "100%",
+                            minWidth: `${Math.max(920, 520 + grp.uniqueSubjects.length * 95)}px`,
+                            borderCollapse: "collapse",
+                            fontSize: "0.85rem",
+                            textAlign: "left",
+                            tableLayout: "auto"
+                          }}>
                             <thead>
-                              <tr style={{ background: "rgba(0, 0, 0, 0.03)", borderBottom: "1px solid var(--border-color)" }}>
-                                <th style={{ padding: "0.65rem 0.85rem", width: 45 }}>S.No</th>
-                                <th style={{ padding: "0.65rem 0.85rem" }}>Roll No</th>
-                                <th style={{ padding: "0.65rem 0.85rem" }}>Student Name</th>
+                              <tr style={{ background: "rgba(0, 0, 0, 0.03)", borderBottom: "1.5px solid var(--border-color)" }}>
+                                <th style={{ padding: "0.75rem 0.65rem", width: 50, minWidth: 50, textAlign: "center", whiteSpace: "nowrap" }}>S.No</th>
+                                <th style={{ padding: "0.75rem 0.85rem", minWidth: 130, whiteSpace: "nowrap" }}>Roll No</th>
+                                <th style={{ padding: "0.75rem 0.85rem", minWidth: 160, whiteSpace: "nowrap" }}>Student Name</th>
                                 {grp.uniqueSubjects.map(sub => (
-                                  <th key={sub.id} style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>
+                                  <th key={sub.id} style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 95, whiteSpace: "nowrap" }}>
                                     {sub.name} <span style={{ fontSize: "0.72rem", opacity: 0.7 }}>({sub.maxMarks})</span>
                                   </th>
                                 ))}
-                                <th style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>Total</th>
-                                <th style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>%</th>
-                                <th style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>Grade</th>
-                                <th style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>Result</th>
-                                <th style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>Rank</th>
-                                <th style={{ padding: "0.65rem 0.85rem", textAlign: "right" }}>Actions</th>
+                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 75, whiteSpace: "nowrap" }}>Total</th>
+                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 65, whiteSpace: "nowrap" }}>%</th>
+                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 75, whiteSpace: "nowrap" }}>Grade</th>
+                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 85, whiteSpace: "nowrap" }}>Result</th>
+                                <th style={{ padding: "0.75rem 0.75rem", textAlign: "center", minWidth: 65, whiteSpace: "nowrap" }}>Rank</th>
+                                <th style={{ padding: "0.75rem 0.85rem", textAlign: "right", minWidth: 125, whiteSpace: "nowrap" }}>Actions</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -1485,60 +1501,68 @@ export default function TeacherReportCardsClient({
                                       background: idx % 2 === 0 ? "transparent" : "rgba(0, 0, 0, 0.015)"
                                     }}
                                   >
-                                    <td style={{ padding: "0.65rem 0.85rem", color: "var(--text-secondary)" }}>{idx + 1}</td>
-                                    <td style={{ padding: "0.65rem 0.85rem", fontWeight: 700 }}>{st.rollNumber}</td>
-                                    <td style={{ padding: "0.65rem 0.85rem", fontWeight: 600 }}>{st.studentName}</td>
+                                    <td style={{ padding: "0.65rem 0.65rem", textAlign: "center", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{idx + 1}</td>
+                                    <td style={{ padding: "0.65rem 0.85rem", fontWeight: 700, whiteSpace: "nowrap" }}>{st.rollNumber}</td>
+                                    <td style={{ padding: "0.65rem 0.85rem", fontWeight: 600, whiteSpace: "nowrap" }}>{st.studentName}</td>
                                     {grp.uniqueSubjects.map(sub => {
                                       const m = st.marks.find(sm => (sm.subjectId && sm.subjectId === sub.id) || sm.subjectName.toLowerCase() === sub.name.toLowerCase());
                                       const val = m ? (m.remarks === "Absent" ? "AB" : `${m.score}`) : "-";
                                       return (
-                                        <td key={sub.id} style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>
+                                        <td key={sub.id} style={{ padding: "0.65rem 0.75rem", textAlign: "center", whiteSpace: "nowrap" }}>
                                           <span style={{ fontWeight: 600 }}>{val}</span>
                                         </td>
                                       );
                                     })}
-                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "center", fontWeight: 800 }}>{st.totalMarks}</td>
-                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "center", fontWeight: 700 }}>{st.percentage}%</td>
-                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>
+                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", fontWeight: 800, whiteSpace: "nowrap" }}>{st.totalMarks}</td>
+                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", fontWeight: 700, whiteSpace: "nowrap" }}>{st.percentage}%</td>
+                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", whiteSpace: "nowrap" }}>
                                       <span style={{
                                         fontWeight: 800,
                                         color: "var(--primary)",
                                         background: "rgba(99, 102, 241, 0.1)",
-                                        padding: "0.15rem 0.45rem",
-                                        borderRadius: "4px",
-                                        fontSize: "0.78rem"
+                                        padding: "0.2rem 0.55rem",
+                                        borderRadius: "6px",
+                                        fontSize: "0.8rem",
+                                        display: "inline-block"
                                       }}>
                                         {st.grade}
                                       </span>
                                     </td>
-                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "center" }}>
+                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", whiteSpace: "nowrap" }}>
                                       <span style={{
-                                        fontSize: "0.72rem",
+                                        fontSize: "0.74rem",
                                         fontWeight: 800,
-                                        padding: "0.2rem 0.55rem",
+                                        padding: "0.25rem 0.65rem",
                                         borderRadius: "6px",
+                                        display: "inline-block",
+                                        whiteSpace: "nowrap",
                                         background: isPass ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
                                         color: isPass ? "#10b981" : "#ef4444"
                                       }}>
                                         {isPass ? "PASS" : "FAIL"}
                                       </span>
                                     </td>
-                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "center", fontWeight: 700, color: "var(--text-secondary)" }}>
+                                    <td style={{ padding: "0.65rem 0.75rem", textAlign: "center", fontWeight: 700, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
                                       #{idx + 1}
                                     </td>
-                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "right" }}>
-                                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "right", whiteSpace: "nowrap" }}>
+                                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", flexWrap: "nowrap" }}>
                                         <button
                                           type="button"
                                           onClick={() => setPreviewItem(st)}
                                           title="View Report Card"
                                           style={{
-                                            padding: "0.35rem 0.55rem",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            width: "30px",
+                                            height: "30px",
                                             borderRadius: "6px",
                                             border: "1px solid var(--border-color)",
                                             background: "var(--card-bg, #ffffff)",
                                             cursor: "pointer",
-                                            color: "var(--foreground)"
+                                            color: "var(--foreground)",
+                                            flexShrink: 0
                                           }}
                                         >
                                           <Eye size={13} />
@@ -1552,12 +1576,17 @@ export default function TeacherReportCardsClient({
                                           }}
                                           title="Download Student PDF"
                                           style={{
-                                            padding: "0.35rem 0.55rem",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            width: "30px",
+                                            height: "30px",
                                             borderRadius: "6px",
                                             border: "1px solid var(--border-color)",
                                             background: "var(--card-bg, #ffffff)",
                                             cursor: "pointer",
-                                            color: "var(--foreground)"
+                                            color: "var(--foreground)",
+                                            flexShrink: 0
                                           }}
                                         >
                                           <Download size={13} />
@@ -1569,12 +1598,17 @@ export default function TeacherReportCardsClient({
                                           disabled={deletingId === st.id}
                                           title="Delete"
                                           style={{
-                                            padding: "0.35rem 0.55rem",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            width: "30px",
+                                            height: "30px",
                                             borderRadius: "6px",
                                             border: "1px solid rgba(239, 68, 68, 0.3)",
                                             background: "rgba(239, 68, 68, 0.08)",
                                             cursor: "pointer",
-                                            color: "#ef4444"
+                                            color: "#ef4444",
+                                            flexShrink: 0
                                           }}
                                         >
                                           <Trash2 size={13} />
@@ -1689,24 +1723,26 @@ export default function TeacherReportCardsClient({
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", textAlign: "left" }}>
                   <thead>
                     <tr style={{ background: "rgba(0, 0, 0, 0.03)", borderBottom: "1px solid var(--border-color)" }}>
-                      <th style={{ padding: "0.6rem 0.85rem" }}>Subject</th>
-                      <th style={{ padding: "0.6rem 0.85rem", textAlign: "center" }}>Marks</th>
-                      <th style={{ padding: "0.6rem 0.85rem", textAlign: "center" }}>Status</th>
+                      <th style={{ padding: "0.6rem 0.85rem", whiteSpace: "nowrap" }}>Subject</th>
+                      <th style={{ padding: "0.6rem 0.85rem", textAlign: "center", whiteSpace: "nowrap" }}>Marks</th>
+                      <th style={{ padding: "0.6rem 0.85rem", textAlign: "center", whiteSpace: "nowrap" }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {previewItem.marks.map((m, idx) => (
                       <tr key={idx} style={{ borderBottom: "1px solid var(--border-color)" }}>
-                        <td style={{ padding: "0.6rem 0.85rem", fontWeight: 600 }}>{m.subjectName}</td>
-                        <td style={{ padding: "0.6rem 0.85rem", textAlign: "center", fontWeight: 700 }}>
+                        <td style={{ padding: "0.6rem 0.85rem", fontWeight: 600, whiteSpace: "nowrap" }}>{m.subjectName}</td>
+                        <td style={{ padding: "0.6rem 0.85rem", textAlign: "center", fontWeight: 700, whiteSpace: "nowrap" }}>
                           {m.score} / {m.maxScore}
                         </td>
-                        <td style={{ padding: "0.6rem 0.85rem", textAlign: "center" }}>
+                        <td style={{ padding: "0.6rem 0.85rem", textAlign: "center", whiteSpace: "nowrap" }}>
                           <span style={{
                             fontSize: "0.72rem",
                             fontWeight: 700,
                             padding: "0.2rem 0.5rem",
                             borderRadius: "4px",
+                            display: "inline-block",
+                            whiteSpace: "nowrap",
                             background: m.score >= m.passMarks ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
                             color: m.score >= m.passMarks ? "#10b981" : "#ef4444"
                           }}>

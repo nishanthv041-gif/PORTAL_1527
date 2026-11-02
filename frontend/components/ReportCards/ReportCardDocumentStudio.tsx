@@ -2636,40 +2636,41 @@ export default function ReportCardDocumentStudio({
               })()}
 
               {/* Ready Students Preview Table */}
-              <div style={{ border: "1px solid var(--border-color)", borderRadius: "10px", overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+              <div style={{ border: "1px solid var(--border-color)", borderRadius: "10px", overflowX: "auto", WebkitOverflowScrolling: "touch", width: "100%" }}>
+                <table style={{ width: "100%", minWidth: "640px", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                   <thead style={{ background: "rgba(255, 255, 255, 0.04)" }}>
                     <tr>
-                      <th style={{ padding: "0.5rem 0.75rem", textAlign: "left", fontWeight: 700 }}>Student Name</th>
-                      <th style={{ padding: "0.5rem 0.75rem", textAlign: "left", fontWeight: 700 }}>Roll No</th>
-                      <th style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 700 }}>Total</th>
-                      <th style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 700 }}>%</th>
-                      <th style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 700, minWidth: "85px", whiteSpace: "nowrap" }}>Grade</th>
-                      <th style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 700 }}>Result</th>
-                      <th style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 700 }}>Parents</th>
+                      <th style={{ padding: "0.55rem 0.75rem", textAlign: "left", fontWeight: 700, minWidth: "150px", whiteSpace: "nowrap" }}>Student Name</th>
+                      <th style={{ padding: "0.55rem 0.75rem", textAlign: "left", fontWeight: 700, minWidth: "110px", whiteSpace: "nowrap" }}>Roll No</th>
+                      <th style={{ padding: "0.55rem 0.75rem", textAlign: "center", fontWeight: 700, minWidth: "75px", whiteSpace: "nowrap" }}>Total</th>
+                      <th style={{ padding: "0.55rem 0.75rem", textAlign: "center", fontWeight: 700, minWidth: "60px", whiteSpace: "nowrap" }}>%</th>
+                      <th style={{ padding: "0.55rem 0.75rem", textAlign: "center", fontWeight: 700, minWidth: "65px", whiteSpace: "nowrap" }}>Grade</th>
+                      <th style={{ padding: "0.55rem 0.75rem", textAlign: "center", fontWeight: 700, minWidth: "80px", whiteSpace: "nowrap" }}>Result</th>
+                      <th style={{ padding: "0.55rem 0.75rem", textAlign: "center", fontWeight: 700, minWidth: "85px", whiteSpace: "nowrap" }}>Parents</th>
                     </tr>
                   </thead>
                   <tbody>
                     {readyStudentsList.filter(s => s.isReady).map((st) => (
                       <tr key={st.studentId} style={{ borderTop: "1px solid var(--border-color)" }}>
-                        <td style={{ padding: "0.5rem 0.75rem", fontWeight: 700 }}>{st.studentName}</td>
-                        <td style={{ padding: "0.5rem 0.75rem", color: "var(--text-secondary)" }}>{st.rollNumber || "-"}</td>
-                        <td style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 800 }}>{st.totalScore}/{st.maxTotal}</td>
-                        <td style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 700 }}>{st.percentage}%</td>
-                        <td style={{ padding: "0.5rem 0.75rem", textAlign: "center", fontWeight: 900, color: st.grade === "F" ? "#ef4444" : "#10b981", minWidth: "85px", whiteSpace: "nowrap" }}>{st.grade}</td>
-                        <td style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>
+                        <td style={{ padding: "0.55rem 0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}>{st.studentName}</td>
+                        <td style={{ padding: "0.55rem 0.75rem", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{st.rollNumber || "-"}</td>
+                        <td style={{ padding: "0.55rem 0.75rem", textAlign: "center", fontWeight: 800, whiteSpace: "nowrap" }}>{st.totalScore}/{st.maxTotal}</td>
+                        <td style={{ padding: "0.55rem 0.75rem", textAlign: "center", fontWeight: 700, whiteSpace: "nowrap" }}>{st.percentage}%</td>
+                        <td style={{ padding: "0.55rem 0.75rem", textAlign: "center", fontWeight: 900, color: st.grade === "F" ? "#ef4444" : "#10b981", whiteSpace: "nowrap" }}>{st.grade}</td>
+                        <td style={{ padding: "0.55rem 0.75rem", textAlign: "center", whiteSpace: "nowrap" }}>
                           <span style={{
                             padding: "2px 6px",
                             borderRadius: "4px",
                             fontSize: "0.72rem",
                             fontWeight: 800,
+                            whiteSpace: "nowrap",
                             background: st.result === "PASS" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
                             color: st.result === "PASS" ? "#10b981" : "#ef4444"
                           }}>
                             {st.result}
                           </span>
                         </td>
-                        <td style={{ padding: "0.5rem 0.75rem", textAlign: "center", color: st.hasLinkedParent ? "#10b981" : "#f59e0b" }}>
+                        <td style={{ padding: "0.55rem 0.75rem", textAlign: "center", color: st.hasLinkedParent ? "#10b981" : "#f59e0b", whiteSpace: "nowrap" }}>
                           {st.parentCount > 0 ? `${st.parentCount} linked` : "None"}
                         </td>
                       </tr>
