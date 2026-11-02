@@ -16,6 +16,7 @@ import {
 } from "@/backend/lib/services/reportCardActions";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { exportConsolidatedMarksToExcel } from "@/frontend/lib/exams/exportConsolidatedMarks";
+import MobileTabs, { MobileTabItem } from "@/components/ui/MobileTabs";
 
 const ReportCardDocumentStudio = dynamic(() => import("./ReportCardDocumentStudio"), {
   ssr: false,
@@ -153,6 +154,44 @@ export default function TeacherReportCardsClient({
 
   // Document / OCR Scan Modal State
   const [showScanModal, setShowScanModal] = useState(false);
+
+  const reportCardTabs: MobileTabItem[] = useMemo(() => [
+    {
+      id: "CREATE",
+      label: "Create & Send",
+      mobileLabel: "Create",
+      icon: <FileText size={16} />,
+    },
+    {
+      id: "STUDIO",
+      label: "Document & Gradebook OCR Studio",
+      mobileLabel: "Scan",
+      icon: <Upload size={16} />,
+    },
+    {
+      id: "HISTORY",
+      label: "Sent History",
+      mobileLabel: "History",
+      icon: <Clock size={16} />,
+      badge: history.length,
+    },
+    {
+      id: "TASKS",
+      label: "Marks Tasks",
+      mobileLabel: "Marks",
+      icon: <BookOpen size={16} />,
+      onClick: () => router.push("/dashboard/teacher/exams/tasks"),
+      title: "Open your assigned subject marks tasks",
+    },
+    {
+      id: "REQUESTS",
+      label: "Exam Requests",
+      mobileLabel: "Exams",
+      icon: <Send size={16} />,
+      onClick: () => router.push("/dashboard/teacher/exams/requests"),
+      title: "Propose new exams for your classes",
+    },
+  ], [history.length, router]);
 
   // Selected Class Object
   const currentClass = useMemo(() => {
@@ -602,63 +641,19 @@ export default function TeacherReportCardsClient({
           <h1 className={styles.mainTitle}>Student Report Cards</h1>
         </div>
 
-        {/* Tab Switcher & Scan Action */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
-          <div className={styles.tabNav} role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "CREATE"}
-              className={`${styles.tabBtn} ${activeTab === "CREATE" ? styles.tabBtnActive : ""}`}
-              onClick={() => setActiveTab("CREATE")}
-            >
-              <FileText size={16} />
-              <span>Create &amp; Send</span>
-            </button>
-
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "STUDIO"}
-              className={`${styles.tabBtn} ${activeTab === "STUDIO" ? styles.tabBtnActive : ""}`}
-              onClick={() => setActiveTab("STUDIO")}
-            >
-              <Upload size={16} />
-              <span>Document &amp; Gradebook OCR Studio</span>
-            </button>
-
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "HISTORY"}
-              className={`${styles.tabBtn} ${activeTab === "HISTORY" ? styles.tabBtnActive : ""}`}
-              onClick={() => setActiveTab("HISTORY")}
-            >
-              <Clock size={16} />
-              <span>Sent History</span>
-              <span className={styles.tabBadge}>{history.length}</span>
-            </button>
-
-            <button
-              type="button"
-              className={styles.tabBtn}
-              onClick={() => router.push("/dashboard/teacher/exams/tasks")}
-              title="Open your assigned subject marks tasks"
-            >
-              <BookOpen size={16} />
-              <span>Marks Tasks</span>
-            </button>
-
-            <button
-              type="button"
-              className={styles.tabBtn}
-              onClick={() => router.push("/dashboard/teacher/exams/requests")}
-              title="Propose new exams for your classes"
-            >
-              <Send size={16} />
-              <span>Exam Requests</span>
-            </button>
-          </div>
+        {/* Tab Switcher */}
+        <div style={{ width: "100%", marginTop: "0.25rem" }}>
+          <MobileTabs
+            tabs={reportCardTabs}
+            activeTab={activeTab}
+            onChange={(tabId) => {
+              if (tabId === "CREATE" || tabId === "STUDIO" || tabId === "HISTORY") {
+                setActiveTab(tabId);
+              }
+            }}
+            syncWithUrl={true}
+            queryParamName="tab"
+          />
         </div>
       </div>
 

@@ -1,0 +1,24 @@
+{
+  "name": "SRT Universal School Portal",
+  "short_name": "SRT Portal",
+  "description": "School Management Portal for Teachers, Parents, and Administrators",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#151515",
+  "theme_color": "#151515",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/logo/srt-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo/srt-logo-hd.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

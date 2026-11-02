@@ -1,0 +1,129 @@
+.tabsWrapper {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.scrollContainer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+  background: var(--card-bg, #1a2234);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  padding: 0.35rem;
+  border-radius: 14px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.scrollContainer::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* Edge Fade Indicators */
+.fadeLeft,
+.fadeRight {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  pointer-events: none;
+  z-index: 5;
+  transition: opacity 0.2s ease;
+  border-radius: 14px;
+}
+
+.fadeLeft {
+  left: 0;
+  background: linear-gradient(to right, var(--card-bg, #1a2234) 20%, transparent);
+}
+
+.fadeRight {
+  right: 0;
+  background: linear-gradient(to left, var(--card-bg, #1a2234) 20%, transparent);
+}
+
+.tabBtn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-height: 44px;
+  padding: 0 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  scroll-snap-align: center;
+  text-decoration: none;
+  touch-action: manipulation;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+.tabBtn:hover {
+  color: var(--foreground, #ffffff);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tabBtn:focus-visible {
+  outline: 2px solid var(--primary, #3b82f6);
+  outline-offset: 2px;
+}
+
+.tabBtnActive {
+  background: var(--primary, #3b82f6) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.tabLabelDesktop {
+  display: none;
+}
+
+.tabLabelMobile {
+  display: inline;
+}
+
+@media (min-width: 640px) {
+  .tabLabelDesktop {
+    display: inline;
+  }
+  .tabLabelMobile {
+    display: none;
+  }
+}
+
+.tabBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.25);
+  color: inherit;
+  line-height: 1;
+}
+
+.tabBtn:not(.tabBtnActive) .tabBadge {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary, #94a3b8);
+}
