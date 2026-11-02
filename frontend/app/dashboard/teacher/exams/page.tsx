@@ -54,9 +54,52 @@ export default async function TeacherExamsPage() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.headerRow}>
+      <div className={styles.headerRow} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
         <div>
           <h1 className={styles.title} style={{ margin: 0 }}>Exams &amp; Marks Management</h1>
+          <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.875rem", color: "var(--text-secondary)" }}>
+            Manage exam schedules, subject marks tasks, and exam requests.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+          <Link
+            href="/dashboard/teacher/exams/tasks"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.55rem 1rem",
+              borderRadius: "8px",
+              background: "#3b82f6",
+              color: "#ffffff",
+              textDecoration: "none",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              boxShadow: "0 2px 8px rgba(59, 130, 246, 0.3)",
+            }}
+          >
+            <BookOpen size={16} />
+            <span>My Marks Tasks</span>
+          </Link>
+          <Link
+            href="/dashboard/teacher/exams/requests"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.55rem 1rem",
+              borderRadius: "8px",
+              background: "rgba(255, 255, 255, 0.08)",
+              color: "#e2e8f0",
+              textDecoration: "none",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+            }}
+          >
+            <FileText size={16} />
+            <span>Exam Requests</span>
+          </Link>
         </div>
       </div>
 
