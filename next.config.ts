@@ -26,13 +26,22 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
   experimental: {
-    optimizePackageImports: ['lucide-react', 'recharts', 'date-fns'],
+    optimizePackageImports: ['lucide-react', 'recharts', 'date-fns', 'xlsx'],
     serverActions: {
       bodySizeLimit: '25mb',
     },
   },
   async headers() {
     return [
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
       {
         source: '/favicon.ico',
         headers: [
