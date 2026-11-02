@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -24,6 +25,11 @@ import BottomSheet from "@/components/ui/BottomSheet";
 export function TeacherBottomNav() {
   const pathname = usePathname();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const navItems = [
     {
@@ -99,7 +105,9 @@ export function TeacherBottomNav() {
     !navItems.some((item) => item.isActive) &&
     moreItems.some((item) => pathname?.startsWith(item.href));
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <>
       <nav className={styles.bottomNav} aria-label="Teacher mobile navigation">
         {navItems.map((item) => (
@@ -151,8 +159,10 @@ export function TeacherBottomNav() {
           ))}
         </div>
       </BottomSheet>
-    </>
+    </>,
+    document.body
   );
 }
 
 export default TeacherBottomNav;
+
