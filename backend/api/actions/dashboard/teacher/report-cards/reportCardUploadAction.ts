@@ -5,51 +5,6 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { createAndSendReportCardAction } from "@/backend/lib/services/reportCardActions";
 
-export interface RecordUploadAuditPayload {
-  classId: string;
-  fileName: string;
-  fileSize: number;
-  examName: string;
-  status: "EXTRACTED" | "FAILED" | "PENDING";
-  fileUrl?: string;
-  studentCount: number;
-  subjectCount: number;
-}
-
-export async function recordReportCardUploadAudit(payload: RecordUploadAuditPayload) {
-  try {
-    const session = await getServerSession(getAuthOptions());
-    if (!session || (session.user.role !== "TEACHER" && session.user.role !== "ADMIN")) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const audit = await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: "REPORT_CARD_DOCUMENT_UPLOAD",
-        targetModel: "ReportCardUpload",
-        targetId: payload.classId,
-        details: JSON.stringify({
-          fileName: payload.fileName,
-          fileSize: payload.fileSize,
-          fileUrl: payload.fileUrl || null,
-          uploadedBy: session.user.name || session.user.email,
-          examName: payload.examName,
-          status: payload.status,
-          studentCount: payload.studentCount,
-          subjectCount: payload.subjectCount,
-          createdAt: new Date().toISOString()
-        })
-      }
-    });
-
-    return { success: true, auditId: audit.id };
-  } catch (err: any) {
-    console.error("Failed to record upload audit:", err);
-    return { success: false, error: err?.message || "Audit error" };
-  }
-}
-
 export interface BulkSaveStudentEntry {
   studentId: string;
   marks: Array<{
@@ -69,6 +24,11 @@ export interface BulkSavePayload {
   students: BulkSaveStudentEntry[];
 }
 
+/**
+ * Saves verified report card values for all ready students in the class.
+ * Never receives, saves, or processes file objects; operates exclusively on
+ * teacher-reviewed final values.
+ */
 export async function bulkSaveReportCardsAction(payload: BulkSavePayload) {
   try {
     const session = await getServerSession(getAuthOptions());
@@ -122,23 +82,6 @@ export async function bulkSaveReportCardsAction(payload: BulkSavePayload) {
         errors.push(`Student (${studentEntry.studentId}): ${stErr?.message || "Transaction error"}`);
       }
     }
-
-    // Record audit of batch save
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: "REPORT_CARD_BULK_SAVE",
-        targetModel: "ReportCard",
-        targetId: classId,
-        details: JSON.stringify({
-          examName: examName.trim(),
-          savedCount,
-          totalAttempted: students.length,
-          errorsCount: errors.length,
-          savedReportCardIds
-        })
-      }
-    });
 
     return {
       success: savedCount > 0,

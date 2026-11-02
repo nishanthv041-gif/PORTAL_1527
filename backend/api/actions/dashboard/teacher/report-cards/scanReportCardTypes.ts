@@ -4,13 +4,13 @@ export interface ScannedReportCardSubject {
   id: string; // Temporary unique ID for client editing
   subjectId: string; // Mapped class subject ID (empty if unmatched)
   subjectName: string;
-  score: number | "";
-  marksScored?: number | ""; // Canonical alias for marks scored
+  score: number | "" | "AB";
+  marksScored?: number | "" | "AB"; // Canonical alias for marks scored
   maxScore: number;
   passMarks: number;
   remarks: string;
   grade?: string | null;
-  status?: "PASS" | "FAIL" | "NEEDS_REVIEW";
+  status?: "PASS" | "FAIL" | "ABSENT" | "NEEDS_REVIEW";
   originalExtractedValue?: string | null;
   isInvalid?: boolean;
   validationError?: string;
@@ -36,6 +36,8 @@ export interface DetectedStudentEntry {
   hasMarks?: boolean;
   scannerConfigured?: boolean;
   confidence?: number | string;
+  printedTotal?: number;
+  totalMismatchWarning?: string;
 }
 
 export interface ExtractedStudentSchema {

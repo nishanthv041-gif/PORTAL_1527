@@ -145,6 +145,8 @@ export default function TeacherReportCardsClient({
   // History State
   const [history, setHistory] = useState<HistoryItem[]>(initialHistory);
   const [historySearch, setHistorySearch] = useState("");
+  const [historyExamFilter, setHistoryExamFilter] = useState("");
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<"ALL" | "VERIFIED" | "PENDING">("ALL");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [previewItem, setPreviewItem] = useState<HistoryItem | null>(null);
 
@@ -437,17 +439,31 @@ export default function TeacherReportCardsClient({
     }
   };
 
+  // Unique Exams for Filter
+  const uniqueHistoryExams = useMemo(() => {
+    const s = new Set<string>();
+    history.forEach(item => {
+      if (item.examName) s.add(item.examName);
+    });
+    return Array.from(s);
+  }, [history]);
+
   // Filtered History
   const filteredHistory = useMemo(() => {
-    if (!historySearch.trim()) return history;
-    const q = historySearch.toLowerCase();
-    return history.filter(item =>
-      item.studentName.toLowerCase().includes(q) ||
-      item.rollNumber.toLowerCase().includes(q) ||
-      item.examName.toLowerCase().includes(q) ||
-      item.className.toLowerCase().includes(q)
-    );
-  }, [history, historySearch]);
+    return history.filter(item => {
+      if (historyExamFilter && item.examName !== historyExamFilter) return false;
+      if (historyStatusFilter === "VERIFIED" && !item.parentVerified) return false;
+      if (historyStatusFilter === "PENDING" && item.parentVerified) return false;
+      if (!historySearch.trim()) return true;
+      const q = historySearch.toLowerCase();
+      return (
+        item.studentName.toLowerCase().includes(q) ||
+        item.rollNumber.toLowerCase().includes(q) ||
+        item.examName.toLowerCase().includes(q) ||
+        item.className.toLowerCase().includes(q)
+      );
+    });
+  }, [history, historySearch, historyExamFilter, historyStatusFilter]);
 
   return (
     <div className={styles.container}>
@@ -599,9 +615,32 @@ export default function TeacherReportCardsClient({
         <form onSubmit={handleSendReportCard} className={styles.formCard}>
           {/* STEP 1: SELECT CLASS & STUDENT */}
           <div className={styles.sectionGroup}>
-            <div className={styles.sectionHeader}>
-              <span className={styles.stepNumber}>1</span>
-              <h2 className={styles.sectionTitle}>Select Class &amp; Student</h2>
+            <div className={styles.sectionHeader} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <span className={styles.stepNumber}>1</span>
+                <h2 className={styles.sectionTitle}>Select Class &amp; Student</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab("STUDIO")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                  padding: "0.45rem 0.85rem",
+                  borderRadius: "8px",
+                  background: "rgba(59, 130, 246, 0.12)",
+                  color: "#60a5fa",
+                  border: "1px solid rgba(59, 130, 246, 0.25)",
+                  fontWeight: 700,
+                  fontSize: "0.82rem",
+                  cursor: "pointer"
+                }}
+                title="Scan marksheet document (PDF, Excel, Photo) to auto-fill details"
+              >
+                <Upload size={14} />
+                <span>Upload &amp; Auto-fill Marksheet</span>
+              </button>
             </div>
 
             <div className={styles.inputGrid}>
@@ -1101,17 +1140,64 @@ export default function TeacherReportCardsClient({
           ========================================================= */}
       {activeTab === "HISTORY" && (
         <div className={styles.historyContainer}>
-          {/* History Search Bar */}
-          <div className={styles.historyToolbar}>
-            <div className={styles.searchBox}>
-              <Search size={16} className={styles.searchIcon} />
-              <input
-                type="text"
-                placeholder="Search history by student name, roll number, or exam..."
-                className={styles.searchInput}
-                value={historySearch}
-                onChange={(e) => setHistorySearch(e.target.value)}
-              />
+          {/* History Search & Filters Bar */}
+          <div className={styles.historyToolbar} style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem", alignItems: "center", flex: "1 1 320px" }}>
+              <div className={styles.searchBox} style={{ flex: "1 1 200px" }}>
+                <Search size={16} className={styles.searchIcon} />
+                <input
+                  type="text"
+                  placeholder="Search by student, roll no, or exam..."
+                  className={styles.searchInput}
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                />
+              </div>
+
+              {/* Exam/Term Filter */}
+              {uniqueHistoryExams.length > 0 && (
+                <select
+                  value={historyExamFilter}
+                  onChange={e => setHistoryExamFilter(e.target.value)}
+                  style={{
+                    padding: "0.5rem 0.75rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color)",
+                    background: "var(--input-bg, #0f172a)",
+                    color: "var(--foreground)",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    cursor: "pointer"
+                  }}
+                  title="Filter by Exam"
+                >
+                  <option value="">All Exams ({uniqueHistoryExams.length})</option>
+                  {uniqueHistoryExams.map(ex => (
+                    <option key={ex} value={ex}>{ex}</option>
+                  ))}
+                </select>
+              )}
+
+              {/* Verification Status Filter */}
+              <select
+                value={historyStatusFilter}
+                onChange={e => setHistoryStatusFilter(e.target.value as any)}
+                style={{
+                  padding: "0.5rem 0.75rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  background: "var(--input-bg, #0f172a)",
+                  color: "var(--foreground)",
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+                title="Filter by Verification Status"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="VERIFIED">Verified by Parent</option>
+                <option value="PENDING">Awaiting Verification</option>
+              </select>
             </div>
 
             <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)", fontWeight: 600 }}>
