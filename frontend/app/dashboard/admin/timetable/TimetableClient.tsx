@@ -28,7 +28,11 @@ import {
   Copy,
   RotateCcw,
   Check,
-  Globe
+  Globe,
+  UserCheck,
+  Search,
+  Sparkles,
+  Filter
 } from "lucide-react";
 import {
   createTimetableSlotAction,
@@ -44,10 +48,15 @@ import {
   savePeriodSlotsAction,
   quickGenerateSlotsAction
 } from "@/backend/api/actions/dashboard/admin/timetable/periodSlotActions";
+import { calculateFreePeriodStaff } from "@/backend/lib/timetable/timetableCalculations";
 import type {
   PeriodSlotData,
   TimetableSlotEntry,
-  PeriodType
+  PeriodType,
+  DayFreeStaffSummary,
+  PeriodStaffAvailability,
+  FreeTeacherInfo,
+  BusyTeacherInfo
 } from "@/backend/lib/timetable/timetableTypes";
 import dynamic from "next/dynamic";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
@@ -153,8 +162,11 @@ export default function TimetableClient({
 
   const [selectedClass, setSelectedClass] = useState(initialClassId);
   const [selectedWeek, setSelectedWeek] = useState(weekOf);
-  const [viewMode, setViewMode] = useState<"CLASS" | "TEACHER">("CLASS");
+  const [viewMode, setViewMode] = useState<"CLASS" | "TEACHER" | "FREE_STAFF">("CLASS");
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(allTeachers[0]?.id || "");
+  const [selectedFreeDay, setSelectedFreeDay] = useState<string>("MONDAY");
+  const [freeStaffSearchQuery, setFreeStaffSearchQuery] = useState("");
+  const [freeStaffDisplayMode, setFreeStaffDisplayMode] = useState<"PERIOD_CARDS" | "MATRIX">("PERIOD_CARDS");
 
   // Mobile layout state
   const [activeMobileDay, setActiveMobileDay] = useState<string>(() => {
@@ -525,6 +537,69 @@ export default function TimetableClient({
     return [...periodSlots].sort((a, b) => a.order - b.order);
   }, [periodSlots]);
 
+  // Real-time calculation of free staff and busy faculty for the selected day
+  const freeStaffSummary = useMemo(() => {
+    return calculateFreePeriodStaff({
+      dayOfWeek: selectedFreeDay,
+      periodSlots: sortedPeriods,
+      allSchoolSlots,
+      allTeachers,
+      classes,
+      absencesToday: weekAbsences.map(a => ({
+        teacherId: a.teacherId,
+        fullDay: a.fullDay,
+        periodNumbers: a.periodNumbers,
+        reason: undefined
+      }))
+    });
+  }, [selectedFreeDay, sortedPeriods, allSchoolSlots, allTeachers, classes, weekAbsences]);
+
+  // Real-time free/busy calculation for the specific slot being edited
+  const slotStaffAvailability = useMemo(() => {
+    if (!editingSlot) return null;
+    const curDay = editingSlot.day.toUpperCase();
+    const curPeriod = editingSlot.period;
+
+    // Find who is busy during (curDay, curPeriod) across the entire school
+    const busyMap = new Map<string, { className: string; subjectName: string; classroom?: string }>();
+    allSchoolSlots.forEach(s => {
+      if ((s.dayOfWeek || "").toUpperCase() === curDay && s.period === curPeriod) {
+        if (s.isBreak || s.slotType === "BREAK" || s.slotType === "LUNCH") return;
+        const tId = s.teacherId || s.subject?.teacherId;
+        if (tId) {
+          const cls = classes.find(c => c.id === s.classId);
+          const clsName = s.class ? `${s.class.name} - ${s.class.section}` : (cls ? `${cls.name} - ${cls.section}` : s.classId);
+          busyMap.set(tId, {
+            className: clsName,
+            subjectName: s.subject?.name || s.subjectName || "Subject",
+            classroom: s.classroom || undefined
+          });
+        }
+      }
+    });
+
+    const freeTeachers: Array<{ id: string; name: string }> = [];
+    const busyTeachers: Array<{ id: string; name: string; assignment: string }> = [];
+
+    allTeachers.forEach(t => {
+      const b = busyMap.get(t.id);
+      if (b) {
+        busyTeachers.push({
+          id: t.id,
+          name: t.name,
+          assignment: `${b.className} (${b.subjectName})`
+        });
+      } else {
+        freeTeachers.push({
+          id: t.id,
+          name: t.name
+        });
+      }
+    });
+
+    return { freeTeachers, busyTeachers };
+  }, [editingSlot, allSchoolSlots, allTeachers, classes]);
+
   return (
     <div style={{ position: "relative", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       {/* Top Transition indicator */}
@@ -683,7 +758,7 @@ export default function TimetableClient({
 
           <div className="timetable-control-group" style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             {/* View Mode Toggle */}
-            <div style={{ display: "inline-flex", background: "var(--input-bg)", padding: "0.2rem", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+            <div style={{ display: "inline-flex", background: "var(--input-bg)", padding: "0.2rem", borderRadius: "8px", border: "1px solid var(--border-color)", flexWrap: "wrap", gap: "2px" }}>
               <button
                 type="button"
                 onClick={() => setViewMode("CLASS")}
@@ -716,9 +791,25 @@ export default function TimetableClient({
               >
                 Teacher View
               </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("FREE_STAFF")}
+                style={{
+                  padding: "0.4rem 0.8rem",
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  background: viewMode === "FREE_STAFF" ? "var(--primary)" : "transparent",
+                  color: viewMode === "FREE_STAFF" ? "var(--primary-fg)" : "var(--text-secondary)"
+                }}
+              >
+                🟢 Free Staff
+              </button>
             </div>
 
-            {/* Class or Teacher Dropdown */}
+            {/* Class, Teacher or Free Day Selector */}
             {viewMode === "CLASS" ? (
               <div className="timetable-select-wrapper" style={{ minWidth: "220px" }}>
                 <select
@@ -733,7 +824,7 @@ export default function TimetableClient({
                   ))}
                 </select>
               </div>
-            ) : (
+            ) : viewMode === "TEACHER" ? (
               <div className="timetable-select-wrapper" style={{ minWidth: "240px" }}>
                 <select
                   value={selectedTeacherId}
@@ -742,6 +833,18 @@ export default function TimetableClient({
                 >
                   {allTeachers.map(t => (
                     <option key={t.id} value={t.id}>{t.name} ({t.subjects.join(", ") || "Faculty"})</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="timetable-select-wrapper" style={{ minWidth: "180px" }}>
+                <select
+                  value={selectedFreeDay}
+                  onChange={(e) => setSelectedFreeDay(e.target.value)}
+                  style={{ width: "100%", padding: "0.55rem 0.8rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontWeight: 600, fontSize: "0.875rem" }}
+                >
+                  {DAYS.map(d => (
+                    <option key={d} value={d}>📅 {d}</option>
                   ))}
                 </select>
               </div>
@@ -1051,10 +1154,28 @@ export default function TimetableClient({
                             style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.85rem" }}
                           >
                             <option value="">-- Assigned Teacher --</option>
-                            {allTeachers.map(t => (
-                              <option key={t.id} value={t.id}>{t.name}</option>
-                            ))}
+                            {slotStaffAvailability?.freeTeachers && slotStaffAvailability.freeTeachers.length > 0 && (
+                              <optgroup label={`🟢 Free Staff / Available (${slotStaffAvailability.freeTeachers.length})`}>
+                                {slotStaffAvailability.freeTeachers.map(t => (
+                                  <option key={t.id} value={t.id}>🟢 {t.name} (Free)</option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {slotStaffAvailability?.busyTeachers && slotStaffAvailability.busyTeachers.length > 0 && (
+                              <optgroup label={`🔴 Busy Staff (${slotStaffAvailability.busyTeachers.length})`}>
+                                {slotStaffAvailability.busyTeachers.map(t => (
+                                  <option key={t.id} value={t.id}>🔴 {t.name} (Teaching {t.assignment})</option>
+                                ))}
+                              </optgroup>
+                            )}
                           </select>
+
+                          {editData.teacherId && slotStaffAvailability?.busyTeachers?.some(b => b.id === editData.teacherId) && (
+                            <div style={{ fontSize: "0.72rem", color: "#d97706", background: "rgba(245, 158, 11, 0.12)", padding: "0.3rem 0.5rem", borderRadius: "4px", border: "1px solid rgba(245, 158, 11, 0.25)", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                              <AlertCircle size={12} style={{ flexShrink: 0 }} />
+                              <span>Already teaching {slotStaffAvailability.busyTeachers.find(b => b.id === editData.teacherId)?.assignment}</span>
+                            </div>
+                          )}
 
                           <input
                             type="text"
@@ -1310,10 +1431,27 @@ export default function TimetableClient({
                                     style={{ width: "100%", padding: "0.2rem", fontSize: "0.72rem", borderRadius: "4px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit" }}
                                   >
                                     <option value="">Select Teacher</option>
-                                    {allTeachers.map(t => (
-                                      <option key={t.id} value={t.id}>{t.name}</option>
-                                    ))}
+                                    {slotStaffAvailability?.freeTeachers && slotStaffAvailability.freeTeachers.length > 0 && (
+                                      <optgroup label={`🟢 Free Staff (${slotStaffAvailability.freeTeachers.length})`}>
+                                        {slotStaffAvailability.freeTeachers.map(t => (
+                                          <option key={t.id} value={t.id}>🟢 {t.name} (Free)</option>
+                                        ))}
+                                      </optgroup>
+                                    )}
+                                    {slotStaffAvailability?.busyTeachers && slotStaffAvailability.busyTeachers.length > 0 && (
+                                      <optgroup label={`🔴 Busy Staff (${slotStaffAvailability.busyTeachers.length})`}>
+                                        {slotStaffAvailability.busyTeachers.map(t => (
+                                          <option key={t.id} value={t.id}>🔴 {t.name} (Teaching {t.assignment})</option>
+                                        ))}
+                                      </optgroup>
+                                    )}
                                   </select>
+
+                                  {editData.teacherId && slotStaffAvailability?.busyTeachers?.some(b => b.id === editData.teacherId) && (
+                                    <div style={{ fontSize: "0.65rem", color: "#d97706", lineHeight: 1.2 }}>
+                                      ⚠️ Busy: {slotStaffAvailability.busyTeachers.find(b => b.id === editData.teacherId)?.assignment}
+                                    </div>
+                                  )}
 
                                   <input
                                     type="text"
@@ -1489,6 +1627,454 @@ export default function TimetableClient({
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* FREE PERIOD STAFF & FACULTY AVAILABILITY VIEW */}
+      {viewMode === "FREE_STAFF" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+          {/* Header & Quick Actions */}
+          <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", padding: "1.25rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <UserCheck size={20} color="var(--primary)" /> Free Period Staff &amp; Faculty Availability
+                </h3>
+                <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
+                  Real-time calculation of available, teaching, and absent faculty for <strong>{selectedFreeDay}</strong>. Monitor teacher workloads and assign coverage instantly.
+                </p>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                {/* Display mode switcher */}
+                <div style={{ display: "inline-flex", background: "var(--input-bg)", padding: "0.2rem", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                  <button
+                    type="button"
+                    onClick={() => setFreeStaffDisplayMode("PERIOD_CARDS")}
+                    style={{
+                      padding: "0.35rem 0.75rem",
+                      borderRadius: "6px",
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      background: freeStaffDisplayMode === "PERIOD_CARDS" ? "var(--primary)" : "transparent",
+                      color: freeStaffDisplayMode === "PERIOD_CARDS" ? "var(--primary-fg)" : "var(--text-secondary)"
+                    }}
+                  >
+                    Period Cards
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFreeStaffDisplayMode("MATRIX")}
+                    style={{
+                      padding: "0.35rem 0.75rem",
+                      borderRadius: "6px",
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      background: freeStaffDisplayMode === "MATRIX" ? "var(--primary)" : "transparent",
+                      color: freeStaffDisplayMode === "MATRIX" ? "var(--primary-fg)" : "var(--text-secondary)"
+                    }}
+                  >
+                    Faculty Matrix
+                  </button>
+                </div>
+
+                <Link
+                  href="/dashboard/admin/timetable/substitution"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                    padding: "0.45rem 0.85rem",
+                    background: "rgba(99, 102, 241, 0.12)",
+                    color: "var(--primary)",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(99, 102, 241, 0.3)",
+                    fontWeight: 600,
+                    fontSize: "0.82rem",
+                    textDecoration: "none"
+                  }}
+                >
+                  <ArrowRight size={14} /> Assign Substitution
+                </Link>
+              </div>
+            </div>
+
+            {/* KPI Summary Cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem", marginTop: "1rem" }}>
+              <div style={{ padding: "0.75rem 1rem", borderRadius: "8px", background: "rgba(99, 102, 241, 0.08)", border: "1px solid rgba(99, 102, 241, 0.2)" }}>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>Total Active Faculty</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--primary)", marginTop: "0.2rem" }}>
+                  {allTeachers.length} <span style={{ fontSize: "0.78rem", fontWeight: 500, color: "var(--text-secondary)" }}>Teachers</span>
+                </div>
+              </div>
+
+              <div style={{ padding: "0.75rem 1rem", borderRadius: "8px", background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.2)" }}>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>Faculty with Free Periods Today</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#10b981", marginTop: "0.2rem" }}>
+                  {freeStaffSummary.teacherDailyLoads.filter(t => t.totalFree > 0).length} <span style={{ fontSize: "0.78rem", fontWeight: 500, color: "var(--text-secondary)" }}>Available</span>
+                </div>
+              </div>
+
+              <div style={{ padding: "0.75rem 1rem", borderRadius: "8px", background: "rgba(59, 130, 246, 0.08)", border: "1px solid rgba(59, 130, 246, 0.2)" }}>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>Total Scheduled Lessons Today</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#3b82f6", marginTop: "0.2rem" }}>
+                  {freeStaffSummary.periods.reduce((acc, p) => acc + p.busyTeachers.length, 0)} <span style={{ fontSize: "0.78rem", fontWeight: 500, color: "var(--text-secondary)" }}>Classes</span>
+                </div>
+              </div>
+
+              <div style={{ padding: "0.75rem 1rem", borderRadius: "8px", background: "rgba(245, 158, 11, 0.08)", border: "1px solid rgba(245, 158, 11, 0.2)" }}>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>Active Absences / Leave</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#d97706", marginTop: "0.2rem" }}>
+                  {freeStaffSummary.teacherDailyLoads.filter(t => t.isAbsentToday).length} <span style={{ fontSize: "0.78rem", fontWeight: 500, color: "var(--text-secondary)" }}>Teachers</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Day Selector Pills & Search Row */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", marginTop: "1rem", paddingTop: "0.85rem", borderTop: "1px solid var(--border-color)" }}>
+              {/* Day selection pills */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                {DAYS.map(d => {
+                  const isCur = selectedFreeDay === d;
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setSelectedFreeDay(d)}
+                      style={{
+                        padding: "0.4rem 0.8rem",
+                        borderRadius: "8px",
+                        border: isCur ? "1px solid var(--primary)" : "1px solid var(--border-color)",
+                        background: isCur ? "var(--primary)" : "var(--input-bg)",
+                        color: isCur ? "var(--primary-fg)" : "inherit",
+                        fontWeight: isCur ? 700 : 500,
+                        fontSize: "0.82rem",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease"
+                      }}
+                    >
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Search query input */}
+              <div style={{ position: "relative", minWidth: "220px", maxWidth: "320px", flex: "1 1 220px" }}>
+                <Search size={15} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)" }} />
+                <input
+                  type="text"
+                  placeholder="Filter teacher or subject..."
+                  value={freeStaffSearchQuery}
+                  onChange={(e) => setFreeStaffSearchQuery(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.45rem 0.75rem 0.45rem 2rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color)",
+                    background: "var(--input-bg)",
+                    color: "inherit",
+                    fontSize: "0.82rem",
+                    boxSizing: "border-box"
+                  }}
+                />
+                {freeStaffSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setFreeStaffSearchQuery("")}
+                    style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* DISPLAY MODE 1: PERIOD BREAKDOWN CARDS */}
+          {freeStaffDisplayMode === "PERIOD_CARDS" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+              {freeStaffSummary.periods.map(p => {
+                if (p.isBreak) {
+                  return (
+                    <div
+                      key={p.period}
+                      style={{
+                        padding: "0.75rem 1rem",
+                        borderRadius: "10px",
+                        background: "rgba(245, 158, 11, 0.08)",
+                        border: "1px dashed rgba(245, 158, 11, 0.35)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        color: "#d97706"
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 700, fontSize: "0.88rem" }}>
+                        <Coffee size={18} /> {p.periodLabel}
+                        <span style={{ fontSize: "0.78rem", fontWeight: 500, color: "var(--text-secondary)" }}>
+                          (School-wide Interval • All Staff Free)
+                        </span>
+                      </div>
+                      <div style={{ fontSize: "0.82rem", fontWeight: 600 }}>
+                        {p.startTime} - {p.endTime}
+                      </div>
+                    </div>
+                  );
+                }
+
+                const query = freeStaffSearchQuery.trim().toLowerCase();
+                const filteredFree = p.freeTeachers.filter(t => {
+                  if (!query) return true;
+                  return t.name.toLowerCase().includes(query) || t.subjects.some(s => s.toLowerCase().includes(query));
+                });
+                const filteredBusy = p.busyTeachers.filter(t => {
+                  if (!query) return true;
+                  return t.name.toLowerCase().includes(query) || t.subjectName.toLowerCase().includes(query) || t.className.toLowerCase().includes(query);
+                });
+
+                return (
+                  <div
+                    key={p.period}
+                    style={{
+                      background: "var(--card-bg)",
+                      borderRadius: "12px",
+                      border: "1px solid var(--border-color)",
+                      padding: "1rem",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.75rem"
+                    }}
+                  >
+                    {/* Period Card Header */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.6rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                        <span style={{ padding: "0.2rem 0.55rem", borderRadius: "6px", background: "var(--primary)", color: "var(--primary-fg)", fontWeight: 800, fontSize: "0.82rem" }}>
+                          Period {p.period}
+                        </span>
+                        <span style={{ fontWeight: 700, fontSize: "0.95rem" }}>{p.periodLabel}</span>
+                        <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                          <Clock size={13} /> {p.startTime} - {p.endTime}
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                        <span style={{ padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(16, 185, 129, 0.12)", color: "#10b981", fontSize: "0.78rem", fontWeight: 700 }}>
+                          🟢 {filteredFree.length} Free Faculty
+                        </span>
+                        <span style={{ padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(59, 130, 246, 0.12)", color: "#3b82f6", fontSize: "0.78rem", fontWeight: 700 }}>
+                          🔵 {filteredBusy.length} In Class
+                        </span>
+                        {p.absentTeachers.length > 0 && (
+                          <span style={{ padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(239, 68, 68, 0.12)", color: "var(--danger)", fontSize: "0.78rem", fontWeight: 700 }}>
+                            🔴 {p.absentTeachers.length} On Leave
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Section 1: Free Teachers Available */}
+                    <div>
+                      <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#10b981", marginBottom: "0.4rem", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                        <span>🟢 AVAILABLE FREE STAFF ({filteredFree.length})</span>
+                      </div>
+
+                      {filteredFree.length === 0 ? (
+                        <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontStyle: "italic", padding: "0.4rem 0" }}>
+                          No free teachers found for this period {freeStaffSearchQuery ? "matching your filter" : ""}.
+                        </div>
+                      ) : (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "0.5rem" }}>
+                          {filteredFree.map(t => (
+                            <div
+                              key={t.id}
+                              style={{
+                                padding: "0.55rem 0.75rem",
+                                borderRadius: "8px",
+                                background: "rgba(16, 185, 129, 0.06)",
+                                border: "1px solid rgba(16, 185, 129, 0.22)",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                gap: "0.5rem"
+                              }}
+                            >
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontWeight: 700, fontSize: "0.85rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {t.name}
+                                </div>
+                                <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {t.subjects.length > 0 ? t.subjects.join(", ") : "Faculty"}
+                                </div>
+                              </div>
+
+                              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                <span style={{ fontSize: "0.72rem", padding: "0.15rem 0.45rem", borderRadius: "4px", background: "rgba(16, 185, 129, 0.18)", color: "#10b981", fontWeight: 700 }}>
+                                  {t.periodsToday} classes today
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Section 2: Busy Teachers (In Class) */}
+                    {filteredBusy.length > 0 && (
+                      <div style={{ marginTop: "0.25rem" }}>
+                        <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
+                          TEACHERS CURRENTLY IN CLASS ({filteredBusy.length})
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                          {filteredBusy.map(b => (
+                            <div
+                              key={`${b.id}-${b.classId}`}
+                              style={{
+                                padding: "0.35rem 0.6rem",
+                                borderRadius: "6px",
+                                background: "var(--input-bg)",
+                                border: "1px solid var(--border-color)",
+                                fontSize: "0.75rem",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.35rem"
+                              }}
+                            >
+                              <span style={{ fontWeight: 600 }}>{b.name}</span>
+                              <span style={{ color: "var(--text-secondary)" }}>→</span>
+                              <span style={{ color: "var(--primary)", fontWeight: 700 }}>{b.className}</span>
+                              <span style={{ color: "var(--text-secondary)" }}>({b.subjectName})</span>
+                              {b.classroom && <span style={{ color: "var(--text-secondary)", fontSize: "0.7rem" }}>[{b.classroom}]</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* DISPLAY MODE 2: FULL FACULTY SCHEDULE MATRIX GRID */}
+          {freeStaffDisplayMode === "MATRIX" && (
+            <div style={{ background: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", padding: "1.25rem", overflowX: "auto" }}>
+              <div style={{ marginBottom: "0.75rem" }}>
+                <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700 }}>
+                  {selectedFreeDay} Faculty Timetable &amp; Free Periods Matrix
+                </h4>
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-secondary)", marginTop: "0.2rem" }}>
+                  Overview of all teachers across Period 1 to Period {sortedPeriods[sortedPeriods.length - 1]?.order || 8}. Green cells indicate free periods available for substitution or task assignment.
+                </p>
+              </div>
+
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px", fontSize: "0.8rem" }}>
+                <thead>
+                  <tr style={{ background: "var(--input-bg)", borderBottom: "1px solid var(--border-color)" }}>
+                    <th style={{ padding: "0.6rem 0.75rem", textAlign: "left", width: "180px", fontWeight: 700 }}>Teacher</th>
+                    <th style={{ padding: "0.6rem 0.75rem", textAlign: "left", width: "140px", fontWeight: 700 }}>Specialization</th>
+                    {sortedPeriods.map(p => (
+                      <th key={p.order} style={{ padding: "0.6rem 0.4rem", textAlign: "center", minWidth: "75px", fontWeight: 700 }}>
+                        {p.type === "BREAK" || p.type === "LUNCH" ? "Break" : `P${p.order}`}
+                      </th>
+                    ))}
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", width: "85px", fontWeight: 700 }}>Free Today</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", width: "85px", fontWeight: 700 }}>Classes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {freeStaffSummary.teacherDailyLoads
+                    .filter(t => {
+                      const q = freeStaffSearchQuery.trim().toLowerCase();
+                      if (!q) return true;
+                      return t.teacherName.toLowerCase().includes(q) || t.subjects.some(s => s.toLowerCase().includes(q));
+                    })
+                    .map(t => {
+                      return (
+                        <tr key={t.teacherId} style={{ borderBottom: "1px solid var(--border-color)" }}>
+                          <td style={{ padding: "0.55rem 0.75rem", fontWeight: 600 }}>
+                            {t.teacherName}
+                            {t.isAbsentToday && (
+                              <span style={{ marginLeft: "0.4rem", fontSize: "0.68rem", padding: "0.1rem 0.35rem", borderRadius: "4px", background: "rgba(239, 68, 68, 0.15)", color: "var(--danger)", fontWeight: 700 }}>
+                                LEAVE
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: "0.55rem 0.75rem", color: "var(--text-secondary)", fontSize: "0.75rem" }}>
+                            {t.subjects.join(", ") || "-"}
+                          </td>
+
+                          {sortedPeriods.map(p => {
+                            if (p.type === "BREAK" || p.type === "LUNCH") {
+                              return (
+                                <td key={p.order} style={{ padding: "0.4rem 0.25rem", textAlign: "center", background: "rgba(245, 158, 11, 0.04)", color: "#d97706", fontSize: "0.72rem" }}>
+                                  ☕
+                                </td>
+                              );
+                            }
+
+                            if (t.isAbsentToday) {
+                              return (
+                                <td key={p.order} style={{ padding: "0.4rem 0.25rem", textAlign: "center", background: "rgba(239, 68, 68, 0.04)" }}>
+                                  <span style={{ padding: "0.2rem 0.4rem", borderRadius: "4px", background: "rgba(239, 68, 68, 0.12)", color: "var(--danger)", fontSize: "0.68rem", fontWeight: 700 }}>
+                                    ABSENT
+                                  </span>
+                                </td>
+                              );
+                            }
+
+                            const periodData = freeStaffSummary.periods.find(ps => ps.period === p.order);
+                            const busy = periodData?.busyTeachers.find(b => b.id === t.teacherId);
+
+                            if (busy) {
+                              return (
+                                <td key={p.order} style={{ padding: "0.4rem 0.25rem", textAlign: "center" }}>
+                                  <div
+                                    title={`${busy.className} - ${busy.subjectName}`}
+                                    style={{
+                                      padding: "0.25rem 0.35rem",
+                                      borderRadius: "4px",
+                                      background: "rgba(59, 130, 246, 0.12)",
+                                      color: "#2563eb",
+                                      fontSize: "0.7rem",
+                                      fontWeight: 700,
+                                      whiteSpace: "nowrap",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis"
+                                    }}
+                                  >
+                                    {busy.className}
+                                  </div>
+                                </td>
+                              );
+                            }
+
+                            return (
+                              <td key={p.order} style={{ padding: "0.4rem 0.25rem", textAlign: "center" }}>
+                                <span style={{ padding: "0.2rem 0.45rem", borderRadius: "4px", background: "rgba(16, 185, 129, 0.15)", color: "#10b981", fontSize: "0.68rem", fontWeight: 800 }}>
+                                  FREE
+                                </span>
+                              </td>
+                            );
+                          })}
+
+                          <td style={{ padding: "0.55rem 0.5rem", textAlign: "center", fontWeight: 700, color: "#10b981" }}>
+                            {t.totalFree}
+                          </td>
+                          <td style={{ padding: "0.55rem 0.5rem", textAlign: "center", fontWeight: 600 }}>
+                            {t.totalAssigned}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

@@ -3,7 +3,11 @@ import type {
   TimetableSlotEntry,
   SubjectScheduleSummary,
   TeacherLoad,
-  PeriodType
+  PeriodType,
+  FreeTeacherInfo,
+  BusyTeacherInfo,
+  PeriodStaffAvailability,
+  DayFreeStaffSummary
 } from "./timetableTypes";
 
 export const SCHOOL_WORKING_DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
@@ -222,7 +226,8 @@ export function calculateTeacherLoads(
 
     for (const slot of allSchoolSlots) {
       if (slot.isBreak || slot.slotType === "BREAK" || slot.slotType === "LUNCH") continue;
-      if (slot.teacherId === t.id) {
+      const tMatch = slot.teacherId === t.id || (slot as any).subject?.teacherId === t.id;
+      if (tMatch) {
         const d = (slot.dayOfWeek || "").toUpperCase();
         if (periodsPerDay[d] !== undefined) {
           periodsPerDay[d] += 1;
@@ -265,4 +270,183 @@ export function calculateTeacherLoads(
       isOverloaded
     };
   });
+}
+
+/**
+ * Calculates real-time free period staff and teachers for a specific day and period slots
+ */
+export function calculateFreePeriodStaff(params: {
+  dayOfWeek: string;
+  periodSlots: PeriodSlotData[];
+  allSchoolSlots: any[];
+  allTeachers: Array<{
+    id: string;
+    name: string;
+    email?: string;
+    maxPeriodsPerDay?: number | null;
+    subjects?: string[];
+  }>;
+  classes?: Array<{ id: string; name: string; section: string }>;
+  absencesToday?: Array<{ teacherId: string; fullDay: boolean; periodNumbers?: number[]; reason?: string }>;
+}): DayFreeStaffSummary {
+  const normDay = (params.dayOfWeek || "").trim().toUpperCase();
+  const sortedPeriods = [...params.periodSlots].sort((a, b) => a.order - b.order);
+  const classesMap = new Map<string, string>();
+  (params.classes || []).forEach(c => classesMap.set(c.id, `${c.name} - ${c.section}`));
+
+  // Index absences
+  const absenceMap = new Map<string, { fullDay: boolean; periodNumbers: number[]; reason?: string }>();
+  (params.absencesToday || []).forEach(a => {
+    absenceMap.set(a.teacherId, {
+      fullDay: a.fullDay,
+      periodNumbers: a.periodNumbers || [],
+      reason: a.reason
+    });
+  });
+
+  // Calculate teacher occupancy across the day
+  // teacherId -> Set of busy period numbers
+  const teacherBusyPeriods = new Map<string, Set<number>>();
+  // key: `${teacherId}-${period}` -> busy slot details
+  const teacherBusySlotDetails = new Map<string, any>();
+
+  params.allTeachers.forEach(t => {
+    teacherBusyPeriods.set(t.id, new Set<number>());
+  });
+
+  for (const slot of params.allSchoolSlots) {
+    if ((slot.dayOfWeek || "").toUpperCase() !== normDay) continue;
+    const isBreak = slot.isBreak || slot.slotType === "BREAK" || slot.slotType === "LUNCH";
+    if (isBreak) continue;
+
+    const tId = slot.teacherId || slot.subject?.teacherId;
+    if (tId && teacherBusyPeriods.has(tId)) {
+      teacherBusyPeriods.get(tId)!.add(slot.period);
+      teacherBusySlotDetails.set(`${tId}-${slot.period}`, slot);
+    }
+  }
+
+  // Pre-calculate daily totals for each teacher
+  const lessonPeriods = sortedPeriods.filter(p => p.type !== "BREAK" && p.type !== "LUNCH");
+
+  const teacherDailyLoads = params.allTeachers.map(t => {
+    const busySet = teacherBusyPeriods.get(t.id) || new Set<number>();
+    const assignedPeriods = Array.from(busySet).sort((a, b) => a - b);
+    const freePeriods: number[] = [];
+
+    for (const p of lessonPeriods) {
+      if (!busySet.has(p.order)) {
+        freePeriods.push(p.order);
+      }
+    }
+
+    const maxDay = t.maxPeriodsPerDay || 6;
+    const absence = absenceMap.get(t.id);
+
+    return {
+      teacherId: t.id,
+      teacherName: t.name,
+      assignedPeriods,
+      freePeriods,
+      totalAssigned: assignedPeriods.length,
+      totalFree: freePeriods.length,
+      maxPeriodsPerDay: maxDay,
+      isOverloaded: assignedPeriods.length > maxDay,
+      subjects: t.subjects || [],
+      isAbsentToday: !!absence?.fullDay,
+      absenceReason: absence?.reason
+    };
+  });
+
+  const teacherLoadMap = new Map(teacherDailyLoads.map(tl => [tl.teacherId, tl]));
+
+  // Build availability for every period
+  const periods: PeriodStaffAvailability[] = sortedPeriods.map(pSlot => {
+    const isBreak = pSlot.type === "BREAK" || pSlot.type === "LUNCH";
+    const periodNum = pSlot.order;
+
+    if (isBreak) {
+      return {
+        period: periodNum,
+        periodLabel: pSlot.label,
+        startTime: pSlot.startTime,
+        endTime: pSlot.endTime,
+        isBreak: true,
+        type: pSlot.type,
+        freeTeachers: [],
+        busyTeachers: [],
+        absentTeachers: []
+      };
+    }
+
+    const freeTeachers: FreeTeacherInfo[] = [];
+    const busyTeachers: BusyTeacherInfo[] = [];
+    const absentTeachers: Array<{ id: string; name: string; reason?: string; fullDay: boolean }> = [];
+
+    for (const t of params.allTeachers) {
+      const loadInfo = teacherLoadMap.get(t.id);
+      const absence = absenceMap.get(t.id);
+      const isAbsentThisPeriod = absence && (absence.fullDay || absence.periodNumbers.includes(periodNum));
+
+      if (isAbsentThisPeriod) {
+        absentTeachers.push({
+          id: t.id,
+          name: t.name,
+          reason: absence?.reason,
+          fullDay: !!absence?.fullDay
+        });
+        continue;
+      }
+
+      const busySlot = teacherBusySlotDetails.get(`${t.id}-${periodNum}`);
+      if (busySlot) {
+        const clsName = classesMap.get(busySlot.classId) || (busySlot.class ? `${busySlot.class.name} - ${busySlot.class.section}` : busySlot.classId);
+        busyTeachers.push({
+          id: t.id,
+          name: t.name,
+          email: t.email,
+          classId: busySlot.classId,
+          className: clsName,
+          subjectName: busySlot.subject?.name || busySlot.subjectName || "Subject",
+          subjectCode: busySlot.subject?.code || busySlot.subjectCode,
+          classroom: busySlot.classroom,
+          period: periodNum
+        });
+      } else {
+        freeTeachers.push({
+          id: t.id,
+          name: t.name,
+          email: t.email,
+          subjects: t.subjects || [],
+          periodsToday: loadInfo?.totalAssigned || 0,
+          freePeriodsToday: loadInfo?.totalFree || 0,
+          maxPeriodsPerDay: loadInfo?.maxPeriodsPerDay || 6,
+          freePeriodNumbers: loadInfo?.freePeriods || [],
+          assignedPeriodNumbers: loadInfo?.assignedPeriods || []
+        });
+      }
+    }
+
+    // Sort free teachers by periodsToday ascending (teachers with fewer classes first)
+    freeTeachers.sort((a, b) => a.periodsToday - b.periodsToday);
+
+    return {
+      period: periodNum,
+      periodLabel: pSlot.label,
+      startTime: pSlot.startTime,
+      endTime: pSlot.endTime,
+      isBreak: false,
+      type: pSlot.type,
+      freeTeachers,
+      busyTeachers,
+      absentTeachers
+    };
+  });
+
+  return {
+    dayOfWeek: normDay,
+    totalTeachers: params.allTeachers.length,
+    periods,
+    teacherDailyLoads
+  };
 }

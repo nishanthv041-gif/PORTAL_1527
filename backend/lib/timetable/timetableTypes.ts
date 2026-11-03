@@ -91,3 +91,63 @@ export interface TimetableCalculationResult {
   canPublish: boolean;
   publishBlockReasons: string[];
 }
+
+export interface FreeTeacherInfo {
+  id: string;
+  name: string;
+  email?: string;
+  subjects: string[];
+  periodsToday: number;
+  freePeriodsToday: number;
+  maxPeriodsPerDay: number;
+  freePeriodNumbers: number[];
+  assignedPeriodNumbers: number[];
+}
+
+export interface BusyTeacherInfo {
+  id: string;
+  name: string;
+  email?: string;
+  classId: string;
+  className: string;
+  subjectName: string;
+  subjectCode?: string;
+  classroom?: string;
+  period: number;
+}
+
+export interface PeriodStaffAvailability {
+  period: number;
+  periodLabel: string;
+  startTime: string;
+  endTime: string;
+  isBreak: boolean;
+  type: PeriodType;
+  freeTeachers: FreeTeacherInfo[];
+  busyTeachers: BusyTeacherInfo[];
+  absentTeachers: Array<{
+    id: string;
+    name: string;
+    reason?: string;
+    fullDay: boolean;
+  }>;
+}
+
+export interface DayFreeStaffSummary {
+  dayOfWeek: string;
+  totalTeachers: number;
+  periods: PeriodStaffAvailability[];
+  teacherDailyLoads: Array<{
+    teacherId: string;
+    teacherName: string;
+    assignedPeriods: number[];
+    freePeriods: number[];
+    totalAssigned: number;
+    totalFree: number;
+    maxPeriodsPerDay: number;
+    isOverloaded: boolean;
+    subjects: string[];
+    isAbsentToday: boolean;
+    absenceReason?: string;
+  }>;
+}

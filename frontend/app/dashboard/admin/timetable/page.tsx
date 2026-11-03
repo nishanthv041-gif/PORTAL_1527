@@ -64,6 +64,7 @@ export default async function AdminTimetablePage({
   });
 
   const allTeachers = await prisma.teacher.findMany({
+    where: { isActive: true },
     include: {
       user: true,
       subjects: true
