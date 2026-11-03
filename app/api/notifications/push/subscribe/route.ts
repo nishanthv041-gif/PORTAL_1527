@@ -1,2 +1,1 @@
-export * from "@/frontend/app/api/notifications/push/subscribe/route";
-
+export { POST } from "@/frontend/app/api/notifications/push/subscribe/route";
