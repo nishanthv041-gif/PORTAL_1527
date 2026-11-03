@@ -25,6 +25,8 @@ model User {
   notificationsEnabled Boolean @default(true)
   sessionVersion      Int      @default(1)
   expiresAt           DateTime?
+  lastLoginAt         DateTime?
+  lastActivityAt      DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -39,6 +41,7 @@ model User {
   pushSubscriptions      PushSubscription[]
   notificationPreference NotificationPreference?
   notificationRecipients NotificationRecipient[]
+  loginActivities        UserLoginActivity[]
   homeworkComments HomeworkComment[]
   complaintMessages ComplaintMessage[]
   sessions         UserSession[]
@@ -67,6 +70,24 @@ model UserSession {
   @@index([userId, revokedAt])
   @@index([sessionId])
   @@index([expiresAt])
+}
+
+// UserLoginActivity model for 24-hour inactivity tracking and security auditing
+model UserLoginActivity {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  loginAt    DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+  deviceId   String?
+  deviceType String?  // Mobile, Desktop, Tablet, PWA
+  browser    String?
+  os         String?
+  status     String   @default("SUCCESS") // SUCCESS, FAILED
+
+  @@index([userId])
+  @@index([loginAt])
 }
 
 

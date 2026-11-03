@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { prisma } from "@/backend/db/prisma";
 import { env } from "@/backend/config/env";
 import { createUserSession } from "@/backend/lib/session-manager";
+import { recordUserLogin } from "@/backend/services/auth/loginActivityTracker";
 
 export const googleProviderConfig = GoogleProvider({
   get clientId() { return env.GOOGLE_CLIENT_ID; },
@@ -98,6 +99,12 @@ export async function verifyGoogleSignIn(user: any, account: any) {
     }
 
     await logAttempt(true);
+
+    // 24-hour inactivity tracking & device login record for Google Auth
+    recordUserLogin(dbUser.id, { ipAddress, userAgent }).catch((err) =>
+      console.error("[GoogleAuth] Failed to track login activity:", err)
+    );
+
     return true; // Allow sign in
   }
   return true;

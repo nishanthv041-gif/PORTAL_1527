@@ -141,6 +141,7 @@ export default function NotificationsClient({
     let recipientDescription = "All Registered Users";
     if (targetType === "TEACHERS") recipientDescription = "All Active Teachers";
     else if (targetType === "PARENTS") recipientDescription = "All Active Parents";
+    else if (targetType === "INACTIVE_24H") recipientDescription = "Users Inactive for > 24 Hours";
     else if (targetType === "ROLE") recipientDescription = `All Users with Role: ${targetRole}`;
     else if (targetType === "CLASS") {
       const cls = classes.find(c => c.id === targetClassId);
@@ -328,6 +329,7 @@ export default function NotificationsClient({
                   <option value="ROLE">Selected Role (Teachers, Parents, Staff, Admin)</option>
                   <option value="TEACHERS">All Teachers Only</option>
                   <option value="PARENTS">All Parents Only</option>
+                  <option value="INACTIVE_24H">Inactive Users (&gt; 24h Since Last Login)</option>
                   <option value="CLASS">Specific Class (Parents &amp; Teachers)</option>
                   <option value="USER">Individual Specific User</option>
                 </select>

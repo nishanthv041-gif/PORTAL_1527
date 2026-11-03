@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/frontend/components/ThemeProvider";
 import { ConfirmDialogProvider } from "@/frontend/components/ui/ConfirmDialog";
 import SessionGuard from "@/frontend/components/auth/SessionGuard";
 import PwaRegistration from "@/frontend/components/pwa/PwaRegistration";
+import PwaWelcomeNotificationPrompt from "@/frontend/components/pwa/PwaWelcomeNotificationPrompt";
 
 import Script from "next/script";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -240,6 +241,7 @@ export default async function RootLayout({
         </ThemeProvider>
         <SpeedInsights />
         <PwaRegistration />
+        <PwaWelcomeNotificationPrompt />
 
       </body>
     </html>

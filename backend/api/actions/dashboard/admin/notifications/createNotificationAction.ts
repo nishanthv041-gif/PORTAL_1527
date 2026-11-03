@@ -9,7 +9,7 @@ import { dispatchPushToRecipients } from "@/backend/services/push/webPushService
 export interface CreateNotificationInput {
   title: string;
   content: string;
-  targetType: "ALL" | "ROLE" | "TEACHERS" | "PARENTS" | "CLASS" | "USER";
+  targetType: "ALL" | "ROLE" | "TEACHERS" | "PARENTS" | "CLASS" | "USER" | "INACTIVE_24H";
   targetRole?: string;
   targetClassId?: string;
   targetUserId?: string;
@@ -70,6 +70,19 @@ export async function createCustomNotificationAction(formData: FormData) {
       userIdsToNotify = parents.map((p) => p.userId);
     } else if (targetType === "USER" && targetUserId) {
       userIdsToNotify = [targetUserId];
+    } else if (targetType === "INACTIVE_24H") {
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const inactiveUsers = await prisma.user.findMany({
+        where: {
+          status: "ACTIVE",
+          OR: [
+            { lastLoginAt: null },
+            { lastLoginAt: { lte: oneDayAgo } },
+          ],
+        },
+        select: { id: true },
+      });
+      userIdsToNotify = inactiveUsers.map((u) => u.id);
     } else if (targetType === "CLASS" && targetClassId) {
       const parents = await prisma.parent.findMany({
         where: { children: { some: { student: { classId: targetClassId } } } },

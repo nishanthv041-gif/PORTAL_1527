@@ -9,6 +9,7 @@ import {
   validateSession,
   recordSessionActivity,
 } from "@/backend/lib/session-manager";
+import { recordUserLogin } from "@/backend/services/auth/loginActivityTracker";
 import {
   IDLE_TIMEOUT_HOURS,
   ACTIVITY_UPDATE_INTERVAL_MIN,
@@ -119,6 +120,11 @@ export function getAuthOptions(): NextAuthOptions {
           }
 
           await logAttempt(true);
+
+          // 24-hour inactivity tracking & device login record
+          recordUserLogin(user.id, { ipAddress: ip, userAgent }).catch((err) =>
+            console.error("[NextAuth] Failed to track login activity:", err)
+          );
 
           return {
             id: user.id,

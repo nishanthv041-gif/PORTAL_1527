@@ -1,0 +1,184 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background-color: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal {
+  background: var(--card-bg, #ffffff);
+  color: var(--text-primary, #0f172a);
+  border: 1px solid var(--border-color, rgba(226, 232, 240, 0.8));
+  border-radius: 1.25rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  max-width: 440px;
+  overflow: hidden;
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.header {
+  padding: 1.5rem 1.5rem 0.5rem 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.logoRow {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.logoBox {
+  width: 48px;
+  height: 48px;
+  border-radius: 0.875rem;
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  overflow: hidden;
+}
+
+.appBadge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.1);
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  display: inline-block;
+  margin-bottom: 0.25rem;
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.closeBtn:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.05));
+  color: var(--text-primary, #0f172a);
+}
+
+.body {
+  padding: 1rem 1.5rem 1.25rem 1.5rem;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  margin: 0 0 0.5rem 0;
+  letter-spacing: -0.01em;
+}
+
+.desc {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--text-secondary, #475569);
+  margin: 0;
+}
+
+.actions {
+  padding: 1rem 1.5rem 1.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--bg-subtle, rgba(248, 250, 252, 0.7));
+  border-top: 1px solid var(--border-color, rgba(226, 232, 240, 0.8));
+}
+
+.enableBtn {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  transition: all 0.15s ease;
+}
+
+.enableBtn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+}
+
+.enableBtn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.laterBtn {
+  background: transparent;
+  color: var(--text-secondary, #64748b);
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 0.75rem;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.laterBtn:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+  color: var(--text-primary, #0f172a);
+}
+
+.successCard {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 0.75rem;
+  color: #065f46;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-top: 0.75rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
