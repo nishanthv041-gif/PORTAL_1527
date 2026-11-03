@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Bell, ChevronLeft, ChevronRight, ExternalLink, 
@@ -35,6 +35,22 @@ export default function NotificationPopupModal({
   const [isOpen, setIsOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isClearing, setIsClearing] = useState(false);
+  const seenIdRef = useRef<Set<string>>(new Set());
+
+  // Initialize seen IDs from localStorage on client
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(SEEN_POPUP_IDS_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((id: string) => seenIdRef.current.add(id));
+          }
+        }
+      } catch {}
+    }
+  }, []);
 
   // Helper to filter out already-read, already-cleared, or already-seen-in-popup notifications
   const filterActiveUnread = (items: UnifiedNotification[]) => {
@@ -42,18 +58,9 @@ export default function NotificationPopupModal({
     const clearedTimeStr = typeof window !== "undefined" ? localStorage.getItem(CLEARED_TIMESTAMP_KEY) : null;
     const clearedTime = clearedTimeStr ? new Date(clearedTimeStr).getTime() : 0;
 
-    let seenIds = new Set<string>();
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem(SEEN_POPUP_IDS_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) seenIds = new Set(parsed);
-        }
-      } catch {}
-    }
-
-    return items.filter(n => !n.isRead && !seenIds.has(n.id) && new Date(n.timestamp).getTime() > clearedTime);
+    return items.filter(
+      n => !n.isRead && !seenIdRef.current.has(n.id) && new Date(n.timestamp).getTime() > clearedTime
+    );
   };
 
   // Helper to mark a list of notifications as seen:
@@ -62,6 +69,8 @@ export default function NotificationPopupModal({
   const markShownNotificationsAsSeen = (items: UnifiedNotification[]) => {
     if (!items || items.length === 0) return;
     const ids = items.map(n => n.id);
+
+    ids.forEach(id => seenIdRef.current.add(id));
 
     if (typeof window !== "undefined") {
       try {
@@ -75,7 +84,7 @@ export default function NotificationPopupModal({
     markNotificationsAsSeenInPopupAction(ids).catch(() => {});
   };
 
-  // Sync if prop updates
+  // Sync if initialNotifications prop updates (fast initial SSR paint)
   useEffect(() => {
     if (initialNotifications && initialNotifications.length > 0) {
       const activeUnread = filterActiveUnread(initialNotifications);
@@ -103,19 +112,17 @@ export default function NotificationPopupModal({
         .then((fresh) => {
           if (!isMounted || !fresh || fresh.length === 0) return;
           const activeFresh = filterActiveUnread(fresh);
-          const autoPopupItems = activeFresh.filter(n => n.category !== "MESSAGE");
+          // Only show notifications that have NEVER been seen or popped up before
+          const newUnseenItems = activeFresh.filter(
+            n => !seenIdRef.current.has(n.id) && n.category !== "MESSAGE"
+          );
 
-          if (autoPopupItems.length > 0) {
-            setNotifications((prev) => {
-              const prevIds = new Set(prev.map(p => p.id));
-              const hasNew = autoPopupItems.some(item => !prevIds.has(item.id));
-              if (hasNew || prev.length === 0) {
-                setIsOpen(true);
-                markShownNotificationsAsSeen(autoPopupItems);
-                return autoPopupItems;
-              }
-              return prev;
-            });
+          if (newUnseenItems.length > 0) {
+            newUnseenItems.forEach(n => seenIdRef.current.add(n.id));
+            setNotifications(newUnseenItems);
+            setCurrentIndex(0);
+            setIsOpen(true);
+            markShownNotificationsAsSeen(newUnseenItems);
           }
         })
         .catch(() => {});
@@ -142,22 +149,36 @@ export default function NotificationPopupModal({
   // Listen for manual open trigger from Topbar Bell button
   useEffect(() => {
     const handleManualOpen = () => {
-      getUnifiedNotificationsAction()
+      // 1. If we already have notifications loaded in state, open immediately in 0ms!
+      if (notifications && notifications.length > 0) {
+        setCurrentIndex(0);
+        setIsOpen(true);
+        return;
+      }
+
+      // 2. Fetch recent notifications so user can review them immediately
+      getUnifiedNotificationsAction({ unreadOnly: false })
         .then((fresh) => {
           if (fresh && fresh.length > 0) {
-            setNotifications(fresh);
+            setNotifications(fresh.slice(0, 8));
+            setCurrentIndex(0);
             setIsOpen(true);
           } else {
-            alert("No notifications available right now.");
+            const path = typeof window !== "undefined" ? window.location.pathname : "";
+            const target = path.includes("/parent")
+              ? "/dashboard/parent/notifications"
+              : path.includes("/teacher")
+              ? "/dashboard/teacher/notifications"
+              : "/dashboard/admin/notifications";
+            router.push(target);
           }
         })
         .catch(() => {});
-      sessionStorage.removeItem(DISMISSED_KEY);
     };
 
     window.addEventListener("open-notification-popup", handleManualOpen);
     return () => window.removeEventListener("open-notification-popup", handleManualOpen);
-  }, []);
+  }, [notifications, router]);
 
   if (!isOpen || !notifications || notifications.length === 0) {
     return null;

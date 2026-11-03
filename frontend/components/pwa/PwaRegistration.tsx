@@ -2,6 +2,17 @@
 
 import { useEffect } from "react";
 
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 /**
  * PwaRegistration
  * Registers the Service Worker (/sw.js) securely in the browser.
@@ -50,15 +61,49 @@ export default function PwaRegistration() {
           }
         };
 
-        // If push permission is already granted, ensure subscription is synced with current session
+        // Self-Healing Push Subscription: If push permission is granted, ensure device has a live subscription
         if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
           navigator.serviceWorker.ready.then(async (readyReg) => {
             try {
-              const sub = await readyReg.pushManager.getSubscription();
+              let sub = await readyReg.pushManager.getSubscription();
+
+              // If subscription is missing or revoked, renew it automatically with the current VAPID key
+              if (!sub) {
+                const keyRes = await fetch("/api/notifications/push/public-key").catch(() => null);
+                const keyData = await keyRes?.json().catch(() => null);
+                if (keyData?.publicKey) {
+                  const keyArr = urlBase64ToUint8Array(keyData.publicKey);
+                  sub = await readyReg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: keyArr as unknown as BufferSource,
+                  }).catch(() => null);
+                }
+              }
+
               if (sub) {
                 const raw = sub.toJSON();
-                const p256dh = raw.keys?.p256dh;
-                const auth = raw.keys?.auth;
+                let p256dh = raw.keys?.p256dh;
+                let auth = raw.keys?.auth;
+
+                if ((!p256dh || !auth) && sub.getKey) {
+                  try {
+                    const rawKey = sub.getKey("p256dh");
+                    if (rawKey) {
+                      p256dh = btoa(String.fromCharCode(...new Uint8Array(rawKey)))
+                        .replace(/\+/g, "-")
+                        .replace(/\//g, "_")
+                        .replace(/=+$/, "");
+                    }
+                    const rawAuth = sub.getKey("auth");
+                    if (rawAuth) {
+                      auth = btoa(String.fromCharCode(...new Uint8Array(rawAuth)))
+                        .replace(/\+/g, "-")
+                        .replace(/\//g, "_")
+                        .replace(/=+$/, "");
+                    }
+                  } catch {}
+                }
+
                 if (p256dh && auth) {
                   await fetch("/api/notifications/push/subscribe", {
                     method: "POST",

@@ -5,7 +5,7 @@
  * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
 
-const CACHE_NAME = "srt-pwa-v3";
+const CACHE_NAME = "srt-pwa-v4";
 const PRECACHE_ASSETS = [
   "/offline.html",
   "/manifest.webmanifest",
@@ -121,36 +121,45 @@ self.addEventListener("fetch", (event) => {
 
 // 4. Push Event: Show OS-level notifications from Web Push API
 self.addEventListener("push", (event) => {
-  if (!event.data) return;
+  const showPushNotification = async () => {
+    let title = "Nipo Portal";
+    let body = "You have a new school update.";
+    let targetUrl = "/dashboard";
+    const iconUrl = self.location.origin + "/icons/icon-192x192.png";
 
-  try {
-    const data = event.data.json();
-    const title = data.title || "Nipo Portal";
+    if (event.data) {
+      try {
+        const payload = event.data.json();
+        if (payload.title) title = payload.title;
+        if (payload.body) body = payload.body;
+        if (payload.url) targetUrl = payload.url;
+        else if (payload.data && payload.data.url) targetUrl = payload.data.url;
+      } catch {
+        try {
+          const txt = event.data.text();
+          if (txt) body = txt;
+        } catch {}
+      }
+    }
+
     const options = {
-      body: data.body || "",
-      icon: data.icon || "/icons/icon-192x192.png",
-      badge: data.badge || "/icons/icon-192x192.png",
-      vibrate: [120, 60, 120],
+      body: body,
+      icon: iconUrl,
       data: {
-        url: data.url || "/dashboard",
-        ...(data.data || {}),
+        url: targetUrl,
       },
-      tag: data.tag || `nipo-push-${Date.now()}`,
+      tag: "nipo-" + Date.now(),
       renotify: true,
-      requireInteraction: data.priority === "URGENT",
     };
 
-    event.waitUntil(self.registration.showNotification(title, options));
-  } catch (err) {
-    const text = event.data.text();
-    event.waitUntil(
-      self.registration.showNotification("Nipo Portal", {
-        body: text,
-        icon: "/icons/icon-192x192.png",
-        data: { url: "/dashboard" },
-      })
-    );
-  }
+    try {
+      await self.registration.showNotification(title, options);
+    } catch (err) {
+      console.error("[ServiceWorker] showNotification failed:", err);
+    }
+  };
+
+  event.waitUntil(showPushNotification());
 });
 
 // 5. Notification Click Event: Navigate to relevant portal page

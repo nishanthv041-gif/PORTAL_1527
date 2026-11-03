@@ -368,17 +368,11 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
             .filter(Boolean) as string[]
         ));
 
-        const [reportCards, assignments] = await Promise.all([
+        const [reportCards] = await Promise.all([
           studentIds.length > 0 ? prisma.reportCard.findMany({
             where: { studentId: { in: studentIds }, published: true },
             include: { exam: true },
             orderBy: { exam: { date: "desc" } },
-            take: 6
-          }) : Promise.resolve([]),
-          classIds.length > 0 ? prisma.assignment.findMany({
-            where: { classId: { in: classIds } },
-            include: { teacher: { select: { user: { select: { name: true } } } } },
-            orderBy: { deadline: "desc" },
             take: 6
           }) : Promise.resolve([])
         ]);
@@ -399,28 +393,6 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
               isRead: rc.parentVerified,
               badgeLabel: "Report Card",
               badgeColors: { bg: "rgba(37, 99, 235, 0.12)", text: "#2563eb", border: "rgba(37, 99, 235, 0.25)" }
-            });
-          }
-        }
-
-        for (const asg of assignments) {
-          const alreadyHasAsg = items.some(i => i.id === `asg-${asg.id}`);
-          if (!alreadyHasAsg) {
-            const matchedChild = parentRecord.children.find(c => c.student.classId === asg.classId)?.student;
-            const childIdParam = matchedChild ? `?childId=${matchedChild.id}` : "";
-            const targetClassName = matchedChild?.class?.name || "Class";
-
-            items.push({
-              id: `asg-${asg.id}`,
-              category: "ASSIGNMENT",
-              title: `Instruction/Task: ${asg.title}`,
-              description: `${asg.description || "Academic assignment task."} Teacher: ${asg.teacher.user.name}. Due: ${new Date(asg.deadline).toLocaleDateString()}`,
-              targetName: targetClassName,
-              timestamp: asg.deadline.toISOString(),
-              link: `/dashboard/parent/assignments${childIdParam}`,
-              isRead: false,
-              badgeLabel: "Task / Instruction",
-              badgeColors: { bg: "rgba(16, 185, 129, 0.12)", text: "#059669", border: "rgba(16, 185, 129, 0.25)" }
             });
           }
         }
@@ -533,6 +505,11 @@ export async function markNotificationReadAction(notificationId: string) {
         where: { id: realId },
         data: { parentVerified: true }
       });
+    } else {
+      await prisma.notification.updateMany({
+        where: { id: notificationId, userId },
+        data: { isRead: true }
+      }).catch(() => {});
     }
 
     revalidatePath("/dashboard/admin/notifications");
@@ -732,6 +709,11 @@ export async function markNotificationsAsSeenInPopupAction(notificationIds: stri
             });
           }
         }
+      } else {
+        await prisma.notification.updateMany({
+          where: { id: notifId, userId },
+          data: { isRead: true }
+        }).catch(() => {});
       }
     }
 

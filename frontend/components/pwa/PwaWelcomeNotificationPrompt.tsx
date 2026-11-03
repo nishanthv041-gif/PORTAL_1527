@@ -101,12 +101,15 @@ export default function PwaWelcomeNotificationPrompt() {
       // 4. Subscribe with PushManager
       const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
       let subscription = await registration.pushManager.getSubscription();
-      if (!subscription) {
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: convertedKey as unknown as BufferSource,
-        });
+      if (subscription) {
+        try {
+          await subscription.unsubscribe();
+        } catch {}
       }
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedKey as unknown as BufferSource,
+      });
 
       // 5. Send subscription to backend API to register device
       const rawSub = subscription.toJSON();

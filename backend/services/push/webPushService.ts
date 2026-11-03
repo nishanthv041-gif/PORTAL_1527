@@ -130,8 +130,8 @@ export async function sendPushToSubscription(
       pushSubscription,
       payloadString,
       {
-        TTL: payload.priority === "URGENT" ? 86400 : 3600 * 12,
-        urgency: payload.priority === "URGENT" ? "high" : "normal",
+        TTL: 86400,
+        urgency: "high",
       }
     );
 
@@ -229,6 +229,7 @@ export async function dispatchPushToRecipients(
         ...(isBroadcastOrAlert ? [{ userId: null }] : []),
       ],
     },
+    orderBy: { lastUsedAt: "desc" },
     select: {
       id: true,
       userId: true,

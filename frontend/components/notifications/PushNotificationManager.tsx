@@ -177,9 +177,9 @@ export default function PushNotificationManager() {
     setSubscriptions((prev) => prev.filter((s) => s.id !== subId));
   };
 
-  // Test local notification
+  // Test server-to-device push notification
   const handleSendTest = async () => {
-    setTestStatus("Sending test notification...");
+    setTestStatus("Sending server push to device...");
     try {
       if (!("Notification" in window) || Notification.permission !== "granted") {
         setTestStatus("Please enable notifications first.");
@@ -187,17 +187,32 @@ export default function PushNotificationManager() {
       }
 
       const registration = await navigator.serviceWorker.ready;
-      await registration.showNotification("Nipo Portal Test Notification", {
-        body: "Success! Real-time Web Push is configured and working on this device.",
-        icon: "/icons/icon-192x192.png",
-        badge: "/icons/icon-192x192.png",
-        data: { url: "/dashboard" },
+      const sub = await registration.pushManager.getSubscription();
+
+      const res = await fetch("/api/notifications/push/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: sub?.endpoint || null }),
       });
-      setTestStatus("Test notification delivered to device!");
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        setTestStatus("High-urgency push dispatched to your device!");
+      } else {
+        // Fallback to local notification if server dispatch had an issue
+        await registration.showNotification("Nipo Portal Test Notification", {
+          body: "Push registered! Testing local notification presentation.",
+          icon: "/icons/icon-192x192.png",
+          data: { url: "/dashboard" },
+        });
+        setTestStatus(data?.error || "Delivered local test notification.");
+      }
       setTimeout(() => setTestStatus(null), 4000);
     } catch (err) {
       console.error("[Push Test Error]", err);
-      setTestStatus("Error showing notification.");
+      setTestStatus("Error sending test push.");
+      setTimeout(() => setTestStatus(null), 4000);
     }
   };
 
