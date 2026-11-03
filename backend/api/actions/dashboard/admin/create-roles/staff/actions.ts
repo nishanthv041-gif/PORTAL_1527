@@ -35,7 +35,7 @@ export async function createStaffAction(formData: FormData) {
         email,
         password: hashedPassword,
         name,
-        role: "NON_TEACHING_STAFF",
+        role: "STAFF",
         status: "ACTIVE",
         staff: {
           create: {
@@ -49,6 +49,7 @@ export async function createStaffAction(formData: FormData) {
     });
 
     revalidatePath("/dashboard/admin/users");
+    revalidatePath("/dashboard/admin/staff-attendance");
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {

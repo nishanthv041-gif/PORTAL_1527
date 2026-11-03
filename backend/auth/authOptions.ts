@@ -36,10 +36,14 @@ export function getAuthOptions(): NextAuthOptions {
           throw new Error("Too many login attempts. Please try again later.");
         }
 
-        const logAttempt = (success: boolean) => {
-          prisma.loginAttempt.create({
-            data: { email: credentials.email, success, ipAddress: ip, userAgent }
-          }).catch((err) => console.error("[NextAuth] Failed to log login attempt:", err));
+        const logAttempt = async (success: boolean) => {
+          try {
+            await prisma.loginAttempt.create({
+              data: { email: credentials.email, success, ipAddress: ip, userAgent }
+            });
+          } catch (err) {
+            console.error("[NextAuth] Failed to log login attempt:", err);
+          }
         };
 
         let user;
@@ -53,29 +57,53 @@ export function getAuthOptions(): NextAuthOptions {
         }
 
         if (!user || !user.password) {
-          logAttempt(false);
+          await logAttempt(false);
           return null;
         }
 
-        const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+        let isPasswordValid = false;
+        try {
+          isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+        } catch {
+          isPasswordValid = false;
+        }
+
+        // Automatic fallback and self-healing for legacy unhashed plain text passwords
+        if (!isPasswordValid && credentials.password === user.password) {
+          isPasswordValid = true;
+          try {
+            const upgradedHash = await bcrypt.hash(credentials.password, 10);
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { password: upgradedHash }
+            });
+          } catch (upgradeErr) {
+            console.warn("[NextAuth] Failed to auto-upgrade plain text password:", upgradeErr);
+          }
+        }
 
         if (isPasswordValid) {
           if (user.status === "INACTIVE") {
-            logAttempt(false);
+            await logAttempt(false);
             throw new Error(
               "Your account has been deactivated. Please contact the administrator."
             );
           }
 
           // If expectedRole is provided, ensure it matches the user's actual role
-          if (
-            credentials.expectedRole &&
-            credentials.expectedRole.toUpperCase() !== user.role.toUpperCase()
-          ) {
-            logAttempt(false);
-            throw new Error(
-              `This is a ${user.role.toLowerCase()} account. Please use the correct login page.`
-            );
+          if (credentials.expectedRole) {
+            const exp = credentials.expectedRole.toUpperCase();
+            const actual = user.role.toUpperCase();
+            const isStaffMatch =
+              (exp === "STAFF" || exp === "NON_TEACHING_STAFF") &&
+              (actual === "STAFF" || actual === "NON_TEACHING_STAFF");
+
+            if (!isStaffMatch && exp !== actual) {
+              await logAttempt(false);
+              throw new Error(
+                `This is a ${user.role.toLowerCase()} account. Please use the correct login page.`
+              );
+            }
           }
 
           let userSession;
@@ -90,7 +118,7 @@ export function getAuthOptions(): NextAuthOptions {
             console.error("[NextAuth] Failed to create UserSession:", sessErr);
           }
 
-          logAttempt(true);
+          await logAttempt(true);
 
           return {
             id: user.id,
@@ -104,7 +132,7 @@ export function getAuthOptions(): NextAuthOptions {
           };
         }
 
-        logAttempt(false);
+        await logAttempt(false);
         return null;
       },
     }),

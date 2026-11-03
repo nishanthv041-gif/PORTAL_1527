@@ -44,14 +44,18 @@ export async function verifyGoogleSignIn(user: any, account: any) {
   if (account?.provider === "google") {
     const { ipAddress, userAgent } = await getClientMetadata();
 
-    const logAttempt = (success: boolean, emailStr = user.email || "unknown@google") => {
-      prisma.loginAttempt.create({
-        data: { email: emailStr, success, ipAddress, userAgent }
-      }).catch((err) => console.error("[GoogleAuth] Failed to log login attempt:", err));
+    const logAttempt = async (success: boolean, emailStr = user.email || "unknown@google") => {
+      try {
+        await prisma.loginAttempt.create({
+          data: { email: emailStr, success, ipAddress, userAgent }
+        });
+      } catch (err) {
+        console.error("[GoogleAuth] Failed to log login attempt:", err);
+      }
     };
 
     if (!user.email) {
-      logAttempt(false, "unknown@google");
+      await logAttempt(false, "unknown@google");
       return "/?error=AccessDenied: Google account has no email.";
     }
 
@@ -67,18 +71,18 @@ export async function verifyGoogleSignIn(user: any, account: any) {
       });
     } catch (error) {
       console.error("[GoogleAuth] Prisma error:", error);
-      logAttempt(false);
+      await logAttempt(false);
       return "/?error=Server error verifying account.";
     }
 
     if (!dbUser) {
       console.warn(`[GoogleAuth] Rejecting unrecognized email: ${user.email}`);
-      logAttempt(false);
+      await logAttempt(false);
       return "/?error=AccessDenied: Your Google account email is not registered. Please contact your administrator.";
     }
 
     if (dbUser.status === "INACTIVE") {
-      logAttempt(false);
+      await logAttempt(false);
       return "/?error=AccessDenied: Your account has been deactivated. Please contact the administrator.";
     }
 
@@ -93,7 +97,7 @@ export async function verifyGoogleSignIn(user: any, account: any) {
       }).catch((err) => console.error("[GoogleAuth] Failed to link Google email:", err));
     }
 
-    logAttempt(true);
+    await logAttempt(true);
     return true; // Allow sign in
   }
   return true;

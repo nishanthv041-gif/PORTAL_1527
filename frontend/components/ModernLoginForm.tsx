@@ -140,7 +140,12 @@ export default function ModernLoginForm({
             if (sessRes.ok) {
               const sess = await sessRes.json();
               if (sess?.user?.role) {
-                target = `/dashboard/${sess.user.role.toLowerCase()}`;
+                const r = sess.user.role.toUpperCase();
+                if (r === "STAFF" || r === "NON_TEACHING_STAFF") {
+                  target = "/staff/my-bus";
+                } else {
+                  target = `/dashboard/${sess.user.role.toLowerCase()}`;
+                }
               }
             }
           } catch {}

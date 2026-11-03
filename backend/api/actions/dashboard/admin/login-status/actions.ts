@@ -1,6 +1,7 @@
 "use server";
 
 import { sendSecurityReportEmail, getSmtpTransporter } from "@/backend/lib/services/emailService";
+import { prisma } from "@/backend/db/prisma";
 
 export async function sendReportEmailAction(
   email: string,
@@ -12,10 +13,28 @@ export async function sendReportEmailAction(
   userAgent?: string | null
 ) {
   try {
-    const recipient = (customRecipient || email)?.trim().toLowerCase();
+    let recipient = (customRecipient || email)?.trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
     if (!recipient || !emailRegex.test(recipient)) {
-      return { error: `Invalid recipient email address: "${customRecipient || email}". Please provide a valid email.` };
+      // Look up user by username or display name in database
+      const foundUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: { equals: email, mode: "insensitive" } },
+            { name: { equals: email, mode: "insensitive" } },
+          ],
+        },
+        select: { email: true },
+      });
+
+      if (foundUser?.email && emailRegex.test(foundUser.email)) {
+        recipient = foundUser.email.toLowerCase();
+      } else {
+        return {
+          error: `Invalid recipient email address: "${customRecipient || email}". Please specify a valid email to send the report.`,
+        };
+      }
     }
 
     return await sendSecurityReportEmail({

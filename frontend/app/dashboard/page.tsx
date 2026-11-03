@@ -17,6 +17,8 @@ export default async function DashboardRoot() {
     redirect("/dashboard/parent");
   } else if (role === "ADMIN") {
     redirect("/dashboard/admin");
+  } else if (role === "STAFF" || role === "NON_TEACHING_STAFF") {
+    redirect("/staff/my-bus");
   } else {
     redirect("/login");
   }

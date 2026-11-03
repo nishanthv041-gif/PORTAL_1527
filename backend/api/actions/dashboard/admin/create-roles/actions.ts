@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/backend/db/prisma";
+import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
@@ -95,12 +96,14 @@ export async function createTeacherAction(formData: FormData) {
       };
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     // Create User & Teacher
     await prisma.user.create({
       data: {
         name,
         email,
-        password, // Using plain password as per existing mock data flow. In prod, bcrypt.
+        password: hashedPassword,
         role: "TEACHER",
         status: "ACTIVE",
         googleEmail: googleEmail || null,
@@ -233,11 +236,12 @@ export async function createParentStudentAction(formData: FormData) {
       let parentId: string;
 
       if (!existingUser) {
+        const hashedPassword = await bcrypt.hash(parentPassword, 10);
         const user = await tx.user.create({
           data: {
             name: parentName,
             email: parentEmail,
-            password: parentPassword,
+            password: hashedPassword,
             role: "PARENT",
             status: "ACTIVE",
             googleEmail: parentGoogleEmail || null,

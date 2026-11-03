@@ -30,10 +30,15 @@ export default async function AdminStaffAttendancePage({
   const { start: academicStart } = await getEffectiveAcademicYearRange(startOfDay);
   const officialWorkingDaysPromise = countSchoolWorkingDays(academicStart, endOfDay);
 
-  // Fetch all active staff and today's attendance records
+  // Fetch all active non-teaching staff (excluding teachers) and today's attendance records
   const [staffMembers, dateAttendances, officialWorkingDays] = await Promise.all([
     prisma.staff.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        user: {
+          role: { in: ["STAFF", "NON_TEACHING_STAFF"] },
+        },
+      },
       include: {
         user: true,
         attendances: {
@@ -138,3 +143,4 @@ export default async function AdminStaffAttendancePage({
     </div>
   );
 }
+

@@ -346,7 +346,13 @@ export default function AttendanceSessionManager({
 
         <div style={{ width: "100%", maxWidth: "340px", minWidth: "220px" }}>
           <SearchBar
-            placeholder={title.toLowerCase().includes("teacher") ? "Search teachers by name/code..." : "Search students by name/roll..."}
+            placeholder={
+              title.toLowerCase().includes("teacher")
+                ? "Search teachers by name/code..."
+                : title.toLowerCase().includes("staff")
+                ? "Search staff by name/designation..."
+                : "Search students by name/roll..."
+            }
             value={searchQuery}
             onChange={(val) => setSearchQuery(val)}
             onPendingChange={(pending) => setIsPendingSearch(pending)}
@@ -468,7 +474,13 @@ export default function AttendanceSessionManager({
       <ResultsContainer
         isPending={isPendingSearch}
         isEmpty={filteredPeople.length === 0}
-        emptyTitle={title.toLowerCase().includes("teacher") ? "No faculty members found" : "No students found"}
+        emptyTitle={
+          title.toLowerCase().includes("teacher")
+            ? "No faculty members found"
+            : title.toLowerCase().includes("staff")
+            ? "No staff members found"
+            : "No students found"
+        }
         emptyMessage="Try adjusting your search query or class category."
         onReset={() => setSearchQuery("")}
         resetLabel="Clear Search"
@@ -480,7 +492,11 @@ export default function AttendanceSessionManager({
               <tr>
                 <th className={styles.th} style={{ width: "50px" }}>#</th>
                 <th className={styles.th}>
-                  {title.toLowerCase().includes("teacher") ? "FACULTY MEMBER" : "STUDENT"}
+                  {title.toLowerCase().includes("teacher")
+                    ? "FACULTY MEMBER"
+                    : title.toLowerCase().includes("staff")
+                    ? "STAFF MEMBER"
+                    : "STUDENT"}
                 </th>
                 <th className={styles.th} style={{ textAlign: "center" }}>
                   {session === "FORENOON" ? "FORENOON STATUS" : "AFTERNOON STATUS"}
@@ -516,16 +532,48 @@ export default function AttendanceSessionManager({
                           </span>
                         </div>
 
-                        {/* Live Recalculated Percentage View Button / Badge */}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedPersonForModal(person)}
-                          className={styles.pctBadge}
-                          title="Click to view detailed attendance breakdown"
-                        >
-                          <Award size={12} />
-                          <span>{liveStats.percentage}%</span>
-                        </button>
+                        {/* Live Recalculated Stats (Present Count, Absent Count, and Percentage Badge) */}
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
+                          <span
+                            style={{
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              color: "#16a34a",
+                              background: "rgba(22, 163, 74, 0.12)",
+                              border: "1px solid rgba(22, 163, 74, 0.25)",
+                              borderRadius: "12px",
+                              padding: "0.15rem 0.45rem",
+                              whiteSpace: "nowrap",
+                            }}
+                            title="Total Present sessions to date"
+                          >
+                            P: {liveStats.presentCount}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              color: "#dc2626",
+                              background: "rgba(220, 38, 38, 0.12)",
+                              border: "1px solid rgba(220, 38, 38, 0.25)",
+                              borderRadius: "12px",
+                              padding: "0.15rem 0.45rem",
+                              whiteSpace: "nowrap",
+                            }}
+                            title="Total Absent sessions to date"
+                          >
+                            A: {liveStats.absentCount}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPersonForModal(person)}
+                            className={styles.pctBadge}
+                            title="Click to view detailed attendance breakdown"
+                          >
+                            <Award size={12} />
+                            <span>{liveStats.percentage}%</span>
+                          </button>
+                        </div>
                       </div>
                     </td>
 

@@ -11,14 +11,14 @@ export default async function LoginStatusPage() {
   const session = await getServerSession(getAuthOptions());
   if (!session || session.user.role !== 'ADMIN') return null;
 
-  // Delete records older than 3 days automatically
-  const threeDaysAgo = new Date();
-  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+  // Delete records older than 2 days automatically
+  const twoDaysAgo = new Date();
+  twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
   
   await prisma.loginAttempt.deleteMany({
     where: {
       timestamp: {
-        lt: threeDaysAgo,
+        lt: twoDaysAgo,
       },
     },
   });
@@ -32,7 +32,7 @@ export default async function LoginStatusPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <h1 className={styles.title} style={{ margin: 0 }}>Login Status</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          Login records older than 3 days are automatically deleted.
+          Login records older than 2 days are automatically deleted.
         </p>
       </div>
 
