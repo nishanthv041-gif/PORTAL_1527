@@ -296,6 +296,17 @@ export default async function AdminDashboardPage({
             </div>
           </div>
         </Link>
+        <Link href="/dashboard/admin/staff-attendance" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div className={styles.statCard}>
+            <div className={styles.statIcon} style={{ backgroundColor: "rgba(6, 182, 212, 0.1)", color: "#06b6d4" }}>
+              <UserCheck size={24} />
+            </div>
+            <div className={styles.statInfo}>
+              <span className={styles.statLabel}>Staff Attendance</span>
+              <span className={styles.statValue}>Manage</span>
+            </div>
+          </div>
+        </Link>
       </div>
 
       <div style={{ marginTop: "2rem", display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'center', marginBottom: "1rem" }}>

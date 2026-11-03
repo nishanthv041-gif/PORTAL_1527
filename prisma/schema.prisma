@@ -164,6 +164,7 @@ model Staff {
   inChargeBuses Bus[]          @relation("StaffInChargeBuses")
   statusLogs    BusStatusLog[] @relation("StaffReportedStatusLogs")
   sentMessages  BusMessage[]   @relation("StaffSentBusMessages")
+  attendances   StaffAttendance[]
 }
 
 model Parent {
@@ -283,6 +284,27 @@ model TeacherAttendance {
   @@index([date])
   @@index([date, status])
   @@index([teacherId, status])
+  @@index([createdAt])
+}
+
+model StaffAttendance {
+  id        String   @id @default(cuid())
+  date      DateTime
+  status    String   // PRESENT, ABSENT, LEAVE, LATE, HALF_DAY
+  remarks   String?
+
+  // Relationships
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([staffId, date])
+  @@index([staffId])
+  @@index([date])
+  @@index([date, status])
+  @@index([staffId, status])
   @@index([createdAt])
 }
 

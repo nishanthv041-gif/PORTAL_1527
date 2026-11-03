@@ -109,6 +109,11 @@ const ROUTE_MAP: Record<string, BreadcrumbInfo> = {
     parentLabel: "Dashboard",
     currentLabel: "Teacher Attendance"
   },
+  "/dashboard/admin/staff-attendance": {
+    parentHref: "/dashboard/admin",
+    parentLabel: "Dashboard",
+    currentLabel: "Staff Attendance"
+  },
   "/dashboard/admin/students": {
     parentHref: "/dashboard/admin",
     parentLabel: "Dashboard",

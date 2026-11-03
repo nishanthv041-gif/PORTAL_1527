@@ -65,6 +65,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     { href: "/dashboard/admin", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
     { href: "/dashboard/admin/main-roles", label: "Main Roles", icon: <Users size={20} /> },
     { href: "/dashboard/admin/teacher-attendance", label: "Teacher Attendance", icon: <UserCheck size={20} /> },
+    { href: "/dashboard/admin/staff-attendance", label: "Staff Attendance", icon: <UserCheck size={20} /> },
     { href: "/admin/buses", label: "Bus Details & Fleet", icon: <Bus size={20} /> },
     { href: "/dashboard/admin/activity-centre", label: "Activity Centre", icon: <Star size={20} /> },
     { href: "/dashboard/admin/system-health", label: "System Health & Monitor", icon: <Activity size={20} /> },

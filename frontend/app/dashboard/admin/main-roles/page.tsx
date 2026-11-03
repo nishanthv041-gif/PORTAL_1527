@@ -30,6 +30,7 @@ export default async function MainRolesPage() {
     { href: "/dashboard/admin/subjects", label: "Subjects", icon: <BookOpen size={22} />, color: "#ec4899", bg: "rgba(236, 72, 153, 0.1)" },
     { href: "/dashboard/admin/attendance", label: "Student Attendance", icon: <UserCheck size={22} />, color: "var(--primary)", bg: "var(--primary-bg)" },
     { href: "/dashboard/admin/teacher-attendance", label: "Teacher Attendance", icon: <UserCheck size={22} />, color: "var(--success)", bg: "var(--success-bg)" },
+    { href: "/dashboard/admin/staff-attendance", label: "Staff Attendance", icon: <UserCheck size={22} />, color: "#06b6d4", bg: "rgba(6, 182, 212, 0.1)" },
     { href: "/dashboard/admin/performance", label: "Performance", icon: <TrendingUp size={22} />, color: "var(--success)", bg: "var(--success-bg)" },
     { href: "/dashboard/admin/calendar", label: "Calendar", icon: <Calendar size={22} />, color: "#8b5cf6", bg: "rgba(139, 92, 246, 0.1)" },
     { href: "/dashboard/admin/complaints", label: "Complaints", icon: <FileWarning size={22} />, color: "var(--danger)", bg: "var(--danger-bg)" },
