@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
+    "db:sync": "node scripts/sync-neon-to-supabase.js",
+    "db:push:all": "node scripts/push-all-dbs.js",
     "cap:sync": "cap sync android",
     "cap:open": "cap open android"
   },

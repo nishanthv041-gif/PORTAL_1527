@@ -113,3 +113,4 @@ export default async function SystemHealthPage() {
 
   return <SystemHealthClient initialData={initialData} />;
 }
+
