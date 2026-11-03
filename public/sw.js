@@ -1,10 +1,11 @@
 /**
- * SRT Universal School Portal - Progressive Web App Service Worker
- * Version: 2.0.0
- * Security: Strict exclusion for all /api/, NextAuth, and dynamic private data.
+ * Nipo Portal (SRT Universal School) - Progressive Web App Service Worker
+ * Version: 3.0.0
+ * Features: Offline fallback shell, fast static caching, Web Push notifications, OS click navigation.
+ * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
 
-const CACHE_NAME = "srt-pwa-v2";
+const CACHE_NAME = "srt-pwa-v3";
 const PRECACHE_ASSETS = [
   "/offline.html",
   "/manifest.webmanifest",
@@ -115,5 +116,71 @@ self.addEventListener("fetch", (event) => {
       const cached = await caches.match(request);
       return cached || Response.error();
     })
+  );
+});
+
+// 4. Push Event: Show OS-level notifications from Web Push API
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+
+  try {
+    const data = event.data.json();
+    const title = data.title || "Nipo Portal";
+    const options = {
+      body: data.body || "",
+      icon: data.icon || "/icons/icon-192x192.png",
+      badge: data.badge || "/icons/icon-192x192.png",
+      vibrate: [120, 60, 120],
+      data: {
+        url: data.url || "/dashboard",
+        ...(data.data || {}),
+      },
+      tag: data.tag || `nipo-push-${Date.now()}`,
+      renotify: true,
+      requireInteraction: data.priority === "URGENT",
+    };
+
+    event.waitUntil(self.registration.showNotification(title, options));
+  } catch (err) {
+    const text = event.data.text();
+    event.waitUntil(
+      self.registration.showNotification("Nipo Portal", {
+        body: text,
+        icon: "/icons/icon-192x192.png",
+        data: { url: "/dashboard" },
+      })
+    );
+  }
+});
+
+// 5. Notification Click Event: Navigate to relevant portal page
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const targetUrl =
+    (event.notification.data && event.notification.data.url) || "/dashboard";
+
+  event.waitUntil(
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((windowClients) => {
+        // If an open window matches our origin, focus and navigate it
+        for (const client of windowClients) {
+          if (
+            client.url.startsWith(self.location.origin) &&
+            "focus" in client
+          ) {
+            client.focus();
+            if ("navigate" in client) {
+              return client.navigate(targetUrl);
+            }
+            return;
+          }
+        }
+        // Otherwise, open a new window
+        if (clients.openWindow) {
+          return clients.openWindow(targetUrl);
+        }
+      })
   );
 });

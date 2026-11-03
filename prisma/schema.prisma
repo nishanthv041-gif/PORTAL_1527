@@ -35,7 +35,10 @@ model User {
   ratings          Rating[]
   sentMessages     Message[]      @relation("SentMessages")
   receivedMessages Message[]      @relation("ReceivedMessages")
-  notifications    Notification[]
+  notifications          Notification[]
+  pushSubscriptions      PushSubscription[]
+  notificationPreference NotificationPreference?
+  notificationRecipients NotificationRecipient[]
   homeworkComments HomeworkComment[]
   complaintMessages ComplaintMessage[]
   sessions         UserSession[]
@@ -887,23 +890,98 @@ model ConversationMeta {
 }
 
 model Notification {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  title     String
-  content   String
-  type      String // ATTENDANCE, EXAM, HOMEWORK, MEETING, ANNOUNCEMENT, SYSTEM, BUS
-  category  String?  @default("GENERAL") // BUS, ACADEMIC, SYSTEM
-  priority  String?  @default("NORMAL")  // NORMAL, URGENT
-  link      String?
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  title        String
+  content      String
+  type         String // ATTENDANCE, EXAM, HOMEWORK, MEETING, ANNOUNCEMENT, SYSTEM, BUS
+  category     String?   @default("GENERAL") // BUS, ACADEMIC, SYSTEM
+  priority     String?   @default("NORMAL")  // NORMAL, URGENT
+  link         String?
+  isRead       Boolean   @default(false)
+  targetType   String?   // ALL, ROLE, CLASS, USER
+  targetRole   String?
+  targetGroup  String?
+  scheduledFor DateTime?
+  sentAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  recipients   NotificationRecipient[]
+  deliveryLogs NotificationDeliveryLog[]
 
   @@index([userId, createdAt])
   @@index([userId, isRead, createdAt])
   @@index([userId, isRead, type])
   @@index([userId, category])
   @@index([userId, isRead, category])
+  @@index([createdAt])
+  @@index([scheduledFor])
+}
+
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  deviceName String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+  @@index([endpoint])
+}
+
+model NotificationPreference {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled     Boolean  @default(true)
+  general     Boolean  @default(true)
+  account     Boolean  @default(true)
+  alerts      Boolean  @default(true)
+  academic    Boolean  @default(true)
+  admin       Boolean  @default(true)
+  maintenance Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model NotificationRecipient {
+  id             String       @id @default(cuid())
+  notificationId String
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status         String       @default("PENDING") // PENDING, SENT, DELIVERED, FAILED
+  read           Boolean      @default(false)
+  readAt         DateTime?
+  deliveryError  String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([notificationId, userId])
+  @@index([userId, read])
+  @@index([notificationId, status])
+}
+
+model NotificationDeliveryLog {
+  id             String        @id @default(cuid())
+  notificationId String?
+  notification   Notification? @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  userId         String
+  subscriptionId String?
+  status         String        // SENT, FAILED, EXPIRED, UNSUBSCRIBED
+  statusCode     Int?
+  error          String?
+  createdAt      DateTime      @default(now())
+
+  @@index([notificationId])
+  @@index([userId])
+  @@index([status])
   @@index([createdAt])
 }
 

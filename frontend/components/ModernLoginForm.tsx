@@ -15,6 +15,7 @@ import {
 import styles from "@/frontend/app/login/modern-login.module.css";
 import ThemeToggle from "@/frontend/components/ThemeToggle";
 import SrtLogo from "@/frontend/components/ui/SrtLogo";
+import LoginPwaPrompt from "@/frontend/components/pwa/LoginPwaPrompt";
 
 interface ModernLoginFormProps {
   schoolName?: string;
@@ -332,9 +333,10 @@ export default function ModernLoginForm({
               </button>
             </div>
 
-            {/* Footer note */}
+            {/* Footer note & PWA Install Prompt */}
             <div className={styles.formFooter}>
-              &copy; SRT Universal School
+              <div>&copy; SRT Universal School</div>
+              <LoginPwaPrompt />
             </div>
           </div>
 

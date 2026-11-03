@@ -3,6 +3,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import SettingsForm from "./SettingsForm";
+import PushNotificationManager from "@/frontend/components/notifications/PushNotificationManager";
 
 export default async function TeacherSettingsPage() {
   const session = await getServerSession(getAuthOptions());
@@ -30,6 +31,11 @@ export default async function TeacherSettingsPage() {
           phone={user.teacher?.phone || ""} 
           qualification={user.teacher?.qualification || ""}
         />
+      </div>
+
+      <div className={styles.chartCard} style={{ marginTop: "1.5rem" }}>
+        <h3 className={styles.chartHeader}>Push Notifications &amp; Alerts</h3>
+        <PushNotificationManager />
       </div>
     </div>
   );
