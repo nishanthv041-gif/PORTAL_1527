@@ -5,6 +5,8 @@ import NavigationProgressBar from "@/frontend/components/NavigationProgressBar";
 import { ThemeProvider } from "@/frontend/components/ThemeProvider";
 import { ConfirmDialogProvider } from "@/frontend/components/ui/ConfirmDialog";
 import SessionGuard from "@/frontend/components/auth/SessionGuard";
+import PwaRegistration from "@/frontend/components/pwa/PwaRegistration";
+import PwaInstallPrompt from "@/frontend/components/pwa/PwaInstallPrompt";
 import Script from "next/script";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -86,6 +88,12 @@ export async function generateMetadata(): Promise<Metadata> {
         { url: "/favicon.png", sizes: "64x64", type: "image/png" },
       ],
       apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+    },
+    manifest: "/manifest.webmanifest",
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "black-translucent",
+      title: "SRT Portal",
     },
     robots: {
       index: true,
@@ -199,6 +207,14 @@ export default async function RootLayout({
       <head>
         {/* Preload school crest logo for instant splash rendering */}
         <link rel="preload" href="/logo/srt-logo.svg" as="image" type="image/svg+xml" />
+        {/* PWA & Mobile Web App Manifest Links */}
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="SRT Portal" />
+        <meta name="application-name" content="SRT Universal School Portal" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
         {/* Flash-prevention: runs synchronously before paint */}
         <Script
           id="flash-prevention-script"
@@ -223,6 +239,8 @@ export default async function RootLayout({
           </ConfirmDialogProvider>
         </ThemeProvider>
         <SpeedInsights />
+        <PwaRegistration />
+        <PwaInstallPrompt />
       </body>
     </html>
   );
