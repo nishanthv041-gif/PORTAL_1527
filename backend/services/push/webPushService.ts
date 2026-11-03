@@ -1,18 +1,70 @@
 import webpush from "web-push";
 import { prisma } from "@/backend/db/prisma";
 
-// Safe VAPID configuration (supports both VAPID_PUBLIC_KEY and NEXT_PUBLIC_VAPID_PUBLIC_KEY)
-const VAPID_PUBLIC_KEY =
-  process.env.VAPID_PUBLIC_KEY ||
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+// Default verified fallback key pair
+const DEFAULT_VAPID_PUBLIC_KEY =
   "BBIHzbc-DVhlpPB_plCE0gUMpCSsHiqA1Y5FVyP-ax6p0HWnFZILFISth4FYfyAp0gywswCBxz4GfDnXm_c-Agk";
-
-const VAPID_PRIVATE_KEY =
-  process.env.VAPID_PRIVATE_KEY ||
+const DEFAULT_VAPID_PRIVATE_KEY =
   "ExZi6lTrD-JWJN9cqk88AA6Y8-vxTYaxwhaY4AUwMFc";
+const DEFAULT_VAPID_SUBJECT =
+  "mailto:admin@nipoportal.com";
 
-const VAPID_SUBJECT =
-  process.env.VAPID_SUBJECT || "mailto:admin@nipoportal.com";
+function cleanEnvString(val?: string | null): string {
+  if (!val || typeof val !== "string") return "";
+  return val.trim().replace(/^["']|["']$/g, "").trim();
+}
+
+function resolveVapidCredentials(): {
+  publicKey: string;
+  privateKey: string;
+  subject: string;
+} {
+  const envPub = cleanEnvString(
+    process.env.VAPID_PUBLIC_KEY || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+  );
+  const envPriv = cleanEnvString(process.env.VAPID_PRIVATE_KEY);
+  const envSub = cleanEnvString(process.env.VAPID_SUBJECT);
+
+  let publicKey = DEFAULT_VAPID_PUBLIC_KEY;
+  if (envPub) {
+    try {
+      const buf = Buffer.from(envPub, "base64");
+      // Public key must be 65 uncompressed bytes (87 base64 chars)
+      if (buf.length === 65) {
+        publicKey = envPub;
+      } else {
+        console.warn("[WebPush] Provided public key is not 65 bytes, using default key.");
+      }
+    } catch {
+      console.warn("[WebPush] Provided public key invalid, using default key.");
+    }
+  }
+
+  let privateKey = DEFAULT_VAPID_PRIVATE_KEY;
+  if (envPriv) {
+    try {
+      const buf = Buffer.from(envPriv, "base64");
+      // Private key must be 32 bytes (43 base64 chars)
+      if (buf.length === 32) {
+        privateKey = envPriv;
+      } else {
+        console.warn("[WebPush] Provided private key is not 32 bytes, using default key.");
+      }
+    } catch {
+      console.warn("[WebPush] Provided private key invalid, using default key.");
+    }
+  }
+
+  let subject = DEFAULT_VAPID_SUBJECT;
+  if (envSub && (envSub.startsWith("mailto:") || envSub.startsWith("https://"))) {
+    subject = envSub;
+  }
+
+  return { publicKey, privateKey, subject };
+}
+
+const { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY, subject: VAPID_SUBJECT } =
+  resolveVapidCredentials();
 
 try {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
