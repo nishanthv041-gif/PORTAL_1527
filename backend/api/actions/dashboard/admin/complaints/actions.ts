@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { sendUnifiedBroadcast } from "@/backend/services/notifications/unifiedNotificationEngine";
 import { addComplaintMessageAction, getComplaintMessagesAction } from "@/backend/api/actions/dashboard/parent/complaints/actions";
 
 export { addComplaintMessageAction, getComplaintMessagesAction };
@@ -91,17 +92,15 @@ export async function createAdminComplaintAction(formData: FormData) {
     ));
 
     if (parentUserIds.length > 0) {
-      await prisma.notification.createMany({
-        data: parentUserIds.map(userId => ({
-          userId,
-          title: `School Notice / Complaint: ${title}`,
-          content: `School Administration recorded a ${severity} priority complaint regarding ${student.firstName} ${student.lastName} (${category}): "${description}"`,
-          type: "COMPLAINT",
-          link: "/dashboard/parent/complaints"
-        }))
+      await sendUnifiedBroadcast({
+        userIds: parentUserIds,
+        title: `School Notice / Complaint: ${title}`,
+        content: `School Administration recorded a ${severity} priority complaint regarding ${student.firstName} ${student.lastName} (${category}): "${description}"`,
+        type: "COMPLAINT",
+        category: "admin",
+        priority: severity === "HIGH" ? "URGENT" : "NORMAL",
+        link: "/dashboard/parent/complaints",
       });
-
-      await Promise.all(parentUserIds.map(uid => invalidateUserNotifCache(uid).catch(() => { })));
     }
 
     revalidatePath("/dashboard/admin/complaints");
@@ -174,19 +173,14 @@ export async function updateComplaintStatusAction(id: string, status: string, re
     ].filter(Boolean) as string[]));
 
     if (parentUserIds.length > 0) {
-      await prisma.notification.createMany({
-        data: parentUserIds.map(userId => ({
-          userId,
-          title: `Complaint Status: ${status.replace("_", " ")}`,
-          content: `Your complaint "${complaint.title}" is now marked as ${status.replace("_", " ")}.${remarks?.trim() ? ` Remarks: ${remarks.trim()}` : ""}`,
-          type: "COMPLAINT",
-          link: "/dashboard/parent/complaints"
-        }))
+      await sendUnifiedBroadcast({
+        userIds: parentUserIds,
+        title: `Complaint Status: ${status.replace("_", " ")}`,
+        content: `Your complaint "${complaint.title}" is now marked as ${status.replace("_", " ")}.${remarks?.trim() ? ` Remarks: ${remarks.trim()}` : ""}`,
+        type: "COMPLAINT",
+        category: "admin",
+        link: "/dashboard/parent/complaints",
       });
-
-      for (const uid of parentUserIds) {
-        invalidateUserNotifCache(uid);
-      }
     }
 
     revalidatePath("/dashboard/admin/complaints");

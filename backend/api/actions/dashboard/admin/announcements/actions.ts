@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import { sendUnifiedBroadcast } from "@/backend/services/notifications/unifiedNotificationEngine";
 
 export async function createAnnouncementAction(formData: FormData) {
   try {
@@ -81,25 +82,13 @@ export async function createAnnouncementAction(formData: FormData) {
           ? "INSTRUCTION" 
           : "ANNOUNCEMENT";
 
-        // Query user roles to set destination links accurately
-        const targetUsers = await prisma.user.findMany({
-          where: { id: { in: targetUserIds } },
-          select: { id: true, role: true }
-        });
-
-        await prisma.notification.createMany({
-          data: targetUsers.map(u => ({
-            userId: u.id,
-            title,
-            content,
-            type: notifType,
-            link: u.role === "PARENT"
-              ? "/dashboard/parent/announcements"
-              : u.role === "TEACHER"
-                ? "/dashboard/teacher/announcements"
-                : "/dashboard/admin/announcements",
-            isRead: false
-          }))
+        await sendUnifiedBroadcast({
+          userIds: targetUserIds,
+          title,
+          content,
+          type: notifType,
+          category: "general",
+          link: "/dashboard",
         });
       }
     } catch (notifErr) {

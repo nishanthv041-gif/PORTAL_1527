@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { dispatchPushToRecipients } from "@/backend/services/push/webPushService";
 
 export interface CreateMeetingInput {
   meetingType: "PARENTS" | "TEACHERS";
@@ -280,6 +281,19 @@ export async function createMeetingAction(formData: FormData) {
 
         // Invalidate notification cache so pop-up appears immediately
         await invalidateUserNotifCache();
+
+        // Dispatch real-time device push notifications
+        dispatchPushToRecipients(
+          notificationsToInsert.map(n => n.userId),
+          {
+            title: `📅 Meeting Scheduled: ${topic}`,
+            body: `${description ? description + " - " : ""}${date} at ${startTime}`,
+            url: "/dashboard",
+            category: "general",
+          },
+          undefined,
+          "general"
+        ).catch(() => {});
       }
     }
 
@@ -418,6 +432,18 @@ export async function sendMeetingNotificationAction(meetingId: string) {
 
     await prisma.notification.createMany({ data: notifs });
     await invalidateUserNotifCache();
+
+    dispatchPushToRecipients(
+      notifs.map(n => n.userId),
+      {
+        title: `🔔 Reminder: ${meeting.agenda}`,
+        body: `Meeting on ${dateFormatted} (${meeting.time}). Staff In-charge: ${inchargeName}.`,
+        url: "/dashboard",
+        category: "general",
+      },
+      undefined,
+      "general"
+    ).catch(() => {});
 
     revalidatePath("/dashboard/admin/meetings");
     revalidatePath("/dashboard/teacher/meetings");

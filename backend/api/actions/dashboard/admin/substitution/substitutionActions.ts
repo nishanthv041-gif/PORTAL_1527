@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { revalidatePath } from "next/cache";
 import { normalizeDateToUTC, formatSchoolDate } from "@/backend/lib/timetable/getEffectiveTimetable";
+import { sendUnifiedNotification } from "@/backend/services/notifications/unifiedNotificationEngine";
 
 const DAYS_OF_WEEK = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 
@@ -50,15 +51,13 @@ export interface TeacherAbsenceRecord {
  */
 async function sendNotification(userId: string, title: string, content: string, link: string) {
   try {
-    await prisma.notification.create({
-      data: {
-        userId,
-        title,
-        content,
-        type: "SYSTEM",
-        link,
-        isRead: false
-      }
+    await sendUnifiedNotification({
+      userId,
+      title,
+      content,
+      type: "SYSTEM",
+      category: "academic",
+      link,
     });
   } catch (err) {
     console.warn("Failed to dispatch notification to user:", userId, err);

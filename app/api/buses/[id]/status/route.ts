@@ -4,6 +4,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { UpdateBusStatusSchema } from "@/backend/lib/validations/transport";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { sendUnifiedBroadcast } from "@/backend/services/notifications/unifiedNotificationEngine";
 
 export const dynamic = "force-dynamic";
 
@@ -101,22 +102,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         const notifTitle = `${statusPrefix}: Bus ${bus.busNumber}`;
         const notifContent = `Bus ${bus.busNumber} (${bus.name}): ${description}`;
 
-        await prisma.notification.createMany({
-          data: parentUserIds.map((userId) => ({
-            userId,
-            title: notifTitle,
-            content: notifContent,
-            type: "BUS",
-            category: "BUS",
-            priority: "URGENT",
-            link: "/parent/bus",
-            isRead: false,
-          })),
+        await sendUnifiedBroadcast({
+          userIds: parentUserIds,
+          title: notifTitle,
+          content: notifContent,
+          type: "BUS",
+          category: "alerts",
+          priority: "URGENT",
+          link: "/parent/bus",
         });
-
-        for (const uid of parentUserIds) {
-          invalidateUserNotifCache(uid);
-        }
 
         notifiedParentCount = parentUserIds.length;
       }

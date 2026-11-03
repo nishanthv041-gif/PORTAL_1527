@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import { sendUnifiedBroadcast } from "@/backend/services/notifications/unifiedNotificationEngine";
 
 export async function sendProgramNotificationToAllAction(programId: string) {
   try {
@@ -33,20 +34,14 @@ export async function sendProgramNotificationToAllAction(programId: string) {
       : `School Program: ${prog.title}`;
     const notifContent = `📅 Program Scheduled for ${targetLabel}: "${prog.title}" on ${dateFormatted} at ${prog.startTime}${prog.endTime ? ` - ${prog.endTime}` : ""}${prog.location ? ` | Venue: ${prog.location}` : ""}. ${prog.description || "All are cordially invited."}`;
 
-    // Create notifications for all active users with role-specific link
-    await prisma.notification.createMany({
-      data: activeUsers.map(u => ({
-        userId: u.id,
-        title: notifTitle,
-        content: notifContent,
-        type: "PROGRAM",
-        link: u.role === "PARENT" 
-          ? "/dashboard/parent/programs" 
-          : u.role === "ADMIN" 
-            ? "/dashboard/admin/programs" 
-            : "/dashboard/teacher/calendar",
-        isRead: false
-      }))
+    // Dispatch unified real-time notifications to all active users
+    await sendUnifiedBroadcast({
+      userIds: activeUsers.map(u => u.id),
+      title: notifTitle,
+      content: notifContent,
+      type: "PROGRAM",
+      category: "general",
+      link: "/dashboard",
     });
 
     revalidatePath("/dashboard/admin/programs");

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { sendUnifiedBroadcast } from "@/backend/services/notifications/unifiedNotificationEngine";
 
 /**
  * Submit one or more complaints by a Parent with multi-child selection,
@@ -116,22 +117,15 @@ export async function submitParentComplaintAction(formData: FormData) {
     // Connect to Notification database: insert notification records for Admins
     if (admins.length > 0) {
       const studentNames = students.map(s => `${s.firstName} ${s.lastName}`).join(", ");
-      const notifData = admins.map(admin => ({
-        userId: admin.id,
+      await sendUnifiedBroadcast({
+        userIds: admins.map(a => a.id),
         title: `New Parent Complaint: ${title}`,
         content: `${session.user.name || "Parent"} filed a ${severity} severity complaint regarding ${studentNames} (${category}): "${title}"`,
         type: "COMPLAINT",
-        link: "/dashboard/admin/complaints"
-      }));
-
-      await prisma.notification.createMany({
-        data: notifData
+        category: "admin",
+        priority: severity === "HIGH" ? "URGENT" : "NORMAL",
+        link: "/dashboard/admin/complaints",
       });
-
-      // Invalidate notification cache for admins
-      for (const admin of admins) {
-        invalidateUserNotifCache(admin.id);
-      }
     }
 
     revalidatePath("/dashboard/parent/complaints");
@@ -234,19 +228,14 @@ export async function addComplaintMessageAction(complaintId: string, content: st
         ].filter(Boolean) as string[]));
 
         if (parentUserIds.length > 0) {
-          await prisma.notification.createMany({
-            data: parentUserIds.map(userId => ({
-              userId,
-              title: `Admin Reply: ${complaint.title}`,
-              content: `${authorName}: ${cleanContent.length > 120 ? cleanContent.substring(0, 117) + "..." : cleanContent}`,
-              type: "COMPLAINT",
-              link: "/dashboard/parent/complaints"
-            }))
+          await sendUnifiedBroadcast({
+            userIds: parentUserIds,
+            title: `Admin Reply: ${complaint.title}`,
+            content: `${authorName}: ${cleanContent.length > 120 ? cleanContent.substring(0, 117) + "..." : cleanContent}`,
+            type: "COMPLAINT",
+            category: "admin",
+            link: "/dashboard/parent/complaints",
           });
-
-          for (const uid of parentUserIds) {
-            invalidateUserNotifCache(uid);
-          }
         }
       } else {
         // Parent or Teacher replied -> Notify all active Admins
@@ -256,19 +245,14 @@ export async function addComplaintMessageAction(complaintId: string, content: st
         });
 
         if (admins.length > 0) {
-          await prisma.notification.createMany({
-            data: admins.map(admin => ({
-              userId: admin.id,
-              title: `${userRole === "PARENT" ? "Parent" : "Teacher"} Reply: ${complaint.title}`,
-              content: `${authorName} on ${complaint.student.firstName} ${complaint.student.lastName}'s complaint: "${cleanContent.length > 120 ? cleanContent.substring(0, 117) + "..." : cleanContent}"`,
-              type: "COMPLAINT",
-              link: "/dashboard/admin/complaints"
-            }))
+          await sendUnifiedBroadcast({
+            userIds: admins.map(a => a.id),
+            title: `${userRole === "PARENT" ? "Parent" : "Teacher"} Reply: ${complaint.title}`,
+            content: `${authorName} on ${complaint.student.firstName} ${complaint.student.lastName}'s complaint: "${cleanContent.length > 120 ? cleanContent.substring(0, 117) + "..." : cleanContent}"`,
+            type: "COMPLAINT",
+            category: "admin",
+            link: "/dashboard/admin/complaints",
           });
-
-          for (const admin of admins) {
-            invalidateUserNotifCache(admin.id);
-          }
         }
       }
     } catch (notifErr) {

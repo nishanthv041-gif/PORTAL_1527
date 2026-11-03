@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { calculateReportCardGrade } from "@/frontend/lib/constants";
 import { sendStudentReportCardEmail, ReportCardEmailSubjectMark } from "@/backend/lib/services/emailService";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { sendUnifiedNotification } from "@/backend/services/notifications/unifiedNotificationEngine";
 
 export interface DispatchSubjectInput {
   subjectId: string;
@@ -530,18 +531,15 @@ export async function dispatchSingleStudentReportCardAction(
       if (!parentUser) continue;
 
       try {
-        await prisma.notification.create({
-          data: {
-            userId: parentUser.id,
-            title: `Report card available: ${trimmedExamName}`,
-            content: `The official report card for ${studentName} (${rollNumber}) has been dispatched for ${trimmedExamName}. Total: ${criteria.totalMarks}/${criteria.maxTotal} (${criteria.percentage}% - Grade ${criteria.overallGrade}).`,
-            type: "REPORT_CARD",
-            category: "REPORT_CARD",
-            link: "/dashboard/parent/report-cards",
-            priority: "NORMAL",
-          },
+        await sendUnifiedNotification({
+          userId: parentUser.id,
+          title: `Report card available: ${trimmedExamName}`,
+          content: `The official report card for ${studentName} (${rollNumber}) has been dispatched for ${trimmedExamName}. Total: ${criteria.totalMarks}/${criteria.maxTotal} (${criteria.percentage}% - Grade ${criteria.overallGrade}).`,
+          type: "REPORT_CARD",
+          category: "academic",
+          link: "/dashboard/parent/report-cards",
+          priority: "NORMAL",
         });
-        await invalidateUserNotifCache(parentUser.id);
         notifiedParentsCount++;
 
         // Send email notification if parent has a valid email

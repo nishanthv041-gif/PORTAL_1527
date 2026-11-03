@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import { sendUnifiedBroadcast } from "@/backend/services/notifications/unifiedNotificationEngine";
 import path from "path";
 import fs from "fs/promises";
 
@@ -255,14 +256,13 @@ export async function createAssignment(formData: FormData) {
       ));
 
       if (parentUserIds.length > 0) {
-        await prisma.notification.createMany({
-          data: parentUserIds.map(userId => ({
-            userId,
-            title: `New Home Work: ${title}`,
-            content: `${subjectName ? `[${subjectName}] ` : ""}${title} assigned for ${assignment.class.name} - ${assignment.class.section}. Due on ${deadlineDate.toLocaleDateString()}.`,
-            type: "HOMEWORK",
-            link: "/dashboard/parent/assignments"
-          }))
+        await sendUnifiedBroadcast({
+          userIds: parentUserIds,
+          title: `New Home Work: ${title}`,
+          content: `${subjectName ? `[${subjectName}] ` : ""}${title} assigned for ${assignment.class.name} - ${assignment.class.section}. Due on ${deadlineDate.toLocaleDateString()}.`,
+          type: "HOMEWORK",
+          category: "academic",
+          link: "/dashboard/parent/assignments",
         });
       }
     } catch (notifErr) {

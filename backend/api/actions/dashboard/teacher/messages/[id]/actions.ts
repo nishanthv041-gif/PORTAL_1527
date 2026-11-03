@@ -3,6 +3,7 @@
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { sendUnifiedNotification } from "@/backend/services/notifications/unifiedNotificationEngine";
 
 export async function sendMessage(senderId: string, receiverId: string, content: string) {
   try {
@@ -36,20 +37,17 @@ export async function sendMessage(senderId: string, receiverId: string, content:
       recipientLink = `/dashboard/admin/messages/${senderId}`;
     }
 
-    // Create real-time notification pop-up alert & notification entry
+    // Create unified notification & dispatch system push
     try {
       const senderRoleLabel = sender?.role === "ADMIN" ? "School Administration" : sender?.role === "TEACHER" ? "Faculty Teacher" : "Parent";
-      await prisma.notification.create({
-        data: {
-          userId: receiverId,
-          title: `💬 New Message from ${sender?.name || "Portal User"} (${senderRoleLabel})`,
-          content: `${sender?.name || "User"}: "${cleanContent.length > 120 ? cleanContent.slice(0, 117) + "..." : cleanContent}"`,
-          type: "MESSAGE",
-          link: recipientLink,
-          isRead: false
-        }
+      await sendUnifiedNotification({
+        userId: receiverId,
+        title: `💬 New Message from ${sender?.name || "Portal User"} (${senderRoleLabel})`,
+        content: `${sender?.name || "User"}: "${cleanContent.length > 120 ? cleanContent.slice(0, 117) + "..." : cleanContent}"`,
+        type: "MESSAGE",
+        category: "admin",
+        link: recipientLink,
       });
-      await invalidateUserNotifCache(receiverId);
     } catch (notifErr) {
       console.error("Message notification creation error:", notifErr);
     }

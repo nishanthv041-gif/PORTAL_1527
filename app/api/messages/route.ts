@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { sendUnifiedNotification } from "@/backend/services/notifications/unifiedNotificationEngine";
 
 export async function POST(request: Request) {
   try {
@@ -105,17 +106,14 @@ export async function POST(request: Request) {
               ? cleanContent.slice(0, 97) + "..." 
               : cleanContent;
 
-        await prisma.notification.create({
-          data: {
-            userId: receiverId,
-            title: `💬 New Message from ${session.user.name || "Portal User"} (${senderRoleLabel})`,
-            content: `${session.user.name || "User"}: "${previewSnippet}"`,
-            type: "MESSAGE",
-            link: recipientLink,
-            isRead: false,
-          }
+        await sendUnifiedNotification({
+          userId: receiverId,
+          title: `💬 New Message from ${session.user.name || "Portal User"} (${senderRoleLabel})`,
+          content: `${session.user.name || "User"}: "${previewSnippet}"`,
+          type: "MESSAGE",
+          category: "admin",
+          link: recipientLink,
         });
-        await invalidateUserNotifCache(receiverId);
       } catch (err) {
         console.error("Background notification error on message send:", err);
       }

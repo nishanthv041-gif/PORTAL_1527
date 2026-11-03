@@ -464,6 +464,12 @@ export async function markNotificationReadAction(notificationId: string) {
         where: { id: realId },
         data: { isRead: true }
       });
+      if (userId) {
+        await prisma.notificationRecipient.updateMany({
+          where: { notificationId: realId, userId },
+          data: { read: true, readAt: new Date(), status: "DELIVERED" }
+        }).catch(() => {});
+      }
     } else if (notificationId.startsWith("msg-")) {
       const realId = notificationId.replace("msg-", "");
       await prisma.message.updateMany({
@@ -598,6 +604,11 @@ export async function clearAllNotificationsAction(): Promise<{ success?: boolean
       where: { userId, isRead: false },
       data: { isRead: true }
     });
+
+    await prisma.notificationRecipient.updateMany({
+      where: { userId, read: false },
+      data: { read: true, readAt: new Date(), status: "DELIVERED" }
+    }).catch(() => {});
 
     // Mark all direct messages as read
     await prisma.message.updateMany({
