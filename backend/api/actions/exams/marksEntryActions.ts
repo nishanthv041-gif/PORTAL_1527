@@ -378,11 +378,13 @@ export async function saveMarksDraftAction(
 
 /**
  * 4. Submit Marks to Class Teacher
- * Validates all students have marks or are marked absent, then locks the task and notifies class teacher.
+ * Validates students have marks or are marked absent, then locks the task and notifies class teacher.
+ * If allowPartial is true, sends all entered marks without failing on missing students.
  */
 export async function submitMarksToClassTeacherAction(
   examSubjectId: string,
-  entries: MarkEntryItem[]
+  entries: MarkEntryItem[],
+  allowPartial?: boolean
 ) {
   try {
     const { session, role, teacher } = await getAuthTeacherOrAdmin();
@@ -465,7 +467,7 @@ export async function submitMarksToClassTeacherAction(
       }
     }
 
-    if (missingStudents.length > 0) {
+    if (missingStudents.length > 0 && !allowPartial) {
       return {
         success: false,
         error: `Cannot submit: ${missingStudents.length} student(s) have missing marks. All students must have a mark or be marked as Absent.`,
@@ -473,10 +475,27 @@ export async function submitMarksToClassTeacherAction(
       };
     }
 
+    // Filter valid entries to persist
+    const validEntries = entries.filter((e) => {
+      const isAbsent = Boolean(e.isAbsent);
+      const hasScore =
+        e.marksObtained !== null &&
+        e.marksObtained !== undefined &&
+        !isNaN(Number(e.marksObtained));
+      return isAbsent || hasScore;
+    });
+
+    if (validEntries.length === 0) {
+      return {
+        success: false,
+        error: "No student marks have been entered to submit.",
+      };
+    }
+
     // Run submission in transaction
     await prisma.$transaction(async (tx) => {
-      // 1. Upsert all marks
-      for (const entry of entries) {
+      // 1. Upsert all entered marks
+      for (const entry of validEntries) {
         if (!entry.studentId) continue;
 
         const isAbsent = Boolean(entry.isAbsent);
@@ -566,7 +585,7 @@ export async function submitMarksToClassTeacherAction(
           data: {
             userId: classTeacherUserId,
             title: `Marks Submitted for Verification: ${subjectName}`,
-            content: `${teacherName} has submitted marks for ${subjectName} in ${examName} (${classInfo}). Please review and verify.`,
+            content: `${teacherName} has submitted marks for ${validEntries.length} student(s) in ${subjectName} for ${examName} (${classInfo}). Please review and verify.`,
             type: "EXAM",
             category: "ACADEMIC",
             priority: "HIGH",
@@ -586,7 +605,7 @@ export async function submitMarksToClassTeacherAction(
           data: {
             userId: admin.id,
             title: `Marks Submitted: ${subjectName} (${classInfo})`,
-            content: `${teacherName} submitted ${subjectName} marks for ${examName}.`,
+            content: `${teacherName} submitted ${validEntries.length} student marks for ${subjectName} in ${examName}.`,
             type: "EXAM",
             category: "ACADEMIC",
             priority: "NORMAL",
@@ -600,14 +619,156 @@ export async function submitMarksToClassTeacherAction(
     revalidatePath(`/dashboard/teacher/exams/tasks/${examSubjectId}`);
     revalidatePath(`/dashboard/teacher/exams/tasks`);
     revalidatePath(`/dashboard/teacher/exams/${examSubject.examId}/review`);
+    revalidatePath(`/dashboard/teacher/exams/${examSubject.examId}`);
     revalidatePath(`/dashboard/teacher/report-cards`);
 
-    return { success: true };
+    return { success: true, count: validEntries.length, missingCount: missingStudents.length };
   } catch (error: unknown) {
     console.error("submitMarksToClassTeacherAction error:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to submit marks to class teacher.",
+      error: error instanceof Error ? error.message : "Failed to submit marks.",
+    };
+  }
+}
+
+/**
+ * 5. Submit/Send Marks for an Individual Student to the Class Teacher
+ * Immediately saves the student's mark into the test marks grid and notifies the Class Teacher.
+ */
+export async function submitIndividualStudentMarkAction(
+  examSubjectId: string,
+  entry: MarkEntryItem
+): Promise<{ success: boolean; error?: string; studentId?: string; score?: number | null }> {
+  try {
+    const { session, role, teacher } = await getAuthTeacherOrAdmin();
+
+    const examSubject = await prisma.examSubject.findUnique({
+      where: { id: examSubjectId },
+      include: {
+        exam: {
+          include: {
+            class: {
+              include: {
+                classTeacher: {
+                  include: {
+                    user: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        subject: true,
+        teacher: {
+          include: { user: true },
+        },
+      },
+    });
+
+    if (!examSubject) {
+      return { success: false, error: "Exam subject task not found." };
+    }
+
+    const isAssigned = teacher && examSubject.teacherId === teacher.id;
+    if (!isAssigned && role !== "ADMIN") {
+      return { success: false, error: "Only the assigned subject teacher can submit marks." };
+    }
+
+    if (!entry.studentId) {
+      return { success: false, error: "Student ID is required." };
+    }
+
+    const isAbsent = Boolean(entry.isAbsent);
+    const marksObtained = isAbsent ? null : Math.min(examSubject.maxMarks, Math.max(0, Number(entry.marksObtained ?? 0)));
+
+    const student = await prisma.student.findUnique({
+      where: { id: entry.studentId },
+      select: { id: true, firstName: true, lastName: true, rollNumber: true },
+    });
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Upsert Mark in database
+      await tx.mark.upsert({
+        where: {
+          studentId_examId_subjectId: {
+            studentId: entry.studentId,
+            examId: examSubject.examId,
+            subjectId: examSubject.subjectId,
+          },
+        },
+        create: {
+          examSubjectId: examSubject.id,
+          studentId: entry.studentId,
+          examId: examSubject.examId,
+          subjectId: examSubject.subjectId,
+          marksObtained,
+          score: marksObtained ?? 0,
+          maxScore: examSubject.maxMarks,
+          isAbsent,
+          remark: entry.remark?.trim() || null,
+          remarks: entry.remark?.trim() || null,
+          enteredByStaffId: teacher?.id || null,
+        },
+        update: {
+          examSubjectId: examSubject.id,
+          marksObtained,
+          score: marksObtained ?? 0,
+          maxScore: examSubject.maxMarks,
+          isAbsent,
+          remark: entry.remark?.trim() || null,
+          remarks: entry.remark?.trim() || null,
+          enteredByStaffId: teacher?.id || null,
+        },
+      });
+
+      // 2. Advance status from PENDING to DRAFT if not already
+      if (examSubject.status === "PENDING") {
+        await tx.examSubject.update({
+          where: { id: examSubjectId },
+          data: { status: "DRAFT" },
+        });
+      }
+
+      // 3. Notify Class Teacher of this individual mark entry
+      const classTeacherUserId = examSubject.exam.class.classTeacher?.user.id;
+      const teacherName = teacher?.user.name || session.user.name || "Subject Teacher";
+      const subjectName = examSubject.subject.name;
+      const examName = examSubject.exam.name;
+      const studentName = student ? `${student.firstName} ${student.lastName}`.trim() : "Student";
+
+      if (classTeacherUserId) {
+        await tx.notification.create({
+          data: {
+            userId: classTeacherUserId,
+            title: `Mark Added: ${studentName} (${subjectName})`,
+            content: `${teacherName} sent marks for ${studentName} in ${subjectName}: ${isAbsent ? "ABSENT" : `${marksObtained}/${examSubject.maxMarks}`} for ${examName}. Added to test grid.`,
+            type: "EXAM",
+            category: "ACADEMIC",
+            priority: "NORMAL",
+            link: `/dashboard/teacher/exams/${examSubject.examId}/review`,
+            isRead: false,
+          },
+        }).catch(() => {});
+      }
+    });
+
+    revalidatePath(`/dashboard/teacher/exams/tasks/${examSubjectId}`);
+    revalidatePath(`/dashboard/teacher/exams/tasks`);
+    revalidatePath(`/dashboard/teacher/exams/${examSubject.examId}/review`);
+    revalidatePath(`/dashboard/teacher/exams/${examSubject.examId}`);
+    revalidatePath(`/dashboard/teacher/report-cards`);
+
+    return {
+      success: true,
+      studentId: entry.studentId,
+      score: marksObtained,
+    };
+  } catch (error: unknown) {
+    console.error("submitIndividualStudentMarkAction error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send individual student mark.",
     };
   }
 }

@@ -11,6 +11,7 @@ import styles from "./MarksWorkspace.module.css";
 import {
   saveMarksDraftAction,
   submitMarksToClassTeacherAction,
+  submitIndividualStudentMarkAction,
   MarkEntryItem,
 } from "@/backend/api/actions/exams/marksEntryActions";
 import {
@@ -71,6 +72,7 @@ export default function ExamSubjectMarksWorkspaceClient({
   const [entries, setEntries] = useState<StudentRowItem[]>(initialEntries);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [sendingStudentIds, setSendingStudentIds] = useState<Record<string, "sending" | "sent" | "error">>({});
 
   // Submit Modal state
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
@@ -298,7 +300,49 @@ export default function ExamSubjectMarksWorkspaceClient({
     });
   };
 
-  // 4. Open Submit Confirmation Modal
+  // 4. Send Individual Student Mark to Class Teacher
+  const handleSendIndividualStudent = async (studentId: string) => {
+    const row = entries.find((e) => e.studentId === studentId);
+    if (!row) return;
+
+    const hasScore = row.marksObtained !== null && row.marksObtained !== undefined && !isNaN(Number(row.marksObtained));
+    if (!row.isAbsent && !hasScore) {
+      alert("Please enter a mark score or check Absent before sending this student to the Class Teacher.");
+      return;
+    }
+
+    setSendingStudentIds((prev) => ({ ...prev, [studentId]: "sending" }));
+
+    try {
+      const res = await submitIndividualStudentMarkAction(task.id, {
+        studentId: row.studentId,
+        marksObtained: row.marksObtained,
+        isAbsent: row.isAbsent,
+        remark: row.remark,
+      });
+
+      if (res.success) {
+        setSendingStudentIds((prev) => ({ ...prev, [studentId]: "sent" }));
+        setSaveMessage(`Mark for ${row.fullName} (${row.isAbsent ? "ABSENT" : `${res.score ?? row.marksObtained}/${task.maxMarks}`}) sent to Class Teacher and added to test grid!`);
+        setTimeout(() => {
+          setSendingStudentIds((prev) => {
+            const copy = { ...prev };
+            delete copy[studentId];
+            return copy;
+          });
+        }, 3500);
+      } else {
+        setSendingStudentIds((prev) => ({ ...prev, [studentId]: "error" }));
+        alert(res.error || "Failed to send mark.");
+      }
+    } catch (err) {
+      console.error(err);
+      setSendingStudentIds((prev) => ({ ...prev, [studentId]: "error" }));
+      alert("An unexpected error occurred while sending mark.");
+    }
+  };
+
+  // 5. Open Submit Confirmation Modal
   const handleOpenSubmitModal = () => {
     setSubmitError(null);
     const missing: Array<{ rollNumber: string; name: string }> = [];
@@ -314,10 +358,11 @@ export default function ExamSubjectMarksWorkspaceClient({
     setIsSubmitModalOpen(true);
   };
 
-  // Confirm Final Submission
+  // Confirm Submission to Class Teacher (allows partial)
   const handleConfirmSubmit = () => {
-    if (missingList.length > 0) {
-      setSubmitError("Cannot submit while there are missing marks. Please fill marks or mark absent.");
+    const validCount = entries.filter((e) => e.isAbsent || (e.marksObtained !== null && e.marksObtained !== undefined && !isNaN(Number(e.marksObtained)))).length;
+    if (validCount === 0) {
+      setSubmitError("No student marks have been entered. Please enter at least one student's mark.");
       return;
     }
 
@@ -330,7 +375,7 @@ export default function ExamSubjectMarksWorkspaceClient({
     }));
 
     startTransition(async () => {
-      const res = await submitMarksToClassTeacherAction(task.id, payload);
+      const res = await submitMarksToClassTeacherAction(task.id, payload, true);
       if (res.success) {
         setIsSubmitModalOpen(false);
         router.refresh();
@@ -542,7 +587,8 @@ export default function ExamSubjectMarksWorkspaceClient({
               <th style={{ minWidth: "180px" }}>Student Name</th>
               <th style={{ width: "130px", textAlign: "right" }}>Marks (Max: {task.maxMarks})</th>
               <th style={{ width: "90px", textAlign: "center" }}>Absent</th>
-              <th style={{ minWidth: "200px" }}>Remarks</th>
+              <th style={{ minWidth: "180px" }}>Remarks</th>
+              <th style={{ width: "120px", textAlign: "center" }}>Send to CT</th>
             </tr>
           </thead>
           <tbody>
@@ -550,6 +596,8 @@ export default function ExamSubjectMarksWorkspaceClient({
               const isInvalidScore =
                 row.marksObtained !== null &&
                 (row.marksObtained < 0 || row.marksObtained > task.maxMarks);
+
+              const studentStatus = sendingStudentIds[row.studentId];
 
               return (
                 <tr key={row.studentId} className={row.isAbsent ? styles.rowAbsent : ""}>
@@ -599,6 +647,50 @@ export default function ExamSubjectMarksWorkspaceClient({
                       placeholder="Optional remark..."
                       className={styles.remarksInput}
                     />
+                  </td>
+                  <td style={{ textAlign: "center" }}>
+                    <button
+                      type="button"
+                      disabled={!task.isEditable || studentStatus === "sending"}
+                      onClick={() => handleSendIndividualStudent(row.studentId)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.3rem",
+                        padding: "0.32rem 0.65rem",
+                        borderRadius: "6px",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        cursor: task.isEditable ? "pointer" : "not-allowed",
+                        border: "1px solid",
+                        backgroundColor:
+                          studentStatus === "sent"
+                            ? "rgba(16, 185, 129, 0.2)"
+                            : "rgba(59, 130, 246, 0.15)",
+                        borderColor:
+                          studentStatus === "sent"
+                            ? "rgba(16, 185, 129, 0.4)"
+                            : "rgba(59, 130, 246, 0.35)",
+                        color: studentStatus === "sent" ? "#34d399" : "#60a5fa",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Send this student's mark directly to the Class Teacher and add to test grid"
+                    >
+                      {studentStatus === "sending" ? (
+                        <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />
+                      ) : studentStatus === "sent" ? (
+                        <CheckCircle2 size={12} />
+                      ) : (
+                        <Send size={12} />
+                      )}
+                      <span>
+                        {studentStatus === "sending"
+                          ? "Sending..."
+                          : studentStatus === "sent"
+                          ? "Sent ✓"
+                          : "Send"}
+                      </span>
+                    </button>
                   </td>
                 </tr>
               );
@@ -782,22 +874,27 @@ export default function ExamSubjectMarksWorkspaceClient({
                 </div>
               </div>
 
-              {missingList.length > 0 && (
-                <div className={`${styles.alertBox} ${styles.alertDanger}`} style={{ flexDirection: "column" }}>
-                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              {missingList.length > 0 ? (
+                <div className={`${styles.alertBox} ${styles.alertWarning}`} style={{ flexDirection: "column", background: "rgba(245, 158, 11, 0.12)", border: "1px solid rgba(245, 158, 11, 0.3)" }}>
+                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", color: "#fbbf24" }}>
                     <AlertTriangle size={18} />
-                    <strong>Missing Marks ({missingList.length} Students)</strong>
+                    <strong>Partial Submission: {missingList.length} student(s) not yet entered</strong>
                   </div>
-                  <p style={{ margin: "4px 0 6px 0", fontSize: "0.85rem" }}>
-                    All students must either have a numeric mark or be marked as Absent before submission is permitted.
+                  <p style={{ margin: "4px 0 6px 0", fontSize: "0.85rem", color: "#cbd5e1" }}>
+                    The <strong>{stats.entered + stats.absent} entered student marks</strong> will be submitted to the Class Teacher and added to the test grid. You can return later to submit the remaining {missingList.length} student(s).
                   </p>
-                  <div style={{ maxHeight: "120px", overflowY: "auto", width: "100%", fontSize: "0.8rem" }}>
+                  <div style={{ maxHeight: "100px", overflowY: "auto", width: "100%", fontSize: "0.8rem", color: "#94a3b8" }}>
                     {missingList.map((m, idx) => (
                       <div key={idx} style={{ padding: "2px 0" }}>
                         • Roll {m.rollNumber}: {m.name}
                       </div>
                     ))}
                   </div>
+                </div>
+              ) : (
+                <div style={{ padding: "0.75rem", borderRadius: "8px", background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.3)", color: "#34d399", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                  <CheckCircle2 size={16} />
+                  <span>All <strong>{stats.total}</strong> students have marks or are marked absent. Ready for full submission!</span>
                 </div>
               )}
 
@@ -809,7 +906,7 @@ export default function ExamSubjectMarksWorkspaceClient({
               )}
 
               <div style={{ marginTop: "1rem", fontSize: "0.825rem", color: "#94a3b8" }}>
-                <strong>Note:</strong> Once submitted, the subject task will be locked. You will receive a notification if the Class Teacher verifies the marks or returns them for review.
+                <strong>Note:</strong> Submitted marks immediately appear in the Class Teacher&apos;s consolidated marks review grid for verification.
               </div>
             </div>
 
@@ -824,11 +921,15 @@ export default function ExamSubjectMarksWorkspaceClient({
               <button
                 type="button"
                 onClick={handleConfirmSubmit}
-                disabled={isPending || missingList.length > 0}
+                disabled={isPending || (stats.entered + stats.absent === 0)}
                 className={styles.btnSubmit}
               >
                 {isPending ? <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} /> : <Send size={16} />}
-                <span>Confirm &amp; Submit</span>
+                <span>
+                  {missingList.length > 0
+                    ? `Submit Available (${stats.entered + stats.absent} Students)`
+                    : "Confirm & Submit All"}
+                </span>
               </button>
             </div>
           </div>
