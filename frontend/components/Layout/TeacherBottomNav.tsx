@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
+import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import {
   Home,
   Users,
@@ -18,18 +20,37 @@ import {
   AlertCircle,
   Settings,
   Bus,
+  LogOut,
 } from "lucide-react";
 import styles from "./TeacherBottomNav.module.css";
 import BottomSheet from "@/components/ui/BottomSheet";
 
 export function TeacherBottomNav() {
   const pathname = usePathname();
+  const confirm = useConfirm();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const handleLogout = async () => {
+    const ok = await confirm({
+      title: "Sign out of Teacher Portal?",
+      message: "Are you sure you want to log out of your teacher account? Any unsaved progress will be lost.",
+      confirmText: "Sign Out",
+      cancelText: "Stay Logged In",
+      variant: "primary",
+    });
+    if (!ok) return;
+
+    try {
+      sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
+      sessionStorage.removeItem("srt_portal_fresh_login");
+    } catch { }
+    await signOut({ callbackUrl: "/" });
+  };
 
   const navItems = [
     {
@@ -99,14 +120,21 @@ export function TeacherBottomNav() {
       href: "/dashboard/teacher/settings",
       icon: <Settings size={22} />,
     },
+    {
+      label: "Log Out",
+      href: "#logout",
+      icon: <LogOut size={22} />,
+      isLogout: true,
+    },
   ];
 
   const isMoreActive =
     !navItems.some((item) => item.isActive) &&
     moreItems.some(
       (item) =>
-        pathname?.startsWith(item.href) ||
-        (item.href === "/dashboard/teacher/assignments" && pathname?.startsWith("/dashboard/teacher/homework"))
+        !item.isLogout &&
+        (pathname?.startsWith(item.href) ||
+          (item.href === "/dashboard/teacher/assignments" && pathname?.startsWith("/dashboard/teacher/homework")))
     );
 
   if (!mounted) return null;
@@ -151,18 +179,47 @@ export function TeacherBottomNav() {
         title="Teacher Menu"
       >
         <div className={styles.moreGrid}>
-          {moreItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              prefetch={false}
-              className={styles.moreItem}
-              onClick={() => setIsMoreOpen(false)}
-            >
-              <div className={styles.moreIconCircle}>{item.icon}</div>
-              <span>{item.label}</span>
-            </Link>
-          ))}
+          {moreItems.map((item) =>
+            item.isLogout ? (
+              <button
+                key={item.href}
+                type="button"
+                className={`${styles.moreItem} ${styles.moreItemLogout}`}
+                onClick={() => {
+                  setIsMoreOpen(false);
+                  handleLogout();
+                }}
+              >
+                <div className={styles.moreIconCircle}>{item.icon}</div>
+                <span>{item.label}</span>
+              </button>
+            ) : (
+              <Link
+                key={item.href}
+                href={item.href}
+                prefetch={false}
+                className={styles.moreItem}
+                onClick={() => setIsMoreOpen(false)}
+              >
+                <div className={styles.moreIconCircle}>{item.icon}</div>
+                <span>{item.label}</span>
+              </Link>
+            )
+          )}
+        </div>
+
+        <div className={styles.moreLogoutSection}>
+          <button
+            type="button"
+            className={styles.moreLogoutBtn}
+            onClick={() => {
+              setIsMoreOpen(false);
+              handleLogout();
+            }}
+          >
+            <LogOut size={18} />
+            <span>Log Out of Teacher Portal</span>
+          </button>
         </div>
       </BottomSheet>
     </>,

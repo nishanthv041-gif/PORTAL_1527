@@ -112,7 +112,6 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     {
       title: "PERSONAL",
       items: [
-        { href: "/dashboard/teacher/leaves", label: "Leaves", icon: <CalendarOff size={20} /> },
         { href: "/dashboard/teacher/settings", label: "Settings", icon: <Settings size={20} /> },
       ],
     },

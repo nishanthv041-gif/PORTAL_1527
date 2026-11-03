@@ -19,7 +19,7 @@
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
-    z-index: 99999 !important;
+    z-index: 40 !important;
     justify-content: space-around;
     align-items: center;
     box-shadow: 0 -4px 25px rgba(0, 0, 0, 0.45);
@@ -141,5 +141,58 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.moreItemLogout {
+  color: #ef4444 !important;
+  cursor: pointer;
+}
+
+.moreItemLogout .moreIconCircle {
+  background: rgba(239, 68, 68, 0.12) !important;
+  color: #ef4444 !important;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.moreItemLogout:hover,
+.moreItemLogout:active {
+  background: rgba(239, 68, 68, 0.12) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  color: #ef4444 !important;
+}
+
+.moreLogoutSection {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  width: 100%;
+}
+
+.moreLogoutBtn {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 12px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: all 0.15s ease;
+}
+
+.moreLogoutBtn:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.moreLogoutBtn:active {
+  background: rgba(239, 68, 68, 0.25);
+  transform: scale(0.99);
 }
 
