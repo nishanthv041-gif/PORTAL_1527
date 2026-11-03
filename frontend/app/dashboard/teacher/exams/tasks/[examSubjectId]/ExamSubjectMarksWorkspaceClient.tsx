@@ -8,6 +8,7 @@ import {
   AlertCircle, RotateCcw, Clock, Lock, FileSpreadsheet, X, AlertTriangle, Loader2
 } from "lucide-react";
 import styles from "./MarksWorkspace.module.css";
+import { formatClassName } from "@/lib/teacher/formatClassName";
 import {
   saveMarksDraftAction,
   submitMarksToClassTeacherAction,
@@ -405,7 +406,7 @@ export default function ExamSubjectMarksWorkspaceClient({
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap", marginBottom: "0.4rem" }}>
             <span className={`${styles.badge} ${styles.badgeInfo}`}>
-              Class {task.className}-{task.section}
+              {formatClassName(task.className, task.section)}
             </span>
             <span style={{ fontSize: "0.85rem", color: "#94a3b8" }}>•</span>
             <span style={{ fontSize: "0.85rem", color: "#94a3b8" }}>
@@ -850,7 +851,7 @@ export default function ExamSubjectMarksWorkspaceClient({
 
             <div>
               <p style={{ margin: "0 0 1rem 0", fontSize: "0.9rem", color: "#cbd5e1" }}>
-                You are about to submit marks for <strong>{task.subjectName}</strong> ({task.className}-{task.section}) to the Class Teacher: <strong>{task.classTeacherName}</strong>.
+                You are about to submit marks for <strong>{task.subjectName}</strong> ({formatClassName(task.className, task.section)}) to the Class Teacher: <strong>{task.classTeacherName}</strong>.
               </p>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>

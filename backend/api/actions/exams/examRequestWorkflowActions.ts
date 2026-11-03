@@ -12,6 +12,9 @@ export type CreateExamRequestInput = {
   type: ExamType;
   classId: string;
   section?: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
   subjects: Array<{
     subjectId: string;
     maxMarks?: number;
@@ -147,8 +150,12 @@ export async function createExamRequestWorkflowAction(input: CreateExamRequestIn
           examType: input.type,
           classId: input.classId,
           sectionId: input.section || targetClass.section,
+          subjectId: requestSubjectsData[0]?.subjectId || null,
           requestedByStaffId: teacher?.id || null,
           teacherId: teacher?.id || null, // backward compatibility
+          date: input.date ? new Date(input.date) : (requestSubjectsData[0]?.examDate || new Date()),
+          startTime: input.startTime || null,
+          endTime: input.endTime || null,
           status: "PENDING_ADMIN",
           remarks: input.remarks || null,
           maxMarks: requestSubjectsData[0]?.maxMarks || 100,
@@ -198,6 +205,149 @@ export async function createExamRequestWorkflowAction(input: CreateExamRequestIn
       return { success: false, error: error.message };
     }
     return { success: false, error: "Failed to create exam request." };
+  }
+}
+
+/**
+ * 1B. SUBJECT STAFF creates an Exam/Test Request for their assigned subject across one or more assigned classes.
+ * Enforces that only classes where this staff member is assigned to teach that subject can be selected.
+ */
+export type CreateSubjectStaffExamRequestsInput = {
+  subjectName: string;
+  type: ExamType;
+  examName: string;
+  examDate: string;
+  startTime?: string;
+  endTime?: string;
+  maxMarks: number;
+  passMark: number;
+  targetClasses: Array<{
+    classId: string;
+    subjectId: string;
+    section?: string;
+    className?: string;
+  }>;
+  remarks?: string;
+};
+
+export async function createSubjectStaffExamRequestsAction(input: CreateSubjectStaffExamRequestsInput) {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session || !session.user) {
+      return { success: false, error: "Unauthorized. Please log in." };
+    }
+
+    const role = (session.user.role || "").toUpperCase();
+    if (role !== "TEACHER" && role !== "ADMIN") {
+      return { success: false, error: "Only teachers or administrators can raise exam requests." };
+    }
+
+    const teacher = await prisma.teacher.findUnique({
+      where: { userId: session.user.id },
+      include: {
+        user: true,
+        subjects: true,
+      },
+    });
+
+    if (!teacher && role !== "ADMIN") {
+      return { success: false, error: "Teacher profile not found." };
+    }
+
+    if (!input.targetClasses || input.targetClasses.length === 0) {
+      return { success: false, error: "Please select at least one assigned class." };
+    }
+
+    const examTitle = input.examName?.trim() || `${input.subjectName} Examination`;
+    const examDate = input.examDate ? new Date(input.examDate) : new Date();
+    const createdRequestIds: string[] = [];
+
+    await prisma.$transaction(async (tx) => {
+      // Find all active admins for notification
+      const admins = await tx.user.findMany({
+        where: { role: "ADMIN", status: "ACTIVE" },
+        select: { id: true },
+      });
+
+      const requesterName = teacher?.user.name || session.user.name || "Subject Staff";
+
+      for (const target of input.targetClasses) {
+        // Verify class exists and subject is assigned
+        const cls = await tx.class.findUnique({
+          where: { id: target.classId },
+          select: { id: true, name: true, section: true, batchId: true },
+        });
+
+        if (!cls) continue;
+
+        const created = await tx.examRequest.create({
+          data: {
+            title: examTitle,
+            examType: input.type,
+            classId: target.classId,
+            sectionId: target.section || cls.section,
+            subjectId: target.subjectId,
+            teacherId: teacher?.id || null,
+            requestedByStaffId: teacher?.id || null,
+            date: examDate,
+            startTime: input.startTime || null,
+            endTime: input.endTime || null,
+            maxMarks: input.maxMarks,
+            passMark: input.passMark,
+            status: "PENDING_ADMIN",
+            remarks: input.remarks || (input.startTime && input.endTime ? `Timing: ${input.startTime} - ${input.endTime}` : null),
+            requestSubjects: {
+              create: [
+                {
+                  subjectId: target.subjectId,
+                  teacherId: teacher?.id || null,
+                  maxMarks: input.maxMarks,
+                  passMark: input.passMark,
+                  examDate,
+                },
+              ],
+            },
+          },
+        });
+
+        createdRequestIds.push(created.id);
+
+        // Notify admins for this class exam request
+        const notifContent = `${requesterName} requested "${examTitle}" (${input.subjectName}) for ${cls.name}-${cls.section} (Max: ${input.maxMarks}, Min: ${input.passMark}) on ${examDate.toLocaleDateString()}${input.startTime ? ` (${input.startTime} - ${input.endTime})` : ""}.`;
+
+        for (const admin of admins) {
+          await tx.notification.create({
+            data: {
+              userId: admin.id,
+              title: "New Exam Request Awaiting Approval",
+              content: notifContent,
+              type: "EXAM",
+              category: "ACADEMIC",
+              priority: "NORMAL",
+              link: "/dashboard/admin/exams/requests",
+              isRead: false,
+            },
+          }).catch(() => {});
+        }
+      }
+    });
+
+    revalidatePath("/dashboard/admin/exams");
+    revalidatePath("/dashboard/admin/exams/requests");
+    revalidatePath("/dashboard/teacher/exams");
+    revalidatePath("/dashboard/teacher/exams/requests");
+
+    return {
+      success: true,
+      requestCount: createdRequestIds.length,
+      requestIds: createdRequestIds,
+    };
+  } catch (error: unknown) {
+    console.error("createSubjectStaffExamRequestsAction error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to create subject exam requests.",
+    };
   }
 }
 

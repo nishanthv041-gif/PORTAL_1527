@@ -7,6 +7,7 @@ import {
   RotateCcw, ArrowRight, ShieldAlert, GraduationCap, Calendar, FileText
 } from "lucide-react";
 import styles from "./TeacherMarksTasks.module.css";
+import { formatClassName } from "@/lib/teacher/formatClassName";
 
 interface MarksTaskItem {
   id: string;
@@ -224,7 +225,7 @@ export default function TeacherMarksTasksClient({
                       <div className={styles.examName}>{task.examName}</div>
                       <h2 className={styles.subjectTitle}>{task.subjectName}</h2>
                       <div className={styles.classBadge}>
-                        <GraduationCap size={14} /> Class {task.className}-{task.section}
+                        <GraduationCap size={14} /> {formatClassName(task.className, task.section)}
                       </div>
                     </div>
                     {renderBadge(task.status)}

@@ -1,219 +1,398 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Send, RotateCcw, AlertCircle, CheckCircle2, CheckSquare, Square } from "lucide-react";
+import {
+  Send,
+  RotateCcw,
+  AlertCircle,
+  CheckCircle2,
+  CheckSquare,
+  Square,
+  Clock,
+  BookOpen,
+  GraduationCap,
+  Sparkles,
+} from "lucide-react";
 import styles from "./CreateExamForm.module.css";
-import { createExamRequestWorkflowAction, ExamType } from "@/backend/api/actions/exams/examRequestWorkflowActions";
+import {
+  createSubjectStaffExamRequestsAction,
+  createExamRequestWorkflowAction,
+  ExamType,
+} from "@/backend/api/actions/exams/examRequestWorkflowActions";
 import { formatClassName } from "@/lib/teacher/formatClassName";
 
-export type ExamClassSubject = {
-  id: string;
-  name: string;
-  maxMarks?: number | null;
-  passMarks?: number | null;
+export type AssignedSubjectItem = {
+  id: string; // subject id
+  name: string; // e.g. "Mathematics"
+  code?: string | null;
+  classId: string;
+  className: string;
+  section: string;
+  maxMarks: number;
+  passMarks: number;
 };
 
 export type ExamClassItem = {
   id: string;
   name: string;
   section: string;
-  subjects?: ExamClassSubject[];
+  subjects?: Array<{
+    id: string;
+    name: string;
+    maxMarks?: number | null;
+    passMarks?: number | null;
+  }>;
 };
 
 const EXAM_TYPE_OPTIONS: { value: ExamType; label: string }[] = [
   { value: "UNIT_TEST", label: "Unit Test" },
+  { value: "OTHER", label: "Midterm / Other Test" },
   { value: "QUARTERLY", label: "Quarterly Examination" },
   { value: "HALF_YEARLY", label: "Half-Yearly Examination" },
   { value: "ANNUAL", label: "Annual Examination" },
   { value: "MODEL", label: "Model Examination" },
-  { value: "OTHER", label: "Midterm / Other Test" },
+];
+
+const PRESET_EXAM_NAMES = [
+  "Unit Test 1",
+  "Unit Test 2",
+  "Midterm Examination",
+  "Quarterly Exam",
+  "Half-Yearly Exam",
+  "Annual Exam",
 ];
 
 export default function CreateExamForm({
+  teacherId,
+  assignedSubjects = [],
   classes = [],
 }: {
-  teacherId: string;
-  classes: ExamClassItem[];
+  teacherId?: string;
+  assignedSubjects?: AssignedSubjectItem[];
+  classes?: ExamClassItem[];
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // Form states
-  const [examType, setExamType] = useState<ExamType>("UNIT_TEST");
-  const [examName, setExamName] = useState("Unit Test 1");
-  const [selectedClassId, setSelectedClassId] = useState(classes[0]?.id || "");
-  const [examDate, setExamDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [startTime, setStartTime] = useState("09:30");
-  const [endTime, setEndTime] = useState("12:30");
-  const [defaultMaxMarks, setDefaultMaxMarks] = useState(100);
-  const [defaultPassMarks, setDefaultPassMarks] = useState(35);
-
-  // Selected subjects and per-subject marks
-  const currentClass = useMemo(() => {
-    return classes.find((c) => c.id === selectedClassId) || classes[0] || null;
-  }, [classes, selectedClassId]);
-
-  const availableSubjects = useMemo(() => {
-    return currentClass?.subjects || [];
-  }, [currentClass]);
-
-  // Map of subjectId -> { selected: boolean; maxMarks: number; passMark: number }
-  const [subjectConfigs, setSubjectConfigs] = useState<
-    Record<string, { selected: boolean; maxMarks: number; passMark: number }>
-  >({});
-
-  // Initialize or reset subject configs whenever class changes
-  const activeSubjectConfigs = useMemo(() => {
-    const map: Record<string, { selected: boolean; maxMarks: number; passMark: number }> = {};
-    for (const sub of availableSubjects) {
-      if (subjectConfigs[sub.id]) {
-        map[sub.id] = subjectConfigs[sub.id];
-      } else {
-        map[sub.id] = {
-          selected: true,
-          maxMarks: sub.maxMarks || defaultMaxMarks,
-          passMark: sub.passMarks || defaultPassMarks,
-        };
+  // Normalise assigned subjects: if assignedSubjects was not provided, derive from classes
+  const normalizedSubjects: AssignedSubjectItem[] = useMemo(() => {
+    if (assignedSubjects && assignedSubjects.length > 0) {
+      return assignedSubjects;
+    }
+    const derived: AssignedSubjectItem[] = [];
+    for (const c of classes) {
+      for (const s of c.subjects || []) {
+        derived.push({
+          id: s.id,
+          name: s.name,
+          classId: c.id,
+          className: c.name,
+          section: c.section,
+          maxMarks: s.maxMarks || 100,
+          passMarks: s.passMarks || 35,
+        });
       }
     }
-    return map;
-  }, [availableSubjects, subjectConfigs, defaultMaxMarks, defaultPassMarks]);
+    return derived;
+  }, [assignedSubjects, classes]);
 
-  const handleClassChange = (classId: string) => {
-    setSelectedClassId(classId);
-    setSubjectConfigs({});
-    setMessage("");
-  };
-
-  const handleToggleSubject = (subjectId: string) => {
-    setSubjectConfigs((prev) => {
-      const cur = activeSubjectConfigs[subjectId];
-      return {
-        ...prev,
-        [subjectId]: {
-          ...cur,
-          selected: !cur?.selected,
-        },
-      };
-    });
-  };
-
-  const handleSubjectMarkChange = (subjectId: string, field: "maxMarks" | "passMark", value: number) => {
-    setSubjectConfigs((prev) => {
-      const cur = activeSubjectConfigs[subjectId];
-      return {
-        ...prev,
-        [subjectId]: {
-          ...cur,
-          [field]: Math.max(1, value),
-        },
-      };
-    });
-  };
-
-  const handleApplyCriteriaToAll = () => {
-    const updated: Record<string, { selected: boolean; maxMarks: number; passMark: number }> = {};
-    for (const sub of availableSubjects) {
-      updated[sub.id] = {
-        selected: activeSubjectConfigs[sub.id]?.selected ?? true,
-        maxMarks: defaultMaxMarks,
-        passMark: defaultPassMarks,
-      };
+  // Group assigned subjects by subject name (e.g. "Mathematics", "Science")
+  const subjectsByName = useMemo(() => {
+    const map = new Map<string, AssignedSubjectItem[]>();
+    for (const item of normalizedSubjects) {
+      const list = map.get(item.name) || [];
+      // avoid duplicate class entry for same subject
+      if (!list.some((existing) => existing.classId === item.classId)) {
+        list.push(item);
+      }
+      map.set(item.name, list);
     }
-    setSubjectConfigs(updated);
-    setMessage(`Applied Max: ${defaultMaxMarks}, Min: ${defaultPassMarks} to all subjects.`);
-    setIsSuccess(true);
-    setTimeout(() => setMessage(""), 3000);
+    return map;
+  }, [normalizedSubjects]);
+
+  const subjectNames = useMemo(() => Array.from(subjectsByName.keys()), [subjectsByName]);
+
+  // Form states
+  const [selectedSubjectName, setSelectedSubjectName] = useState<string>(
+    subjectNames[0] || ""
+  );
+
+  // When subjectNames updates, ensure selectedSubjectName is valid
+  useEffect(() => {
+    if (subjectNames.length > 0 && !subjectsByName.has(selectedSubjectName)) {
+      setSelectedSubjectName(subjectNames[0]);
+    }
+  }, [subjectNames, selectedSubjectName, subjectsByName]);
+
+  // Available classes for selected subject ("VIEW ONLY" assigned classes)
+  const assignedClassesForSubject = useMemo(() => {
+    return subjectsByName.get(selectedSubjectName) || [];
+  }, [subjectsByName, selectedSubjectName]);
+
+  // Selected classes: multi-class selection
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+
+  // Auto-select all assigned classes when subject changes
+  useEffect(() => {
+    if (assignedClassesForSubject.length > 0) {
+      setSelectedClassIds(assignedClassesForSubject.map((c) => c.classId));
+    } else {
+      setSelectedClassIds([]);
+    }
+  }, [assignedClassesForSubject]);
+
+  const [examType, setExamType] = useState<ExamType>("UNIT_TEST");
+  const [examName, setExamName] = useState("Unit Test 1");
+  const [examDate, setExamDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startTime, setStartTime] = useState("09:30");
+  const [endTime, setEndTime] = useState("11:00");
+  const [maxMarks, setMaxMarks] = useState(100);
+  const [passMark, setPassMark] = useState(35);
+  const [remarks, setRemarks] = useState("");
+
+  // Update marks criteria when subject changes
+  useEffect(() => {
+    const firstAssigned = assignedClassesForSubject[0];
+    if (firstAssigned) {
+      setMaxMarks(firstAssigned.maxMarks || 100);
+      setPassMark(firstAssigned.passMarks || 35);
+    }
+  }, [selectedSubjectName, assignedClassesForSubject]);
+
+  // Toggle class selection
+  const handleToggleClass = (classId: string) => {
+    setSelectedClassIds((prev) =>
+      prev.includes(classId) ? prev.filter((id) => id !== classId) : [...prev, classId]
+    );
   };
+
+  const handleSelectAllClasses = () => {
+    setSelectedClassIds(assignedClassesForSubject.map((c) => c.classId));
+  };
+
+  const handleDeselectAllClasses = () => {
+    setSelectedClassIds([]);
+  };
+
+  // Duration calculation
+  const durationLabel = useMemo(() => {
+    try {
+      const [sh, sm] = startTime.split(":").map(Number);
+      const [eh, em] = endTime.split(":").map(Number);
+      const startMin = sh * 60 + sm;
+      const endMin = eh * 60 + em;
+      const diff = endMin - startMin;
+      if (diff <= 0) return null;
+      const hours = Math.floor(diff / 60);
+      const mins = diff % 60;
+      if (hours > 0 && mins > 0) return `${hours} hr ${mins} mins`;
+      if (hours > 0) return `${hours} hr${hours > 1 ? "s" : ""}`;
+      return `${mins} mins`;
+    } catch {
+      return null;
+    }
+  }, [startTime, endTime]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage("");
 
-    if (!selectedClassId) {
+    if (!selectedSubjectName) {
       setIsSuccess(false);
-      setMessage("Please select a target class.");
+      setMessage("Please select a subject assigned to you.");
       setLoading(false);
       return;
     }
 
-    const selectedSubs = availableSubjects
-      .filter((s) => activeSubjectConfigs[s.id]?.selected)
-      .map((s) => ({
-        subjectId: s.id,
-        maxMarks: activeSubjectConfigs[s.id]?.maxMarks || defaultMaxMarks,
-        passMark: activeSubjectConfigs[s.id]?.passMark || defaultPassMarks,
-        examDate,
+    if (selectedClassIds.length === 0) {
+      setIsSuccess(false);
+      setMessage("Please select at least one assigned class.");
+      setLoading(false);
+      return;
+    }
+
+    if (passMark > maxMarks) {
+      setIsSuccess(false);
+      setMessage(`Minimum pass mark (${passMark}) cannot exceed Maximum mark (${maxMarks}).`);
+      setLoading(false);
+      return;
+    }
+
+    // Collect target classes with their corresponding subjectId
+    const targetClasses = assignedClassesForSubject
+      .filter((c) => selectedClassIds.includes(c.classId))
+      .map((c) => ({
+        classId: c.classId,
+        subjectId: c.id,
+        section: c.section,
+        className: c.className,
       }));
 
-    if (selectedSubs.length === 0) {
-      setIsSuccess(false);
-      setMessage("Please select at least one subject for the examination.");
-      setLoading(false);
-      return;
-    }
-
     try {
-      const result = await createExamRequestWorkflowAction({
-        name: examName.trim(),
+      const res = await createSubjectStaffExamRequestsAction({
+        subjectName: selectedSubjectName,
         type: examType,
-        classId: selectedClassId,
-        section: currentClass?.section,
-        remarks: `Exam scheduled ${startTime} - ${endTime}`,
-        subjects: selectedSubs,
+        examName: examName.trim() || `${selectedSubjectName} Examination`,
+        examDate,
+        startTime,
+        endTime,
+        maxMarks: Number(maxMarks),
+        passMark: Number(passMark),
+        targetClasses,
+        remarks: remarks.trim() || undefined,
       });
 
-      if (result.success) {
+      if (res.success) {
         setIsSuccess(true);
-        setMessage("Exam request submitted to Administrator for approval! Once accepted, exam marks tasks will be assigned and timetable updated.");
+        setMessage(
+          `Exam request for ${res.requestCount || targetClasses.length} class(es) successfully submitted to Admin!`
+        );
         router.refresh();
       } else {
         setIsSuccess(false);
-        setMessage("Request failed: " + result.error);
+        setMessage(res.error || "Failed to submit exam request.");
       }
     } catch (err: unknown) {
       setIsSuccess(false);
-      setMessage("An unexpected error occurred: " + (err instanceof Error ? err.message : "Network error"));
+      setMessage(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleReset = () => {
-    setExamName("Unit Test 1");
     setExamType("UNIT_TEST");
-    setDefaultMaxMarks(100);
-    setDefaultPassMarks(35);
-    setSubjectConfigs({});
+    setExamName("Unit Test 1");
+    setExamDate(new Date().toISOString().slice(0, 10));
+    setStartTime("09:30");
+    setEndTime("11:00");
+    setMaxMarks(100);
+    setPassMark(35);
+    setRemarks("");
     setMessage("");
+    if (assignedClassesForSubject.length > 0) {
+      setSelectedClassIds(assignedClassesForSubject.map((c) => c.classId));
+    }
   };
+
+  if (subjectNames.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: "1.5rem 1rem", color: "var(--text-secondary)" }}>
+        <BookOpen size={32} style={{ opacity: 0.4, margin: "0 auto 0.5rem" }} />
+        <p style={{ margin: "0 0 0.25rem 0", fontWeight: 600, color: "var(--foreground)" }}>
+          No Assigned Subjects Found
+        </p>
+        <p style={{ margin: 0, fontSize: "0.85rem" }}>
+          You are not currently assigned as the subject staff for any class. Please contact the administrator to assign your subjects.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className={styles.form}>
-      {/* 1. Examination Type */}
+      {message && (
+        <div className={isSuccess ? styles.messageSuccess : styles.messageError}>
+          {isSuccess ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+          <span>{message}</span>
+        </div>
+      )}
+
+      {/* 1. Subject Staff Assignment (Select Assigned Subject) */}
       <div className={styles.fieldGroup}>
-        <label htmlFor="exam-type-select" className={styles.label}>
-          Examination Type *
+        <label className={styles.label}>
+          <span>Your Assigned Subject *</span>
+          <span className={styles.labelNote}>
+            {subjectNames.length} Subject{subjectNames.length !== 1 ? "s" : ""} Assigned
+          </span>
         </label>
         <select
-          id="exam-type-select"
+          value={selectedSubjectName}
+          onChange={(e) => setSelectedSubjectName(e.target.value)}
+          className={styles.select}
+          required
+        >
+          {subjectNames.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* 2. Assigned Classes ("VIEW ONLY" Assigned Classes List + Multi-select) */}
+      <div className={styles.fieldGroup}>
+        <div className={styles.classesHeader}>
+          <label className={styles.label} style={{ margin: 0 }}>
+            <span>Assigned Classes (View &amp; Select) *</span>
+          </label>
+          <div className={styles.classesActions}>
+            <button
+              type="button"
+              onClick={handleSelectAllClasses}
+              className={styles.actionPillBtn}
+            >
+              Select All
+            </button>
+            <button
+              type="button"
+              onClick={handleDeselectAllClasses}
+              className={styles.actionPillBtn}
+            >
+              Clear
+            </button>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginLeft: "0.25rem" }}>
+              {selectedClassIds.length}/{assignedClassesForSubject.length} Selected
+            </span>
+          </div>
+        </div>
+
+        <div className={styles.classesGrid}>
+          {assignedClassesForSubject.map((item) => {
+            const isSelected = selectedClassIds.includes(item.classId);
+            return (
+              <button
+                key={item.classId}
+                type="button"
+                onClick={() => handleToggleClass(item.classId)}
+                className={`${styles.classCard} ${isSelected ? styles.classCardActive : ""}`}
+              >
+                {isSelected ? (
+                  <CheckSquare size={16} color="#3b82f6" />
+                ) : (
+                  <Square size={16} color="var(--text-secondary)" />
+                )}
+                <span>{formatClassName(item.className, item.section)}</span>
+              </button>
+            );
+          })}
+        </div>
+        <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginTop: "0.2rem" }}>
+          * Displays only classes assigned to you for {selectedSubjectName}. Select one or more classes to request this exam.
+        </span>
+      </div>
+
+      {/* 3. Examination Type */}
+      <div className={styles.fieldGroup}>
+        <label className={styles.label}>
+          <span>Examination Type *</span>
+        </label>
+        <select
           value={examType}
           onChange={(e) => {
-            const val = e.target.value as ExamType;
-            setExamType(val);
-            if (val === "UNIT_TEST") setExamName("Unit Test 1");
-            else if (val === "QUARTERLY") setExamName("Quarterly Examination");
-            else if (val === "HALF_YEARLY") setExamName("Half-Yearly Examination");
-            else if (val === "ANNUAL") setExamName("Annual Examination");
-            else if (val === "MODEL") setExamName("Model Examination");
-            else setExamName("Midterm Examination");
+            const t = e.target.value as ExamType;
+            setExamType(t);
+            const opt = EXAM_TYPE_OPTIONS.find((o) => o.value === t);
+            if (opt) {
+              setExamName(`${opt.label} - ${selectedSubjectName}`);
+            }
           }}
           className={styles.select}
-          disabled={loading}
+          required
         >
           {EXAM_TYPE_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -223,221 +402,149 @@ export default function CreateExamForm({
         </select>
       </div>
 
-      {/* 2. Exam Name / Title */}
+      {/* 4. Exam Name / Title */}
       <div className={styles.fieldGroup}>
-        <label htmlFor="exam-title-input" className={styles.label}>
-          Exam Name / Title *
+        <label className={styles.label}>
+          <span>Exam Title / Name *</span>
         </label>
         <input
-          id="exam-title-input"
           type="text"
-          required
           value={examName}
           onChange={(e) => setExamName(e.target.value)}
-          placeholder="e.g. Unit Test 1, Midterm Examination"
+          placeholder={`e.g. Unit Test 1 - ${selectedSubjectName}`}
           className={styles.input}
-          disabled={loading}
+          required
+        />
+        <div className={styles.presetChips}>
+          {PRESET_EXAM_NAMES.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => setExamName(`${preset} - ${selectedSubjectName}`)}
+              className={`${styles.presetChip} ${
+                examName.startsWith(preset) ? styles.presetChipActive : ""
+              }`}
+            >
+              {preset}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 5. Date & Times */}
+      <div className={styles.fieldGroup}>
+        <label className={styles.label}>
+          <span>Exam Date *</span>
+        </label>
+        <input
+          type="date"
+          value={examDate}
+          onChange={(e) => setExamDate(e.target.value)}
+          className={styles.input}
+          required
         />
       </div>
 
-      {/* 3. Class & Section Selection */}
-      <div className={styles.fieldGroup}>
-        <label htmlFor="exam-class-select" className={styles.label}>
-          Target Class &amp; Section *
-        </label>
-        <select
-          id="exam-class-select"
-          value={selectedClassId}
-          onChange={(e) => handleClassChange(e.target.value)}
-          required
-          className={styles.select}
-          disabled={loading || classes.length === 0}
-        >
-          {classes.map((c) => (
-            <option key={c.id} value={c.id}>
-              {formatClassName(c.name, c.section)} ({c.subjects?.length || 0} subjects)
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* 4. Date & Times (For Timetable Overlap) */}
       <div className={styles.pairedRow}>
         <div className={styles.fieldGroup}>
-          <label htmlFor="exam-date" className={styles.label}>
-            Exam Date *
+          <label className={styles.label}>
+            <span>Test Start Time *</span>
           </label>
           <input
-            id="exam-date"
-            type="date"
-            required
-            value={examDate}
-            onChange={(e) => setExamDate(e.target.value)}
-            className={styles.input}
-            disabled={loading}
-          />
-        </div>
-
-        <div className={styles.fieldGroup}>
-          <label htmlFor="exam-time-start" className={styles.label}>
-            Start Time
-          </label>
-          <input
-            id="exam-time-start"
             type="time"
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
             className={styles.input}
-            disabled={loading}
+            required
           />
         </div>
-
         <div className={styles.fieldGroup}>
-          <label htmlFor="exam-time-end" className={styles.label}>
-            End Time
+          <label className={styles.label}>
+            <span>Test End Time *</span>
           </label>
           <input
-            id="exam-time-end"
             type="time"
             value={endTime}
             onChange={(e) => setEndTime(e.target.value)}
             className={styles.input}
-            disabled={loading}
+            required
           />
         </div>
       </div>
 
-      {/* 5. Subjects with Minimum & Maximum Marks */}
-      <div className={styles.fieldGroup}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-          <label className={styles.label} style={{ margin: 0 }}>
-            Subjects &amp; Criteria (Min / Max Marks) *
+      {durationLabel && (
+        <div className={styles.durationBadge}>
+          <Clock size={13} />
+          <span>Scheduled Duration: {durationLabel}</span>
+        </div>
+      )}
+
+      {/* 6. Marks Criteria (Max Mark & Min Mark / Pass Mark) */}
+      <div className={styles.pairedRow}>
+        <div className={styles.fieldGroup}>
+          <label className={styles.label}>
+            <span>Maximum Mark *</span>
           </label>
-          <button
-            type="button"
-            onClick={handleApplyCriteriaToAll}
-            style={{
-              background: "none",
-              border: "none",
-              color: "var(--primary, #3b82f6)",
-              fontSize: "0.78rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              padding: 0,
-            }}
-          >
-            Apply Defaults to All
-          </button>
+          <input
+            type="number"
+            min={1}
+            max={1000}
+            value={maxMarks}
+            onChange={(e) => setMaxMarks(Number(e.target.value))}
+            className={styles.input}
+            required
+          />
         </div>
-
-        {/* Global Criteria Presets */}
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", background: "rgba(255,255,255,0.03)", padding: "0.5rem", borderRadius: "8px", border: "1px solid var(--border)" }}>
-          <div style={{ flex: 1, fontSize: "0.78rem" }}>
-            <span style={{ color: "var(--text-secondary)" }}>Default Max: </span>
-            <input
-              type="number"
-              min="1"
-              max="1000"
-              value={defaultMaxMarks}
-              onChange={(e) => setDefaultMaxMarks(Number(e.target.value))}
-              style={{ width: "55px", padding: "2px 4px", borderRadius: "4px", border: "1px solid var(--border)", background: "var(--background)", color: "var(--foreground)" }}
-            />
-          </div>
-          <div style={{ flex: 1, fontSize: "0.78rem" }}>
-            <span style={{ color: "var(--text-secondary)" }}>Default Min: </span>
-            <input
-              type="number"
-              min="0"
-              max="1000"
-              value={defaultPassMarks}
-              onChange={(e) => setDefaultPassMarks(Number(e.target.value))}
-              style={{ width: "55px", padding: "2px 4px", borderRadius: "4px", border: "1px solid var(--border)", background: "var(--background)", color: "var(--foreground)" }}
-            />
-          </div>
-        </div>
-
-        {/* Subjects Checklist */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "200px", overflowY: "auto", paddingRight: "4px" }}>
-          {availableSubjects.map((sub) => {
-            const cfg = activeSubjectConfigs[sub.id] || { selected: true, maxMarks: defaultMaxMarks, passMark: defaultPassMarks };
-
-            return (
-              <div
-                key={sub.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "0.5rem 0.65rem",
-                  borderRadius: "8px",
-                  background: cfg.selected ? "rgba(59, 130, 246, 0.08)" : "rgba(255,255,255,0.02)",
-                  border: `1px solid ${cfg.selected ? "rgba(59, 130, 246, 0.25)" : "var(--border)"}`,
-                  gap: "0.5rem",
-                }}
-              >
-                <div
-                  onClick={() => handleToggleSubject(sub.id)}
-                  style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", flex: 1 }}
-                >
-                  {cfg.selected ? (
-                    <CheckSquare size={16} color="#3b82f6" />
-                  ) : (
-                    <Square size={16} color="#64748b" />
-                  )}
-                  <span style={{ fontSize: "0.85rem", fontWeight: cfg.selected ? 700 : 500, color: cfg.selected ? "var(--foreground)" : "var(--text-secondary)" }}>
-                    {sub.name}
-                  </span>
-                </div>
-
-                {cfg.selected && (
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.2rem", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                      <span>Min:</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max={cfg.maxMarks}
-                        value={cfg.passMark}
-                        onChange={(e) => handleSubjectMarkChange(sub.id, "passMark", Number(e.target.value))}
-                        style={{ width: "45px", padding: "2px 4px", borderRadius: "4px", border: "1px solid var(--border)", background: "var(--background)", color: "var(--foreground)", textAlign: "center", fontSize: "0.75rem" }}
-                        title="Minimum Pass Mark"
-                      />
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.2rem", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                      <span>Max:</span>
-                      <input
-                        type="number"
-                        min="1"
-                        max="1000"
-                        value={cfg.maxMarks}
-                        onChange={(e) => handleSubjectMarkChange(sub.id, "maxMarks", Number(e.target.value))}
-                        style={{ width: "48px", padding: "2px 4px", borderRadius: "4px", border: "1px solid var(--border)", background: "var(--background)", color: "var(--foreground)", textAlign: "center", fontSize: "0.75rem" }}
-                        title="Maximum Marks"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {availableSubjects.length === 0 && (
-            <div style={{ padding: "0.75rem", textAlign: "center", color: "var(--text-secondary)", fontSize: "0.82rem" }}>
-              No subjects assigned to this class yet.
-            </div>
-          )}
+        <div className={styles.fieldGroup}>
+          <label className={styles.label}>
+            <span>Minimum / Pass Mark *</span>
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={maxMarks}
+            value={passMark}
+            onChange={(e) => setPassMark(Number(e.target.value))}
+            className={styles.input}
+            required
+          />
         </div>
       </div>
 
-      {/* Actions: Submit + Reset */}
+      {passMark > maxMarks && (
+        <span style={{ fontSize: "0.78rem", color: "#ef4444", fontWeight: 600 }}>
+          Warning: Minimum pass mark cannot exceed maximum mark!
+        </span>
+      )}
+
+      {/* 7. Optional Remarks / Instructions */}
+      <div className={styles.fieldGroup}>
+        <label className={styles.label}>
+          <span>Remarks / Instructions (Optional)</span>
+        </label>
+        <textarea
+          value={remarks}
+          onChange={(e) => setRemarks(e.target.value)}
+          placeholder="e.g. Timing, special stationery required, or room scheduling notes..."
+          className={styles.textarea}
+        />
+      </div>
+
+      {/* 8. Action Buttons */}
       <div className={styles.actionsRow}>
         <button
           type="submit"
-          disabled={loading || availableSubjects.length === 0}
+          disabled={loading || selectedClassIds.length === 0 || passMark > maxMarks}
           className={styles.submitBtn}
         >
           <Send size={16} />
-          <span>{loading ? "Submitting to Admin..." : "Submit to Admin"}</span>
+          <span>
+            {loading
+              ? "Submitting to Admin..."
+              : `Send Request to Admin (${selectedClassIds.length} Class${
+                  selectedClassIds.length !== 1 ? "es" : ""
+                })`}
+          </span>
         </button>
 
         <button
@@ -445,21 +552,11 @@ export default function CreateExamForm({
           onClick={handleReset}
           disabled={loading}
           className={styles.resetBtn}
-          title="Reset form"
         >
-          <RotateCcw size={15} style={{ display: "inline", verticalAlign: "middle", marginRight: "4px" }} />
-          <span>Reset</span>
+          <RotateCcw size={15} style={{ display: "inline", marginRight: "0.3rem" }} />
+          Reset
         </button>
       </div>
-
-      {message && (
-        <div className={isSuccess ? styles.messageSuccess : styles.messageError}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-            {isSuccess ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-            {message}
-          </span>
-        </div>
-      )}
     </form>
   );
 }

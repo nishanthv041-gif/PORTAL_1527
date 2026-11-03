@@ -79,6 +79,68 @@ export default async function TeacherExamsPage() {
   const allClasses = Array.from(classesMap.values());
   const teacherClassIds = allClasses.map((c) => c.id);
 
+  // Construct list of assigned subjects for this subject staff across their classes
+  const assignedSubjectsMap = new Map<string, {
+    id: string;
+    name: string;
+    code: string | null;
+    classId: string;
+    className: string;
+    section: string;
+    maxMarks: number;
+    passMarks: number;
+  }>();
+
+  (teacher.subjects || []).forEach((s) => {
+    if (s && s.class) {
+      assignedSubjectsMap.set(s.id, {
+        id: s.id,
+        name: s.name,
+        code: s.code || null,
+        classId: s.class.id,
+        className: s.class.name,
+        section: s.class.section,
+        maxMarks: s.maxMarks || 100,
+        passMarks: s.passMarks || 35,
+      });
+    }
+  });
+
+  (teacher.classes || []).forEach((c) => {
+    (c.subjects || []).forEach((s: any) => {
+      if (s && s.teacherId === teacher.id && !assignedSubjectsMap.has(s.id)) {
+        assignedSubjectsMap.set(s.id, {
+          id: s.id,
+          name: s.name,
+          code: s.code || null,
+          classId: c.id,
+          className: c.name,
+          section: c.section,
+          maxMarks: s.maxMarks || 100,
+          passMarks: s.passMarks || 35,
+        });
+      }
+    });
+  });
+
+  const ctClass = teacher.classTeacherOf;
+  if (assignedSubjectsMap.size === 0 && ctClass) {
+    (ctClass.subjects || []).forEach((s: any) => {
+      assignedSubjectsMap.set(s.id, {
+        id: s.id,
+        name: s.name,
+        code: s.code || null,
+        classId: ctClass.id,
+        className: ctClass.name,
+        section: ctClass.section,
+        maxMarks: s.maxMarks || 100,
+        passMarks: s.passMarks || 35,
+      });
+    });
+  }
+
+  const assignedSubjects = Array.from(assignedSubjectsMap.values());
+
   // Filter out standalone report card records created purely for report card dispatch.
   // Genuine school exams have an associated exam request or configured exam subjects.
   const exams = await prisma.exam.findMany({
@@ -365,9 +427,9 @@ export default async function TeacherExamsPage() {
               <span>Request New Exam</span>
             </h3>
             <p style={{ fontSize: "0.825rem", color: "var(--text-secondary)", margin: "-0.5rem 0 1rem 0" }}>
-              Configure exam type, dates, subjects, pass marks, and maximum marks. Submits to Admin for timetable scheduling.
+              Configure exam type, dates, test timings, pass marks, and maximum marks for your assigned classes. Submits to Admin for timetable scheduling.
             </p>
-            <CreateExamForm teacherId={teacher.id} classes={allClasses} />
+            <CreateExamForm teacherId={teacher.id} assignedSubjects={assignedSubjects} />
           </div>
         </div>
       </div>

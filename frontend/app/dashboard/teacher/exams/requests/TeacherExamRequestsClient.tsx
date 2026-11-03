@@ -23,6 +23,7 @@ import {
 import styles from "./TeacherExamRequests.module.css";
 import { Modal } from "@/frontend/components/ui";
 import { createExamRequestWorkflowAction, ExamType } from "@/backend/api/actions/exams/examRequestWorkflowActions";
+import { formatClassName } from "@/lib/teacher/formatClassName";
 
 export type AvailableClass = {
   id: string;
@@ -348,7 +349,7 @@ export default function TeacherExamRequestsClient({
                   <div>
                     <h3 className={styles.cardExamTitle}>{req.title}</h3>
                     <p className={styles.cardExamMeta}>
-                      Class {req.className} - {req.section} • {req.examType.replace("_", " ")}
+                      {formatClassName(req.className, req.section)} • {req.examType.replace("_", " ")}
                     </p>
                   </div>
                   <div>
@@ -543,7 +544,7 @@ export default function TeacherExamRequestsClient({
             >
               {classes.map((cls) => (
                 <option key={cls.id} value={cls.id}>
-                  {cls.name} - {cls.section} {cls.isClassTeacher ? "(Your Assigned Class)" : ""}
+                  {formatClassName(cls.name, cls.section)} {cls.isClassTeacher ? "(Your Assigned Class)" : ""}
                 </option>
               ))}
             </select>
