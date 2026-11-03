@@ -10,3 +10,4 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 export const getCachedServerSession = cache(async () => {
   return await getServerSession(getAuthOptions());
 });
+

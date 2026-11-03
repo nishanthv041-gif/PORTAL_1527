@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
 import { createClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
@@ -9,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function SystemHealthPage() {
   const authStart = performance.now();
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
   const authLatencyMs = Math.round((performance.now() - authStart) * 100) / 100;
 
   if (!session || session.user.role !== "ADMIN") {

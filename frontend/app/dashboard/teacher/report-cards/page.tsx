@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
 import { redirect } from "next/navigation";
 import TeacherReportCardsClient, {
@@ -8,7 +7,7 @@ import TeacherReportCardsClient, {
 } from "@/frontend/components/ReportCards/TeacherReportCardsClient";
 
 export default async function TeacherReportCardsPage() {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
   if (!session) {
     redirect("/login");
   }

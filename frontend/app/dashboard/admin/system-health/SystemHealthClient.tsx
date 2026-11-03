@@ -61,10 +61,14 @@ interface DiagnosticsData {
 interface BrowserPerfMetrics {
   dnsMs: number;
   tcpMs: number;
+  tlsMs: number;
   ttfbMs: number;
+  fcpMs: number;
+  lcpMs: number;
   domInteractiveMs: number;
   domCompleteMs: number;
   transferSizeKb: number;
+  jsBundleSizeKb: number;
   decodedBodySizeKb: number;
   apiRoundtripMs: number;
 }
@@ -93,19 +97,48 @@ export default function SystemHealthClient({
         const resources = performance.getEntriesByType("resource") as PerformanceResourceTiming[];
         let totalTransfer = 0;
         let totalDecoded = 0;
+        let jsBundleTransfer = 0;
 
         resources.forEach((r) => {
           if (r.transferSize) totalTransfer += r.transferSize;
           if (r.decodedBodySize) totalDecoded += r.decodedBodySize;
+          if (r.initiatorType === "script" || r.name.includes(".js")) {
+            jsBundleTransfer += r.transferSize || 0;
+          }
         });
+
+        // First Contentful Paint (FCP)
+        let fcp = 0;
+        const paintEntries = performance.getEntriesByType("paint");
+        const fcpEntry = paintEntries.find((p) => p.name === "first-contentful-paint");
+        if (fcpEntry) {
+          fcp = Math.round(fcpEntry.startTime);
+        }
+
+        // Largest Contentful Paint (LCP) fallback from latest resource or domComplete
+        let lcp = fcp;
+        try {
+          const lcpEntries = performance.getEntriesByType("largest-contentful-paint");
+          if (lcpEntries.length > 0) {
+            lcp = Math.round(lcpEntries[lcpEntries.length - 1].startTime);
+          }
+        } catch {}
+
+        const tlsHandshake = nav.secureConnectionStart > 0
+          ? Math.max(0, Math.round(nav.connectEnd - nav.secureConnectionStart))
+          : 0;
 
         setBrowserPerf({
           dnsMs: Math.max(0, Math.round(nav.domainLookupEnd - nav.domainLookupStart)),
           tcpMs: Math.max(0, Math.round(nav.connectEnd - nav.connectStart)),
+          tlsMs: tlsHandshake,
           ttfbMs: Math.max(0, Math.round(nav.responseStart - nav.requestStart)),
+          fcpMs: fcp,
+          lcpMs: Math.max(fcp, lcp),
           domInteractiveMs: Math.max(0, Math.round(nav.domInteractive)),
           domCompleteMs: Math.max(0, Math.round(nav.domComplete)),
           transferSizeKb: Math.round((totalTransfer / 1024) * 10) / 10,
+          jsBundleSizeKb: Math.round((jsBundleTransfer / 1024) * 10) / 10,
           decodedBodySizeKb: Math.round((totalDecoded / 1024) * 10) / 10,
           apiRoundtripMs: 0,
         });
@@ -295,32 +328,46 @@ export default function SystemHealthClient({
 
           <div className={styles.metricList}>
             <div className={styles.metricRow}>
-              <span className={styles.metricName}>Time to First Byte (TTFB)</span>
-              <span className={styles.metricVal}>{browserPerf?.ttfbMs ?? "--"} ms</span>
-            </div>
-            <div className={styles.metricRow}>
               <span className={styles.metricName}>DNS Lookup Time</span>
               <span className={styles.metricVal}>{browserPerf?.dnsMs ?? "--"} ms</span>
             </div>
             <div className={styles.metricRow}>
-              <span className={styles.metricName}>TCP &amp; SSL Handshake</span>
+              <span className={styles.metricName}>TCP Connection Establishment</span>
               <span className={styles.metricVal}>{browserPerf?.tcpMs ?? "--"} ms</span>
             </div>
             <div className={styles.metricRow}>
-              <span className={styles.metricName}>DOM Interactive (Parsing Complete)</span>
-              <span className={styles.metricVal}>{browserPerf?.domInteractiveMs ?? "--"} ms</span>
+              <span className={styles.metricName}>TLS Handshake Time</span>
+              <span className={styles.metricVal}>{browserPerf?.tlsMs ?? "--"} ms</span>
             </div>
             <div className={styles.metricRow}>
-              <span className={styles.metricName}>DOM Complete (Full Page Rendered)</span>
+              <span className={styles.metricName}>Time to First Byte (TTFB)</span>
+              <span className={styles.metricVal}>{browserPerf?.ttfbMs ?? "--"} ms</span>
+            </div>
+            <div className={styles.metricRow}>
+              <span className={styles.metricName}>First Contentful Paint (FCP)</span>
+              <span className={styles.metricVal}>{browserPerf?.fcpMs ?? "--"} ms</span>
+            </div>
+            <div className={styles.metricRow}>
+              <span className={styles.metricName}>Largest Contentful Paint (LCP)</span>
+              <span className={styles.metricVal}>{browserPerf?.lcpMs ?? "--"} ms</span>
+            </div>
+            <div className={styles.metricRow}>
+              <span className={styles.metricName}>DOM Complete (Full Render)</span>
               <span className={styles.metricVal}>{browserPerf?.domCompleteMs ?? "--"} ms</span>
             </div>
             <div className={styles.metricRow}>
-              <span className={styles.metricName}>Transferred Resource Payload</span>
+              <span className={styles.metricName}>Transferred Network Payload</span>
               <span className={styles.metricVal}>{browserPerf?.transferSizeKb ?? "--"} KB</span>
             </div>
             <div className={styles.metricRow}>
-              <span className={styles.metricName}>Decoded Uncompressed Bundle Size</span>
-              <span className={styles.metricVal}>{browserPerf?.decodedBodySizeKb ?? "--"} KB</span>
+              <span className={styles.metricName}>Transferred JavaScript Bundle Size</span>
+              <span className={styles.metricVal}>{browserPerf?.jsBundleSizeKb ?? "--"} KB</span>
+            </div>
+            <div className={styles.metricRow}>
+              <span className={styles.metricName}>Failed Network Requests</span>
+              <span className={styles.metricVal} style={{ color: errorCount > 0 ? "var(--danger)" : "var(--success)" }}>
+                {errorCount}
+              </span>
             </div>
             {browserPerf?.apiRoundtripMs ? (
               <div className={styles.metricRow} style={{ background: "rgba(59, 130, 246, 0.08)", padding: "0.5rem 0.75rem", borderRadius: "6px" }}>

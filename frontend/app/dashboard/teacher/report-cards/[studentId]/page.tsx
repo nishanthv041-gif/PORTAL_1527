@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
 import IndividualReportCardClient from "@/frontend/components/ReportCards/IndividualReportCardClient";
 
@@ -8,32 +7,33 @@ export default async function TeacherIndividualReportCardPage({
 }: { 
   params: Promise<{ studentId: string }> 
 }) {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
   if (!session || session.user.role !== "TEACHER") return null;
 
   const { studentId } = await params;
 
   // Verify the teacher teaches this student's class
-  const teacher = await prisma.teacher.findUnique({
-    where: { userId: session.user.id },
-    include: { classes: true }
-  });
-
-  const student = await prisma.student.findUnique({
-    where: { id: studentId },
-    include: {
-      class: true,
-      parents: {
-        include: {
-          parent: {
-            include: {
-              user: true
+  const [teacher, student] = await Promise.all([
+    prisma.teacher.findUnique({
+      where: { userId: session.user.id },
+      include: { classes: true }
+    }),
+    prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        class: true,
+        parents: {
+          include: {
+            parent: {
+              include: {
+                user: true
+              }
             }
           }
         }
       }
-    }
-  });
+    })
+  ]);
 
   if (!student || !student.class || !teacher) {
     return <div style={{ padding: '2rem' }}>Student not found.</div>;
@@ -44,22 +44,20 @@ export default async function TeacherIndividualReportCardPage({
     return <div style={{ padding: '2rem', color: 'var(--danger)' }}>Unauthorized. You do not teach this student&apos;s class.</div>;
   }
 
-  // Fetch all exams for this class
-  const exams = await prisma.exam.findMany({
-    where: { classId: student.classId! },
-    orderBy: { date: 'asc' }
-  });
-
-  // Fetch all subjects for this class
-  const subjects = await prisma.subject.findMany({
-    where: { classId: student.classId! },
-    orderBy: { name: 'asc' }
-  });
-
-  // Fetch marks for this student
-  const marks = await prisma.mark.findMany({
-    where: { studentId: studentId }
-  });
+  // Fetch all exams, subjects, and marks in parallel
+  const [exams, subjects, marks] = await Promise.all([
+    prisma.exam.findMany({
+      where: { classId: student.classId! },
+      orderBy: { date: 'asc' }
+    }),
+    prisma.subject.findMany({
+      where: { classId: student.classId! },
+      orderBy: { name: 'asc' }
+    }),
+    prisma.mark.findMany({
+      where: { studentId: studentId }
+    })
+  ]);
 
   const parentAccounts = student.parents;
 

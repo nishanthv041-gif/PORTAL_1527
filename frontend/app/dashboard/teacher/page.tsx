@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
 import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
 import styles from "../dashboard.module.css";
@@ -11,7 +10,7 @@ const DAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", 
 import { getTeacherByUserId } from "./teacherHelper";
 
 export default async function TeacherDashboard() {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
 
   if (!session) return null;
 
