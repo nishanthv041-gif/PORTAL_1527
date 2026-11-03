@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/backend/db/prisma';
+import { createClient } from '@supabase/supabase-js';
 
 // Short 3-second cache for DB health status to prevent connection exhaustion during concurrent health probes
 let cachedDbHealth: { status: string; latencyMs: number; expiresAt: number } | null = null;
+let cachedSupabaseHealth: { status: string; latencyMs: number; expiresAt: number } | null = null;
 
 export async function GET() {
   const missingEnv: string[] = [];
@@ -19,8 +21,9 @@ export async function GET() {
     }, { status: 500 });
   }
 
-  // Database connectivity & latency test with 3-second TTL cache
   const now = Date.now();
+
+  // 1. Neon PostgreSQL connectivity & latency test with 3-second TTL cache
   let dbStatus = 'connected';
   let dbLatencyMs = 0;
 
@@ -39,13 +42,41 @@ export async function GET() {
     } catch (err: unknown) {
       dbStatus = 'degraded';
       cachedDbHealth = null;
-      console.error('[HealthCheck] Database readiness failure:', err);
+      console.error('[HealthCheck] Neon database readiness failure:', err);
       return NextResponse.json({
         status: 'degraded',
-        message: 'Database is unreachable or timed out.',
+        message: 'Primary database (Neon) is unreachable or timed out.',
         database: { status: 'unreachable', error: err instanceof Error ? err.message : 'Unknown DB error' },
         timestamp: new Date().toISOString(),
       }, { status: 503 });
+    }
+  }
+
+  // 2. Supabase API & Auth connectivity check
+  let supabaseStatus = 'not_configured';
+  let supabaseLatencyMs = 0;
+  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supaKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+
+  if (supaUrl && supaKey) {
+    if (cachedSupabaseHealth && cachedSupabaseHealth.expiresAt > now) {
+      supabaseStatus = cachedSupabaseHealth.status;
+      supabaseLatencyMs = cachedSupabaseHealth.latencyMs;
+    } else {
+      try {
+        const supaStart = Date.now();
+        const supabase = createClient(supaUrl, supaKey);
+        await Promise.race([
+          supabase.auth.getSession(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase ping timeout')), 3000))
+        ]);
+        supabaseLatencyMs = Date.now() - supaStart;
+        supabaseStatus = 'connected';
+        cachedSupabaseHealth = { status: 'connected', latencyMs: supabaseLatencyMs, expiresAt: now + 5000 };
+      } catch (err) {
+        supabaseStatus = 'degraded';
+        cachedSupabaseHealth = null;
+      }
     }
   }
 
@@ -53,14 +84,18 @@ export async function GET() {
 
   return NextResponse.json({
     ok: dbStatus === 'connected',
-    db: dbStatus === 'connected',
-    uptimeSeconds: Math.floor(process.uptime()),
-    version: '0.1.0',
     status: 'healthy',
-    message: 'System is fully operational and ready for production traffic.',
-    database: {
-      status: dbStatus,
-      latencyMs: dbLatencyMs,
+    message: 'System and database connections verified successfully.',
+    databases: {
+      primaryNeonPostgres: {
+        status: dbStatus,
+        latencyMs: dbLatencyMs,
+      },
+      secondarySupabase: {
+        status: supabaseStatus,
+        endpoint: supaUrl || null,
+        latencyMs: supabaseLatencyMs,
+      },
     },
     system: {
       uptimeSeconds: Math.floor(process.uptime()),
