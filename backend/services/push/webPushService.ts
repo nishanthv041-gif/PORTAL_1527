@@ -42,7 +42,7 @@ export interface PushPayload {
 export async function sendPushToSubscription(
   sub: {
     id: string;
-    userId: string;
+    userId?: string | null;
     endpoint: string;
     p256dh: string;
     auth: string;
@@ -83,7 +83,7 @@ export async function sendPushToSubscription(
     );
 
     // Record successful delivery attempt
-    if (notificationId) {
+    if (notificationId && sub.userId) {
       await prisma.notificationDeliveryLog.create({
         data: {
           notificationId,
@@ -108,7 +108,7 @@ export async function sendPushToSubscription(
     }
 
     // Record failed delivery attempt
-    if (notificationId) {
+    if (notificationId && sub.userId) {
       await prisma.notificationDeliveryLog.create({
         data: {
           notificationId,

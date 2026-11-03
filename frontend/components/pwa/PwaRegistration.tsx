@@ -49,6 +49,31 @@ export default function PwaRegistration() {
             };
           }
         };
+
+        // If push permission is already granted, ensure subscription is synced with current session
+        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+          navigator.serviceWorker.ready.then(async (readyReg) => {
+            try {
+              const sub = await readyReg.pushManager.getSubscription();
+              if (sub) {
+                const raw = sub.toJSON();
+                const p256dh = raw.keys?.p256dh;
+                const auth = raw.keys?.auth;
+                if (p256dh && auth) {
+                  await fetch("/api/notifications/push/subscribe", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      endpoint: sub.endpoint,
+                      keys: { p256dh, auth },
+                      userAgent: navigator.userAgent,
+                    }),
+                  }).catch(() => {});
+                }
+              }
+            } catch {}
+          });
+        }
       } catch (err) {
         console.warn("[PWA] Service worker registration deferred:", err);
       }

@@ -3,70 +3,122 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 
+function detectPlatform(userAgent?: string | null): string {
+  if (!userAgent) return "Web";
+  const ua = userAgent.toLowerCase();
+  if (ua.includes("android")) return "Android";
+  if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ipod")) return "iOS";
+  if (ua.includes("windows")) return "Windows";
+  if (ua.includes("macintosh") || ua.includes("mac os x")) return "macOS";
+  if (ua.includes("linux")) return "Linux";
+  return "Web";
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(getAuthOptions());
-    if (!session || !session.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const authenticatedUserId = session?.user?.id || null;
 
-    const body = await req.json();
-    const { endpoint, keys, userAgent, deviceName } = body;
-
-    if (!endpoint || !keys || !keys.p256dh || !keys.auth) {
+    const body = await req.json().catch(() => null);
+    if (!body) {
       return NextResponse.json(
-        { error: "Invalid subscription payload. Missing endpoint or keys." },
+        { error: "Invalid JSON request payload." },
         { status: 400 }
       );
     }
 
-    // Upsert subscription for the current user
+    const { endpoint, keys, userAgent, deviceName, platform: rawPlatform } = body;
+
+    if (!endpoint || typeof endpoint !== "string") {
+      return NextResponse.json(
+        { error: "Missing or invalid subscription endpoint." },
+        { status: 400 }
+      );
+    }
+
+    if (!keys || typeof keys !== "object" || !keys.p256dh || !keys.auth) {
+      return NextResponse.json(
+        { error: "Invalid encryption keys. Both p256dh and auth are required." },
+        { status: 400 }
+      );
+    }
+
+    const detectedPlatform = rawPlatform || detectPlatform(userAgent);
+    const resolvedDeviceName = deviceName || `${detectedPlatform} PWA`;
+
+    // 1. Check if a subscription with this endpoint already exists
+    const existingSub = await prisma.pushSubscription.findUnique({
+      where: { endpoint },
+    });
+
+    // Determine final userId:
+    // If user is currently logged in, bind to them.
+    // If user is NOT logged in, keep existing userId if already bound, otherwise null.
+    const finalUserId = authenticatedUserId || existingSub?.userId || null;
+
     const subscription = await prisma.pushSubscription.upsert({
       where: { endpoint },
       create: {
-        userId: session.user.id,
+        userId: finalUserId,
         endpoint,
         p256dh: keys.p256dh,
         auth: keys.auth,
         userAgent: userAgent || null,
-        deviceName: deviceName || "Web Browser",
+        deviceName: resolvedDeviceName,
+        platform: detectedPlatform,
+        isActive: true,
+        lastUsedAt: new Date(),
       },
       update: {
-        userId: session.user.id,
+        ...(finalUserId ? { userId: finalUserId } : {}),
         p256dh: keys.p256dh,
         auth: keys.auth,
         userAgent: userAgent || null,
-        deviceName: deviceName || "Web Browser",
+        deviceName: resolvedDeviceName,
+        platform: detectedPlatform,
+        isActive: true,
+        lastUsedAt: new Date(),
       },
     });
 
-    // Ensure user has default NotificationPreference record
-    await prisma.notificationPreference.upsert({
-      where: { userId: session.user.id },
-      create: {
-        userId: session.user.id,
-        enabled: true,
-        general: true,
-        account: true,
-        alerts: true,
-        academic: true,
-        admin: true,
-        maintenance: true,
-      },
-      update: {},
-    });
+    // 2. If user is authenticated, ensure default notification preferences exist
+    if (finalUserId) {
+      await prisma.notificationPreference.upsert({
+        where: { userId: finalUserId },
+        create: {
+          userId: finalUserId,
+          enabled: true,
+          general: true,
+          account: true,
+          alerts: true,
+          academic: true,
+          admin: true,
+          maintenance: true,
+        },
+        update: {},
+      }).catch((err) => {
+        console.warn("[Push API] Could not upsert preferences:", err);
+      });
+    }
 
     return NextResponse.json({
       success: true,
       subscriptionId: subscription.id,
-      message: "Push subscription registered successfully.",
+      associatedUser: !!finalUserId,
+      platform: detectedPlatform,
+      message: finalUserId
+        ? "Notifications enabled successfully!"
+        : "Notifications enabled successfully! Device registered for system alerts.",
     });
   } catch (error: unknown) {
+    const errMessage = error instanceof Error ? error.message : "Internal server error";
     console.error("[Push API] Subscribe error:", error);
     return NextResponse.json(
-      { error: "Internal server error while registering subscription." },
+      {
+        error: "Database error while registering subscription.",
+        details: process.env.NODE_ENV === "development" ? errMessage : undefined,
+      },
       { status: 500 }
     );
   }
 }
-

@@ -125,3 +125,4 @@ export async function checkUserInactivity(userId: string): Promise<{
     return { isInactive24h: true, hoursSinceLogin: 999, lastLoginAt: null };
   }
 }
+

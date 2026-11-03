@@ -963,19 +963,23 @@ model Notification {
 }
 
 model PushSubscription {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  endpoint   String   @unique
+  id         String    @id @default(cuid())
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint   String    @unique
   p256dh     String
   auth       String
   userAgent  String?
   deviceName String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  platform   String?
+  isActive   Boolean   @default(true)
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   @@index([userId])
   @@index([endpoint])
+  @@index([userId, isActive])
 }
 
 model NotificationPreference {

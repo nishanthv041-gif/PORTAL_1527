@@ -108,17 +108,36 @@ export default function PwaWelcomeNotificationPrompt() {
         });
       }
 
-      // 5. Send subscription to backend API to associate with current user
+      // 5. Send subscription to backend API to register device
       const rawSub = subscription.toJSON();
+      let p256dh = rawSub.keys?.p256dh;
+      let auth = rawSub.keys?.auth;
+
+      if ((!p256dh || !auth) && subscription.getKey) {
+        try {
+          const rawKey = subscription.getKey("p256dh");
+          if (rawKey) {
+            p256dh = btoa(String.fromCharCode(...new Uint8Array(rawKey)))
+              .replace(/\+/g, "-")
+              .replace(/\//g, "_")
+              .replace(/=+$/, "");
+          }
+          const rawAuth = subscription.getKey("auth");
+          if (rawAuth) {
+            auth = btoa(String.fromCharCode(...new Uint8Array(rawAuth)))
+              .replace(/\+/g, "-")
+              .replace(/\//g, "_")
+              .replace(/=+$/, "");
+          }
+        } catch {}
+      }
+
       const res = await fetch("/api/notifications/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           endpoint: subscription.endpoint,
-          keys: {
-            p256dh: rawSub.keys?.p256dh,
-            auth: rawSub.keys?.auth,
-          },
+          keys: { p256dh, auth },
           userAgent: navigator.userAgent,
           deviceName: navigator.userAgent.includes("Android")
             ? "Android PWA"
@@ -128,9 +147,18 @@ export default function PwaWelcomeNotificationPrompt() {
         }),
       });
 
+      const resData = await res.json().catch(() => null);
+
       if (!res.ok) {
-        throw new Error("Failed to register subscription with server.");
+        throw new Error(
+          resData?.error || `Registration failed with server status ${res.status}.`
+        );
       }
+
+      // Store endpoint locally so it can be associated automatically on login
+      try {
+        localStorage.setItem("nipo_pwa_push_endpoint", subscription.endpoint);
+      } catch {}
 
       setIsSuccess(true);
       setLoading(false);
@@ -194,7 +222,7 @@ export default function PwaWelcomeNotificationPrompt() {
           {isSuccess ? (
             <div className={styles.successCard}>
               <CheckCircle2 size={20} color="#059669" />
-              <span>Notifications enabled! System notifications will now arrive on your device.</span>
+              <span>Notifications enabled successfully!</span>
             </div>
           ) : errorMsg ? (
             <div style={{ color: "#ef4444", fontSize: "0.875rem", marginTop: "0.75rem" }}>
