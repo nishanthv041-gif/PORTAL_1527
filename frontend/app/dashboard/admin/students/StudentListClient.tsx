@@ -654,6 +654,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
                           </button>
                           <Link
                             href={`/dashboard/teacher/report-cards?studentId=${student.id}`}
+                            prefetch={false}
                             style={{
                               padding: "0.35rem 0.65rem",
                               borderRadius: "6px",
@@ -814,6 +815,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
 
                   <Link
                     href={`/dashboard/teacher/report-cards?studentId=${student.id}`}
+                    prefetch={false}
                     style={{
                       padding: "0.45rem 0.65rem",
                       borderRadius: "6px",

@@ -711,6 +711,7 @@ export default function ClassListClient({
               <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)', flexWrap: 'wrap' }}>
                 <Link 
                   href={`/dashboard/admin?classId=${sections[0]?.id}`} 
+                  prefetch={false}
                   style={{ 
                     flex: '1 1 90px', 
                     textAlign: 'center', 

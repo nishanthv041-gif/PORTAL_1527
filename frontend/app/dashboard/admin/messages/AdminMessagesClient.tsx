@@ -506,6 +506,7 @@ export default function AdminMessagesClient({
                   <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "0.75rem", display: "flex", justifyContent: "flex-end" }}>
                     <Link
                       href={`/dashboard/admin/messages/${teacher.id}`}
+                      prefetch={false}
                       style={{
                         padding: "0.5rem 1rem",
                         borderRadius: "8px",
@@ -639,6 +640,7 @@ export default function AdminMessagesClient({
                   <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "0.75rem", display: "flex", justifyContent: "flex-end" }}>
                     <Link
                       href={`/dashboard/admin/messages/${parent.id}`}
+                      prefetch={false}
                       style={{
                         padding: "0.5rem 1rem",
                         borderRadius: "8px",

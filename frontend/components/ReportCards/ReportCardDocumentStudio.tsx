@@ -779,14 +779,14 @@ export default function ReportCardDocumentStudio({
   };
 
   // Download Pre-Filled Excel Template
-  const handleDownloadExcelTemplate = () => {
+  const handleDownloadExcelTemplate = async () => {
     try {
       if (!currentClass) {
         setGlobalError("Please select a target class first.");
         return;
       }
 
-      const excelBytes = generateClassReportCardExcelTemplate({
+      const excelBytes = await generateClassReportCardExcelTemplate({
         className: currentClass.name,
         section: currentClass.section,
         examName: examName || "Class Examination",

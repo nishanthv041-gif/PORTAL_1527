@@ -89,11 +89,22 @@ export default async function ParentDashboard({
     selectedChild.classId
       ? prisma.timetable.findMany({
           where: { classId: selectedChild.classId },
-          include: {
+          select: {
+            id: true,
+            dayOfWeek: true,
+            period: true,
+            startTime: true,
+            endTime: true,
+            isBreak: true,
+            classroom: true,
             subject: {
-              include: {
+              select: {
+                id: true,
+                name: true,
                 teacher: {
-                  include: { user: { select: { name: true } } },
+                  select: {
+                    user: { select: { name: true } },
+                  },
                 },
               },
             },
@@ -240,7 +251,7 @@ export default async function ParentDashboard({
         {/* 1. Student Attendance Percentage */}
         <Link
           href={`/dashboard/parent/attendance?childId=${selectedChild.id}`}
-          prefetch={true}
+          prefetch={false}
           className={`${styles.statCard} ${styles.statPercentage}`}
         >
           <div className={styles.statIcon}>
@@ -255,7 +266,7 @@ export default async function ParentDashboard({
         {/* 2. Total Presented Days */}
         <Link
           href={`/dashboard/parent/attendance?childId=${selectedChild.id}`}
-          prefetch={true}
+          prefetch={false}
           className={`${styles.statCard} ${styles.statPresent}`}
         >
           <div className={styles.statIcon}>
@@ -270,7 +281,7 @@ export default async function ParentDashboard({
         {/* 3. Absented Days */}
         <Link
           href={`/dashboard/parent/attendance?childId=${selectedChild.id}`}
-          prefetch={true}
+          prefetch={false}
           className={`${styles.statCard} ${styles.statAbsent}`}
         >
           <div className={styles.statIcon}>
@@ -285,7 +296,7 @@ export default async function ParentDashboard({
         {/* 4. Enrolled Class (Class Details) */}
         <Link
           href={`/dashboard/parent/classes?childId=${selectedChild.id}`}
-          prefetch={true}
+          prefetch={false}
           className={`${styles.statCard} ${styles.statClass}`}
         >
           <div className={styles.statIcon}>
@@ -302,7 +313,7 @@ export default async function ParentDashboard({
         {/* 5. Total Subjects */}
         <Link
           href={`/dashboard/parent/classes?childId=${selectedChild.id}`}
-          prefetch={true}
+          prefetch={false}
           className={`${styles.statCard} ${styles.statSubjects}`}
         >
           <div className={styles.statIcon}>
@@ -361,7 +372,7 @@ export default async function ParentDashboard({
 
           <Link
             href={`/dashboard/parent/attendance?childId=${selectedChild.id}`}
-            prefetch={true}
+            prefetch={false}
             className={styles.viewAttendanceBtn}
           >
             <span>View Full Attendance</span>
@@ -451,7 +462,7 @@ export default async function ParentDashboard({
             </p>
             <Link
               href={`/dashboard/parent/attendance?childId=${selectedChild.id}`}
-              prefetch={true}
+              prefetch={false}
               className={styles.viewAttendanceBtn}
               style={{ display: "inline-flex" }}
             >

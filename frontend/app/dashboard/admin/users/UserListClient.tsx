@@ -278,6 +278,7 @@ export default function UserListClient({
                       {user.role === 'TEACHER' && user.teacher && (
                         <Link 
                           href={`/dashboard/admin/teachers?id=${user.teacher.id}`} 
+                          prefetch={false}
                           onClick={() => setOpenMenuId(null)}
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}
                         >
@@ -287,6 +288,7 @@ export default function UserListClient({
                       {user.role === 'PARENT' && user.parent && (
                         <Link 
                           href={`/dashboard/admin/parents?id=${user.parent.id}`} 
+                          prefetch={false}
                           onClick={() => setOpenMenuId(null)}
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}
                         >

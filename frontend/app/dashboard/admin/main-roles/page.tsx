@@ -49,7 +49,7 @@ export default async function MainRolesPage() {
       <div>
         <p className={styles.sectionTitle}>Timetable Scheduling &amp; Substitution</p>
         <Link
-          href="/dashboard/admin/timetable"
+          href="/dashboard/admin/timetable" prefetch={false}
           className={styles.featuredCard}
           style={{ maxWidth: "600px" }}
         >
@@ -73,7 +73,7 @@ export default async function MainRolesPage() {
         <p className={styles.sectionTitle}>Roles &amp; Operations</p>
         <div className={styles.rolesGrid}>
           {roleLinks.map((link) => (
-            <Link key={link.href} href={link.href} className={styles.roleCard}>
+            <Link key={link.href} href={link.href} prefetch={false} className={styles.roleCard}>
               <div
                 className={styles.roleIcon}
                 style={{ color: link.color, backgroundColor: link.bg }}

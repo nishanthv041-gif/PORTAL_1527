@@ -1,5 +1,3 @@
-import * as XLSX from "xlsx";
-
 export interface StudentTemplateData {
   id: string;
   rollNumber: string;
@@ -58,10 +56,11 @@ export interface ExcelValidationResult {
 /**
  * Generates an Excel template (.xlsx) for the given exam subject task
  */
-export function generateMarksExcelTemplate(
+export async function generateMarksExcelTemplate(
   task: TaskMetadata,
   students: StudentTemplateData[]
-): Uint8Array {
+): Promise<Uint8Array> {
+  const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
 
   // 1. Prepare Header rows with explicit metadata header for class/subject verification
@@ -111,6 +110,7 @@ export async function parseAndValidateMarksExcel(
   task: TaskMetadata,
   students: StudentTemplateData[]
 ): Promise<ExcelValidationResult> {
+  const XLSX = await import("xlsx");
   const data = await file.arrayBuffer();
   const wb = XLSX.read(data, { type: "array" });
 
@@ -305,13 +305,14 @@ export async function parseAndValidateMarksExcel(
  * Generates an Excel template (.xlsx) for an entire class report card / marks sheet
  * Pre-filled with real student names, roll numbers, and subject columns.
  */
-export function generateClassReportCardExcelTemplate(params: {
+export async function generateClassReportCardExcelTemplate(params: {
   className: string;
   section: string;
   examName: string;
   subjects: Array<{ id: string; name: string; maxMarks?: number; passMarks?: number }>;
   students: Array<{ id: string; rollNumber: string; name: string }>;
-}): Uint8Array {
+}): Promise<Uint8Array> {
+  const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
 
   // Header rows

@@ -145,6 +145,7 @@ export default async function TeacherDashboard() {
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <Link
             href="/dashboard/teacher/timetable"
+            prefetch={false}
             style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 1rem", borderRadius: "8px", background: "var(--primary)", color: "var(--primary-fg)", textDecoration: "none", fontSize: "0.85rem", fontWeight: 600 }}
           >
             <CalendarIcon size={16} /> View Full Timetable

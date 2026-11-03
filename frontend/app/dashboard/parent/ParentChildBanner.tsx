@@ -184,7 +184,7 @@ export default function ParentChildBanner({
           {activePage !== "classes" && (
             <Link
               href={`/dashboard/parent/classes?childId=${currentChild.id}`}
-              prefetch={true}
+              prefetch={false}
               className={`${styles.actionBtn} ${styles.actionBtnPrimary}`}
             >
               <GraduationCap size={16} />
@@ -195,7 +195,7 @@ export default function ParentChildBanner({
           {activePage !== "dashboard" && (
             <Link
               href={`/dashboard/parent?childId=${currentChild.id}`}
-              prefetch={true}
+              prefetch={false}
               className={`${styles.actionBtn} ${styles.actionBtnSecondary}`}
             >
               <LayoutDashboard size={16} />

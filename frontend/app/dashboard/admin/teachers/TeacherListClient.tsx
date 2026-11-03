@@ -539,6 +539,7 @@ export default function TeacherListClient({
 
                   <Link
                     href={`/dashboard/admin/timetable?weekOf=${new Date().toISOString().split("T")[0]}`}
+                    prefetch={false}
                     onClick={(e) => e.stopPropagation()}
                     style={{
                       display: "inline-flex",

@@ -33,6 +33,7 @@ import {
   AlertOctagon,
   Layers,
   Bus,
+  Activity,
   X
 } from "lucide-react";
 
@@ -66,6 +67,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     { href: "/dashboard/admin/teacher-attendance", label: "Teacher Attendance", icon: <UserCheck size={20} /> },
     { href: "/admin/buses", label: "Bus Details & Fleet", icon: <Bus size={20} /> },
     { href: "/dashboard/admin/activity-centre", label: "Activity Centre", icon: <Star size={20} /> },
+    { href: "/dashboard/admin/system-health", label: "System Health & Monitor", icon: <Activity size={20} /> },
     { href: "/dashboard/admin/users", label: "User Management", icon: <UserCheck size={20} /> },
     { href: "/dashboard/admin/create-roles", label: "Create New Roles", icon: <UserPlus size={20} /> },
     { href: "/dashboard/admin/login-status", label: "Log In Status", icon: <Clock size={20} /> },

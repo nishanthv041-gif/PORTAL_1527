@@ -1,5 +1,3 @@
-import * as XLSX from "xlsx";
-
 export interface ConsolidatedExportSubject {
   id: string;
   subjectName: string;
@@ -19,7 +17,7 @@ export interface ConsolidatedExportStudent {
   result: string;
 }
 
-export function exportConsolidatedMarksToExcel(
+export async function exportConsolidatedMarksToExcel(
   examName: string,
   className: string,
   section: string,
@@ -27,6 +25,7 @@ export function exportConsolidatedMarksToExcel(
   students: ConsolidatedExportStudent[],
   academicYear: string = "2025-2026"
 ) {
+  const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
 
   // 1. School Header block (Standardized)

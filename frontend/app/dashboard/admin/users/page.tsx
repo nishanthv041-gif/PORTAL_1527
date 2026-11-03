@@ -13,9 +13,20 @@ export default async function AdminUsersPage() {
 
   const users = await prisma.user.findMany({
     orderBy: { createdAt: 'desc' },
-    include: {
-      teacher: true,
-      parent: true,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      status: true,
+      expiresAt: true,
+      createdAt: true,
+      teacher: {
+        select: { id: true, phone: true }
+      },
+      parent: {
+        select: { id: true, phone: true }
+      },
       sessions: {
         where: { revokedAt: null, expiresAt: { gt: new Date() } },
         select: { id: true, deviceInfo: true, ipAddress: true, lastActiveAt: true, createdAt: true },
@@ -38,7 +49,7 @@ export default async function AdminUsersPage() {
         <p style={{ color: 'var(--text-secondary)' }}>To create new users, please use the &quot;Create New Roles&quot; section in the sidebar.</p>
       </div>
 
-      <UserListClient users={users} isCurrentUserSuperAdmin={isCurrentUserSuperAdmin} />
+      <UserListClient users={users as any} isCurrentUserSuperAdmin={isCurrentUserSuperAdmin} />
     </div>
   );
 }

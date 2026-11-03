@@ -68,7 +68,7 @@ export default function ExamClassPerformancePieChart({
           {childId && (
             <Link 
               href={`/dashboard/parent/exams?childId=${childId}`}
-              prefetch={true}
+              prefetch={false}
               className={styles.viewExamsLink}
             >
               <span>View All Exams</span>
@@ -86,7 +86,7 @@ export default function ExamClassPerformancePieChart({
           {childId && (
             <Link 
               href={`/dashboard/parent/exams?childId=${childId}`}
-              prefetch={true}
+              prefetch={false}
               className={styles.viewExamsLink}
               style={{ display: "inline-flex" }}
             >
@@ -126,7 +126,7 @@ export default function ExamClassPerformancePieChart({
         {childId && (
           <Link 
             href={`/dashboard/parent/exams?childId=${childId}`}
-            prefetch={true}
+            prefetch={false}
             className={styles.viewExamsLink}
           >
             <span>View All Exams</span>

@@ -46,6 +46,7 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
         </div>
         <Link
           href="/dashboard/admin/exams/requests"
+          prefetch={false}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -180,6 +181,7 @@ export default function ExamsClient({ exams, examRequests }: { exams: ExamWithRe
                   </h3>
                   <Link
                     href={`/dashboard/teacher/exams/${exam.id}/review`}
+                    prefetch={false}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',

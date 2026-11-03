@@ -276,6 +276,7 @@ export default function ParentListClient({
                       }}>
                         <Link 
                           href={`/dashboard/admin/parents/${parent.id}`} 
+                          prefetch={false}
                           onClick={() => setOpenMenuId(null)}
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'inherit', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px' }}
                         >

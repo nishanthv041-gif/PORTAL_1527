@@ -172,7 +172,7 @@ export default function ExamSubjectMarksWorkspaceClient({
   };
 
   // 1. Download Excel Template
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
     const meta: TaskMetadata = {
       id: task.id,
       examId: task.examId,
@@ -195,7 +195,7 @@ export default function ExamSubjectMarksWorkspaceClient({
       remark: e.remark,
     }));
 
-    const buffer = generateMarksExcelTemplate(meta, studentsData);
+    const buffer = await generateMarksExcelTemplate(meta, studentsData);
     const blob = new Blob([buffer as any], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });

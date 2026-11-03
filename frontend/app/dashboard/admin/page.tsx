@@ -174,6 +174,8 @@ export default async function AdminDashboardPage({
         prisma.mark.findMany({
           where: { student: { classId } },
           select: { studentId: true, examId: true, score: true, maxScore: true },
+          take: 500,
+          orderBy: { createdAt: 'desc' },
         }),
       ]);
 
@@ -229,7 +231,7 @@ export default async function AdminDashboardPage({
       <h1 className={styles.title}>Admin Dashboard</h1>
 
       <div className={styles.statsGrid}>
-        <Link href="/dashboard/admin/students" style={{ textDecoration: 'none', color: 'inherit' }}>
+        <Link href="/dashboard/admin/students" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className={styles.statCard}>
             <div className={styles.statIcon} style={{ backgroundColor: "var(--primary-bg)", color: "var(--primary)" }}>
               <Users size={24} />
@@ -240,7 +242,7 @@ export default async function AdminDashboardPage({
             </div>
           </div>
         </Link>
-        <Link href="/dashboard/admin/teachers" style={{ textDecoration: 'none', color: 'inherit' }}>
+        <Link href="/dashboard/admin/teachers" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className={styles.statCard}>
             <div className={styles.statIcon} style={{ backgroundColor: "var(--success-bg)", color: "var(--success)" }}>
               <Briefcase size={24} />
@@ -251,7 +253,7 @@ export default async function AdminDashboardPage({
             </div>
           </div>
         </Link>
-        <Link href="/dashboard/admin/parents" style={{ textDecoration: 'none', color: 'inherit' }}>
+        <Link href="/dashboard/admin/parents" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className={styles.statCard}>
             <div className={styles.statIcon} style={{ backgroundColor: "var(--warning-bg)", color: "var(--warning)" }}>
               <Users size={24} />
@@ -262,7 +264,7 @@ export default async function AdminDashboardPage({
             </div>
           </div>
         </Link>
-        <Link href="/dashboard/admin/classes" style={{ textDecoration: 'none', color: 'inherit' }}>
+        <Link href="/dashboard/admin/classes" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className={styles.statCard}>
             <div className={styles.statIcon} style={{ backgroundColor: "rgba(139, 92, 246, 0.1)", color: "#8b5cf6" }}>
               <GraduationCap size={24} />
@@ -273,7 +275,7 @@ export default async function AdminDashboardPage({
             </div>
           </div>
         </Link>
-        <Link href="/dashboard/admin/subjects" style={{ textDecoration: 'none', color: 'inherit' }}>
+        <Link href="/dashboard/admin/subjects" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className={styles.statCard}>
             <div className={styles.statIcon} style={{ backgroundColor: "rgba(236, 72, 153, 0.1)", color: "#ec4899" }}>
               <BookOpen size={24} />
@@ -284,7 +286,7 @@ export default async function AdminDashboardPage({
             </div>
           </div>
         </Link>
-        <Link href="/dashboard/admin/teacher-attendance" style={{ textDecoration: 'none', color: 'inherit' }}>
+        <Link href="/dashboard/admin/teacher-attendance" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className={styles.statCard}>
             <div className={styles.statIcon} style={{ backgroundColor: "var(--success-bg)", color: "var(--success)" }}>
               <UserCheck size={24} />
