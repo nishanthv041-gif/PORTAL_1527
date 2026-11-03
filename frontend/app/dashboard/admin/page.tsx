@@ -1,6 +1,5 @@
 import dynamic from "next/dynamic";
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../dashboard.module.css";
 import { Users, GraduationCap, BookOpen, Briefcase, Mail, Phone, CheckCircle2, XCircle, UserCheck } from "lucide-react";
@@ -44,7 +43,7 @@ export default async function AdminDashboardPage({
 }: {
   searchParams: Promise<{ classId?: string; page?: string }>;
 }) {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
   if (!session || session.user.role !== "ADMIN") return null;
 
   const resolvedSearchParams = await searchParams;

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { redirect } from "next/navigation";
 import Sidebar from "@/frontend/components/Sidebar";
 import Topbar from "@/frontend/components/Topbar";
@@ -31,7 +30,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
 
   if (!session) {
     redirect("/login");

@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
+import NavigationProgressBar from "@/frontend/components/NavigationProgressBar";
 import { ThemeProvider } from "@/frontend/components/ThemeProvider";
 import { ConfirmDialogProvider } from "@/frontend/components/ui/ConfirmDialog";
 import SessionGuard from "@/frontend/components/auth/SessionGuard";
@@ -154,7 +154,7 @@ export default async function RootLayout({
   let initialTheme = defaultThemeMode === "system" ? "light" : defaultThemeMode; // fallback for server render
   let isAuthenticated = false;
 
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
   if (session?.user) {
     isAuthenticated = true;
     if (session.user.theme) {
@@ -212,6 +212,7 @@ export default async function RootLayout({
         />
       </head>
       <body suppressHydrationWarning>
+        <NavigationProgressBar />
         <ThemeProvider
           initialTheme={initialTheme}
           isAuthenticated={isAuthenticated}

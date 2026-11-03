@@ -82,10 +82,28 @@ export async function GET() {
 
   const memory = process.memoryUsage();
 
+  const isPrimaryOk = dbStatus === 'connected';
+  const isSecondaryOk = supabaseStatus === 'connected';
+  const currentMode = isPrimaryOk ? 'normal' : isSecondaryOk ? 'limited' : 'unavailable';
+
   return NextResponse.json({
-    ok: dbStatus === 'connected',
-    status: 'healthy',
-    message: 'System and database connections verified successfully.',
+    ok: isPrimaryOk || isSecondaryOk,
+    mode: currentMode,
+    status: isPrimaryOk ? 'healthy' : isSecondaryOk ? 'limited_mode' : 'degraded',
+    message: isPrimaryOk
+      ? 'System and primary database operating normally.'
+      : 'Primary database offline. Limited read mode active via secondary replica.',
+    primary: {
+      ok: isPrimaryOk,
+      status: dbStatus,
+      latencyMs: dbLatencyMs,
+    },
+    secondary: {
+      ok: isSecondaryOk,
+      status: supabaseStatus,
+      endpoint: supaUrl || null,
+      latencyMs: supabaseLatencyMs,
+    },
     databases: {
       primaryNeonPostgres: {
         status: dbStatus,

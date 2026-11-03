@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { redirect } from "next/navigation";
 
 export default async function ParentLayout({
@@ -7,7 +6,7 @@ export default async function ParentLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
 
   if (!session) {
     redirect("/login");

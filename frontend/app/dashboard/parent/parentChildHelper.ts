@@ -1,6 +1,5 @@
 import { cache } from "react";
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
 import { cookies } from "next/headers";
 
@@ -43,7 +42,7 @@ export function invalidateParentRecordCache(userId?: string) {
 }
 
 export const getParentAndSelectedChild = cache(async (searchParamsChildId?: string) => {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
   if (!session) return { session: null, parent: null, children: [], selectedChild: null };
 
   const cookieStore = await cookies();

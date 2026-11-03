@@ -1175,3 +1175,20 @@ model SettingsSecurity {
 
   @@index([passwordVersion])
 }
+
+// Outbox Pattern for Non-blocking Asynchronous Replication to Secondary DB (Supabase)
+model SyncOutbox {
+  id         String    @id @default(cuid())
+  modelName  String
+  recordId   String
+  action     String    // CREATE, UPDATE, DELETE
+  payload    Json?
+  status     String    @default("PENDING") // PENDING, SYNCED, FAILED
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+  syncedAt   DateTime?
+  error      String?
+
+  @@index([status, createdAt])
+  @@index([modelName, recordId])
+}

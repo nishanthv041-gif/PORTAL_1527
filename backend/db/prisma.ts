@@ -1,17 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { db, dbSecondary, prisma } from "@/lib/db";
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-
-function createPrismaClient(): PrismaClient {
-  return new PrismaClient({
-    log: process.env.NODE_ENV === 'development' && process.env.DEBUG_QUERIES === 'true'
-      ? ['query', 'error', 'warn']
-      : ['error', 'warn'],
-  });
-}
-
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
-
-// Always attach to globalThis to reuse connection pools across serverless/warm invocations
-globalForPrisma.prisma = prisma;
-
+export { db, dbSecondary, prisma };
+export default db;

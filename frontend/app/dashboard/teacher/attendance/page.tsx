@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import { TeacherStudentItem } from "./AttendanceForm";
@@ -18,7 +17,7 @@ export default async function TeacherAttendancePage({
 }: {
   searchParams: Promise<{ date?: string; tab?: string; view?: string; classId?: string }>;
 }) {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
   if (!session) return null;
 
   const resolvedSearchParams = await searchParams;
