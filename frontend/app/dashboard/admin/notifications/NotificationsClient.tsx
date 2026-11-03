@@ -14,7 +14,6 @@ import {
   retryFailedDeliveriesAction 
 } from "@/backend/api/actions/dashboard/admin/notifications/createNotificationAction";
 import ToggleNotifications from "@/frontend/components/ToggleNotifications";
-import PushNotificationManager from "@/frontend/components/notifications/PushNotificationManager";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
@@ -217,28 +216,8 @@ export default function NotificationsClient({
           />
         </div>
 
-        {/* Tab & Action Buttons */}
+        {/* Broadcast Notification Action */}
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          <button
-            type="button"
-            onClick={() => setActiveTab(activeTab === "HISTORY" ? "PUSH_SETTINGS" : "HISTORY")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              padding: "0.6rem 1rem",
-              background: activeTab === "PUSH_SETTINGS" ? "var(--primary)" : "rgba(255, 255, 255, 0.08)",
-              color: activeTab === "PUSH_SETTINGS" ? "#ffffff" : "var(--foreground)",
-              border: "1px solid var(--border-color)",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "0.85rem",
-              fontWeight: 600
-            }}
-          >
-            <Smartphone size={16} /> {activeTab === "PUSH_SETTINGS" ? "View History" : "My Push Settings"}
-          </button>
-
           <button
             onClick={() => setShowCreate(true)}
             style={{
@@ -260,13 +239,6 @@ export default function NotificationsClient({
           </button>
         </div>
       </div>
-
-      {/* VIEW: Push Settings Tab */}
-      {activeTab === "PUSH_SETTINGS" && (
-        <div style={{ marginBottom: "2rem" }}>
-          <PushNotificationManager />
-        </div>
-      )}
 
       {/* MODAL 1: Create Notification Form */}
       {showCreate && (

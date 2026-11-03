@@ -34,8 +34,7 @@ export default function Topbar({
       if (data) {
         setUnreadCount(data.unreadCount);
         setHasBusAlert(data.hasBusAlert);
-        const isClearedForever = localStorage.getItem(CLEARED_KEY) === "true";
-        setShowRedDot(!isClearedForever && (data.unreadCount > 0 || data.hasBusAlert));
+        setShowRedDot(data.unreadCount > 0 || data.hasBusAlert);
       }
       return;
     }
@@ -70,8 +69,7 @@ export default function Topbar({
     if (data) {
       setUnreadCount(data.unreadCount);
       setHasBusAlert(data.hasBusAlert);
-      const isClearedForever = localStorage.getItem(CLEARED_KEY) === "true";
-      setShowRedDot(!isClearedForever && (data.unreadCount > 0 || data.hasBusAlert));
+      setShowRedDot(data.unreadCount > 0 || data.hasBusAlert);
     }
   }, []);
 

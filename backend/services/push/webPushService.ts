@@ -211,39 +211,24 @@ export async function dispatchPushToRecipients(
     return { sent: 0, failed: 0, totalSubscriptions: 0 };
   }
 
-  // 3. MODULE 3: 24-Hour Last Login Inactivity Rule
-  // If user has NOT logged in for > 24 hours (or priority is URGENT), trigger Web Push.
-  // If user was active within last 24 hours, their in-app bell & center already has it.
-  const usersLoginStatus = await prisma.user.findMany({
-    where: { id: { in: allowedUserIds } },
-    select: { id: true, lastLoginAt: true },
-  });
+  // 3. Find active push subscriptions for qualifying recipients
+  // Real-time Push Delivery: Delivers instant push notifications to all registered devices of target users
+  // (e.g. Android phone notification drawer, Windows desktop, iOS PWA) like WhatsApp/Gmail
+  const isBroadcastOrAlert =
+    payload.category === "general" ||
+    payload.priority === "URGENT" ||
+    categoryKey === "alerts" ||
+    categoryKey === "general";
 
-  const now = Date.now();
-  const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
-
-  const targetPushUserIds = usersLoginStatus
-    .filter((u) => {
-      // URGENT priority overrides 24h rule (e.g. security alert, emergency bus delay)
-      if (payload.priority === "URGENT") return true;
-
-      // If user has never logged in or logged in > 24 hours ago, send push notification
-      if (!u.lastLoginAt) return true;
-      const elapsed = now - new Date(u.lastLoginAt).getTime();
-      return elapsed >= TWENTY_FOUR_HOURS_MS;
-    })
-    .map((u) => u.id);
-
-  if (targetPushUserIds.length === 0) {
-    console.info(
-      `[WebPush] Skipped push delivery: all ${allowedUserIds.length} target recipient(s) active within last 24h.`
-    );
-    return { sent: 0, failed: 0, totalSubscriptions: 0 };
-  }
-
-  // 4. Find active push subscriptions for qualifying users
   const subscriptions = await prisma.pushSubscription.findMany({
-    where: { userId: { in: targetPushUserIds } },
+    where: {
+      isActive: true,
+      OR: [
+        { userId: { in: allowedUserIds } },
+        // For general announcements & emergency alerts, also deliver to anonymous PWA subscriptions
+        ...(isBroadcastOrAlert ? [{ userId: null }] : []),
+      ],
+    },
     select: {
       id: true,
       userId: true,

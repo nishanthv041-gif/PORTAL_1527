@@ -5,6 +5,7 @@ import Sidebar from "@/frontend/components/Sidebar";
 import Topbar from "@/frontend/components/Topbar";
 import styles from "./layout.module.css";
 import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/settings/actions";
+import { getUnifiedNotificationsAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
 
 import { SettingsProvider } from "@/frontend/contexts/SettingsContext";
 import NavigationProgressBar from "@/frontend/components/NavigationProgressBar";
@@ -40,9 +41,12 @@ export default async function DashboardLayout({
   const displayName = session.user.name || "User";
   const notificationsEnabled = session.user.notificationsEnabled ?? true;
 
-  // Fetch only system settings (instant from unstable_cache memory)
-  // Notifications are handled asynchronously by the client modal to keep route switching instant
-  const settings = await getSystemSettings();
+  // Preload system settings and active unread notifications in parallel during layout SSR
+  // This enables NotificationPopupModal to render instantly without client fetch delay
+  const [settings, initialNotifications] = await Promise.all([
+    getSystemSettings(),
+    getUnifiedNotificationsAction({ unreadOnly: true }).catch(() => []),
+  ]);
 
   return (
     <SettingsProvider settings={settings}>
@@ -51,7 +55,7 @@ export default async function DashboardLayout({
         schoolName={settings.SCHOOL_NAME || "SRT School Management Portal"}
         schoolLogo={settings.SCHOOL_LOGO || null}
       />
-      <NotificationPopupModal initialNotifications={[]} notificationsEnabled={notificationsEnabled} />
+      <NotificationPopupModal initialNotifications={initialNotifications} notificationsEnabled={notificationsEnabled} />
       <div className={styles.container}>
         {/* Subtle, beautiful, fixed school campus backdrop */}
         <div className={styles.portalBackground} aria-hidden="true" />

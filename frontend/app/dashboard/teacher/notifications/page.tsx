@@ -5,7 +5,6 @@ import styles from "../../dashboard.module.css";
 import { Bell, CheckCircle, Clock, Trash2 } from "lucide-react";
 import MarkReadButton from "./MarkReadButton";
 import ToggleNotifications from "@/frontend/components/ToggleNotifications";
-import PushNotificationManager from "@/frontend/components/notifications/PushNotificationManager";
 import { toggleNotificationsEnabled, deleteNotificationAction } from "@/backend/api/actions/dashboard/teacher/notifications/actions";
 
 export default async function TeacherNotificationsPage() {
@@ -37,10 +36,6 @@ export default async function TeacherNotificationsPage() {
     <div className={styles.dashboard}>
       <div style={{ marginBottom: '1.5rem' }}>
         <h1 className={styles.title} style={{ margin: 0 }}>Notifications</h1>
-      </div>
-
-      <div style={{ marginBottom: "1.5rem" }}>
-        <PushNotificationManager />
       </div>
 
       <ToggleNotifications 

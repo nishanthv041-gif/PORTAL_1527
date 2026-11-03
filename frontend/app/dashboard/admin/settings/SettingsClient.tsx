@@ -12,10 +12,12 @@ import { SystemSetting } from "@prisma/client";
 import {
   Building2, Save, Loader2, CheckCircle2, Upload, AlertCircle, Image as ImageIcon,
   Phone, Mail, Globe, User, Calendar, MapPin, Users, GraduationCap, Clock, ArrowRight,
-  Layers, Lock, KeyRound, Eye, EyeOff, ShieldCheck, ShieldAlert, Sparkles, RefreshCw
+  Layers, Lock, KeyRound, Eye, EyeOff, ShieldCheck, ShieldAlert, Sparkles, RefreshCw,
+  Smartphone, Bell
 } from "lucide-react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import BatchManagementClient from "../batches/BatchManagementClient";
+import PushNotificationManager from "@/frontend/components/notifications/PushNotificationManager";
 import styles from "./settings.module.css";
 
 interface SettingsClientProps {
@@ -56,14 +58,15 @@ export default function SettingsClient({
   const confirm = useConfirm();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Active Tab: "info" | "batches" | "security"
-  const [activeTab, setActiveTab] = useState<"info" | "batches" | "security">(() => {
+  // Active Tab: "info" | "batches" | "security" | "push"
+  const [activeTab, setActiveTab] = useState<"info" | "batches" | "security" | "push">(() => {
     if (initialTab === "batches") return "batches";
     if (initialTab === "security") return "security";
+    if (initialTab === "push") return "push";
     return "info";
   });
 
-  const handleTabChange = (tab: "info" | "batches" | "security") => {
+  const handleTabChange = (tab: "info" | "batches" | "security" | "push") => {
     setActiveTab(tab);
     // Update URL query string smoothly without reload
     const newUrl = tab === "info" ? "/dashboard/admin/settings" : `/dashboard/admin/settings?tab=${tab}`;
@@ -419,6 +422,29 @@ export default function SettingsClient({
           >
             <KeyRound size={18} />
             <span>Change Settings Password</span>
+          </button>
+
+          {/* Tab 4: Push Notifications & Devices */}
+          <button
+            type="button"
+            onClick={() => handleTabChange("push")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.6rem 1.1rem",
+              borderRadius: "8px",
+              fontSize: "0.9rem",
+              fontWeight: activeTab === "push" ? 700 : 500,
+              border: "none",
+              color: activeTab === "push" ? "#ffffff" : "var(--text-secondary, #94a3b8)",
+              background: activeTab === "push" ? "var(--primary, #3b82f6)" : "transparent",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <Smartphone size={18} />
+            <span>Push Notifications &amp; Devices</span>
           </button>
 
           <div
@@ -1283,6 +1309,13 @@ export default function SettingsClient({
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* ── TAB 4: PUSH NOTIFICATIONS & DEVICE MANAGEMENT ─────────────────── */}
+      {activeTab === "push" && (
+        <div style={{ maxWidth: "860px", width: "100%", margin: "0 auto" }}>
+          <PushNotificationManager />
         </div>
       )}
     </div>
