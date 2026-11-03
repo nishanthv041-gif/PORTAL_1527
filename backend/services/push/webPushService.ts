@@ -1,8 +1,9 @@
 import webpush from "web-push";
 import { prisma } from "@/backend/db/prisma";
 
-// Safe VAPID configuration
+// Safe VAPID configuration (supports both VAPID_PUBLIC_KEY and NEXT_PUBLIC_VAPID_PUBLIC_KEY)
 const VAPID_PUBLIC_KEY =
+  process.env.VAPID_PUBLIC_KEY ||
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
   "BBIHzbc-DVhlpPB_plCE0gUMpCSsHiqA1Y5FVyP-ax6p0HWnFZILFISth4FYfyAp0gywswCBxz4GfDnXm_c-Agk";
 
