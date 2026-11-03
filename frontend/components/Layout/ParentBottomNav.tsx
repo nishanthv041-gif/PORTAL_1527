@@ -8,6 +8,7 @@ import { signOut } from "next-auth/react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import {
   Home,
+  Users,
   GraduationCap,
   Award,
   CalendarCheck,
@@ -63,7 +64,7 @@ export function ParentBottomNav() {
     {
       label: "Classes",
       href: "/dashboard/parent/classes",
-      icon: <GraduationCap size={20} />,
+      icon: <Users size={20} />,
       isActive: pathname?.startsWith("/dashboard/parent/classes"),
     },
     {
