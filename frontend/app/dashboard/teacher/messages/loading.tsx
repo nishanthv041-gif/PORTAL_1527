@@ -3,3 +3,4 @@ import DashboardSectionSkeleton from "@/frontend/components/ui/DashboardSectionS
 export default function Loading() {
   return <DashboardSectionSkeleton title="Messages" variant="list" count={5} />;
 }
+

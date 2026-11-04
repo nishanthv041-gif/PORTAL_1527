@@ -5,7 +5,7 @@
  * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
 
-const CACHE_NAME = "srt-pwa-v7";
+const CACHE_NAME = "srt-pwa-v8";
 const PRECACHE_ASSETS = [
   "/offline.html",
   "/manifest.webmanifest",
@@ -156,7 +156,6 @@ self.addEventListener("push", (event) => {
       icon: iconUrl,
       badge: badgeUrl,
       vibrate: [200, 100, 200],
-      requireInteraction: true,
       timestamp: Date.now(),
       data: {
         url: targetUrl,

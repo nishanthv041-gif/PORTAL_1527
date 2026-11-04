@@ -242,6 +242,38 @@ export default function BulkUpload({
   const openEditRow = (row: RowValidationResult) => {
     setEditingRow(row);
     const initialData = { ...row.data };
+
+    // Normalize gender to Title Case matching select options
+    if (initialData.gender) {
+      const gUpper = String(initialData.gender).toUpperCase();
+      initialData.gender = gUpper === "FEMALE" ? "Female" : gUpper === "MALE" ? "Male" : "Other";
+    }
+
+    // Auto-resolve classTeacherClassId if missing but class name exists
+    if (!initialData.classTeacherClassId && (initialData.classTeacherClassName || initialData.classTeacher)) {
+      const targetStr = String(initialData.classTeacherClassName || initialData.classTeacher).trim().toLowerCase();
+      const matched = activeClasses.find(c => {
+        const full = `${c.name} - Section ${c.section}`.toLowerCase();
+        const short = `${c.name} - ${c.section}`.toLowerCase();
+        const numSec = `${c.name.replace(/\D/g, "")}-${c.section.toLowerCase()}`;
+        return full === targetStr || short === targetStr || full.includes(targetStr) || targetStr.includes(short) || targetStr.includes(numSec);
+      });
+      if (matched) {
+        initialData.classTeacherClassId = matched.id;
+        initialData.classTeacherClassName = `${matched.name} - Section ${matched.section}`;
+      }
+    }
+
+    // Default joining date to today (Asia/Kolkata date format)
+    if (!initialData.joiningDate) {
+      try {
+        const istDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+        initialData.joiningDate = istDate;
+      } catch {
+        initialData.joiningDate = new Date().toISOString().split("T")[0];
+      }
+    }
+
     if (initialData.residenceType) {
       const upper = String(initialData.residenceType).toUpperCase();
       if (upper.includes("HOSTEL") && !upper.includes("DAY")) {
@@ -2211,7 +2243,11 @@ export default function BulkUpload({
                         Gender
                       </label>
                       <select
-                        value={editFormData.gender || ""}
+                        value={
+                          String(editFormData.gender || "").toUpperCase() === "FEMALE" ? "Female" :
+                          String(editFormData.gender || "").toUpperCase() === "MALE" ? "Male" :
+                          String(editFormData.gender || "").toUpperCase() === "OTHER" ? "Other" : ""
+                        }
                         onChange={(e) => setEditFormData({ ...editFormData, gender: e.target.value })}
                         style={{
                           width: "100%",
@@ -2343,9 +2379,81 @@ export default function BulkUpload({
                     </div>
 
                     <div>
-                      <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                        Class Teacher (Assigned Class)
-                      </label>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
+                        <label style={{ fontSize: "0.8125rem", fontWeight: 600 }}>
+                          Class Teacher (Assigned Class)
+                        </label>
+                        {editFormData.classTeacherClassId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditFormData({
+                                ...editFormData,
+                                classTeacherClassId: "",
+                                classTeacherClassName: "",
+                                classTeacher: "",
+                                isClassTeacher: false,
+                                classNotFound: false
+                              });
+                            }}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "var(--text-secondary)",
+                              fontSize: "0.75rem",
+                              cursor: "pointer",
+                              textDecoration: "underline"
+                            }}
+                          >
+                            Clear class
+                          </button>
+                        )}
+                      </div>
+
+                      {Boolean(editFormData.classNotFound || (!editFormData.classTeacherClassId && editFormData.classTeacher && editFormData.classTeacher !== "No Class Assigned")) && (
+                        <div style={{
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "8px",
+                          background: "rgba(245, 158, 11, 0.12)",
+                          border: "1px solid rgba(245, 158, 11, 0.35)",
+                          color: "#d97706",
+                          fontSize: "0.78rem",
+                          marginBottom: "0.5rem",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "0.5rem"
+                        }}>
+                          <span>⚠️ Class &ldquo;{editFormData.classNotFoundName || editFormData.classTeacherClassName || editFormData.classTeacher}&rdquo; is not created in the portal yet.</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditFormData({
+                                ...editFormData,
+                                classTeacherClassId: "",
+                                classTeacherClassName: "",
+                                classTeacher: "",
+                                isClassTeacher: false,
+                                classNotFound: false
+                              });
+                            }}
+                            style={{
+                              padding: "0.2rem 0.5rem",
+                              background: "rgba(245, 158, 11, 0.2)",
+                              border: "1px solid rgba(245, 158, 11, 0.5)",
+                              borderRadius: "4px",
+                              color: "#d97706",
+                              fontSize: "0.72rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              whiteSpace: "nowrap"
+                            }}
+                          >
+                            Import without class
+                          </button>
+                        </div>
+                      )}
+
                       <select
                         value={editFormData.classTeacherClassId || ""}
                         onChange={(e) => {
@@ -2354,7 +2462,8 @@ export default function BulkUpload({
                             ...editFormData,
                             classTeacherClassId: e.target.value,
                             classTeacherClassName: selected ? `${selected.name} - ${selected.section}` : "",
-                            classTeacherRaw: selected ? `${selected.name} - ${selected.section}` : ""
+                            classTeacher: selected ? `${selected.name} - ${selected.section}` : "",
+                            classNotFound: false
                           });
                         }}
                         style={{

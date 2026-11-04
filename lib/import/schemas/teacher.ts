@@ -148,7 +148,7 @@ export const TeacherRowSchema = z.object({
   name: z.string().min(1, "Teacher name is required."),
   firstName: z.string().min(1, "First name is required."),
   lastName: z.string().optional().default(""),
-  gender: z.enum(["MALE", "FEMALE", "OTHER"]).default("OTHER"),
+  gender: z.enum(["Female", "Male", "Other", "MALE", "FEMALE", "OTHER"]).default("Female"),
   phone: z.string().refine(p => isValidIndianPhone(p), {
     message: "Phone number must be a valid 10-digit Indian mobile number (e.g. 9876543210).",
   }),
@@ -174,3 +174,4 @@ export const TeacherRowSchema = z.object({
 });
 
 export type ValidatedTeacherRow = z.infer<typeof TeacherRowSchema>;
+

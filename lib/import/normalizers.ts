@@ -141,15 +141,15 @@ export function isValidIndianPhone(phone: string): boolean {
 }
 
 /**
- * Standardizes Gender values into "MALE" | "FEMALE" | "OTHER"
+ * Standardizes Gender values into "Female" | "Male" | "Other" (matching UI selects)
  */
-export function normalizeGender(rawGender: string): "MALE" | "FEMALE" | "OTHER" {
-  if (!rawGender) return "OTHER";
+export function normalizeGender(rawGender: string): "Female" | "Male" | "Other" {
+  if (!rawGender) return "Other";
   const g = rawGender.trim().toUpperCase();
 
-  if (g === "M" || g === "MALE" || g === "BOY" || g === "MAN") return "MALE";
-  if (g === "F" || g === "FEMALE" || g === "GIRL" || g === "WOMAN") return "FEMALE";
-  return "OTHER";
+  if (g === "M" || g === "MALE" || g === "BOY" || g === "MAN") return "Male";
+  if (g === "F" || g === "FEMALE" || g === "GIRL" || g === "WOMAN") return "Female";
+  return "Other";
 }
 
 // Subject typo dictionary & abbreviation mapping
@@ -286,6 +286,86 @@ export function parseClassTeacher(raw: string): ParsedClassTeacher {
   };
 }
 
+export interface SmartClassResolution {
+  isClassTeacher: boolean;
+  matchedClass: { id: string; name: string; section: string } | null;
+  isNotFound: boolean;
+  rawEntry: string;
+  canonicalName: string;
+  isNonClassRole?: boolean;
+  nonClassRole?: string;
+}
+
+/**
+ * Intelligently resolves raw Class Teacher Excel strings against database classes.
+ * - Handles: "class 3 - section A" -> Class 3 - Section A
+ * - Handles: "class 11 - section C" -> Class 11 - Section C(BIO - CS)
+ * - Flags classes that do not exist in the database (e.g. Class 1-B, LKG, UKG) with isNotFound: true
+ * - Safely detects non-class staff roles ("Accounts assistant", "-", etc.)
+ */
+export function resolveClassSmart(
+  raw: string,
+  availableClasses: Array<{ id: string; name: string; section: string }> = []
+): SmartClassResolution {
+  const parsed = parseClassTeacher(raw);
+
+  if (!parsed.isClassTeacher || parsed.isNonClassRole) {
+    return {
+      isClassTeacher: false,
+      matchedClass: null,
+      isNotFound: false,
+      rawEntry: parsed.rawEntry,
+      canonicalName: "",
+      isNonClassRole: parsed.isNonClassRole,
+      nonClassRole: parsed.rawEntry,
+    };
+  }
+
+  const targetClass = parsed.className ? parsed.className.toUpperCase().replace(/^CLASS\s*/i, "").trim() : "";
+  const targetSection = parsed.section ? parsed.section.toUpperCase().trim() : "";
+
+  for (const c of availableClasses) {
+    const dbClassNum = c.name.toUpperCase().replace(/^CLASS\s*/i, "").trim();
+    const dbSection = c.section.toUpperCase().trim();
+    const dbSectionPrefix = dbSection.split(/[^A-Z]/)[0] || dbSection;
+
+    // Direct match: e.g. Class 3 and Section A
+    if (targetClass && targetSection) {
+      if (dbClassNum === targetClass && (dbSection === targetSection || dbSectionPrefix === targetSection)) {
+        return {
+          isClassTeacher: true,
+          matchedClass: c,
+          isNotFound: false,
+          rawEntry: parsed.rawEntry,
+          canonicalName: `${c.name} - Section ${c.section}`,
+        };
+      }
+    }
+
+    // Fallback exact full string comparison
+    const rawClean = parsed.rawEntry.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const dbClean = `${c.name} ${c.section}`.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (rawClean && dbClean && (rawClean === dbClean || dbClean.includes(rawClean))) {
+      return {
+        isClassTeacher: true,
+        matchedClass: c,
+        isNotFound: false,
+        rawEntry: parsed.rawEntry,
+        canonicalName: `${c.name} - Section ${c.section}`,
+      };
+    }
+  }
+
+  // Class not found in the portal database
+  return {
+    isClassTeacher: true,
+    matchedClass: null,
+    isNotFound: true,
+    rawEntry: parsed.rawEntry,
+    canonicalName: parsed.canonicalName || parsed.rawEntry,
+  };
+}
+
 export interface PasswordQuality {
   isValid: boolean;
   isWeak: boolean;
@@ -332,3 +412,4 @@ export function assessPassword(password: string, phone?: string): PasswordQualit
 
   return { isValid: true, isWeak: false };
 }
+

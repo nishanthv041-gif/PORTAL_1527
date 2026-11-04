@@ -384,6 +384,7 @@ export async function parseAndScanWorkbook(
         columnMappings,
         rawRows: parsedData.rows,
         checkDb: true,
+        availableClasses,
       });
 
       const validCount = validatedRows.filter(r => r.status === "VALID").length;

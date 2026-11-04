@@ -149,7 +149,7 @@ async function commitSingleTeacher(data: Record<string, any>) {
           await tx.subject.update({
             where: { id: foundSubj.id },
             data: { teacherId: teacher.id },
-          }).catch(() => {});
+          }).catch(() => { });
         }
       }
     }

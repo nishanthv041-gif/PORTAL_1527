@@ -26,8 +26,10 @@ import {
   normalizePhone,
   normalizeSubjects,
   parseClassTeacher,
+  resolveClassSmart,
   splitFullName,
 } from "./normalizers";
+import { formatDateToKolkataIso } from "./coerce";
 import { TeacherRowSchema } from "./schemas/teacher";
 import { StudentRowSchema } from "./schemas/student";
 
@@ -36,6 +38,7 @@ export interface ValidationContext {
   columnMappings: ColumnMappingItem[];
   rawRows: RawRow[];
   checkDb?: boolean;
+  availableClasses?: Array<{ id: string; name: string; section: string }>;
 }
 
 /**
@@ -45,6 +48,20 @@ export async function validateImportRows(
   context: ValidationContext
 ): Promise<RowValidationResult[]> {
   const { role, columnMappings, rawRows, checkDb = true } = context;
+
+  // Retrieve active classes from context or database for smart class matching
+  let activeClasses = context.availableClasses || [];
+  if (activeClasses.length === 0 && checkDb) {
+    try {
+      activeClasses = await prisma.class.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, section: true },
+        orderBy: [{ name: "asc" }, { section: "asc" }],
+      });
+    } catch (err) {
+      console.warn("Could not fetch active classes for import validation:", err);
+    }
+  }
 
   // Build header-to-target field lookup
   const headerToField = new Map<string, string>();
@@ -94,17 +111,24 @@ export async function validateImportRows(
       mapped.email = mapped.userId; // compatibility with legacy UI
       mapped.googleEmail = normalizeEmail(mapped.googleEmail || "");
       mapped.qualification = (mapped.qualification || "").trim();
+      mapped.joiningDate = mapped.joiningDate || formatDateToKolkataIso(new Date());
 
       const rawSubject = mapped.subject || "";
       mapped.subjects = normalizeSubjects(rawSubject);
       mapped.subject = mapped.subjects.join(", ");
 
-      const classInfo = parseClassTeacher(mapped.classTeacher || "");
-      mapped.classTeacher = classInfo.isClassTeacher ? classInfo.canonicalName || classInfo.rawEntry : "";
-      mapped.classTeacherClassName = mapped.classTeacher; // compatibility with legacy UI
-      mapped.isClassTeacher = classInfo.isClassTeacher;
-      if (classInfo.isNonClassRole) {
-        mapped.nonClassRole = classInfo.rawEntry;
+      const classResolution = resolveClassSmart(mapped.classTeacher || "", activeClasses);
+      mapped.isClassTeacher = classResolution.isClassTeacher;
+      mapped.classTeacherClassId = classResolution.matchedClass?.id || "";
+      mapped.classTeacherClassName = classResolution.canonicalName;
+      mapped.classTeacher = classResolution.canonicalName;
+      mapped.classNotFound = classResolution.isNotFound;
+      if (classResolution.isNotFound) {
+        mapped.classNotFoundName = classResolution.rawEntry;
+        warnings.classTeacher = `Class "${classResolution.rawEntry}" is not created in the portal yet.`;
+      }
+      if (classResolution.isNonClassRole) {
+        mapped.nonClassRole = classResolution.nonClassRole;
       }
 
       const pwdQuality = assessPassword(mapped.password || "", mapped.phone);

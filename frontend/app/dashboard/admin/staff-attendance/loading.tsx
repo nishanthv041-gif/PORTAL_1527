@@ -3,3 +3,4 @@ import DashboardSectionSkeleton from "@/frontend/components/ui/DashboardSectionS
 export default function Loading() {
   return <DashboardSectionSkeleton title="Staff Attendance" variant="table" count={6} />;
 }
+

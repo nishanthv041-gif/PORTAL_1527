@@ -62,9 +62,12 @@ export async function verifyGoogleSignIn(user: any, account: any) {
 
     let dbUser;
     try {
+      const cleanGoogleEmail = (user.email || "").trim().toLowerCase();
       dbUser = await prisma.user.findFirst({
         where: { 
           OR: [
+            { email: { equals: cleanGoogleEmail, mode: "insensitive" } },
+            { googleEmail: { equals: cleanGoogleEmail, mode: "insensitive" } },
             { email: user.email },
             { googleEmail: user.email }
           ]
@@ -113,9 +116,12 @@ export async function verifyGoogleSignIn(user: any, account: any) {
 export async function populateGoogleJwt(token: any, user: any, account: any) {
   if (account?.provider === "google" && user?.email) {
     try {
+      const cleanGoogleEmail = (user.email || "").trim().toLowerCase();
       const dbUser = await prisma.user.findFirst({
         where: { 
           OR: [
+            { email: { equals: cleanGoogleEmail, mode: "insensitive" } },
+            { googleEmail: { equals: cleanGoogleEmail, mode: "insensitive" } },
             { email: user.email },
             { googleEmail: user.email }
           ]
