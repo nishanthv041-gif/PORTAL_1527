@@ -72,6 +72,25 @@
   font-weight: 700;
 }
 
+.navItemPending {
+  color: #3b82f6 !important;
+  opacity: 0.9;
+}
+
+.bottomSpinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: bottomSpin 0.5s linear infinite;
+  display: inline-block;
+}
+
+@keyframes bottomSpin {
+  to { transform: rotate(360deg); }
+}
+
 .navLabel {
   display: block;
   text-align: center;

@@ -20,22 +20,29 @@ function LoaderInner({ schoolName = "SRT School Management Portal", schoolLogo }
 
   const startLoader = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    setIsFadingOut(false);
-    setIsLoading(true);
-
-    // Safety timeout: automatically dismiss after 2.4s so it NEVER traps the user
+    // Cold start / slow network fallback: only show if navigation takes longer than 2.5 seconds
     timerRef.current = setTimeout(() => {
-      finishLoader();
-    }, 2400);
+      setIsFadingOut(false);
+      setIsLoading(true);
+
+      timerRef.current = setTimeout(() => {
+        finishLoader();
+      }, 5000);
+    }, 2500);
   };
 
   const finishLoader = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    setIsFadingOut(true);
-    timerRef.current = setTimeout(() => {
+    if (isLoading) {
+      setIsFadingOut(true);
+      setTimeout(() => {
+        setIsLoading(false);
+        setIsFadingOut(false);
+      }, 200);
+    } else {
       setIsLoading(false);
       setIsFadingOut(false);
-    }, 320);
+    }
   };
 
   // Route change completion
@@ -188,7 +195,7 @@ function LoaderInner({ schoolName = "SRT School Management Portal", schoolLogo }
               textTransform: "uppercase",
             }}
           >
-            Official Portal
+            Waking up the server... Please wait a moment.
           </div>
         </div>
 

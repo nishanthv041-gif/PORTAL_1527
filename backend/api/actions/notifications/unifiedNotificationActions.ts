@@ -709,6 +709,12 @@ export async function markNotificationsAsSeenInPopupAction(notificationIds: stri
             });
           }
         }
+      } else if (notifId.startsWith("rc-")) {
+        const realId = notifId.replace("rc-", "");
+        await prisma.reportCard.updateMany({
+          where: { id: realId },
+          data: { parentVerified: true }
+        });
       } else {
         await prisma.notification.updateMany({
           where: { id: notifId, userId },

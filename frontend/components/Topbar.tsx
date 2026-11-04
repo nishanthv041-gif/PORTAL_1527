@@ -79,8 +79,10 @@ export default function Topbar({
     checkNotifications(abortController.signal);
 
     const interval = setInterval(() => {
-      checkNotifications(abortController.signal);
-    }, 20000); // 20s active polling interval
+      if (!document.hidden) {
+        checkNotifications(abortController.signal);
+      }
+    }, 60000); // 60s shared polling interval
 
     // Immediate refetch when user switches back to the tab (throttled)
     const handleVisibilityChange = () => {

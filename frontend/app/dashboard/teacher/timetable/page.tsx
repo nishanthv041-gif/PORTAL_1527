@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
 import { startOfSchoolDay } from "@/lib/time";
 import styles from "../../dashboard.module.css";
@@ -13,7 +12,7 @@ export default async function TeacherTimetablePage({
 }: {
   searchParams?: Promise<{ classId?: string }>;
 }) {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
   if (!session) return null;
 
   const resolvedParams = searchParams ? await searchParams : {};

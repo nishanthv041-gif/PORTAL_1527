@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import {
@@ -27,13 +27,19 @@ import BottomSheet from "@/components/ui/BottomSheet";
 
 export function TeacherBottomNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const confirm = useConfirm();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setPendingHref(null);
+  }, [pathname]);
 
   const handleLogout = async () => {
     const ok = await confirm({
@@ -142,21 +148,31 @@ export function TeacherBottomNav() {
   return createPortal(
     <>
       <nav className={styles.bottomNav} aria-label="Teacher mobile navigation">
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            prefetch={false}
-            className={`${styles.navItem} ${item.isActive ? styles.navItemActive : ""}`}
-            aria-current={item.isActive ? "page" : undefined}
-          >
-            <div className={styles.iconWrapper}>
-              {item.icon}
-              {item.isActive && <div className={styles.activeDot} />}
-            </div>
-            <span className={styles.navLabel}>{item.label}</span>
-          </Link>
-        ))}
+        {navItems.map((item) => {
+          const isPending = pendingHref === item.href && !item.isActive;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              prefetch={false}
+              onMouseEnter={() => {
+                try { router.prefetch(item.href); } catch {}
+              }}
+              onTouchStart={() => {
+                try { router.prefetch(item.href); } catch {}
+              }}
+              onClick={() => setPendingHref(item.href)}
+              className={`${styles.navItem} ${item.isActive ? styles.navItemActive : ""} ${isPending ? styles.navItemPending : ""}`}
+              aria-current={item.isActive ? "page" : undefined}
+            >
+              <div className={styles.iconWrapper}>
+                {isPending ? <div className={styles.bottomSpinner} /> : item.icon}
+                {(item.isActive || isPending) && <div className={styles.activeDot} />}
+              </div>
+              <span className={styles.navLabel}>{item.label}</span>
+            </Link>
+          );
+        })}
 
         <button
           type="button"
@@ -198,8 +214,17 @@ export function TeacherBottomNav() {
                 key={item.href}
                 href={item.href}
                 prefetch={false}
+                onMouseEnter={() => {
+                  try { router.prefetch(item.href); } catch {}
+                }}
+                onTouchStart={() => {
+                  try { router.prefetch(item.href); } catch {}
+                }}
                 className={styles.moreItem}
-                onClick={() => setIsMoreOpen(false)}
+                onClick={() => {
+                  setPendingHref(item.href);
+                  setIsMoreOpen(false);
+                }}
               >
                 <div className={styles.moreIconCircle}>{item.icon}</div>
                 <span>{item.label}</span>

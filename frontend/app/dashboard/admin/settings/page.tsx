@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
@@ -19,7 +18,7 @@ export default async function AdminSettingsPage({
 }: {
   searchParams: Promise<{ tab?: string }>;
 }) {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
   if (!session || session.user?.role !== "ADMIN") {
     redirect("/login");
   }

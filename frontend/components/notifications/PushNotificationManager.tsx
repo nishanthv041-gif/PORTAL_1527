@@ -177,42 +177,99 @@ export default function PushNotificationManager() {
     setSubscriptions((prev) => prev.filter((s) => s.id !== subId));
   };
 
-  // Test server-to-device push notification
+  // Test server-to-device push notification with active self-healing
   const handleSendTest = async () => {
     setTestStatus("Sending server push to device...");
     try {
       if (!("Notification" in window) || Notification.permission !== "granted") {
         setTestStatus("Please enable notifications first.");
+        setTimeout(() => setTestStatus(null), 4000);
         return;
       }
 
       const registration = await navigator.serviceWorker.ready;
-      const sub = await registration.pushManager.getSubscription();
+      let sub = await registration.pushManager.getSubscription();
 
-      const res = await fetch("/api/notifications/push/test", {
+      // If no local subscription, subscribe fresh now
+      if (!sub) {
+        setTestStatus("Connecting push service with device...");
+        const keyRes = await fetch("/api/notifications/push/public-key");
+        const keyData = await keyRes.json();
+        if (keyData?.publicKey) {
+          const keyArr = urlBase64ToUint8Array(keyData.publicKey);
+          sub = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: keyArr as unknown as BufferSource,
+          });
+          const raw = sub.toJSON();
+          await fetch("/api/notifications/push/subscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              endpoint: sub.endpoint,
+              keys: raw.keys,
+              userAgent: navigator.userAgent,
+            }),
+          });
+        }
+      }
+
+      let res = await fetch("/api/notifications/push/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ endpoint: sub?.endpoint || null }),
       });
 
-      const data = await res.json().catch(() => null);
+      let data = await res.json().catch(() => null);
+
+      // Self-heal: If FCM reports 410 Gone / expired, renew the subscription automatically
+      if (res.status === 410 || data?.expired) {
+        setTestStatus("Refreshing expired FCM registration with Google...");
+        try {
+          if (sub) await sub.unsubscribe();
+        } catch {}
+
+        const keyRes = await fetch("/api/notifications/push/public-key");
+        const keyData = await keyRes.json();
+        if (keyData?.publicKey) {
+          const keyArr = urlBase64ToUint8Array(keyData.publicKey);
+          sub = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: keyArr as unknown as BufferSource,
+          });
+          const raw = sub.toJSON();
+          await fetch("/api/notifications/push/subscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              endpoint: sub.endpoint,
+              keys: raw.keys,
+              userAgent: navigator.userAgent,
+            }),
+          });
+
+          // Re-send test push to the brand new valid endpoint
+          res = await fetch("/api/notifications/push/test", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint: sub.endpoint }),
+          });
+          data = await res.json().catch(() => null);
+        }
+      }
 
       if (res.ok && data?.success) {
         setTestStatus("High-urgency push dispatched to your device!");
+        setIsSubscribed(true);
+        await loadData();
       } else {
-        // Fallback to local notification if server dispatch had an issue
-        await registration.showNotification("Nipo Portal Test Notification", {
-          body: "Push registered! Testing local notification presentation.",
-          icon: "/icons/icon-192x192.png",
-          data: { url: "/dashboard" },
-        });
-        setTestStatus(data?.error || "Delivered local test notification.");
+        setTestStatus(data?.error || "Push delivery failed.");
       }
-      setTimeout(() => setTestStatus(null), 4000);
+      setTimeout(() => setTestStatus(null), 5000);
     } catch (err) {
       console.error("[Push Test Error]", err);
       setTestStatus("Error sending test push.");
-      setTimeout(() => setTestStatus(null), 4000);
+      setTimeout(() => setTestStatus(null), 5000);
     }
   };
 

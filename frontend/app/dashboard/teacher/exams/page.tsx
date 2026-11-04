@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
 import Link from "next/link";
 import styles from "./TeacherExams.module.css";
@@ -9,7 +8,7 @@ import { getSystemSetting } from "@/backend/api/actions/dashboard/admin/settings
 import { formatClassName } from "@/lib/teacher/formatClassName";
 
 export default async function TeacherExamsPage() {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
   if (!session) return null;
 
   const canManage = await getSystemSetting("TEACHER_MANAGE_MARKS", "true");

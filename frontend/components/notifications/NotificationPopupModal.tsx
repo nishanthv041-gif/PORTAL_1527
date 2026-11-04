@@ -181,12 +181,24 @@ export default function NotificationPopupModal({
       };
     }
 
-    // Interval poll every 5 seconds for fast real-time popup
-    const interval = setInterval(checkFreshNotifications, 5000);
+    // Relaxed 60s background poll, paused when document is hidden
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        checkFreshNotifications();
+      }
+    }, 60000);
+
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        checkFreshNotifications();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       isMounted = false;
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [initialNotifications, notificationsEnabled]);
 

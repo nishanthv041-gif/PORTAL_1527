@@ -12,14 +12,14 @@ import {
   ArrowRight,
   Bus,
 } from "lucide-react";
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
+
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function MainRolesPage() {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
   if (!session?.user || session.user.role !== "ADMIN") {
     redirect("/login");
   }

@@ -46,9 +46,16 @@ export async function POST(req: Request) {
     if (result.success) {
       return NextResponse.json({ success: true, message: "Push notification dispatched successfully." });
     } else {
+      const isExpired = result.statusCode === 410 || result.statusCode === 404;
       return NextResponse.json(
-        { success: false, error: result.error || "Failed to deliver push notification." },
-        { status: 500 }
+        {
+          success: false,
+          expired: isExpired,
+          error: isExpired
+            ? "Push subscription expired on push service. Re-registering device..."
+            : result.error || "Failed to deliver push notification.",
+        },
+        { status: isExpired ? 410 : 500 }
       );
     }
   } catch (err: unknown) {

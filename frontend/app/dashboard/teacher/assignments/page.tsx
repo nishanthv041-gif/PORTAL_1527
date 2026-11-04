@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
 import { autoDeleteExpiredHomework } from "@/backend/api/actions/dashboard/teacher/assignments/actions";
 import HomeworkClientPage, { ClassWithSubjects, AssignmentItem } from "./HomeworkClientPage";
@@ -10,7 +9,7 @@ export const metadata = {
 };
 
 export default async function TeacherAssignmentsPage() {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
   if (!session?.user) return null;
 
   // Automatically delete all expired homework records past deadline

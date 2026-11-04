@@ -1,12 +1,11 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { isSuperAdmin } from "@/backend/lib/auth/superAdmin";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import UserListClient from "./UserListClient";
 
 export default async function AdminUsersPage() {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
   if (!session || session.user.role !== 'ADMIN') return null;
 
   const isCurrentUserSuperAdmin = isSuperAdmin(session.user.email);

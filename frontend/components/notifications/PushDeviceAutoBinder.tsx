@@ -91,7 +91,7 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
 
           if (p256dh && auth) {
             lastSyncRef.current = Date.now();
-            await fetch("/api/notifications/push/subscribe", {
+            const res = await fetch("/api/notifications/push/subscribe", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -105,7 +105,34 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
                   ? "iOS PWA"
                   : "Desktop PWA",
               }),
-            }).catch(() => {});
+            }).catch(() => null);
+
+            // If subscription was revoked or expired on push service, self-heal immediately
+            if (res && res.status === 410) {
+              try { await sub.unsubscribe(); } catch {}
+              const keyRes = await fetch("/api/notifications/push/public-key").catch(() => null);
+              const keyData = await keyRes?.json().catch(() => null);
+              if (keyData?.publicKey) {
+                const keyArr = urlBase64ToUint8Array(keyData.publicKey);
+                const freshSub = await reg.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: keyArr as unknown as BufferSource,
+                }).catch(() => null);
+                if (freshSub) {
+                  const rawFresh = freshSub.toJSON();
+                  await fetch("/api/notifications/push/subscribe", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      endpoint: freshSub.endpoint,
+                      keys: rawFresh.keys,
+                      userId,
+                      userAgent: navigator.userAgent,
+                    }),
+                  }).catch(() => {});
+                }
+              }
+            }
           }
         }
       } catch (err) {

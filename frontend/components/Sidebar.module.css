@@ -147,6 +147,44 @@
   background-color: var(--primary);
 }
 
+.navItemPending {
+  background: rgba(99, 102, 241, 0.25) !important;
+  color: #ffffff !important;
+  border-left: 3px solid var(--primary, #6366f1);
+  transition: all 0.1s ease;
+}
+
+.navSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: navSpin 0.5s linear infinite;
+  display: inline-block;
+}
+
+.navPendingPulse {
+  margin-left: auto;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: rgba(99, 102, 241, 0.45);
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  animation: navPulse 1s ease-in-out infinite;
+}
+
+@keyframes navSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes navPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
 .logoutWrapper {
   margin-top: auto;
   border-top: 1px solid rgba(255, 255, 255, 0.1);

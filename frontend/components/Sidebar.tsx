@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState, useEffect } from "react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
@@ -50,11 +50,14 @@ interface NavSection {
 
 export default function Sidebar({ role, settings = {} }: { role: string; settings?: Record<string, string> }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
   const confirm = useConfirm();
 
   useEffect(() => {
-    // Close mobile menu on route change
+    // Reset pending state and close mobile menu on route change
+    setPendingHref(null);
     const checkbox = document.getElementById("mobile-menu-toggle") as HTMLInputElement | null;
     if (checkbox && checkbox.checked) {
       checkbox.checked = false;
@@ -259,22 +262,45 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
                   (link.href === "/dashboard/teacher/assignments" && (pathname === "/dashboard/teacher/homework" || pathname.startsWith("/dashboard/teacher/homework/"))) ||
                   (link.href === "/dashboard/teacher/homework" && (pathname === "/dashboard/teacher/assignments" || pathname.startsWith("/dashboard/teacher/assignments/"))) ||
                   (link.href === "/dashboard/parent/assignments" && (pathname === "/dashboard/parent/homework" || pathname.startsWith("/dashboard/parent/homework/")));
+                const isPending = pendingHref === link.href && !isActive;
+
                 return (
                   <div key={link.href} className={styles.navItemWrapper}>
                     <Link
                       href={link.href}
                       prefetch={false}
+                      onMouseEnter={() => {
+                        try { router.prefetch(link.href); } catch {}
+                      }}
+                      onTouchStart={() => {
+                        try { router.prefetch(link.href); } catch {}
+                      }}
                       onClick={() => {
+                        setPendingHref(link.href);
                         const checkbox = document.getElementById("mobile-menu-toggle") as HTMLInputElement | null;
                         if (checkbox && checkbox.checked) {
-                          checkbox.checked = false;
+                          setTimeout(() => {
+                            if (checkbox) checkbox.checked = false;
+                          }, 100);
                         }
                       }}
-                      className={`${styles.navItem} ${isActive ? styles.navItemActive : ""}`}
+                      className={`${styles.navItem} ${isActive ? styles.navItemActive : ""} ${isPending ? styles.navItemPending : ""}`}
                       title={isCollapsed ? link.label : undefined}
+                      aria-current={isActive ? "page" : undefined}
                     >
-                      <div className={styles.iconWrapper}>{link.icon}</div>
-                      {!isCollapsed && <span className={styles.linkLabel}>{link.label}</span>}
+                      <div className={styles.iconWrapper}>
+                        {isPending ? (
+                          <div className={styles.navSpinner} />
+                        ) : (
+                          link.icon
+                        )}
+                      </div>
+                      {!isCollapsed && (
+                        <>
+                          <span className={styles.linkLabel}>{link.label}</span>
+                          {isPending && <span className={styles.navPendingPulse}>...</span>}
+                        </>
+                      )}
                     </Link>
                   </div>
                 );

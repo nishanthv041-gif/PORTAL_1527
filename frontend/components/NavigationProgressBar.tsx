@@ -36,18 +36,17 @@ function ProgressBarInner() {
     isNavigatingRef.current = true;
     setIsFadingOut(false);
     setIsVisible(true);
-    setProgress(18);
+    setProgress(28);
 
     // Trickle progress up to 90%
     trickleTimerRef.current = setInterval(() => {
       setProgress((prev) => {
-        if (prev < 40) return prev + 12;
-        if (prev < 70) return prev + 6;
-        if (prev < 85) return prev + 3;
-        if (prev < 90) return prev + 1;
+        if (prev < 55) return prev + 15;
+        if (prev < 80) return prev + 7;
+        if (prev < 92) return prev + 2;
         return prev;
       });
-    }, 200);
+    }, 150);
 
     // Safety timeout: automatically finish after 3.5 seconds if navigation stalled or aborted
     safetyTimeoutRef.current = setTimeout(() => {
@@ -149,12 +148,12 @@ function ProgressBarInner() {
         top: 0,
         left: 0,
         width: `${progress}%`,
-        height: "3px",
+        height: "3.5px",
         background: "linear-gradient(90deg, #3b82f6 0%, #6366f1 50%, #ec4899 100%)",
-        boxShadow: "0 0 10px rgba(99, 102, 241, 0.8), 0 0 5px rgba(236, 72, 153, 0.6)",
+        boxShadow: "0 0 12px rgba(99, 102, 241, 0.9), 0 0 6px rgba(236, 72, 153, 0.7)",
         transition: progress === 100
-          ? "width 0.2s ease-out, opacity 0.3s ease-in"
-          : "width 0.25s cubic-bezier(0.1, 0.9, 0.2, 1)",
+          ? "width 0.15s ease-out, opacity 0.25s ease-in"
+          : "width 0.2s cubic-bezier(0.1, 0.9, 0.2, 1)",
         opacity: isFadingOut ? 0 : 1,
         zIndex: 999999,
         pointerEvents: "none",
@@ -166,11 +165,11 @@ function ProgressBarInner() {
           position: "absolute",
           right: 0,
           top: "-2px",
-          width: "80px",
-          height: "7px",
-          background: "radial-gradient(ellipse at center, rgba(236,72,153,0.9) 0%, rgba(99,102,241,0.5) 50%, transparent 100%)",
+          width: "90px",
+          height: "8px",
+          background: "radial-gradient(ellipse at center, rgba(236,72,153,0.95) 0%, rgba(99,102,241,0.6) 50%, transparent 100%)",
           transform: "translateX(40%)",
-          filter: "blur(1px)",
+          filter: "blur(1.5px)",
           pointerEvents: "none",
         }}
       />

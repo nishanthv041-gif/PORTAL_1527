@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
 import Link from "next/link";
 import styles from "../../dashboard.module.css";
@@ -8,7 +7,7 @@ import { Users } from "lucide-react";
 import { getTeacherByUserId } from "../teacherHelper";
 
 export default async function TeacherClassesPage() {
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
   if (!session) return null;
 
   const teacher = await getTeacherByUserId(session.user.id);

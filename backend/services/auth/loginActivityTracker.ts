@@ -88,6 +88,18 @@ export async function recordUserLogin(
           status,
         },
       }),
+      // 3. Auto-bind any recently active device push subscription (e.g. registered on welcome modal before login)
+      prisma.pushSubscription.updateMany({
+        where: {
+          userId: null,
+          isActive: true,
+          createdAt: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+        },
+        data: {
+          userId,
+          lastUsedAt: new Date(),
+        },
+      }).catch(() => {}),
     ]);
   } catch (error) {
     console.error("[LoginActivityTracker] Failed to record user login:", error);
