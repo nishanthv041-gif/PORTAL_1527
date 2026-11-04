@@ -6,11 +6,11 @@ import { revalidatePath } from "next/cache";
 
 export async function createStaffAction(formData: FormData) {
   try {
-    const name = formData.get("name") as string;
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-    const phone = formData.get("phone") as string;
-    const jobTitle = formData.get("jobTitle") as string;
+    const name = ((formData.get("name") as string) || "").trim();
+    const email = ((formData.get("email") as string) || "").trim().toLowerCase();
+    const password = ((formData.get("password") as string) || "").trim();
+    const phone = ((formData.get("phone") as string) || "").trim();
+    const jobTitle = ((formData.get("jobTitle") as string) || "").trim();
 
     if (!name || !email || !password || !jobTitle) {
       return { error: "Please fill in all required fields." };
@@ -20,8 +20,8 @@ export async function createStaffAction(formData: FormData) {
       return { error: "Password must be at least 6 characters long." };
     }
 
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
+    const existingUser = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
     });
 
     if (existingUser) {

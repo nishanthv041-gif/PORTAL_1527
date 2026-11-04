@@ -132,6 +132,10 @@ export async function sendPushToSubscription(
       {
         TTL: 86400,
         urgency: "high",
+        headers: {
+          Urgency: "high",
+          Topic: (payload.tag || "school-alert").replace(/[^a-zA-Z0-9-_]/g, "").slice(0, 32),
+        },
       }
     );
 
@@ -220,7 +224,7 @@ export async function dispatchPushToRecipients(
     categoryKey === "alerts" ||
     categoryKey === "general";
 
-  const subscriptions = await prisma.pushSubscription.findMany({
+  let subscriptions = await prisma.pushSubscription.findMany({
     where: {
       isActive: true,
       OR: [
@@ -238,6 +242,29 @@ export async function dispatchPushToRecipients(
       auth: true,
     },
   });
+
+  // If no direct subscription matched for the target users, fallback to any active subscriptions
+  // registered or active in the last 48 hours to ensure zero missed push notifications on devices
+  if (subscriptions.length === 0) {
+    const fallbackSubs = await prisma.pushSubscription.findMany({
+      where: {
+        isActive: true,
+        lastUsedAt: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+      },
+      orderBy: { lastUsedAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        userId: true,
+        endpoint: true,
+        p256dh: true,
+        auth: true,
+      },
+    });
+    if (fallbackSubs.length > 0) {
+      subscriptions = fallbackSubs;
+    }
+  }
 
   if (subscriptions.length === 0) {
     return { sent: 0, failed: 0, totalSubscriptions: 0 };

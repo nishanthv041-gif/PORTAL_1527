@@ -36,6 +36,7 @@ export default function NotificationPopupModal({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isClearing, setIsClearing] = useState(false);
   const seenIdRef = useRef<Set<string>>(new Set());
+  const cachedRecentRef = useRef<UnifiedNotification[]>(initialNotifications || []);
 
   // Initialize seen IDs from localStorage on client
   useEffect(() => {
@@ -58,8 +59,24 @@ export default function NotificationPopupModal({
     const clearedTimeStr = typeof window !== "undefined" ? localStorage.getItem(CLEARED_TIMESTAMP_KEY) : null;
     const clearedTime = clearedTimeStr ? new Date(clearedTimeStr).getTime() : 0;
 
+    let localSeen = new Set<string>(seenIdRef.current);
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(SEEN_POPUP_IDS_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((id: string) => {
+              localSeen.add(id);
+              seenIdRef.current.add(id);
+            });
+          }
+        }
+      } catch {}
+    }
+
     return items.filter(
-      n => !n.isRead && !seenIdRef.current.has(n.id) && new Date(n.timestamp).getTime() > clearedTime
+      n => !n.isRead && !localSeen.has(n.id) && new Date(n.timestamp).getTime() > clearedTime
     );
   };
 
@@ -146,6 +163,17 @@ export default function NotificationPopupModal({
     };
   }, [initialNotifications, notificationsEnabled]);
 
+  // Preload recent history for instant 0ms manual open via bell button
+  useEffect(() => {
+    getUnifiedNotificationsAction({ unreadOnly: false })
+      .then((fresh) => {
+        if (fresh && fresh.length > 0) {
+          cachedRecentRef.current = fresh;
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Listen for manual open trigger from Topbar Bell button
   useEffect(() => {
     const handleManualOpen = () => {
@@ -156,10 +184,19 @@ export default function NotificationPopupModal({
         return;
       }
 
-      // 2. Fetch recent notifications so user can review them immediately
+      // 2. If we have preloaded cached notifications, open immediately in 0ms!
+      if (cachedRecentRef.current && cachedRecentRef.current.length > 0) {
+        setNotifications(cachedRecentRef.current.slice(0, 8));
+        setCurrentIndex(0);
+        setIsOpen(true);
+        return;
+      }
+
+      // 3. Fallback: Fetch recent notifications so user can review them immediately
       getUnifiedNotificationsAction({ unreadOnly: false })
         .then((fresh) => {
           if (fresh && fresh.length > 0) {
+            cachedRecentRef.current = fresh;
             setNotifications(fresh.slice(0, 8));
             setCurrentIndex(0);
             setIsOpen(true);

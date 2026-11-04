@@ -47,10 +47,18 @@ export function getAuthOptions(): NextAuthOptions {
           }
         };
 
+        const cleanEmail = (credentials.email || "").trim();
+        const lowerEmail = cleanEmail.toLowerCase();
         let user;
         try {
-          user = await prisma.user.findUnique({
-            where: { email: credentials.email },
+          user = await prisma.user.findFirst({
+            where: {
+              OR: [
+                { email: { equals: lowerEmail, mode: "insensitive" } },
+                { email: { equals: cleanEmail, mode: "insensitive" } },
+                { email: cleanEmail },
+              ],
+            },
           });
         } catch (error) {
           console.error("[NextAuth] Prisma database error:", error);

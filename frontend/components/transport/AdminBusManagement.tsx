@@ -45,6 +45,7 @@ import {
   getBusDetailAction,
   updateBusStudentRouteAction,
 } from "@/backend/api/actions/dashboard/admin/transport/actions";
+import { isDayScholarStudent } from "@/backend/lib/transport/dayScholarHelper";
 
 interface TransportSummaryMetrics {
   totalBuses: number;
@@ -248,7 +249,7 @@ export default function AdminBusManagement({
     const list: any[] = [];
     classes.forEach((cls) => {
       (cls.students || [])
-        .filter((st: any) => st.isActive !== false && st.residenceType !== "HOSTEL")
+        .filter((st: any) => isDayScholarStudent(st))
         .forEach((st: any) => {
           const activeAssignment = (st.busAssignments || []).find((ba: any) => ba.academicYear === "2025-2026" || !ba.academicYear);
           const assignedBusNumber = activeAssignment?.bus?.busNumber || (st.busAssignments?.[0]?.bus?.busNumber);
@@ -509,19 +510,22 @@ export default function AdminBusManagement({
 
   const recipientCounts = useMemo(() => {
     if (!msgBusTarget?.students) return { students: 0, parents: 0 };
+    const dayScholarStudents = (msgBusTarget.students || []).filter(
+      (item: any) => item.student && isDayScholarStudent(item.student)
+    );
     if (msgAudienceType === "COMMON") {
       const pSet = new Set<string>();
-      (msgBusTarget.students || []).forEach((item: any) => {
+      dayScholarStudents.forEach((item: any) => {
         (item.student?.parents || []).forEach((p: any) => {
           if (p.parent?.userId) pSet.add(p.parent.userId);
         });
       });
-      return { students: (msgBusTarget.students || []).length, parents: pSet.size };
+      return { students: dayScholarStudents.length, parents: pSet.size };
     } else {
       const pSet = new Set<string>();
       const selSet = new Set(msgTargetStudentIds);
       let studentCount = 0;
-      (msgBusTarget.students || []).forEach((item: any) => {
+      dayScholarStudents.forEach((item: any) => {
         if (selSet.has(item.student?.id)) {
           studentCount++;
           (item.student?.parents || []).forEach((p: any) => {
@@ -2029,10 +2033,10 @@ export default function AdminBusManagement({
             <div style={{ maxHeight: "360px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.45rem" }}>
               {rosterBusData.students
                 .filter((item: any) => {
+                  const s = item.student;
+                  if (!s || !isDayScholarStudent(s)) return false;
                   if (!rosterSearchQuery.trim()) return true;
                   const q = rosterSearchQuery.toLowerCase();
-                  const s = item.student;
-                  if (!s) return false;
                   const name = `${s.firstName} ${s.lastName}`.toLowerCase();
                   const roll = (s.rollNumber || "").toLowerCase();
                   const cls = s.class ? `${s.class.name} ${s.class.section}`.toLowerCase() : "";
@@ -2471,15 +2475,17 @@ export default function AdminBusManagement({
                 label="Select Student(s) on this Bus *"
                 placeholder="Choose one or more students..."
                 searchPlaceholder="Search by student name or roll..."
-                options={(msgBusTarget?.students || []).map((item: any) => {
-                  const s = item.student;
-                  return {
-                    value: s.id,
-                    label: `${s.firstName} ${s.lastName}`,
-                    subLabel: `Roll: ${s.rollNumber} • ${s.class ? `${s.class.name} - ${s.class.section}` : "Class"}`,
-                    badge: item.pickupPoint ? `📍 ${item.pickupPoint}` : undefined,
-                  };
-                })}
+                options={(msgBusTarget?.students || [])
+                  .filter((item: any) => item.student && isDayScholarStudent(item.student))
+                  .map((item: any) => {
+                    const s = item.student;
+                    return {
+                      value: s.id,
+                      label: `${s.firstName} ${s.lastName}`,
+                      subLabel: `Roll: ${s.rollNumber} • ${s.class ? `${s.class.name} - ${s.class.section}` : "Class"}`,
+                      badge: item.pickupPoint ? `📍 ${item.pickupPoint}` : undefined,
+                    };
+                  })}
                 value={msgTargetStudentIds}
                 onChange={setMsgTargetStudentIds}
                 required

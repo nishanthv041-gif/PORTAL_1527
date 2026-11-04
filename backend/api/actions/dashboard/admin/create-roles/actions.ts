@@ -25,20 +25,21 @@ export async function createTeacherAction(formData: FormData) {
     const subjectIdsInput = formData.get("subjectIds") as string;
     
     // Auth fields
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-    const googleEmail = formData.get("googleEmail") as string;
+    const email = ((formData.get("email") as string) || "").trim().toLowerCase();
+    const password = ((formData.get("password") as string) || "").trim();
+    const googleEmail = ((formData.get("googleEmail") as string) || "").trim().toLowerCase();
 
     if (!isValidEmail(email)) return { error: "Invalid official email address." };
     if (googleEmail) {
-      const cleanGoogle = googleEmail.trim().toLowerCase();
-      if (!isValidEmail(cleanGoogle) || (!cleanGoogle.endsWith('@gmail.com') && !cleanGoogle.endsWith('@googlemail.com'))) {
+      if (!isValidEmail(googleEmail) || (!googleEmail.endsWith('@gmail.com') && !googleEmail.endsWith('@googlemail.com'))) {
         return { error: "Google Email must be a valid Gmail account (@gmail.com)." };
       }
     }
 
-    // Check uniqueness
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    // Check uniqueness (case-insensitive)
+    const existingUser = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
+    });
     if (existingUser) return { error: "A user with this official email already exists." };
 
     // Real Google email validation (format check)
@@ -192,24 +193,23 @@ export async function createParentStudentAction(formData: FormData) {
     const residenceType = rawResidence.toUpperCase().includes("HOSTEL") ? "HOSTEL" : "DAYSCHOLAR";
 
     // Parent fields
-    const parentName = formData.get("parentName") as string;
-    const parentPhone = formData.get("parentPhone") as string;
-    const parentEmail = formData.get("parentEmail") as string;
-    const parentPassword = formData.get("parentPassword") as string;
-    const parentGoogleEmail = formData.get("parentGoogleEmail") as string;
-    const parentAddress = formData.get("parentAddress") as string;
+    const parentName = ((formData.get("parentName") as string) || "").trim();
+    const parentPhone = ((formData.get("parentPhone") as string) || "").trim();
+    const parentEmail = ((formData.get("parentEmail") as string) || "").trim().toLowerCase();
+    const parentPassword = ((formData.get("parentPassword") as string) || "").trim();
+    const parentGoogleEmail = ((formData.get("parentGoogleEmail") as string) || "").trim().toLowerCase();
+    const parentAddress = ((formData.get("parentAddress") as string) || "").trim();
 
     if (!isValidEmail(parentEmail)) return { error: "Invalid official email address." };
     if (parentGoogleEmail) {
-      const cleanGoogle = parentGoogleEmail.trim().toLowerCase();
-      if (!isValidEmail(cleanGoogle) || (!cleanGoogle.endsWith('@gmail.com') && !cleanGoogle.endsWith('@googlemail.com'))) {
+      if (!isValidEmail(parentGoogleEmail) || (!parentGoogleEmail.endsWith('@gmail.com') && !parentGoogleEmail.endsWith('@googlemail.com'))) {
         return { error: "Google Email must be a valid Gmail account (@gmail.com)." };
       }
     }
 
-    // Check if user exists
-    const existingUser = await prisma.user.findUnique({ 
-      where: { email: parentEmail },
+    // Check if user exists (case-insensitive)
+    const existingUser = await prisma.user.findFirst({ 
+      where: { email: { equals: parentEmail, mode: "insensitive" } },
       include: { parent: true }
     });
     

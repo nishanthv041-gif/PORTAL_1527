@@ -17,7 +17,7 @@ export async function sendReportEmailAction(
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!recipient || !emailRegex.test(recipient)) {
-      // Look up user by username or display name in database
+      // Look up user by email, name, roll number, or admission number in database
       const foundUser = await prisma.user.findFirst({
         where: {
           OR: [
@@ -31,9 +31,25 @@ export async function sendReportEmailAction(
       if (foundUser?.email && emailRegex.test(foundUser.email)) {
         recipient = foundUser.email.toLowerCase();
       } else {
-        return {
-          error: `Invalid recipient email address: "${customRecipient || email}". Please specify a valid email to send the report.`,
-        };
+        const student = await prisma.student.findFirst({
+          where: {
+            OR: [
+              { rollNumber: { equals: email, mode: "insensitive" } },
+              { admissionNo: { equals: email, mode: "insensitive" } },
+            ],
+          },
+          include: {
+            parents: { include: { parent: { include: { user: true } } } },
+          },
+        });
+        const parentUser = student?.parents?.[0]?.parent?.user;
+        if (parentUser?.email && emailRegex.test(parentUser.email)) {
+          recipient = parentUser.email.toLowerCase();
+        } else {
+          return {
+            error: `Invalid recipient email address: "${customRecipient || email}". Please specify a valid email to send the report.`,
+          };
+        }
       }
     }
 

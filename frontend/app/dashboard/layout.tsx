@@ -11,6 +11,7 @@ import { SettingsProvider } from "@/frontend/contexts/SettingsContext";
 import NavigationProgressBar from "@/frontend/components/NavigationProgressBar";
 import SchoolPortalLoadingAnimation from "@/frontend/components/SchoolPortalLoadingAnimation";
 import NotificationPopupModal from "@/frontend/components/notifications/NotificationPopupModal";
+import PushDeviceAutoBinder from "@/frontend/components/notifications/PushDeviceAutoBinder";
 import PortalBreadcrumb from "@/frontend/components/PortalBreadcrumb";
 
 export const metadata: Metadata = {
@@ -56,6 +57,7 @@ export default async function DashboardLayout({
         schoolLogo={settings.SCHOOL_LOGO || null}
       />
       <NotificationPopupModal initialNotifications={initialNotifications} notificationsEnabled={notificationsEnabled} />
+      <PushDeviceAutoBinder userId={session.user.id} />
       <div className={styles.container}>
         {/* Subtle, beautiful, fixed school campus backdrop */}
         <div className={styles.portalBackground} aria-hidden="true" />

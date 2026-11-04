@@ -235,7 +235,7 @@ export async function sendUnifiedBroadcast(input: UnifiedBroadcastInput) {
           categoryKey
         ),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Broadcast push delivery timeout")), 3500)
+          setTimeout(() => reject(new Error("Broadcast push delivery timeout")), 6000)
         ),
       ]).catch((pushErr) => {
         console.warn("[UnifiedNotification] Broadcast push delivery note:", pushErr);

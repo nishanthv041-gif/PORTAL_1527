@@ -14,6 +14,8 @@ function detectPlatform(userAgent?: string | null): string {
   return "Web";
 }
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(getAuthOptions());
@@ -27,7 +29,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { endpoint, keys, userAgent, deviceName, platform: rawPlatform } = body;
+    const { endpoint, keys, userAgent, deviceName, platform: rawPlatform, userId: bodyUserId } = body;
 
     if (!endpoint || typeof endpoint !== "string") {
       return NextResponse.json(
@@ -53,8 +55,10 @@ export async function POST(req: Request) {
 
     // Determine final userId:
     // If user is currently logged in, bind to them.
+    // If body specifies a valid userId, bind to it.
     // If user is NOT logged in, keep existing userId if already bound, otherwise null.
-    const finalUserId = authenticatedUserId || existingSub?.userId || null;
+    const resolvedBodyUserId = typeof bodyUserId === "string" && bodyUserId.trim() ? bodyUserId.trim() : null;
+    const finalUserId = authenticatedUserId || resolvedBodyUserId || existingSub?.userId || null;
 
     const subscription = await prisma.pushSubscription.upsert({
       where: { endpoint },

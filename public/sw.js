@@ -5,7 +5,7 @@
  * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
 
-const CACHE_NAME = "srt-pwa-v5";
+const CACHE_NAME = "srt-pwa-v6";
 const PRECACHE_ASSETS = [
   "/offline.html",
   "/manifest.webmanifest",
@@ -171,7 +171,19 @@ self.addEventListener("push", (event) => {
     try {
       await self.registration.showNotification(title, options);
     } catch (err) {
-      console.error("[ServiceWorker] showNotification failed:", err);
+      console.warn("[ServiceWorker] Primary showNotification failed, attempting resilient fallback:", err);
+      try {
+        await self.registration.showNotification(title, {
+          body: body,
+          icon: iconUrl,
+          tag: tag,
+          data: {
+            url: targetUrl,
+          },
+        });
+      } catch (fallbackErr) {
+        console.error("[ServiceWorker] Fallback showNotification failed:", fallbackErr);
+      }
     }
   };
 

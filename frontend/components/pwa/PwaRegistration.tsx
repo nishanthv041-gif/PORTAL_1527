@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -19,6 +20,14 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
  * Ensures zero blocking of page loading and handles updates smoothly.
  */
 export default function PwaRegistration() {
+  const pathname = usePathname();
+  const syncFnRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (syncFnRef.current) {
+      syncFnRef.current();
+    }
+  }, [pathname]);
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
       return;
@@ -124,6 +133,9 @@ export default function PwaRegistration() {
             console.warn("[PWA] Push subscription sync skipped:", err);
           }
         };
+
+        // Save ref for pathname change triggers
+        syncFnRef.current = syncActiveSubscription;
 
         // Run sync on startup
         syncActiveSubscription();

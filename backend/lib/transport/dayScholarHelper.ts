@@ -6,18 +6,19 @@ export const RESIDENCE_TYPE_HOSTEL = "HOSTEL";
 /**
  * Single source of truth for Prisma queries:
  * An active Day Scholar student.
- * Never matches any student with residenceType "HOSTEL" or isActive false.
+ * Never matches any student with residenceType containing "HOSTEL" or isActive false.
  */
 export function getDayScholarWhere(): Prisma.StudentWhereInput {
   return {
     isActive: true,
     OR: [
-      { residenceType: RESIDENCE_TYPE_DAYSCHOLAR },
-      { residenceType: null }, // defaults to DAYSCHOLAR in schema
+      { residenceType: { in: ["DAYSCHOLAR", "DAY_SCHOLAR", "Day Scholar", "day scholar", "DAYSCHOLAR "] } },
+      { residenceType: null },
+      { residenceType: "" },
     ],
-    NOT: {
-      residenceType: RESIDENCE_TYPE_HOSTEL,
-    },
+    NOT: [
+      { residenceType: { in: ["HOSTEL", "HOSTELER", "Hostel", "hostel", "Hosteler", "hosteler", "HOSTEL "] } },
+    ],
   };
 }
 
@@ -34,6 +35,7 @@ export function getDayScholarBusStudentWhere(academicYear?: string): Prisma.BusS
 
 /**
  * Synchronous validation helper for student objects.
+ * Strictly guarantees that hostel students are NEVER treated as day scholars.
  */
 export function isDayScholarStudent(student?: {
   residenceType?: string | null;
@@ -41,8 +43,9 @@ export function isDayScholarStudent(student?: {
 } | null): boolean {
   if (!student) return false;
   if (student.isActive === false) return false;
-  if (!student.residenceType) return true; // defaults to DAYSCHOLAR
+  if (!student.residenceType || student.residenceType.trim() === "") return true; // defaults to DAYSCHOLAR
   const val = String(student.residenceType).trim().toUpperCase();
-  return val !== RESIDENCE_TYPE_HOSTEL && (val === RESIDENCE_TYPE_DAYSCHOLAR || val.includes("DAY"));
+  if (val.includes("HOSTEL")) return false;
+  return val.includes("DAY") || val === RESIDENCE_TYPE_DAYSCHOLAR;
 }
 

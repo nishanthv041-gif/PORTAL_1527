@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { UpdateBusSchema } from "@/backend/lib/validations/transport";
+import { getDayScholarBusStudentWhere } from "@/backend/lib/transport/dayScholarHelper";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           },
         },
         students: {
+          where: getDayScholarBusStudentWhere(),
           include: {
             student: {
               select: {
