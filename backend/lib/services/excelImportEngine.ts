@@ -1138,6 +1138,14 @@ export async function validateAndCorrelateBatch(
               newValue: googleEmail,
               actionType: "SET_FIELD"
             });
+          } else {
+            // Both emails are identical (e.g. Row 13 & Row 21: same teacher submitted form twice)
+            suggestions.push({
+              id: `skip-dup-${excelRow}`,
+              label: `Skip duplicate Row ${excelRow} (already registered in Row ${firstRow})`,
+              field: "row",
+              actionType: "SKIP_ROW"
+            });
           }
         } else {
           seenTeacherEmails.set(email, excelRow);

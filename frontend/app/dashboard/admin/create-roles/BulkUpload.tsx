@@ -337,33 +337,51 @@ export default function BulkUpload({
   const handleApplySuggestion = (excelRowNumber: number, sug: any) => {
     if (!scanResult) return;
     startTransition(async () => {
-      const updatedRows = scanResult.rows.map(r => {
-        if (r.excelRowNumber !== excelRowNumber) return r.data;
-        const updatedData = { ...r.data };
-        if (sug.actionType === "SET_FIELD" && sug.field) {
-          updatedData[sug.field] = sug.newValue;
-          if (sug.field === "userId") {
-            updatedData.email = sug.newValue;
+      let updatedRows: Record<string, any>[];
+      if (sug.actionType === "SKIP_ROW") {
+        updatedRows = scanResult.rows.filter(r => r.excelRowNumber !== excelRowNumber).map(r => r.data);
+      } else {
+        updatedRows = scanResult.rows.map(r => {
+          if (r.excelRowNumber !== excelRowNumber) return r.data;
+          const updatedData = { ...r.data };
+          if (sug.actionType === "SET_FIELD" && sug.field) {
+            updatedData[sug.field] = sug.newValue;
+            if (sug.field === "userId") {
+              updatedData.email = sug.newValue;
+            }
+            if (sug.field === "email") {
+              updatedData.userId = sug.newValue;
+            }
+          } else if (sug.actionType === "CLEAR_FIELD" && sug.field) {
+            updatedData[sug.field] = "";
+            if (sug.field === "classTeacher") {
+              updatedData.classTeacherClassName = "";
+              updatedData.isClassTeacher = false;
+            }
+          } else if (sug.actionType === "GENERATE_PASSWORD") {
+            updatedData.password = sug.newValue;
           }
-          if (sug.field === "email") {
-            updatedData.userId = sug.newValue;
-          }
-        } else if (sug.actionType === "CLEAR_FIELD" && sug.field) {
-          updatedData[sug.field] = "";
-          if (sug.field === "classTeacher") {
-            updatedData.classTeacherClassName = "";
-            updatedData.isClassTeacher = false;
-          }
-        } else if (sug.actionType === "GENERATE_PASSWORD") {
-          updatedData.password = sug.newValue;
-        }
-        return updatedData;
-      });
+          return updatedData;
+        });
+      }
 
       const res = await revalidateExcelRowsAction(updatedRows, type);
       if (res.success && res.result) {
         setScanResult(res.result);
       }
+    });
+  };
+
+  // Dedicated 1-click duplicate row skipper
+  const handleSkipRow = (excelRowNumber: number) => {
+    if (!scanResult) return;
+    startTransition(async () => {
+      const updatedRows = scanResult.rows.filter(r => r.excelRowNumber !== excelRowNumber).map(r => r.data);
+      const res = await revalidateExcelRowsAction(updatedRows, type);
+      if (res.success && res.result) {
+        setScanResult(res.result);
+      }
+      setEditingRow(null);
     });
   };
 
@@ -2009,6 +2027,34 @@ export default function BulkUpload({
           size="lg"
           footer={
             <>
+              {editingRow && (
+                Boolean(editingRow.fieldErrors?.email && editingRow.fieldErrors.email.includes("duplicated in row")) ||
+                editingRow.duplicateWarnings?.some(w => String(w).toLowerCase().includes("duplicate"))
+              ) && (
+                <button
+                  type="button"
+                  onClick={() => handleSkipRow(editingRow.excelRowNumber)}
+                  disabled={isPending}
+                  style={{
+                    padding: "0.55rem 1.15rem",
+                    borderRadius: "8px",
+                    border: "1px solid #f59e0b",
+                    background: "rgba(245, 158, 11, 0.12)",
+                    color: "#d97706",
+                    fontWeight: 700,
+                    fontSize: "0.875rem",
+                    cursor: isPending ? "not-allowed" : "pointer",
+                    marginRight: "auto",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.35rem"
+                  }}
+                  title="Omit this duplicate row from import (teacher is already entered in another row)"
+                >
+                  <Trash2 size={15} />
+                  <span>Skip Duplicate Row #{editingRow.excelRowNumber}</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setEditingRow(null)}
@@ -2311,6 +2357,48 @@ export default function BulkUpload({
                   <div style={{ fontWeight: 700, fontSize: "0.9375rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.25rem" }}>
                     Teacher Information
                   </div>
+
+                  {editingRow && (
+                    Boolean(editingRow.fieldErrors?.email && editingRow.fieldErrors.email.includes("duplicated in row")) ||
+                    editingRow.duplicateWarnings?.some(w => String(w).toLowerCase().includes("duplicate"))
+                  ) && (
+                    <div style={{
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "8px",
+                      backgroundColor: "rgba(245, 158, 11, 0.12)",
+                      border: "1px solid rgba(245, 158, 11, 0.35)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      flexWrap: "wrap",
+                      gap: "0.5rem"
+                    }}>
+                      <span style={{ fontSize: "0.82rem", color: "#d97706" }}>
+                        ⚠️ <strong>Duplicate Entry:</strong> Email &ldquo;{editFormData.email}&rdquo; is already entered in another row. If this is the same teacher entered twice, you can skip this duplicate row.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => editingRow && handleSkipRow(editingRow.excelRowNumber)}
+                        disabled={isPending}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3rem",
+                          padding: "0.35rem 0.75rem",
+                          borderRadius: "6px",
+                          background: "#f59e0b",
+                          color: "#ffffff",
+                          border: "none",
+                          fontWeight: 700,
+                          fontSize: "0.75rem",
+                          cursor: isPending ? "not-allowed" : "pointer"
+                        }}
+                      >
+                        <Trash2 size={13} /> Skip Duplicate Row
+                      </button>
+                    </div>
+                  )}
+
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                     <div>
                       <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>
