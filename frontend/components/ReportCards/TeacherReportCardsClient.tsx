@@ -12,7 +12,8 @@ import dynamic from "next/dynamic";
 import styles from "./TeacherReportCardsClient.module.css";
 import {
   createAndSendReportCardAction,
-  deleteReportCardAction
+  deleteReportCardAction,
+  deleteExamGroupReportCardsAction
 } from "@/backend/lib/services/reportCardActions";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { exportConsolidatedMarksToExcel } from "@/frontend/lib/exams/exportConsolidatedMarks";
@@ -478,6 +479,44 @@ export default function TeacherReportCardsClient({
       alert("Error deleting report card: " + (err.message || "Server error"));
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // DELETE ENTIRE EXAM BATCH FROM HISTORY (Teacher Exclusive Feature)
+  const [deletingExamKey, setDeletingExamKey] = useState<string | null>(null);
+
+  const handleDeleteExamGroup = async (grp: typeof groupedExams[0]) => {
+    const ok = await confirm({
+      title: `Delete Exam "${grp.examName}" for ${grp.className}?`,
+      message: `Are you sure you want to delete all ${grp.totalStudents} report card(s) for "${grp.examName}" (${grp.className})? This will permanently remove them from both your history and the Parent Portal. Student academic performance history remains safely preserved.`,
+      confirmText: `Delete Exam (${grp.totalStudents} cards)`,
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
+
+    setDeletingExamKey(grp.key);
+    try {
+      const reportCardIds = grp.students.map(s => s.id);
+      const res = await deleteExamGroupReportCardsAction({
+        examId: grp.examId,
+        classId: grp.classId || undefined,
+        examName: grp.examName,
+        reportCardIds
+      });
+      if (res.success) {
+        setHistory(prev => prev.filter(item => !reportCardIds.includes(item.id)));
+        if (previewItem && reportCardIds.includes(previewItem.id)) {
+          setPreviewItem(null);
+        }
+        router.refresh();
+      } else {
+        alert(res.error || "Failed to delete exam report cards.");
+      }
+    } catch (err: any) {
+      alert("Error deleting exam: " + (err?.message || "Server error"));
+    } finally {
+      setDeletingExamKey(null);
     }
   };
 
@@ -1440,6 +1479,31 @@ export default function TeacherReportCardsClient({
                         >
                           <Download size={14} />
                           <span>Class Excel</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteExamGroup(grp)}
+                          disabled={deletingExamKey === grp.key}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            padding: "0.45rem 0.85rem",
+                            borderRadius: "8px",
+                            border: "1px solid rgba(239, 68, 68, 0.4)",
+                            background: "rgba(239, 68, 68, 0.08)",
+                            color: "#ef4444",
+                            fontSize: "0.8rem",
+                            fontWeight: 700,
+                            cursor: deletingExamKey === grp.key ? "not-allowed" : "pointer",
+                            opacity: deletingExamKey === grp.key ? 0.6 : 1,
+                            transition: "all 0.2s ease"
+                          }}
+                          title="Delete all report cards for this exam (also removes from Parent portal)"
+                        >
+                          <Trash2 size={14} />
+                          <span>{deletingExamKey === grp.key ? "Deleting..." : "Delete Exam"}</span>
                         </button>
                       </div>
                     </div>

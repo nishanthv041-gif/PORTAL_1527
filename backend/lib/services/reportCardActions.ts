@@ -595,6 +595,7 @@ export async function createAndSendReportCardAction(payload: CreateReportCardPay
 
 /**
  * Deletes a report card from teacher history and database.
+ * Also cleans up dependent subjects, audit logs, and parent notifications.
  * Only authorized for TEACHERS and ADMINS.
  */
 export async function deleteReportCardAction(reportCardId: string) {
@@ -607,7 +608,13 @@ export async function deleteReportCardAction(reportCardId: string) {
     const reportCard = await prisma.reportCard.findUnique({
       where: { id: reportCardId },
       include: {
-        student: true,
+        student: {
+          include: {
+            parents: {
+              include: { parent: true }
+            }
+          }
+        },
         exam: true
       }
     });
@@ -622,24 +629,215 @@ export async function deleteReportCardAction(reportCardId: string) {
         where: { userId: session.user.id },
         include: { classes: true, classTeacherOf: true }
       });
-      const teaches = teacher?.classes.some(c => c.id === reportCard.student.classId) || teacher?.classTeacherOf?.id === reportCard.student.classId;
+      const teaches = !!reportCard.student.classId && (teacher?.classes.some(c => c.id === reportCard.student.classId) || teacher?.classTeacherOf?.id === reportCard.student.classId);
       if (!teaches) {
         return { success: false, error: "You are not authorized to delete report cards for this class" };
       }
     }
 
+    // Clean up dependent subjects and audit logs
+    await prisma.reportCardSubject.deleteMany({
+      where: { reportCardId }
+    });
+    await prisma.reportCardAuditLog.deleteMany({
+      where: { reportCardId }
+    });
+
     await prisma.reportCard.delete({
       where: { id: reportCardId }
     });
 
+    // Clean up notifications for this student's parents regarding this exam
+    const parentUserIds = reportCard.student?.parents?.map(p => p.parent?.userId).filter(Boolean) as string[] || [];
+    if (parentUserIds.length > 0 && reportCard.exam?.name) {
+      try {
+        await prisma.notification.deleteMany({
+          where: {
+            userId: { in: parentUserIds },
+            type: "REPORT_CARD",
+            OR: [
+              { title: { contains: reportCard.exam.name, mode: "insensitive" } },
+              { content: { contains: reportCard.exam.name, mode: "insensitive" } }
+            ]
+          }
+        });
+        const { invalidateUserNotifCache } = await import("@/backend/api/actions/notifications/unifiedNotificationActions");
+        for (const uid of parentUserIds) {
+          await invalidateUserNotifCache(uid);
+        }
+      } catch (e) {
+        console.error("Failed to clean up single report card notification:", e);
+      }
+    }
+
+    // Update exam studentCount
+    if (reportCard.examId) {
+      const remainingCount = await prisma.reportCard.count({
+        where: { examId: reportCard.examId, published: true }
+      });
+      await prisma.exam.update({
+        where: { id: reportCard.examId },
+        data: { studentCount: remainingCount }
+      }).catch(() => {});
+    }
+
     revalidatePath("/dashboard/teacher/report-cards");
     revalidatePath("/dashboard/parent/report-cards");
     revalidatePath(`/dashboard/parent/report-cards/${reportCard.studentId}`);
+    revalidatePath("/dashboard/parent");
+    revalidatePath("/dashboard/admin/report-cards");
 
     return { success: true, message: "Report card deleted successfully from history." };
   } catch (error: any) {
     console.error("Error deleting report card:", error);
     return { success: false, error: error.message || "Failed to delete report card" };
+  }
+}
+
+export interface DeleteExamGroupReportCardsPayload {
+  examId?: string;
+  classId?: string;
+  examName?: string;
+  reportCardIds: string[];
+}
+
+/**
+ * Deletes all report cards for an entire exam group / batch.
+ * Removes the records from teacher history and parent portals,
+ * cleans up notifications, and updates exam metrics while safely
+ * preserving student historical marks and academic performance trends.
+ */
+export async function deleteExamGroupReportCardsAction(payload: DeleteExamGroupReportCardsPayload) {
+  const session = await getServerSession(getAuthOptions());
+  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "TEACHER")) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  const { examId, classId, examName, reportCardIds } = payload;
+  if ((!reportCardIds || reportCardIds.length === 0) && !examId) {
+    return { success: false, error: "No report cards specified for deletion." };
+  }
+
+  try {
+    const reportCards = await prisma.reportCard.findMany({
+      where: {
+        OR: [
+          ...(reportCardIds && reportCardIds.length > 0 ? [{ id: { in: reportCardIds } }] : []),
+          ...(examId ? [{ examId }] : [])
+        ]
+      },
+      include: {
+        student: {
+          include: {
+            parents: {
+              include: { parent: true }
+            }
+          }
+        },
+        exam: true
+      }
+    });
+
+    if (reportCards.length === 0) {
+      return { success: false, error: "No report cards found to delete." };
+    }
+
+    // Teacher authorization check
+    if (session.user.role === "TEACHER") {
+      const teacher = await prisma.teacher.findUnique({
+        where: { userId: session.user.id },
+        include: { classes: true, classTeacherOf: true }
+      });
+
+      const allowedClassIds = new Set<string>();
+      teacher?.classes.forEach(c => allowedClassIds.add(c.id));
+      if (teacher?.classTeacherOf) allowedClassIds.add(teacher.classTeacherOf.id);
+
+      const hasUnauthorized = reportCards.some(rc => !rc.student.classId || !allowedClassIds.has(rc.student.classId));
+      if (hasUnauthorized) {
+        return { success: false, error: "Unauthorized: You do not teach one or more classes in this batch." };
+      }
+    }
+
+    const idsToDelete = reportCards.map(rc => rc.id);
+    const affectedExamIds = Array.from(new Set(reportCards.map(rc => rc.examId).filter(Boolean)));
+    const affectedStudentIds = Array.from(new Set(reportCards.map(rc => rc.studentId)));
+
+    // 1. Delete dependent ReportCardSubject and ReportCardAuditLog
+    await prisma.reportCardSubject.deleteMany({
+      where: { reportCardId: { in: idsToDelete } }
+    });
+
+    await prisma.reportCardAuditLog.deleteMany({
+      where: { reportCardId: { in: idsToDelete } }
+    });
+
+    // 2. Delete the ReportCard records
+    const deleteResult = await prisma.reportCard.deleteMany({
+      where: { id: { in: idsToDelete } }
+    });
+
+    // 3. Clean up in-app notifications for parents regarding this exam
+    const parentUserIds = new Set<string>();
+    reportCards.forEach(rc => {
+      rc.student?.parents?.forEach(p => {
+        if (p.parent?.userId) parentUserIds.add(p.parent.userId);
+      });
+    });
+
+    const targetExamName = examName || reportCards[0]?.exam?.name;
+    if (parentUserIds.size > 0 && targetExamName) {
+      try {
+        await prisma.notification.deleteMany({
+          where: {
+            userId: { in: Array.from(parentUserIds) },
+            type: "REPORT_CARD",
+            OR: [
+              { title: { contains: targetExamName, mode: "insensitive" } },
+              { content: { contains: targetExamName, mode: "insensitive" } }
+            ]
+          }
+        });
+
+        const { invalidateUserNotifCache } = await import("@/backend/api/actions/notifications/unifiedNotificationActions");
+        for (const uid of parentUserIds) {
+          await invalidateUserNotifCache(uid);
+        }
+      } catch (notifErr) {
+        console.error("Failed to clean up exam notifications for parents:", notifErr);
+      }
+    }
+
+    // 4. Update exam studentCount
+    for (const eid of affectedExamIds) {
+      try {
+        const remainingCount = await prisma.reportCard.count({
+          where: { examId: eid, published: true }
+        });
+        await prisma.exam.update({
+          where: { id: eid },
+          data: { studentCount: remainingCount }
+        });
+      } catch {}
+    }
+
+    // 5. Revalidate paths for instant UI sync
+    revalidatePath("/dashboard/teacher/report-cards");
+    revalidatePath("/dashboard/parent/report-cards");
+    revalidatePath("/dashboard/parent");
+    revalidatePath("/dashboard/admin/report-cards");
+    for (const sid of affectedStudentIds) {
+      revalidatePath(`/dashboard/parent/report-cards/${sid}`);
+    }
+
+    return {
+      success: true,
+      deletedCount: deleteResult.count,
+      message: `Successfully deleted ${deleteResult.count} report card(s) for "${targetExamName}".`
+    };
+  } catch (error: any) {
+    console.error("Error deleting exam group report cards:", error);
+    return { success: false, error: error.message || "Failed to delete exam report cards." };
   }
 }
 
