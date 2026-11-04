@@ -1,3 +1,5 @@
+export const maxDuration = 60;
+
 import { prisma } from "@/backend/db/prisma";
 import ParentStudentWizard from "./ParentStudentWizard";
 

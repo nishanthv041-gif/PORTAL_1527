@@ -484,23 +484,28 @@ export default function BulkUpload({
     setShowConfirmModal(false);
 
     startTransition(async () => {
-      setGeneralError(null);
-      const res = await commitExcelImportAction(
-        rowsToImport, 
-        type, 
-        file?.name || "upload.xlsx", 
-        file?.size || 0
-      );
+      try {
+        setGeneralError(null);
+        const res = await commitExcelImportAction(
+          rowsToImport, 
+          type, 
+          file?.name || "upload.xlsx", 
+          file?.size || 0
+        );
 
-      if (res.result) {
-        setCommitResult(res.result);
-        if (res.result.success || res.result.importedCount > 0) {
-          // Reset scan result on full or partial success so user sees the report
-          setScanResult(null);
-          setFile(null);
+        if (res?.result) {
+          setCommitResult(res.result);
+          if (res.result.success || res.result.importedCount > 0) {
+            // Reset scan result on full or partial success so user sees the report
+            setScanResult(null);
+            setFile(null);
+          }
+        } else {
+          setGeneralError(res?.error || "Import failed during database execution.");
         }
-      } else {
-        setGeneralError(res.error || "Import failed during database execution.");
+      } catch (err) {
+        console.error("Execute import failed:", err);
+        setGeneralError(err instanceof Error ? err.message : "Import failed or connection timed out. Please try again.");
       }
     });
   };
@@ -1765,7 +1770,7 @@ export default function BulkUpload({
                           border: "none",
                           fontWeight: 700,
                           fontSize: "0.875rem",
-                          cursor: "pointer",
+                          cursor: isPending ? "not-allowed" : "pointer",
                           display: "flex",
                           alignItems: "center",
                           gap: "0.5rem",
@@ -1773,7 +1778,7 @@ export default function BulkUpload({
                         }}
                       >
                         {isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                        Import Valid Rows ({scanResult.readyToImportCount})
+                        {isPending ? "Importing to Database..." : `Import Valid Rows (${scanResult.readyToImportCount})`}
                       </button>
                     )}
 
@@ -1792,13 +1797,14 @@ export default function BulkUpload({
                           border: "none",
                           fontWeight: 700,
                           fontSize: "0.875rem",
-                          cursor: "pointer",
+                          cursor: isPending ? "not-allowed" : "pointer",
                           display: "flex",
                           alignItems: "center",
                           gap: "0.5rem"
                         }}
                       >
-                        Import All ({scanResult.readyToImportCount})
+                        {isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                        {isPending ? "Importing to Database..." : `Import All (${scanResult.readyToImportCount})`}
                       </button>
                     )}
                   </div>

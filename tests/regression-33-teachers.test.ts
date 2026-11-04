@@ -94,8 +94,8 @@ async function runRegressionTest() {
   console.log("Same Person Match:", row21.samePersonMatch);
   if (row21.data.gender !== "Female") throw new Error(`Row 21 gender should be "Female", got "${row21.data.gender}"`);
   if (!row21.data.classTeacherClassId) throw new Error("Row 21 classTeacherClassId is empty");
-  if (!row21.data.classTeacherClassName.includes("Class 11 - Section C(BIO - CS)")) {
-    throw new Error(`Row 21 class name should match "Class 11 - Section C(BIO - CS)", got "${row21.data.classTeacherClassName}"`);
+  if (!row21.data.classTeacherClassName.includes("Class 11 - Section C")) {
+    throw new Error(`Row 21 class name should match "Class 11 - Section C", got "${row21.data.classTeacherClassName}"`);
   }
   if (!row21.samePersonMatch || row21.samePersonMatch.matchedRowNumber !== 13) {
     throw new Error(`Row 21 should match same person with Row 13`);

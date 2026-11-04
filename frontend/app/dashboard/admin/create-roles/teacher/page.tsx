@@ -1,3 +1,5 @@
+export const maxDuration = 60;
+
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
