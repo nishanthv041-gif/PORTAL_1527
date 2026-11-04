@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import {
   Calendar as CalendarIcon, Clock, MapPin, User,
   CheckCircle2, PlayCircle, AlertCircle,
   CalendarDays, ChevronRight
 } from "lucide-react";
-
-const DAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
-const SCHOOL_DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+import { useSchoolToday } from "@/frontend/hooks/useSchoolToday";
+import { SCHOOL_DAYS, getNextSchoolDay } from "@/lib/time";
 
 type SlotType = {
   id: string;
@@ -43,32 +42,40 @@ export default function ParentTimetableClient({
 }) {
   const [activeTab, setActiveTab] = useState<"today" | "week">("today");
   const [selectedDay, setSelectedDay] = useState<string>("ALL");
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 30000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const todayIndex = currentTime.getDay(); // 0 is Sunday
-  const todayDayName = DAYS[todayIndex];
-  const isSchoolDay = SCHOOL_DAYS.includes(todayDayName);
+  // Single Source of Truth Hook for exact Asia/Kolkata school day and live minutes
+  const schoolTime = useSchoolToday();
+  const todayDayName = schoolTime.weekday;
+  const isSchoolDay = schoolTime.isSchoolDay;
+  const currentMinutes = schoolTime.currentMinutes;
 
   // Filter slots for today
-  const todaySlots = scheduleSlots
-    .filter(s => s.dayOfWeek.toUpperCase() === todayDayName)
-    .sort((a, b) => a.period - b.period);
+  const todaySlots = useMemo(() => {
+    return scheduleSlots
+      .filter(s => s.dayOfWeek.toUpperCase() === todayDayName)
+      .sort((a, b) => a.period - b.period);
+  }, [scheduleSlots, todayDayName]);
 
   // Group slots by day for full week
-  const scheduleByDay: Record<string, SlotType[]> = {};
-  SCHOOL_DAYS.forEach(day => {
-    scheduleByDay[day] = scheduleSlots
-      .filter(s => s.dayOfWeek.toUpperCase() === day)
-      .sort((a, b) => a.period - b.period);
-  });
+  const scheduleByDay: Record<string, SlotType[]> = useMemo(() => {
+    const map: Record<string, SlotType[]> = {};
+    SCHOOL_DAYS.forEach(day => {
+      map[day] = scheduleSlots
+        .filter(s => s.dayOfWeek.toUpperCase() === day)
+        .sort((a, b) => a.period - b.period);
+    });
+    return map;
+  }, [scheduleSlots]);
 
-  // Calculate ongoing period right now
-  const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+  // Days with periods
+  const daysWithPeriods = useMemo(() => {
+    return SCHOOL_DAYS.filter(d => (scheduleByDay[d] || []).length > 0);
+  }, [scheduleByDay]);
+
+  // Next school day resolver
+  const nextSchoolDayInfo = useMemo(() => {
+    return getNextSchoolDay(schoolTime.today, daysWithPeriods.length > 0 ? daysWithPeriods : SCHOOL_DAYS);
+  }, [schoolTime.today, daysWithPeriods]);
 
   const getSlotMinutes = (timeStr: string) => {
     if (!timeStr) return 0;
@@ -126,7 +133,7 @@ export default function ParentTimetableClient({
                 LIVE ON-TIME TRACKER
               </span>
               <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)", fontWeight: 500 }}>
-                {currentTime.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })} • {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {schoolTime.formattedDate} • {schoolTime.timeStr}
               </span>
             </div>
 
@@ -187,7 +194,7 @@ export default function ParentTimetableClient({
       </div>
 
       {/* Tabs: Today's Schedule (On-Time) vs Full Weekly Timetable */}
-      <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.5rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.5rem" }}>
+      <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.5rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.5rem", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
         <button
           onClick={() => setActiveTab("today")}
           style={{
@@ -201,7 +208,9 @@ export default function ParentTimetableClient({
             color: activeTab === "today" ? "var(--primary-fg)" : "var(--text-secondary)",
             fontWeight: 600,
             fontSize: "0.9rem",
-            cursor: "pointer"
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            flexShrink: 0
           }}
         >
           <Clock size={16} /> Today&apos;s Class Schedule ({todaySlots.length})
@@ -220,7 +229,9 @@ export default function ParentTimetableClient({
             color: activeTab === "week" ? "var(--primary-fg)" : "var(--text-secondary)",
             fontWeight: 600,
             fontSize: "0.9rem",
-            cursor: "pointer"
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            flexShrink: 0
           }}
         >
           <CalendarDays size={16} /> Full Weekly Timetable
@@ -233,15 +244,20 @@ export default function ParentTimetableClient({
           {todaySlots.length === 0 ? (
             <div style={{ background: "var(--card-bg)", border: "1px dashed var(--border-color)", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
               <Clock size={40} style={{ opacity: 0.3, marginBottom: "1rem" }} />
-              <h3 style={{ fontSize: "1.1rem", fontWeight: 600 }}>No classes scheduled for {todayDayName}</h3>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 600 }}>
+                {!isSchoolDay ? `Weekend (${todayDayName}) — No classes scheduled today` : `No classes scheduled for ${todayDayName}`}
+              </h3>
               <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", maxWidth: "400px", margin: "0.5rem auto 1rem" }}>
-                Switch to the Full Weekly Timetable tab to view schedules for other days.
+                Next upcoming schedule: <strong>Next: {nextSchoolDayInfo.name}</strong> ({nextSchoolDayInfo.daysAhead} day{nextSchoolDayInfo.daysAhead > 1 ? "s" : ""} ahead).
               </p>
               <button
-                onClick={() => setActiveTab("week")}
+                onClick={() => {
+                  setActiveTab("week");
+                  setSelectedDay(nextSchoolDayInfo.name);
+                }}
                 style={{ padding: "0.5rem 1rem", background: "var(--primary)", color: "var(--primary-fg)", border: "none", borderRadius: "6px", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer" }}
               >
-                View Full Week
+                View {nextSchoolDayInfo.name}&apos;s Schedule
               </button>
             </div>
           ) : (

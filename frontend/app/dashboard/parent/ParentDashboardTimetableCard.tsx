@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
@@ -14,8 +14,8 @@ import {
   Layers,
   ChevronRight,
 } from "lucide-react";
-
-const SCHOOL_DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+import { useSchoolToday } from "@/frontend/hooks/useSchoolToday";
+import { SCHOOL_DAYS, getNextSchoolDay, SchoolWeekday } from "@/lib/time";
 
 export interface DashboardTimetableSlot {
   id: string;
@@ -62,23 +62,65 @@ export default function ParentDashboardTimetableCard({
   childName,
   classNameStr,
   childId,
-  todayDayName,
-  todaySlots,
+  todayDayName: initialTodayDayName,
+  todaySlots: initialTodaySlots,
   weeklySlots,
 }: ParentDashboardTimetableCardProps) {
   const [activeTab, setActiveTab] = useState<"today" | "weekly">("today");
   const [selectedDayFilter, setSelectedDayFilter] = useState<string>("ALL");
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 30000);
-    return () => clearInterval(timer);
-  }, []);
+  // Single Source of Truth Hook for exact Asia/Kolkata school day and live minutes
+  const schoolTime = useSchoolToday();
+  const activeWeekday = schoolTime.weekday;
+  const isTodaySchoolDay = schoolTime.isSchoolDay;
 
-  const isTodaySchoolDay = SCHOOL_DAYS.includes(todayDayName.toUpperCase());
+  // Group weekly slots by day
+  const scheduleByDay: Record<string, WeeklyRawSlot[]> = useMemo(() => {
+    const map: Record<string, WeeklyRawSlot[]> = {};
+    SCHOOL_DAYS.forEach((d) => {
+      map[d] = weeklySlots
+        .filter((s) => s.dayOfWeek.toUpperCase() === d)
+        .sort((a, b) => a.period - b.period);
+    });
+    return map;
+  }, [weeklySlots]);
 
-  // Ongoing time calculation
-  const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+  // Determine current day slots: if day flipped past midnight or initial was wrong day,
+  // automatically populate from weekly schedule without needing manual page refresh
+  const displayTodaySlots = useMemo(() => {
+    if (activeWeekday === initialTodayDayName && initialTodaySlots && initialTodaySlots.length > 0) {
+      return initialTodaySlots;
+    }
+    const weeklyForToday = scheduleByDay[activeWeekday] || [];
+    return weeklyForToday.map((ws): DashboardTimetableSlot => ({
+      id: ws.id,
+      dayOfWeek: ws.dayOfWeek,
+      period: ws.period,
+      startTime: ws.startTime,
+      endTime: ws.endTime,
+      classroom: ws.classroom,
+      isBreak: ws.isBreak,
+      subjectName: ws.subject?.name || null,
+      subjectCode: ws.subject?.code || null,
+      regularTeacherName: ws.subject?.teacher?.user?.name || null,
+      substituteTeacherName: null,
+      isFreePeriod: false,
+      hasExamOverlap: false,
+    }));
+  }, [activeWeekday, initialTodayDayName, initialTodaySlots, scheduleByDay]);
+
+  // Available days with configured periods
+  const daysWithPeriods = useMemo(() => {
+    return SCHOOL_DAYS.filter((d) => (scheduleByDay[d] || []).length > 0);
+  }, [scheduleByDay]);
+
+  // Next school day resolver for Sundays / holidays / empty days
+  const nextSchoolDayInfo = useMemo(() => {
+    return getNextSchoolDay(schoolTime.today, daysWithPeriods.length > 0 ? daysWithPeriods : SCHOOL_DAYS);
+  }, [schoolTime.today, daysWithPeriods]);
+
+  // Ongoing time calculation using Indian school minutes
+  const currentMinutes = schoolTime.currentMinutes;
   const getSlotMinutes = (timeStr: string) => {
     if (!timeStr) return 0;
     const parts = timeStr.split(":").map((p) => parseInt(p, 10));
@@ -93,18 +135,10 @@ export default function ParentDashboardTimetableCard({
     return "UPCOMING";
   };
 
-  // Group weekly slots by day
-  const scheduleByDay: Record<string, WeeklyRawSlot[]> = {};
-  SCHOOL_DAYS.forEach((d) => {
-    scheduleByDay[d] = weeklySlots
-      .filter((s) => s.dayOfWeek.toUpperCase() === d)
-      .sort((a, b) => a.period - b.period);
-  });
-
   // Effective days to display in weekly view
   const daysToShow =
     selectedDayFilter === "ALL"
-      ? SCHOOL_DAYS.filter((d) => (scheduleByDay[d] || []).length > 0)
+      ? daysWithPeriods.length > 0 ? daysWithPeriods : SCHOOL_DAYS
       : [selectedDayFilter];
 
   return (
@@ -210,9 +244,9 @@ export default function ParentDashboardTimetableCard({
             }}
           >
             <Clock size={15} />
-            <span>
-              Today&apos;s Schedule ({todayDayName}
-              {isTodaySchoolDay ? ` • ${todaySlots.length} Periods` : ""})
+            <span style={{ whiteSpace: "nowrap" }}>
+              Today&apos;s Schedule ({activeWeekday}
+              {isTodaySchoolDay && displayTodaySlots.length > 0 ? ` • ${displayTodaySlots.length} Periods` : ""})
             </span>
           </button>
 
@@ -232,17 +266,19 @@ export default function ParentDashboardTimetableCard({
                 activeTab === "weekly" ? "var(--primary, #6366f1)" : "rgba(255, 255, 255, 0.05)",
               color: activeTab === "weekly" ? "#ffffff" : "var(--text-secondary, #94a3b8)",
               cursor: "pointer",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
               transition: "all 0.15s ease",
             }}
           >
             <Calendar size={15} />
-            <span>Weekly Timetable</span>
+            <span style={{ whiteSpace: "nowrap" }}>Weekly Timetable</span>
           </button>
         </div>
 
         {/* Day Pills when in Weekly tab */}
         {activeTab === "weekly" && (
-          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
             <button
               type="button"
               onClick={() => setSelectedDayFilter("ALL")}
@@ -258,32 +294,45 @@ export default function ParentDashboardTimetableCard({
                     : "rgba(255, 255, 255, 0.06)",
                 color: selectedDayFilter === "ALL" ? "#ffffff" : "var(--text-secondary, #94a3b8)",
                 cursor: "pointer",
+                whiteSpace: "nowrap",
               }}
             >
               All Days
             </button>
-            {SCHOOL_DAYS.map((d) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setSelectedDayFilter(d)}
-                style={{
-                  padding: "0.25rem 0.65rem",
-                  borderRadius: "6px",
-                  border: "none",
-                  fontSize: "0.75rem",
-                  fontWeight: selectedDayFilter === d ? 700 : 500,
-                  backgroundColor:
-                    selectedDayFilter === d
+            {SCHOOL_DAYS.map((d) => {
+              const isTodayPill = d === activeWeekday;
+              const isSelected = selectedDayFilter === d;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setSelectedDayFilter(d)}
+                  title={isTodayPill ? `${d} (Today)` : d}
+                  style={{
+                    padding: "0.25rem 0.65rem",
+                    borderRadius: "6px",
+                    border: isTodayPill ? "1px solid var(--primary, #6366f1)" : "none",
+                    fontSize: "0.75rem",
+                    fontWeight: isSelected ? 700 : isTodayPill ? 600 : 500,
+                    backgroundColor: isSelected
                       ? "var(--primary, #6366f1)"
+                      : isTodayPill
+                      ? "rgba(99, 102, 241, 0.15)"
                       : "rgba(255, 255, 255, 0.06)",
-                  color: selectedDayFilter === d ? "#ffffff" : "var(--text-secondary, #94a3b8)",
-                  cursor: "pointer",
-                }}
-              >
-                {d.slice(0, 3)}
-              </button>
-            ))}
+                    color: isSelected
+                      ? "#ffffff"
+                      : isTodayPill
+                      ? "var(--primary, #818cf8)"
+                      : "var(--text-secondary, #94a3b8)",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {d.slice(0, 3)}
+                  {isTodayPill && " •"}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -291,7 +340,7 @@ export default function ParentDashboardTimetableCard({
       {/* ── TAB 1: TODAY'S SCHEDULE ────────────────────────────────────────────── */}
       {activeTab === "today" && (
         <div>
-          {todaySlots.length > 0 ? (
+          {displayTodaySlots.length > 0 ? (
             <div
               style={{
                 display: "grid",
@@ -299,7 +348,7 @@ export default function ParentDashboardTimetableCard({
                 gap: "0.85rem",
               }}
             >
-              {todaySlots.map((s) => {
+              {displayTodaySlots.map((s) => {
                 const status = isTodaySchoolDay ? getSlotStatus(s) : "UPCOMING";
                 const isOngoing = status === "ONGOING";
                 const isCompleted = status === "COMPLETED";
@@ -512,8 +561,8 @@ export default function ParentDashboardTimetableCard({
                 }}
               >
                 {!isTodaySchoolDay
-                  ? `Weekend (${todayDayName}) — No Classes Scheduled Today`
-                  : `No Classes Scheduled for ${todayDayName}`}
+                  ? `Weekend (${activeWeekday}) — No Classes Scheduled Today`
+                  : `No Classes Scheduled for ${activeWeekday}`}
               </h4>
               <p
                 style={{
@@ -522,13 +571,14 @@ export default function ParentDashboardTimetableCard({
                   color: "var(--text-secondary, #94a3b8)",
                 }}
               >
-                Switch to the <strong>Weekly Timetable</strong> tab to view schedules for the upcoming school week.
+                Next school schedule: <strong>Next: {nextSchoolDayInfo.name}</strong>
+                {nextSchoolDayInfo.daysAhead > 0 && ` (${nextSchoolDayInfo.daysAhead} day${nextSchoolDayInfo.daysAhead > 1 ? "s" : ""} ahead)`}.
               </p>
               <button
                 type="button"
                 onClick={() => {
                   setActiveTab("weekly");
-                  setSelectedDayFilter("MONDAY");
+                  setSelectedDayFilter(nextSchoolDayInfo.name);
                 }}
                 style={{
                   padding: "0.45rem 1rem",
@@ -541,7 +591,7 @@ export default function ParentDashboardTimetableCard({
                   cursor: "pointer",
                 }}
               >
-                View Monday&apos;s Schedule
+                View {nextSchoolDayInfo.name}&apos;s Schedule
               </button>
             </div>
           )}
@@ -566,7 +616,7 @@ export default function ParentDashboardTimetableCard({
           ) : (
             daysToShow.map((day) => {
               const slots = scheduleByDay[day] || [];
-              const isCurrentDay = day.toUpperCase() === todayDayName.toUpperCase();
+              const isCurrentDay = day.toUpperCase() === activeWeekday.toUpperCase();
 
               return (
                 <div

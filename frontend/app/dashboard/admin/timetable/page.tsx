@@ -5,6 +5,9 @@ import styles from "../../dashboard.module.css";
 import TimetableClient from "./TimetableClient";
 import { Timetable, Subject, Teacher, User } from "@prisma/client";
 import { PeriodSlotData } from "@/backend/lib/timetable/timetableTypes";
+import { startOfSchoolDay, getSchoolToday } from "@/lib/time";
+
+export const dynamic = "force-dynamic";
 
 type SubjectWithTeacher = Subject & { teacher: (Teacher & { user: User }) | null };
 type TimetableWithRelations = Timetable & {
@@ -24,18 +27,15 @@ export default async function AdminTimetablePage({
   const resolvedSearchParams = await searchParams;
   const { classId, weekOf } = resolvedSearchParams;
 
-  let currentWeekStart = new Date();
-  if (weekOf) {
-    currentWeekStart = new Date(weekOf);
-  }
-  // Ensure it's a Monday
-  const day = currentWeekStart.getDay();
-  const diff = currentWeekStart.getDate() - day + (day === 0 ? -6 : 1);
-  currentWeekStart.setDate(diff);
-  currentWeekStart.setHours(0, 0, 0, 0);
+  const todaySchoolDate = getSchoolToday();
+  let currentWeekStart = startOfSchoolDay(weekOf || todaySchoolDate);
+  // Ensure it's a Monday in School Time
+  const day = currentWeekStart.getUTCDay();
+  const diff = currentWeekStart.getUTCDate() - day + (day === 0 ? -6 : 1);
+  currentWeekStart = new Date(Date.UTC(currentWeekStart.getUTCFullYear(), currentWeekStart.getUTCMonth(), diff, 0, 0, 0, 0));
 
   const currentWeekEnd = new Date(currentWeekStart);
-  currentWeekEnd.setDate(currentWeekStart.getDate() + 5); // up to Saturday (Mon..Sat = 6 days)
+  currentWeekEnd.setUTCDate(currentWeekStart.getUTCDate() + 5); // up to Saturday (Mon..Sat = 6 days)
 
   const formatWeekLabel = (start: Date, end: Date) => {
     const sStr = start.toLocaleDateString("en-GB", { day: "numeric", month: "short" });

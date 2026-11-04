@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useSchoolToday } from "@/frontend/hooks/useSchoolToday";
 import {
   Calendar as CalendarIcon, Clock, MapPin, User,
   BookOpen, CheckCircle2, PlayCircle,
@@ -68,17 +69,11 @@ export default function TeacherTimetableClient({
 }) {
   const [viewMode, setViewMode] = useState<"class" | "mySchedule">("class");
   const [selectedClassId, setSelectedClassId] = useState<string>(initialClassId || (classes[0]?.id || ""));
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const schoolTime = useSchoolToday();
 
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 30000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const todayIndex = currentTime.getDay();
-  const todayDayName = DAYS[todayIndex];
-  const isSchoolDay = SCHOOL_DAYS.includes(todayDayName);
-  const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+  const todayDayName = schoolTime.weekday;
+  const isSchoolDay = schoolTime.isSchoolDay;
+  const currentMinutes = schoolTime.currentMinutes;
 
   const getSlotMinutes = (timeStr: string) => {
     if (!timeStr) return 0;
@@ -217,7 +212,7 @@ export default function TeacherTimetableClient({
                 ON-TIME CLASS SCHEDULE
               </span>
               <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)", fontWeight: 500 }}>
-                {currentTime.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })} • {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {schoolTime.formattedDate} • {schoolTime.timeStr}
               </span>
             </div>
 

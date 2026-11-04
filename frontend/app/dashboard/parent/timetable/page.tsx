@@ -1,11 +1,14 @@
 import { getParentAndSelectedChild } from "../parentChildHelper";
 import { prisma } from "@/backend/db/prisma";
 import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
+import { startOfSchoolDay } from "@/lib/time";
 import styles from "../../dashboard.module.css";
 import ParentChildBanner from "../ParentChildBanner";
 import { Calendar as CalendarIcon, Clock, MapPin, User, Building2, Home } from "lucide-react";
 import Link from "next/link";
 import ParentTimetableClient from "./ParentTimetableClient";
+
+export const dynamic = "force-dynamic";
 
 const DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 
@@ -48,8 +51,7 @@ export default async function ParentTimetablePage({
     } | null;
   }> = [];
 
-  const todayDate = new Date();
-  todayDate.setHours(0, 0, 0, 0);
+  const todayDate = startOfSchoolDay();
 
   let activeSubstitutions: Record<string, {
     substituteTeacherName: string;

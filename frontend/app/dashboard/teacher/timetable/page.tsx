@@ -1,9 +1,12 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
+import { startOfSchoolDay } from "@/lib/time";
 import styles from "../../dashboard.module.css";
 import { Calendar as CalendarIcon } from "lucide-react";
 import TeacherTimetableClient from "./TeacherTimetableClient";
+
+export const dynamic = "force-dynamic";
 
 export default async function TeacherTimetablePage({
   searchParams
@@ -60,8 +63,7 @@ export default async function TeacherTimetablePage({
   });
 
   // 3. Fetch substitutions assigned to this teacher for today
-  const todayDate = new Date();
-  todayDate.setHours(0, 0, 0, 0);
+  const todayDate = startOfSchoolDay();
 
   const assignedSubstitutions = await prisma.substitution.findMany({
     where: {

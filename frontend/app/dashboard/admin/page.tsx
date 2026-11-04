@@ -5,6 +5,9 @@ import styles from "../dashboard.module.css";
 import { Users, GraduationCap, BookOpen, Briefcase, Mail, Phone, CheckCircle2, XCircle, UserCheck } from "lucide-react";
 import ClassSelector from "./ClassSelector";
 import Link from "next/link";
+import { startOfSchoolDay, endOfSchoolDay } from "@/lib/time";
+
+export const revalidate = 0;
 
 const PassFailChart = dynamic(() => import("./PassFailChart"), {
   loading: () => (
@@ -106,10 +109,8 @@ export default async function AdminDashboardPage({
     });
 
     if (selectedClassData) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      const todayStart = startOfSchoolDay();
+      const todayEnd = endOfSchoolDay();
 
       const [sectionCountRes, totalClassStudentsRes, studentsDataRes, teachersDataRes, todaysAttendancesRes, marksRes] = await Promise.all([
         prisma.class.count({ where: { name: selectedClassData.name, isActive: true } }),
@@ -166,7 +167,7 @@ export default async function AdminDashboardPage({
               { classId },
               { student: { classId } },
             ],
-            date: { gte: today, lt: tomorrow },
+            date: { gte: todayStart, lte: todayEnd },
           },
           select: { status: true },
         }),

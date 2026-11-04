@@ -111,31 +111,36 @@ export async function sendUnifiedNotification(input: UnifiedNotificationInput) {
     // 3. Invalidate in-app unread notifications cache
     await invalidateUserNotifCache(userId);
 
-    // 4. Trigger Web Push in background (non-blocking)
-    (async () => {
-      try {
-        const payload: PushPayload = {
-          title,
-          body: content,
+    // 4. Trigger Web Push with a safe timeout cap so serverless containers complete delivery before freezing
+    try {
+      const payload: PushPayload = {
+        title,
+        body: content,
+        url: link,
+        priority,
+        category: categoryKey,
+        data: {
+          notificationId: notification.id,
           url: link,
-          priority,
-          category: categoryKey,
-          data: {
-            notificationId: notification.id,
-            url: link,
-          },
-        };
+        },
+      };
 
-        await dispatchPushToRecipients(
+      await Promise.race([
+        dispatchPushToRecipients(
           [userId],
           payload,
           notification.id,
           categoryKey
-        );
-      } catch (pushErr) {
-        console.warn(`[UnifiedNotification] Push delivery error for user ${userId}:`, pushErr);
-      }
-    })();
+        ),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Push delivery timeout")), 3500)
+        ),
+      ]).catch((pushErr) => {
+        console.warn(`[UnifiedNotification] Push delivery note for user ${userId}:`, pushErr);
+      });
+    } catch (pushErr) {
+      console.warn(`[UnifiedNotification] Push delivery error for user ${userId}:`, pushErr);
+    }
 
     return notification;
   } catch (err) {
@@ -158,7 +163,7 @@ export async function sendUnifiedBroadcast(input: UnifiedBroadcastInput) {
     // 1. Deduplicate user IDs
     const uniqueUserIds = Array.from(new Set(userIds));
 
-    // 2. Create Master Notification for tracking
+    // 2. Create Master Notification for tracking (also acts as inbox entry for first recipient)
     const masterNotification = await prisma.notification.create({
       data: {
         userId: uniqueUserIds[0], // primary anchor
@@ -174,19 +179,23 @@ export async function sendUnifiedBroadcast(input: UnifiedBroadcastInput) {
       },
     });
 
-    // 3. Create individual in-app notification rows so each user has an inbox entry
-    await prisma.notification.createMany({
-      data: uniqueUserIds.map((uid) => ({
-        userId: uid,
-        title,
-        content,
-        type,
-        category: categoryKey.toUpperCase(),
-        priority,
-        link,
-        isRead: false,
-      })),
-    });
+    // 3. Create individual in-app notification rows for remaining users (no duplicate for uniqueUserIds[0])
+    if (uniqueUserIds.length > 1) {
+      await prisma.notification.createMany({
+        data: uniqueUserIds.slice(1).map((uid) => ({
+          userId: uid,
+          title,
+          content,
+          type,
+          category: categoryKey.toUpperCase(),
+          priority,
+          link,
+          targetType: "BROADCAST",
+          sentAt: new Date(),
+          isRead: false,
+        })),
+      });
+    }
 
     // 4. Populate NotificationRecipient table
     await prisma.notificationRecipient.createMany({
@@ -204,31 +213,36 @@ export async function sendUnifiedBroadcast(input: UnifiedBroadcastInput) {
       invalidateUserNotifCache(uid);
     }
 
-    // 6. Asynchronously dispatch Web Push to all devices matching recipient preferences
-    (async () => {
-      try {
-        const payload: PushPayload = {
-          title,
-          body: content,
+    // 6. Deliver Web Push notifications with a safe timeout cap so serverless containers complete delivery
+    try {
+      const payload: PushPayload = {
+        title,
+        body: content,
+        url: link,
+        priority,
+        category: categoryKey,
+        data: {
+          notificationId: masterNotification.id,
           url: link,
-          priority,
-          category: categoryKey,
-          data: {
-            notificationId: masterNotification.id,
-            url: link,
-          },
-        };
+        },
+      };
 
-        await dispatchPushToRecipients(
+      await Promise.race([
+        dispatchPushToRecipients(
           uniqueUserIds,
           payload,
           masterNotification.id,
           categoryKey
-        );
-      } catch (pushErr) {
-        console.warn("[UnifiedNotification] Broadcast push delivery error:", pushErr);
-      }
-    })();
+        ),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Broadcast push delivery timeout")), 3500)
+        ),
+      ]).catch((pushErr) => {
+        console.warn("[UnifiedNotification] Broadcast push delivery note:", pushErr);
+      });
+    } catch (pushErr) {
+      console.warn("[UnifiedNotification] Broadcast push delivery error:", pushErr);
+    }
 
     return { success: true, count: uniqueUserIds.length, notificationId: masterNotification.id };
   } catch (err) {

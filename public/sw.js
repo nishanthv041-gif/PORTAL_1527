@@ -5,7 +5,7 @@
  * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
 
-const CACHE_NAME = "srt-pwa-v4";
+const CACHE_NAME = "srt-pwa-v5";
 const PRECACHE_ASSETS = [
   "/offline.html",
   "/manifest.webmanifest",
@@ -125,7 +125,9 @@ self.addEventListener("push", (event) => {
     let title = "Nipo Portal";
     let body = "You have a new school update.";
     let targetUrl = "/dashboard";
-    const iconUrl = self.location.origin + "/icons/icon-192x192.png";
+    let iconUrl = self.location.origin + "/icons/icon-192x192.png";
+    let badgeUrl = self.location.origin + "/icons/icon-192x192.png";
+    let tag = "nipo-" + Date.now();
 
     if (event.data) {
       try {
@@ -134,6 +136,13 @@ self.addEventListener("push", (event) => {
         if (payload.body) body = payload.body;
         if (payload.url) targetUrl = payload.url;
         else if (payload.data && payload.data.url) targetUrl = payload.data.url;
+        if (payload.icon) {
+          iconUrl = payload.icon.startsWith("http") ? payload.icon : self.location.origin + payload.icon;
+        }
+        if (payload.badge) {
+          badgeUrl = payload.badge.startsWith("http") ? payload.badge : self.location.origin + payload.badge;
+        }
+        if (payload.tag) tag = payload.tag;
       } catch {
         try {
           const txt = event.data.text();
@@ -145,11 +154,18 @@ self.addEventListener("push", (event) => {
     const options = {
       body: body,
       icon: iconUrl,
+      badge: badgeUrl,
+      vibrate: [200, 100, 200],
+      requireInteraction: true,
+      timestamp: Date.now(),
       data: {
         url: targetUrl,
       },
-      tag: "nipo-" + Date.now(),
+      tag: tag,
       renotify: true,
+      actions: [
+        { action: "open", title: "Open" }
+      ],
     };
 
     try {

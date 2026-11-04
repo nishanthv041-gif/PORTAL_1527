@@ -44,13 +44,13 @@ export interface AcademicCalendarSummary {
 }
 
 /**
- * Standard utility to format date into YYYY-MM-DD cleanly without timezone offset bugs.
+ * Standard utility to format date into YYYY-MM-DD cleanly in Indian School timezone.
  */
 export function toDateString(d: Date | string): string {
   if (typeof d === "string") {
     return d.split("T")[0];
   }
-  return d.toISOString().split("T")[0];
+  return getSchoolToday(d);
 }
 
 /**
@@ -61,15 +61,14 @@ export function parseDateString(dateStr: string): Date {
   return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 }
 
+import { getSchoolToday } from "@/lib/time";
+
 /**
- * Returns today's YYYY-MM-DD string in the local system timezone.
+ * Returns today's YYYY-MM-DD string in the Indian School timezone (Asia/Kolkata).
+ * Permanently flips to the new day at exactly 12:00:00 AM IST midnight.
  */
 export function getLocalTodayDateString(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return getSchoolToday();
 }
 
 /**

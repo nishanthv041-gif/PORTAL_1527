@@ -1,9 +1,12 @@
 import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
 import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
+import { getSchoolNow, startOfSchoolDay } from "@/lib/time";
 import styles from "../dashboard.module.css";
 import { GraduationCap, Users, Clock, MessageSquare, Calendar as CalendarIcon, MapPin, Star, ArrowRight, ShieldAlert } from "lucide-react";
 import Link from "next/link";
+
+export const dynamic = "force-dynamic";
 
 const DAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 
@@ -28,9 +31,9 @@ export default async function TeacherDashboard() {
   const classCount = teacher.classes.length;
   const studentCount = teacher.classes.reduce((sum, cls) => sum + cls._count.students, 0);
 
-  const todayDayName = DAYS[new Date().getDay()];
-  const todayDate = new Date();
-  todayDate.setHours(0, 0, 0, 0);
+  const schoolToday = getSchoolNow();
+  const todayDayName = schoolToday.weekday;
+  const todayDate = startOfSchoolDay();
 
   const [
     activeHomeworks,
@@ -43,7 +46,7 @@ export default async function TeacherDashboard() {
     prisma.assignment.count({
       where: {
         teacherId: teacher.id,
-        deadline: { gte: new Date() }
+        deadline: { gte: todayDate }
       }
     }),
     prisma.message.count({
@@ -62,7 +65,7 @@ export default async function TeacherDashboard() {
     }),
     prisma.calendarEvent.findMany({
       where: {
-        date: { gte: new Date() },
+        date: { gte: todayDate },
         OR: [{ audience: "ALL" }, { audience: "TEACHER" }, { type: "PROGRAM" }]
       },
       orderBy: { date: 'asc' },
@@ -71,7 +74,7 @@ export default async function TeacherDashboard() {
     prisma.meeting.findMany({
       where: {
         teachers: { some: { id: teacher.id } },
-        date: { gte: new Date() }
+        date: { gte: todayDate }
       },
       include: { parents: { include: { user: true } } },
       orderBy: [{ date: 'asc' }, { time: 'asc' }],

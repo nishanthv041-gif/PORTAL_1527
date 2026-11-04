@@ -1,6 +1,10 @@
 import { prisma } from "@/backend/db/prisma";
-
-const DAYS_OF_WEEK = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+import {
+  getSchoolWeekday,
+  startOfSchoolDay,
+  formatSchoolDate as formatTimeSchoolDate,
+  SchoolWeekday,
+} from "@/lib/time";
 
 export type TimetableScope =
   | { classId: string }
@@ -47,29 +51,17 @@ export interface EffectiveTimetableSlot {
 }
 
 /**
- * Returns date formatted as "30 Oct 2026"
+ * Returns date formatted as "30 Oct 2026" in school time zone.
  */
 export function formatSchoolDate(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  });
+  return formatTimeSchoolDate(date);
 }
 
 /**
- * Normalizes any Date or YYYY-MM-DD string to start of day UTC
+ * Normalizes any Date or YYYY-MM-DD string to start of day in school time zone (Asia/Kolkata).
  */
 export function normalizeDateToUTC(dateInput: Date | string): Date {
-  if (typeof dateInput === "string") {
-    const clean = dateInput.split("T")[0];
-    return new Date(`${clean}T00:00:00.000Z`);
-  }
-  const y = dateInput.getFullYear();
-  const m = String(dateInput.getMonth() + 1).padStart(2, "0");
-  const d = String(dateInput.getDate()).padStart(2, "0");
-  return new Date(`${y}-${m}-${d}T00:00:00.000Z`);
+  return startOfSchoolDay(dateInput);
 }
 
 /**
@@ -84,8 +76,8 @@ export async function getEffectiveTimetable(
   scope: TimetableScope,
   dateInput: Date | string
 ): Promise<EffectiveTimetableSlot[]> {
-  const targetDate = normalizeDateToUTC(dateInput);
-  const dayOfWeek = DAYS_OF_WEEK[targetDate.getUTCDay()];
+  const targetDate = startOfSchoolDay(dateInput);
+  const { name: dayOfWeek } = getSchoolWeekday(dateInput);
 
   // 1. Resolve student classId if scope is studentId
   let targetClassId: string | null = null;

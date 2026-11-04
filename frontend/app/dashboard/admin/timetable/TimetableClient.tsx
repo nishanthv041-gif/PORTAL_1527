@@ -3,6 +3,7 @@
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getSchoolWeekday } from "@/lib/time";
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -168,13 +169,10 @@ export default function TimetableClient({
   const [freeStaffSearchQuery, setFreeStaffSearchQuery] = useState("");
   const [freeStaffDisplayMode, setFreeStaffDisplayMode] = useState<"PERIOD_CARDS" | "MATRIX">("PERIOD_CARDS");
 
-  // Mobile layout state
+  // Mobile layout state - defaults to today's Indian school weekday
   const [activeMobileDay, setActiveMobileDay] = useState<string>(() => {
-    const todayIndex = new Date().getDay(); // 0 is Sun, 1 is Mon
-    if (todayIndex >= 1 && todayIndex <= 6) {
-      return DAYS[todayIndex - 1];
-    }
-    return "MONDAY";
+    const today = getSchoolWeekday();
+    return DAYS.includes(today.name) ? today.name : "MONDAY";
   });
   const [mobileViewType, setMobileViewType] = useState<"DAY" | "WEEK">("DAY");
 

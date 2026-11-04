@@ -61,64 +61,78 @@ export default function PwaRegistration() {
           }
         };
 
-        // Self-Healing Push Subscription: If push permission is granted, ensure device has a live subscription
-        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-          navigator.serviceWorker.ready.then(async (readyReg) => {
-            try {
-              let sub = await readyReg.pushManager.getSubscription();
+        // Self-Healing Push Subscription Helper: Ensures active device subscription is bound to the logged-in user
+        const syncActiveSubscription = async () => {
+          if (typeof window === "undefined" || !("Notification" in window) || Notification.permission !== "granted") {
+            return;
+          }
 
-              // If subscription is missing or revoked, renew it automatically with the current VAPID key
-              if (!sub) {
-                const keyRes = await fetch("/api/notifications/push/public-key").catch(() => null);
-                const keyData = await keyRes?.json().catch(() => null);
-                if (keyData?.publicKey) {
-                  const keyArr = urlBase64ToUint8Array(keyData.publicKey);
-                  sub = await readyReg.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: keyArr as unknown as BufferSource,
-                  }).catch(() => null);
-                }
+          try {
+            const readyReg = await navigator.serviceWorker.ready;
+            let sub = await readyReg.pushManager.getSubscription();
+
+            // If subscription is missing or revoked, renew it automatically with the current VAPID key
+            if (!sub) {
+              const keyRes = await fetch("/api/notifications/push/public-key").catch(() => null);
+              const keyData = await keyRes?.json().catch(() => null);
+              if (keyData?.publicKey) {
+                const keyArr = urlBase64ToUint8Array(keyData.publicKey);
+                sub = await readyReg.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: keyArr as unknown as BufferSource,
+                }).catch(() => null);
+              }
+            }
+
+            if (sub) {
+              const raw = sub.toJSON();
+              let p256dh = raw.keys?.p256dh;
+              let auth = raw.keys?.auth;
+
+              if ((!p256dh || !auth) && sub.getKey) {
+                try {
+                  const rawKey = sub.getKey("p256dh");
+                  if (rawKey) {
+                    p256dh = btoa(String.fromCharCode(...new Uint8Array(rawKey)))
+                      .replace(/\+/g, "-")
+                      .replace(/\//g, "_")
+                      .replace(/=+$/, "");
+                  }
+                  const rawAuth = sub.getKey("auth");
+                  if (rawAuth) {
+                    auth = btoa(String.fromCharCode(...new Uint8Array(rawAuth)))
+                      .replace(/\+/g, "-")
+                      .replace(/\//g, "_")
+                      .replace(/=+$/, "");
+                  }
+                } catch {}
               }
 
-              if (sub) {
-                const raw = sub.toJSON();
-                let p256dh = raw.keys?.p256dh;
-                let auth = raw.keys?.auth;
-
-                if ((!p256dh || !auth) && sub.getKey) {
-                  try {
-                    const rawKey = sub.getKey("p256dh");
-                    if (rawKey) {
-                      p256dh = btoa(String.fromCharCode(...new Uint8Array(rawKey)))
-                        .replace(/\+/g, "-")
-                        .replace(/\//g, "_")
-                        .replace(/=+$/, "");
-                    }
-                    const rawAuth = sub.getKey("auth");
-                    if (rawAuth) {
-                      auth = btoa(String.fromCharCode(...new Uint8Array(rawAuth)))
-                        .replace(/\+/g, "-")
-                        .replace(/\//g, "_")
-                        .replace(/=+$/, "");
-                    }
-                  } catch {}
-                }
-
-                if (p256dh && auth) {
-                  await fetch("/api/notifications/push/subscribe", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      endpoint: sub.endpoint,
-                      keys: { p256dh, auth },
-                      userAgent: navigator.userAgent,
-                    }),
-                  }).catch(() => {});
-                }
+              if (p256dh && auth) {
+                await fetch("/api/notifications/push/subscribe", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    endpoint: sub.endpoint,
+                    keys: { p256dh, auth },
+                    userAgent: navigator.userAgent,
+                  }),
+                }).catch(() => {});
               }
-            } catch {}
-          });
-        }
+            }
+          } catch (err) {
+            console.warn("[PWA] Push subscription sync skipped:", err);
+          }
+        };
+
+        // Run sync on startup
+        syncActiveSubscription();
+
+        // Also re-sync when user returns to app or tab gains focus (e.g. after logging in)
+        window.addEventListener("focus", syncActiveSubscription);
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) syncActiveSubscription();
+        });
       } catch (err) {
         console.warn("[PWA] Service worker registration deferred:", err);
       }

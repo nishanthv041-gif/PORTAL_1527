@@ -5,15 +5,18 @@ import {
   Percent, CheckCircle2, AlertCircle, CalendarCheck,
   GraduationCap, BookOpen, ArrowRight, CalendarDays, Clock
 } from "lucide-react";
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
 import ParentChildBanner from "./ParentChildBanner";
 import Link from "next/link";
 import { getSchoolCalendarStats } from "@/backend/api/actions/dashboard/attendance/calendarStats";
 import { isForenoonRecord, calculateAttendancePercentage } from "@/backend/lib/services/attendanceCalculation";
 import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
+import { getSchoolNow, startOfSchoolDay } from "@/lib/time";
 import ParentDashboardTimetableCard from "./ParentDashboardTimetableCard";
 
-const ExamClassPerformancePieChart = dynamic(
+export const dynamic = "force-dynamic";
+
+const ExamClassPerformancePieChart = nextDynamic(
   () => import("./ExamClassPerformancePieChart"),
   {
     loading: () => (
@@ -69,9 +72,9 @@ export default async function ParentDashboard({
     });
   };
 
-  const todayDayName = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"][new Date().getDay()];
-  const todayDate = new Date();
-  todayDate.setHours(0, 0, 0, 0);
+  const schoolToday = getSchoolNow();
+  const todayDayName = schoolToday.weekday;
+  const todayDate = startOfSchoolDay();
 
   // 1. Fetch attendance, latest exam, calendar statistics, today's schedule, and weekly timetable slots concurrently
   const [attendanceRecords, lastExamWithMarks, calendarStats, effectiveScheduleSlots, weeklyTimetableSlots] = await Promise.all([
