@@ -301,6 +301,61 @@ export default function BulkUpload({
     });
   };
 
+  // One-click suggestion resolver
+  const handleApplySuggestion = (excelRowNumber: number, sug: any) => {
+    if (!scanResult) return;
+    const updatedRows = scanResult.rows.map(r => {
+      if (r.excelRowNumber !== excelRowNumber) return r;
+      const updatedData = { ...r.data };
+      if (sug.actionType === "SET_FIELD" && sug.field) {
+        updatedData[sug.field] = sug.newValue;
+        if (sug.field === "userId") {
+          updatedData.email = sug.newValue;
+        }
+      } else if (sug.actionType === "CLEAR_FIELD" && sug.field) {
+        updatedData[sug.field] = "";
+        if (sug.field === "classTeacher") {
+          updatedData.classTeacherClassName = "";
+          updatedData.isClassTeacher = false;
+        }
+      } else if (sug.actionType === "GENERATE_PASSWORD") {
+        updatedData.password = sug.newValue;
+      }
+
+      if (sug.actionType === "SKIP_ROW") {
+        return {
+          ...r,
+          status: "SAMPLE_ROW" as const, // Treat as skipped
+          isReadyToImport: false,
+        };
+      }
+
+      const remainingConflictWarnings = (r.conflictWarnings || []).filter(
+        w => !w.includes(sug.field || "")
+      );
+      const remainingDupWarnings = (r.duplicateWarnings || []).filter(
+        w => !w.includes(sug.field || "")
+      );
+
+      return {
+        ...r,
+        data: updatedData,
+        status: "VALID" as const,
+        isReadyToImport: true,
+        conflictWarnings: remainingConflictWarnings,
+        duplicateWarnings: remainingDupWarnings,
+        suggestions: (r.suggestions || []).filter((s: any) => s.id !== sug.id),
+      };
+    });
+
+    const readyCount = updatedRows.filter(r => r.isReadyToImport).length;
+    setScanResult({
+      ...scanResult,
+      rows: updatedRows,
+      readyToImportCount: readyCount,
+    });
+  };
+
   // Edit first error row
   const handleEditFirstError = () => {
     if (!scanResult) return;
@@ -1371,6 +1426,32 @@ export default function BulkUpload({
                                         {conf}
                                       </span>
                                     ))}
+                                    {(r as any).suggestions && (r as any).suggestions.length > 0 && (
+                                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.4rem" }}>
+                                        {(r as any).suggestions.map((sug: any, sIdx: number) => (
+                                          <button
+                                            key={`sug-${sIdx}`}
+                                            type="button"
+                                            onClick={() => handleApplySuggestion(r.excelRowNumber, sug)}
+                                            style={{
+                                              display: "inline-flex",
+                                              alignItems: "center",
+                                              gap: "0.25rem",
+                                              padding: "0.2rem 0.5rem",
+                                              borderRadius: "6px",
+                                              backgroundColor: "rgba(16, 185, 129, 0.12)",
+                                              border: "1px solid rgba(16, 185, 129, 0.3)",
+                                              color: "#059669",
+                                              fontSize: "0.72rem",
+                                              fontWeight: 600,
+                                              cursor: "pointer"
+                                            }}
+                                          >
+                                            <Wand2 size={11} /> {sug.label}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </td>

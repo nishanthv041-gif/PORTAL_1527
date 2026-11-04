@@ -1,6 +1,14 @@
 import * as XLSX from "xlsx";
 import { prisma } from "@/backend/db/prisma";
 import { hash } from "bcryptjs";
+import {
+  readExcelBuffer,
+  readCsvContent,
+  autoMapColumns,
+  getTargetFieldsForRole,
+  validateImportRows,
+  ImportRole,
+} from "@/lib/import";
 
 // ==========================================
 // TYPE DEFINITIONS
@@ -74,6 +82,7 @@ export interface RowValidationResult {
   invalidFields: string[];
   duplicateWarnings: string[];
   conflictWarnings: string[];
+  suggestions?: any[];
   data: Record<string, any>;
 }
 
@@ -347,6 +356,63 @@ export async function parseAndScanWorkbook(
   buffer: Buffer | ArrayBuffer,
   expectedType: ImportType
 ): Promise<ExcelScanResult> {
+  // Use new resilient universal import engine for TEACHER and STUDENT_PARENT
+  if (expectedType === "TEACHER" || expectedType === "STUDENT_PARENT") {
+    try {
+      const role: ImportRole = expectedType === "TEACHER" ? "TEACHER" : "STUDENT";
+      let parsedData;
+      try {
+        parsedData = readExcelBuffer(buffer);
+      } catch {
+        const text = new TextDecoder("utf-8").decode(
+          buffer instanceof Buffer ? buffer : new Uint8Array(buffer)
+        );
+        parsedData = readCsvContent(text);
+      }
+
+      const targetFields = getTargetFieldsForRole(role);
+      const columnMappings = autoMapColumns(parsedData.headers, parsedData.rows, targetFields);
+
+      const availableClasses = await prisma.class.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, section: true },
+        orderBy: [{ name: "asc" }, { section: "asc" }]
+      });
+
+      const validatedRows = await validateImportRows({
+        role,
+        columnMappings,
+        rawRows: parsedData.rows,
+        checkDb: true,
+      });
+
+      const validCount = validatedRows.filter(r => r.status === "VALID").length;
+      const errorCount = validatedRows.filter(r => r.status === "NEEDS_CORRECTION").length;
+      const dupCount = validatedRows.filter(r => r.status === "DUPLICATE_IN_FILE").length;
+      const confCount = validatedRows.filter(r => r.status === "CONFLICT_DB").length;
+      const readyCount = validatedRows.filter(r => r.isReadyToImport).length;
+
+      return {
+        isValidWorkbook: true,
+        detectedTemplate: expectedType,
+        headersFound: parsedData.headers,
+        missingHeaders: columnMappings.filter(m => m.confidence === "UNMAPPED").map(m => m.excelHeader),
+        unexpectedHeaders: [],
+        totalRows: validatedRows.length,
+        validRowsCount: validCount,
+        errorRowsCount: errorCount,
+        duplicateRowsCount: dupCount,
+        conflictRowsCount: confCount,
+        sampleRowsCount: 0,
+        readyToImportCount: readyCount,
+        rows: validatedRows as any,
+        availableClasses,
+      };
+    } catch (err: unknown) {
+      console.warn("[ExcelImportEngine] Unified import engine note:", err);
+    }
+  }
+
   // Safe parsing - supports both binary (XLSX, XLS) and text CSV
   let workbook: XLSX.WorkBook;
   const uint8 = buffer instanceof Buffer ? buffer : new Uint8Array(buffer);
@@ -714,7 +780,7 @@ export async function parseAndScanWorkbook(
       let firstName = getNormalizedValue(norm, ["firstname", "first"]);
       let lastName = getNormalizedValue(norm, ["lastname", "last", "surname"]);
       const hasSeparateTeacherNames = normalizedFound.some(h => h.includes("firstname") || h === "first");
-      const rawFullName = !hasSeparateTeacherNames ? getNormalizedValue(norm, ["fullname", "teachername", "staffname", "facultyname", "teacher"]) : "";
+      const rawFullName = !hasSeparateTeacherNames ? getNormalizedValue(norm, ["name", "fullname", "teachername", "staffname", "facultyname"]) : "";
 
       if ((!firstName || !lastName) && rawFullName) {
         const parts = rawFullName.split(/\s+/).filter(Boolean);
