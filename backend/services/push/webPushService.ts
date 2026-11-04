@@ -239,12 +239,13 @@ export async function dispatchPushToRecipients(
     },
   });
 
-  // If no direct subscription matched for the target users, fallback to any active subscriptions
-  // registered or active in the last 48 hours to ensure zero missed push notifications on devices
-  if (subscriptions.length === 0) {
+  // If no direct subscription matched for the target users, only fallback to anonymous subscriptions
+  // for general public broadcasts / emergency alerts — NEVER leak student/parent private data to other users' devices
+  if (subscriptions.length === 0 && isBroadcastOrAlert) {
     const fallbackSubs = await prisma.pushSubscription.findMany({
       where: {
         isActive: true,
+        userId: null, // Only anonymous public device subscriptions
         lastUsedAt: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
       },
       orderBy: { lastUsedAt: "desc" },

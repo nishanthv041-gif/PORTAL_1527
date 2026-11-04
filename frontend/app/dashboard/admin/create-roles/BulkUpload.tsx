@@ -5,7 +5,7 @@ import {
   Upload, Download, FileSpreadsheet, Loader2, AlertTriangle, 
   CheckCircle2, Edit3, Trash2, X, Search, Check, RefreshCw,
   Clock, ShieldAlert, ArrowRight, Eye, AlertOctagon, HelpCircle,
-  FileCheck, Users, GraduationCap, Wand2
+  FileCheck, Users, GraduationCap, Wand2, Zap
 } from "lucide-react";
 import { 
   scanExcelFileAction, 
@@ -336,55 +336,84 @@ export default function BulkUpload({
   // One-click suggestion resolver
   const handleApplySuggestion = (excelRowNumber: number, sug: any) => {
     if (!scanResult) return;
-    const updatedRows = scanResult.rows.map(r => {
-      if (r.excelRowNumber !== excelRowNumber) return r;
-      const updatedData = { ...r.data };
-      if (sug.actionType === "SET_FIELD" && sug.field) {
-        updatedData[sug.field] = sug.newValue;
-        if (sug.field === "userId") {
-          updatedData.email = sug.newValue;
+    startTransition(async () => {
+      const updatedRows = scanResult.rows.map(r => {
+        if (r.excelRowNumber !== excelRowNumber) return r.data;
+        const updatedData = { ...r.data };
+        if (sug.actionType === "SET_FIELD" && sug.field) {
+          updatedData[sug.field] = sug.newValue;
+          if (sug.field === "userId") {
+            updatedData.email = sug.newValue;
+          }
+          if (sug.field === "email") {
+            updatedData.userId = sug.newValue;
+          }
+        } else if (sug.actionType === "CLEAR_FIELD" && sug.field) {
+          updatedData[sug.field] = "";
+          if (sug.field === "classTeacher") {
+            updatedData.classTeacherClassName = "";
+            updatedData.isClassTeacher = false;
+          }
+        } else if (sug.actionType === "GENERATE_PASSWORD") {
+          updatedData.password = sug.newValue;
         }
-      } else if (sug.actionType === "CLEAR_FIELD" && sug.field) {
-        updatedData[sug.field] = "";
-        if (sug.field === "classTeacher") {
-          updatedData.classTeacherClassName = "";
-          updatedData.isClassTeacher = false;
-        }
-      } else if (sug.actionType === "GENERATE_PASSWORD") {
-        updatedData.password = sug.newValue;
+        return updatedData;
+      });
+
+      const res = await revalidateExcelRowsAction(updatedRows, type);
+      if (res.success && res.result) {
+        setScanResult(res.result);
       }
-
-      if (sug.actionType === "SKIP_ROW") {
-        return {
-          ...r,
-          status: "SAMPLE_ROW" as const, // Treat as skipped
-          isReadyToImport: false,
-        };
-      }
-
-      const remainingConflictWarnings = (r.conflictWarnings || []).filter(
-        w => !w.includes(sug.field || "")
-      );
-      const remainingDupWarnings = (r.duplicateWarnings || []).filter(
-        w => !w.includes(sug.field || "")
-      );
-
-      return {
-        ...r,
-        data: updatedData,
-        status: "VALID" as const,
-        isReadyToImport: true,
-        conflictWarnings: remainingConflictWarnings,
-        duplicateWarnings: remainingDupWarnings,
-        suggestions: (r.suggestions || []).filter((s: any) => s.id !== sug.id),
-      };
     });
+  };
 
-    const readyCount = updatedRows.filter(r => r.isReadyToImport).length;
-    setScanResult({
-      ...scanResult,
-      rows: updatedRows,
-      readyToImportCount: readyCount,
+  // Dedicated 1-click duplicate email resolver using teacher's unique Google Mail ID
+  const handleQuickFixDuplicateEmail = (excelRowNumber: number, newEmail: string) => {
+    if (!scanResult) return;
+    startTransition(async () => {
+      const updatedRows = scanResult.rows.map(r => {
+        if (r.excelRowNumber === excelRowNumber) {
+          return {
+            ...r.data,
+            email: newEmail,
+            userId: newEmail,
+          };
+        }
+        return r.data;
+      });
+
+      const res = await revalidateExcelRowsAction(updatedRows, type);
+      if (res.success && res.result) {
+        setScanResult(res.result);
+      }
+    });
+  };
+
+  // Auto-resolve all duplicate emails where distinct Google Mail ID is present
+  const handleAutoFixAllDuplicateEmails = () => {
+    if (!scanResult) return;
+    startTransition(async () => {
+      const updatedRows = scanResult.rows.map(r => {
+        const hasEmailDup = Boolean(
+          r.fieldErrors?.email ||
+          r.duplicateWarnings?.some(w => String(w).toLowerCase().includes("email"))
+        );
+        const googleEmail = r.data.googleEmail ? String(r.data.googleEmail).trim().toLowerCase() : "";
+        const currentEmail = String(r.data.email || r.data.userId || "").trim().toLowerCase();
+        if (hasEmailDup && googleEmail && googleEmail !== currentEmail) {
+          return {
+            ...r.data,
+            email: googleEmail,
+            userId: googleEmail,
+          };
+        }
+        return r.data;
+      });
+
+      const res = await revalidateExcelRowsAction(updatedRows, type);
+      if (res.success && res.result) {
+        setScanResult(res.result);
+      }
     });
   };
 
@@ -1154,6 +1183,59 @@ export default function BulkUpload({
                   </div>
                 </div>
 
+                {/* ⚡ Auto-Resolve Duplicate Emails Banner */}
+                {type === "teacher" && scanResult.rows.some(r => {
+                  const hasEmailDup = Boolean(
+                    r.fieldErrors?.email ||
+                    r.duplicateWarnings?.some(w => String(w).toLowerCase().includes("email"))
+                  );
+                  const googleEmail = r.data.googleEmail ? String(r.data.googleEmail).trim().toLowerCase() : "";
+                  const currentEmail = String(r.data.email || r.data.userId || "").trim().toLowerCase();
+                  return hasEmailDup && googleEmail && googleEmail !== currentEmail;
+                }) && (
+                  <div style={{
+                    padding: "0.75rem 1rem",
+                    borderRadius: "8px",
+                    background: "linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.15))",
+                    border: "1px solid rgba(16, 185, 129, 0.35)",
+                    marginBottom: "1rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "0.5rem"
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <Zap size={18} color="#10b981" />
+                      <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#10b981" }}>
+                        Teacher row(s) have duplicated login emails that can be automatically resolved using their Google Mail IDs so they can log in.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAutoFixAllDuplicateEmails}
+                      disabled={isPending}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                        padding: "0.45rem 0.9rem",
+                        borderRadius: "6px",
+                        background: "linear-gradient(135deg, #10b981, #059669)",
+                        color: "#ffffff",
+                        border: "none",
+                        fontWeight: 700,
+                        fontSize: "0.8rem",
+                        cursor: isPending ? "not-allowed" : "pointer",
+                        boxShadow: "0 2px 6px rgba(16, 185, 129, 0.35)"
+                      }}
+                    >
+                      <Zap size={14} />
+                      <span>{isPending ? "Resolving..." : "Auto-Fix All Using Google Mail"}</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* Validation Preview Table */}
                 <div style={{
                   border: "1px solid var(--border-color)",
@@ -1458,6 +1540,36 @@ export default function BulkUpload({
                                         {conf}
                                       </span>
                                     ))}
+                                    {/* 1-Click Fix for Duplicate Teacher Email using Google Mail */}
+                                    {r.data.googleEmail && String(r.data.googleEmail).trim().toLowerCase() !== String(r.data.email || r.data.userId || "").trim().toLowerCase() && (
+                                      Boolean(r.fieldErrors?.email) ||
+                                      r.duplicateWarnings?.some(w => String(w).toLowerCase().includes("email"))
+                                    ) && (
+                                      <div style={{ marginTop: "0.35rem", width: "100%" }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleQuickFixDuplicateEmail(r.excelRowNumber, String(r.data.googleEmail).trim().toLowerCase())}
+                                          disabled={isPending}
+                                          style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: "0.35rem",
+                                            padding: "0.35rem 0.65rem",
+                                            borderRadius: "6px",
+                                            background: "linear-gradient(135deg, #10b981, #059669)",
+                                            color: "#ffffff",
+                                            border: "none",
+                                            fontWeight: 700,
+                                            fontSize: "0.75rem",
+                                            cursor: isPending ? "not-allowed" : "pointer",
+                                            boxShadow: "0 2px 6px rgba(16, 185, 129, 0.35)"
+                                          }}
+                                          title={`Set Login User ID to ${r.data.googleEmail} to eliminate duplicate and allow teacher to log in`}
+                                        >
+                                          <Zap size={12} /> Fix Login: Use Google Mail ({r.data.googleEmail})
+                                        </button>
+                                      </div>
+                                    )}
                                     {(r as any).suggestions && (r as any).suggestions.length > 0 && (
                                       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.4rem" }}>
                                         {(r as any).suggestions.map((sug: any, sIdx: number) => (
@@ -2263,6 +2375,55 @@ export default function BulkUpload({
                         <option value="Other">Other</option>
                       </select>
                     </div>
+
+                    {editFormData.googleEmail && String(editFormData.googleEmail).trim().toLowerCase() !== String(editFormData.email || "").trim().toLowerCase() && (
+                      <div style={{
+                        gridColumn: "1 / -1",
+                        padding: "0.6rem 0.85rem",
+                        borderRadius: "8px",
+                        backgroundColor: "rgba(59, 130, 246, 0.1)",
+                        border: "1px solid rgba(59, 130, 246, 0.3)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: "0.5rem"
+                      }}>
+                        <span style={{ fontSize: "0.8rem", color: "#60a5fa" }}>
+                          💡 Suggestion: Teacher's Google Mail ID is <strong>{editFormData.googleEmail}</strong>.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditFormData(prev => ({
+                              ...prev,
+                              email: prev.googleEmail,
+                              userId: prev.googleEmail
+                            }));
+                            setEditRowErrors(prev => {
+                              const next = { ...prev };
+                              delete next.email;
+                              return next;
+                            });
+                          }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            padding: "0.3rem 0.65rem",
+                            borderRadius: "6px",
+                            background: "#2563eb",
+                            color: "#ffffff",
+                            border: "none",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            cursor: "pointer"
+                          }}
+                        >
+                          <Zap size={12} /> Use Google Mail as Login ID
+                        </button>
+                      </div>
+                    )}
 
                     <div>
                       <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.25rem" }}>

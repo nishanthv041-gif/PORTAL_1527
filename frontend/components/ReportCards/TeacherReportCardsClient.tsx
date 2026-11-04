@@ -1430,7 +1430,7 @@ export default function TeacherReportCardsClient({
 
                       {/* Bulk Actions for Exam Group */}
                       <div
-                        style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+                        style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button

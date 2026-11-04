@@ -398,7 +398,7 @@ export default function NotificationPopupModal({
 
         {/* Metadata: Timestamp & Sender / Target */}
         <div className={styles.metaInfoRow}>
-          <span>{new Date(current.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
+          <span>{new Date(current.timestamp).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", month: "short", day: "numeric", year: "numeric" })}</span>
           {current.senderOrAuthor && (
             <>
               <span>•</span>

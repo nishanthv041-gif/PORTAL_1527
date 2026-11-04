@@ -25,18 +25,7 @@ export default function PwaWelcomeNotificationPrompt() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // 1. Detect if installed / standalone PWA mode
-    const isStandalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as unknown as { standalone?: boolean }).standalone === true ||
-      document.referrer.includes("android-app://");
-
-    // Only prompt inside the installed PWA
-    if (!isStandalone) {
-      return;
-    }
-
-    // 2. Check if notification permission is already granted or unsupported
+    // 1. Check if notification permission is already granted or unsupported
     if (!("Notification" in window) || !("serviceWorker" in navigator)) {
       return;
     }
@@ -45,7 +34,11 @@ export default function PwaWelcomeNotificationPrompt() {
       return; // Already granted; no prompt needed
     }
 
-    // 3. Check if previously dismissed (cooldown 7 days)
+    if (Notification.permission === "denied") {
+      return; // User has previously blocked notifications
+    }
+
+    // 2. Check if previously dismissed (cooldown 3 days)
     const dismissedUntil = localStorage.getItem("nipo_pwa_welcome_dismissed");
     if (dismissedUntil && Date.now() < Number(dismissedUntil)) {
       return;
@@ -201,9 +194,9 @@ export default function PwaWelcomeNotificationPrompt() {
               />
             </div>
             <div>
-              <span className={styles.appBadge}>PWA INSTALLED</span>
+              <span className={styles.appBadge}>DEVICE ALERTS</span>
               <h3 id="welcome-notif-title" className={styles.title}>
-                Welcome to Nipo Portal!
+                Enable Lock Screen Notifications
               </h3>
             </div>
           </div>
@@ -219,7 +212,7 @@ export default function PwaWelcomeNotificationPrompt() {
 
         <div className={styles.body}>
           <p className={styles.desc}>
-            Enable notifications to receive important messages, announcements, and account updates directly on your device.
+            Receive instant alerts on your phone lock screen for homework assignments, timetable updates, report cards, and school announcements.
           </p>
 
           {isSuccess ? (

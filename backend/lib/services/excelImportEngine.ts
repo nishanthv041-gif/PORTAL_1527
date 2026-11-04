@@ -938,6 +938,7 @@ export async function validateAndCorrelateBatch(
     const invalidFields: string[] = [];
     const duplicateWarnings: string[] = [];
     const conflictWarnings: string[] = [];
+    const suggestions: any[] = [];
 
     // Check if sample row
     const isSample = isSampleTemplateRow(type, row);
@@ -1126,6 +1127,18 @@ export async function validateAndCorrelateBatch(
           const firstRow = seenTeacherEmails.get(email);
           fieldErrors.email = `Teacher email '${email}' is duplicated in row ${firstRow}.`;
           duplicateWarnings.push(`Duplicate teacher email in row ${firstRow}.`);
+
+          // If this teacher has a distinct, valid Google email, offer 1-click suggestion to use it as Login ID
+          const googleEmail = String(row.googleEmail || "").trim().toLowerCase();
+          if (googleEmail && isValidEmail(googleEmail) && googleEmail !== email) {
+            suggestions.push({
+              id: `use-google-email-${excelRow}`,
+              label: `Use Google Mail as Login ID (${googleEmail})`,
+              field: "email",
+              newValue: googleEmail,
+              actionType: "SET_FIELD"
+            });
+          }
         } else {
           seenTeacherEmails.set(email, excelRow);
         }
@@ -1249,6 +1262,7 @@ export async function validateAndCorrelateBatch(
       invalidFields,
       duplicateWarnings,
       conflictWarnings,
+      suggestions,
       data: row
     });
   }
