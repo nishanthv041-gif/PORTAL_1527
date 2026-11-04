@@ -5,12 +5,15 @@ import { useRouter } from "next/navigation";
 import {
   Plus, LayoutGrid, List,
   CheckCircle2, XCircle, Edit2,
-  ArrowUpDown, FileText
+  ArrowUpDown, FileText, Trash2, Loader2
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
-import { toggleStudentStatusAction } from "@/backend/api/actions/dashboard/admin/students/studentManagementActions";
+import {
+  toggleStudentStatusAction,
+  deleteStudentPermanentlyAction
+} from "@/backend/api/actions/dashboard/admin/students/studentManagementActions";
 import type { StudentData } from "./StudentEditDrawer";
 import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 import { SingleSelect } from "@/frontend/components/ui/form";
@@ -51,6 +54,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
   const [isPendingSearch, setIsPendingSearch] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentData | null>(null);
+  const [deletingStudentId, setDeletingStudentId] = useState<string | null>(null);
 
   // Debounce search
   useEffect(() => {
@@ -205,6 +209,34 @@ export default function StudentListClient({ students, classes }: StudentListClie
 
     await toggleStudentStatusAction(student.id);
     router.refresh();
+  };
+
+  const handleDeleteStudent = async (student: StudentData) => {
+    const studentFullName = `${student.firstName} ${student.lastName || ""}`.trim();
+    const confirmed = await confirm({
+      title: `Delete Student "${studentFullName}"?`,
+      message: `Are you sure you want to permanently delete ${studentFullName} (Admission: ${student.admissionNo || student.rollNumber})? This will permanently remove their records, report cards, and enrollments from the database.`,
+      confirmText: "Delete Student",
+      cancelText: "Cancel",
+      variant: "danger",
+    });
+
+    if (!confirmed) return;
+
+    try {
+      setDeletingStudentId(student.id);
+      const res = await deleteStudentPermanentlyAction(student.id);
+      if (res?.error) {
+        alert(res.error);
+      } else {
+        router.refresh();
+      }
+    } catch (err) {
+      console.error("Delete student failed:", err);
+      alert(err instanceof Error ? err.message : "Failed to delete student.");
+    } finally {
+      setDeletingStudentId(null);
+    }
   };
 
   const selectedClassObj = classes.find(c => c.id === selectedClassId);
@@ -502,7 +534,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
       >
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
           <span style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--text-primary, #f8fafc)" }}>
-            {selectedClassObj ? `Class ${selectedClassObj.name} - ${selectedClassObj.section} Roster` : "No Class Selected"}
+            {selectedClassObj ? `${selectedClassObj.name.startsWith("Class ") ? selectedClassObj.name : `Class ${selectedClassObj.name}`} - ${selectedClassObj.section} Roster` : "No Class Selected"}
           </span>
           {selectedClassObj?.classTeacher?.user?.name && (
             <span
@@ -635,7 +667,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
                         </span>
                       </td>
                       <td style={{ padding: "0.85rem 1rem", textAlign: "right" }}>
-                        <div style={{ display: "inline-flex", gap: "0.4rem" }}>
+                        <div style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center" }}>
                           <button
                             type="button"
                             onClick={() => handleOpenEdit(student)}
@@ -670,6 +702,34 @@ export default function StudentListClient({ students, classes }: StudentListClie
                           >
                             <FileText size={14} />
                           </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteStudent(student)}
+                            disabled={deletingStudentId === student.id}
+                            style={{
+                              padding: "0.35rem 0.65rem",
+                              borderRadius: "6px",
+                              border: "1px solid rgba(239, 68, 68, 0.35)",
+                              background: "rgba(239, 68, 68, 0.08)",
+                              color: "#ef4444",
+                              fontSize: "0.8rem",
+                              fontWeight: 600,
+                              cursor: deletingStudentId === student.id ? "not-allowed" : "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.3rem",
+                              opacity: deletingStudentId === student.id ? 0.6 : 1,
+                              transition: "all 0.2s ease"
+                            }}
+                            title="Permanently Delete Student"
+                          >
+                            {deletingStudentId === student.id ? (
+                              <Loader2 size={13} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={13} />
+                            )}
+                            <span>Delete</span>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -785,10 +845,11 @@ export default function StudentListClient({ students, classes }: StudentListClie
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: "0.5rem",
+                    gap: "0.4rem",
                     paddingTop: "0.85rem",
                     borderTop: "1px solid var(--border-color, rgba(255, 255, 255, 0.08))",
                   }}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   <button
                     type="button"
@@ -799,7 +860,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
                       alignItems: "center",
                       justifyContent: "center",
                       gap: "0.35rem",
-                      padding: "0.45rem 0.75rem",
+                      padding: "0.45rem 0.65rem",
                       borderRadius: "6px",
                       border: "1px solid var(--border-color, rgba(255, 255, 255, 0.15))",
                       background: "rgba(255, 255, 255, 0.04)",
@@ -817,13 +878,15 @@ export default function StudentListClient({ students, classes }: StudentListClie
                     href={`/dashboard/teacher/report-cards?studentId=${student.id}`}
                     prefetch={false}
                     style={{
-                      padding: "0.45rem 0.65rem",
+                      padding: "0.45rem 0.55rem",
                       borderRadius: "6px",
                       border: "1px solid rgba(59, 130, 246, 0.2)",
                       background: "rgba(59, 130, 246, 0.08)",
                       color: "#60a5fa",
                       fontSize: "0.8rem",
                       textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center",
                     }}
                     title="Report Card"
                   >
@@ -837,7 +900,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      padding: "0.45rem 0.65rem",
+                      padding: "0.45rem 0.55rem",
                       borderRadius: "6px",
                       border: student.isActive ? "1px solid rgba(239, 68, 68, 0.2)" : "1px solid rgba(16, 185, 129, 0.2)",
                       background: student.isActive ? "rgba(239, 68, 68, 0.08)" : "rgba(16, 185, 129, 0.08)",
@@ -847,6 +910,32 @@ export default function StudentListClient({ students, classes }: StudentListClie
                     title={student.isActive ? "Deactivate" : "Activate"}
                   >
                     {student.isActive ? <XCircle size={14} /> : <CheckCircle2 size={14} />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteStudent(student)}
+                    disabled={deletingStudentId === student.id}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "0.45rem 0.55rem",
+                      borderRadius: "6px",
+                      border: "1px solid rgba(239, 68, 68, 0.35)",
+                      background: "rgba(239, 68, 68, 0.08)",
+                      color: "#ef4444",
+                      cursor: deletingStudentId === student.id ? "not-allowed" : "pointer",
+                      opacity: deletingStudentId === student.id ? 0.6 : 1,
+                      transition: "all 0.2s ease"
+                    }}
+                    title="Permanently Delete Student"
+                  >
+                    {deletingStudentId === student.id ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
                   </button>
                 </div>
               </div>
