@@ -84,6 +84,7 @@ export function matchScanResultToDatabase(
       attendance: st.attendance || null,
       subjects,
       totalMarks: hasMissing ? 0 : totalMarks,
+      maxTotal: maxTotal || (subjects.length * 100),
       percentage,
       grade,
       remarks: st.remarks || undefined,
@@ -141,28 +142,75 @@ function findBestStudentMatch(
   return bestCandidate;
 }
 
-function findBestSubjectMatch(
+export function findBestSubjectMatch(
   scannedSubjectName: string,
   classSubjects: ClassSubject[]
 ): ClassSubject | null {
-  const norm = scannedSubjectName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!scannedSubjectName || classSubjects.length === 0) return null;
+  const rawNorm = scannedSubjectName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 
-  // Direct match
+  // 1. Direct exact match (e.g. "science" === "science", "socialscience" === "socialscience")
   const direct = classSubjects.find(
-    (s) => s.name.toLowerCase().replace(/[^a-z0-9]/g, "") === norm
+    (s) => s.name.toLowerCase().replace(/[^a-z0-9]/g, "") === rawNorm
   );
   if (direct) return direct;
 
-  // Alias lookup
+  // 2. Exact alias mapping (Strictly separated: Science != Social Science)
   for (const [canonical, aliases] of Object.entries(SUBJECT_NAME_ALIASES)) {
-    if (aliases.some((a) => norm === a || norm.startsWith(a) || a.startsWith(norm))) {
-      const match = classSubjects.find(
-        (s) => s.name.toUpperCase() === canonical || s.name.toLowerCase().includes(canonical.toLowerCase())
+    const isAliasMatch = aliases.some((a) => {
+      const aNorm = a.toLowerCase().replace(/[^a-z0-9]/g, "");
+      return rawNorm === aNorm;
+    });
+
+    if (isAliasMatch) {
+      // Find class subject matching this exact canonical name
+      const canonicalMatch = classSubjects.find(
+        (s) => s.name.trim().toUpperCase() === canonical
       );
-      if (match) return match;
+      if (canonicalMatch) return canonicalMatch;
     }
   }
 
-  return classSubjects.find((s) => s.name.toLowerCase().includes(norm) || norm.includes(s.name.toLowerCase())) || null;
+  // 3. Normalized prefix match with strict boundary guard (prevent "science" matching "social science")
+  if (rawNorm === "sci" || rawNorm === "science") {
+    return (
+      classSubjects.find((s) => s.name.trim().toUpperCase() === "SCIENCE") || null
+    );
+  }
+  if (rawNorm === "soc" || rawNorm === "social" || rawNorm === "sst") {
+    return (
+      classSubjects.find((s) => s.name.trim().toUpperCase() === "SOCIAL SCIENCE") || null
+    );
+  }
+  if (rawNorm === "math" || rawNorm === "maths" || rawNorm === "mat") {
+    return (
+      classSubjects.find((s) => s.name.trim().toUpperCase() === "MATHEMATICS") || null
+    );
+  }
+  if (rawNorm === "tam" || rawNorm === "tamil") {
+    return (
+      classSubjects.find((s) => s.name.trim().toUpperCase() === "TAMIL") || null
+    );
+  }
+  if (rawNorm === "eng" || rawNorm === "english") {
+    return (
+      classSubjects.find((s) => s.name.trim().toUpperCase() === "ENGLISH") || null
+    );
+  }
+
+  // 4. Safe fallback for other subjects (strictly avoid Science/Social cross-matches)
+  return (
+    classSubjects.find((s) => {
+      const sNorm = s.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+      // Guard against substring confusion
+      if (sNorm === "socialscience" && rawNorm.includes("sci") && !rawNorm.includes("soc")) {
+        return false;
+      }
+      if (sNorm === "science" && rawNorm.includes("soc")) {
+        return false;
+      }
+      return sNorm.includes(rawNorm) || rawNorm.includes(sNorm);
+    }) || null
+  );
 }
 

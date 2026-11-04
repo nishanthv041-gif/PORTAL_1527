@@ -5,7 +5,7 @@
  * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
 
-const CACHE_NAME = "srt-pwa-v6";
+const CACHE_NAME = "srt-pwa-v7";
 const PRECACHE_ASSETS = [
   "/offline.html",
   "/manifest.webmanifest",

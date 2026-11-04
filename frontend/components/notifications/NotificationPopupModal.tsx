@@ -72,29 +72,56 @@ export default function NotificationPopupModal({
             });
           }
         }
+        const sessionStored = sessionStorage.getItem("srt_portal_session_seen_ids");
+        if (sessionStored) {
+          const parsed = JSON.parse(sessionStored);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((id: string) => {
+              localSeen.add(id);
+              seenIdRef.current.add(id);
+            });
+          }
+        }
       } catch {}
     }
 
     return items.filter(
-      n => !n.isRead && !localSeen.has(n.id) && new Date(n.timestamp).getTime() > clearedTime
+      n => {
+        if (n.isRead) return false;
+        if (localSeen.has(n.id)) return false;
+        // Deduplicate by signature to guard against identical duplicate rows
+        const sig = `${n.category}-${(n.title || "").trim().toLowerCase()}`;
+        if (localSeen.has(sig)) return false;
+        return new Date(n.timestamp).getTime() > clearedTime;
+      }
     );
   };
 
   // Helper to mark a list of notifications as seen:
-  // 1. Locally via localStorage so it never shows in popup again
+  // 1. Locally via localStorage & sessionStorage so it never shows in popup again
   // 2. In database so it remains safely stored and accessible on the user's notification page
   const markShownNotificationsAsSeen = (items: UnifiedNotification[]) => {
     if (!items || items.length === 0) return;
     const ids = items.map(n => n.id);
 
     ids.forEach(id => seenIdRef.current.add(id));
+    items.forEach(n => {
+      const sig = `${n.category}-${(n.title || "").trim().toLowerCase()}`;
+      seenIdRef.current.add(sig);
+    });
 
     if (typeof window !== "undefined") {
       try {
         const stored = localStorage.getItem(SEEN_POPUP_IDS_KEY);
         const existingArr: string[] = stored ? JSON.parse(stored) : [];
-        const updated = new Set([...existingArr, ...ids]);
+        const sigs = items.map(n => `${n.category}-${(n.title || "").trim().toLowerCase()}`);
+        const updated = new Set([...existingArr, ...ids, ...sigs]);
         localStorage.setItem(SEEN_POPUP_IDS_KEY, JSON.stringify(Array.from(updated)));
+
+        const sessionStored = sessionStorage.getItem("srt_portal_session_seen_ids");
+        const existingSessionArr: string[] = sessionStored ? JSON.parse(sessionStored) : [];
+        const sessionUpdated = new Set([...existingSessionArr, ...ids, ...sigs]);
+        sessionStorage.setItem("srt_portal_session_seen_ids", JSON.stringify(Array.from(sessionUpdated)));
       } catch {}
     }
 
@@ -227,7 +254,6 @@ export default function NotificationPopupModal({
     // When closed, ensure all seen notifications are marked as seen and stored in database
     markShownNotificationsAsSeen(notifications);
     setIsOpen(false);
-    router.refresh();
   };
 
   const handleOpen = async () => {

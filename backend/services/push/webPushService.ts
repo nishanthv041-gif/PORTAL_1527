@@ -132,10 +132,6 @@ export async function sendPushToSubscription(
       {
         TTL: 86400,
         urgency: "high",
-        headers: {
-          Urgency: "high",
-          Topic: (payload.tag || "school-alert").replace(/[^a-zA-Z0-9-_]/g, "").slice(0, 32),
-        },
       }
     );
 

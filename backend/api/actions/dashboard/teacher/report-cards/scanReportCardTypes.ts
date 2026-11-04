@@ -28,6 +28,7 @@ export interface DetectedStudentEntry {
   attendance?: number | string | null;
   subjects: ScannedReportCardSubject[];
   totalMarks?: number;
+  maxTotal?: number;
   percentage?: number;
   grade?: string;
   remarks?: string;

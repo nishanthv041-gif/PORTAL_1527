@@ -318,7 +318,10 @@ function identifyColumns(headerLine: TextLine): ColumnRange[] {
     const w = words[i];
     const lower = w.text.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-    const isSubMatch = Object.keys(SUBJECT_KEYWORDS).find((k) => lower === k || lower.startsWith(k));
+    const nextWord = words[i + 1];
+    const nextLower = nextWord ? nextWord.text.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+    const combinedNorm = `${lower}${nextLower}`;
+
     const isTotal = lower.includes("total") || lower === "tot";
     const isName = lower.includes("name") || lower.includes("student") || lower.includes("candidate");
 
@@ -337,24 +340,48 @@ function identifyColumns(headerLine: TextLine): ColumnRange[] {
         isName: true,
       });
       currentNameWords = [];
-    } else if (isSubMatch) {
+    } else if (combinedNorm === "socialscience" || (lower === "social" && nextLower.startsWith("sci"))) {
       columns.push({
-        name: SUBJECT_KEYWORDS[isSubMatch] || w.text.toUpperCase(),
+        name: "SOCIAL SCIENCE",
         x0: w.x0 - 15,
-        x1: w.x1 + 15,
-        xCenter: (w.x0 + w.x1) / 2,
+        x1: nextWord.x1 + 15,
+        xCenter: (w.x0 + nextWord.x1) / 2,
         isTotal: false,
         isName: false,
       });
-    } else if (isTotal) {
+      i++; // consume next word
+    } else if (combinedNorm === "computerscience" || (lower === "computer" && nextLower.startsWith("sci"))) {
       columns.push({
-        name: "TOTAL",
+        name: "COMPUTER SCIENCE",
         x0: w.x0 - 15,
-        x1: w.x1 + 30,
-        xCenter: (w.x0 + w.x1) / 2,
-        isTotal: true,
+        x1: nextWord.x1 + 15,
+        xCenter: (w.x0 + nextWord.x1) / 2,
+        isTotal: false,
         isName: false,
       });
+      i++; // consume next word
+    } else {
+      const isSubMatch = Object.keys(SUBJECT_KEYWORDS).find((k) => lower === k || (k.length >= 4 && lower.startsWith(k)));
+
+      if (isSubMatch) {
+        columns.push({
+          name: SUBJECT_KEYWORDS[isSubMatch] || w.text.toUpperCase(),
+          x0: w.x0 - 15,
+          x1: w.x1 + 15,
+          xCenter: (w.x0 + w.x1) / 2,
+          isTotal: false,
+          isName: false,
+        });
+      } else if (isTotal) {
+        columns.push({
+          name: "TOTAL",
+          x0: w.x0 - 15,
+          x1: w.x1 + 30,
+          xCenter: (w.x0 + w.x1) / 2,
+          isTotal: true,
+          isName: false,
+        });
+      }
     }
   }
 
