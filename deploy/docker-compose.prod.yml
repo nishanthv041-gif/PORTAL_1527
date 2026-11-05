@@ -1,0 +1,62 @@
+services:
+  app:
+    image: ${ECR_REPO_URL}:${IMAGE_TAG:-latest}
+    container_name: nipoportal_app
+    restart: unless-stopped
+    env_file:
+      - /opt/nipoportal/.env.production
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    deploy:
+      resources:
+        limits:
+          cpus: '1.8'
+          memory: 1600M
+        reservations:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - niponet
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: nipoportal_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - DOMAIN=${DOMAIN:-}
+      - ACME_EMAIL=${ALERT_EMAIL:-admin@nipoportal.internal}
+    volumes:
+      - /opt/nipoportal/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/nipoportal/caddy_data:/data
+      - /opt/nipoportal/caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - niponet
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  niponet:
+    driver: bridge
+

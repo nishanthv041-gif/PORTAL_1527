@@ -1,0 +1,70 @@
+# Caddyfile: Production reverse proxy with automatic TLS, HTTP/3, and security headers
+{
+  # Global options
+  email {$ACME_EMAIL:admin@nipoportal.internal}
+  admin off
+}
+
+# Match either the domain name (if set) or fallback to any host on ports 80/443
+{$DOMAIN::80, :443} {
+  # Enable modern compression
+  encode zstd gzip
+
+  # Max upload size limit (25MB matching Next.js server actions limit)
+  request_body {
+    max_size 25MB
+  }
+
+  # Security headers
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    -Server
+  }
+
+  # Healthcheck pass-through directly to application
+  handle /api/health/live {
+    reverse_proxy app:3000 {
+      header_up Host {host}
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+  }
+
+  # NextAuth & API routes (Rate limit protection)
+  handle /api/auth/* {
+    reverse_proxy app:3000 {
+      header_up Host {host}
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+  }
+
+  # All other application requests
+  handle {
+    reverse_proxy app:3000 {
+      header_up Host {host}
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+      header_up X-Forwarded-Host {host}
+      
+      # Healthcheck interval to app container
+      health_uri /api/health/live
+      health_interval 15s
+      health_timeout 5s
+    }
+  }
+
+  # Access logging in JSON format for CloudWatch ingestion
+  log {
+    output stdout
+    format json
+  }
+}
+

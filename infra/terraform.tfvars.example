@@ -1,0 +1,11 @@
+# Example configuration values for Terraform
+# Copy to terraform.tfvars and customize before running terraform plan
+
+aws_region       = "ap-southeast-1" # Singapore (collocated with Neon Primary DB)
+project_name     = "nipoportal"
+environment      = "prod"
+instance_type    = "t4g.small"      # 2 vCPU, 2GB RAM Graviton2 ($12.26/mo)
+domain_name      = ""               # e.g. "portal.myschool.edu" (or leave empty to use IP)
+alert_email      = "admin@example.com"
+budget_limit_usd = 20               # Strict $20 monthly budget guardrail
+

@@ -16,3 +16,4 @@ async function inspectAllRows() {
 }
 
 inspectAllRows().catch(console.error).finally(() => prisma.$disconnect());
+

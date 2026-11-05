@@ -1,0 +1,32 @@
+# Dependency and build caches
+node_modules
+.next
+.git
+.gitignore
+
+# Secrets and environment configurations (NEVER bake into image)
+.env*
+*.pem
+*.key
+*.cert
+
+# Infrastructure, scripts and deployment assets
+infra
+deploy
+tests
+scratch
+docs
+android
+
+# Development tools & IDE
+.vscode
+.gemini
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Documentation & project notes
+*.md
+README*
+

@@ -50,3 +50,4 @@ async function checkExistingEmailCollisions() {
 }
 
 checkExistingEmailCollisions().catch(console.error).finally(() => prisma.$disconnect());
+

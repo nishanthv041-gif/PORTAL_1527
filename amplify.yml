@@ -3,7 +3,7 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm ci --prefer-offline
+        - npm ci --include=dev --prefer-offline
         - npx prisma generate
     build:
       commands:
@@ -16,4 +16,3 @@ frontend:
     paths:
       - .next/cache/**/*
       - node_modules/**/*
-

@@ -16,6 +16,7 @@ const cspHeader = `
 `;
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   compress: true,
   poweredByHeader: false,
   devIndicators: false,

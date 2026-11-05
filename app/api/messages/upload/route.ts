@@ -63,8 +63,19 @@ export async function POST(request: Request) {
 
     let fileUrl: string;
 
-    // 1. Try Vercel Blob if configured
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
+    // 1. Try AWS S3 if configured
+    const { isS3Configured, uploadBufferToS3 } = await import("@/backend/lib/storage/s3Storage");
+    if (isS3Configured()) {
+      const arrayBuffer = await file.arrayBuffer();
+      const s3Res = await uploadBufferToS3(Buffer.from(arrayBuffer), `messages/${uniqueFileName}`, file.type || undefined);
+      if (s3Res.success && s3Res.s3Url) {
+        fileUrl = s3Res.s3Url;
+      } else {
+        console.warn("S3 upload failed, falling back to robust storage:", s3Res.error);
+        fileUrl = await saveFileRobust(file, uniqueFileName);
+      }
+    } else if (process.env.BLOB_READ_WRITE_TOKEN) {
+      // 2. Try Vercel Blob if configured
       try {
         const { put } = await import("@vercel/blob");
         const blob = await put(`messages/${uniqueFileName}`, file, {

@@ -28,8 +28,18 @@ export const options = {
 const BASE_URL = __ENV.TARGET_URL || 'http://localhost:3000';
 
 export default function () {
-  // 1. Health check & DB readiness probe
-  group('Health Check Probe', function () {
+  // 1. Shallow Liveliness & Deep Database Readiness Probes
+  group('Health Check Probes', function () {
+    // 1a. Fast process liveliness probe (Zero DB overhead)
+    const liveRes = http.get(`${BASE_URL}/api/health/live`, {
+      headers: { 'Accept': 'application/json' },
+      timeout: '2s'
+    });
+    check(liveRes, {
+      'live status is 200': (r) => r.status === 200,
+    });
+
+    // 1b. Deep DB readiness probe
     const res = http.get(`${BASE_URL}/api/health`, {
       headers: { 'Accept': 'application/json' },
       timeout: '5s'
