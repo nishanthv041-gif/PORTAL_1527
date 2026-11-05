@@ -1,6 +1,24 @@
 {
   "version": 1,
   "skills": {
+    "aws-amplify": {
+      "source": "aws/agent-toolkit-for-aws",
+      "sourceType": "github",
+      "skillPath": "skills/specialized-skills/web-and-mobile-development/aws-amplify/SKILL.md",
+      "computedHash": "d47fdc170d68ea3a7f939686f5df7b823748593908dc3a634031798295f41379"
+    },
+    "aws-billing-and-cost-management": {
+      "source": "aws/agent-toolkit-for-aws",
+      "sourceType": "github",
+      "skillPath": "skills/core-skills/aws-billing-and-cost-management/SKILL.md",
+      "computedHash": "6dcc33ee4a3ed2ffd0d7f54f427b70551772eac344afebcb868ed24f22700736"
+    },
+    "aws-deployment": {
+      "source": "aws/agent-toolkit-for-aws",
+      "sourceType": "github",
+      "skillPath": "skills/core-skills/aws-deployment/SKILL.md",
+      "computedHash": "615b03e22a690405c0478193352425659b0187b127e27c6de964639734d8a512"
+    },
     "supabase": {
       "source": "supabase/agent-skills",
       "sourceType": "github",
