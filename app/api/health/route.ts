@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/backend/db/prisma';
 import { createClient } from '@supabase/supabase-js';

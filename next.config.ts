@@ -16,7 +16,8 @@ const cspHeader = `
 `;
 
 const nextConfig: NextConfig = {
-  output: process.env.VERCEL ? undefined : "standalone",
+  // Only produce standalone output when explicitly targeted for Docker containers
+  output: process.env.BUILD_TARGET === "docker" ? "standalone" : undefined,
   compress: true,
   poweredByHeader: false,
   devIndicators: false,

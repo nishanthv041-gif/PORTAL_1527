@@ -3,10 +3,13 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm ci --include=dev --prefer-offline
+        - nvm use 20 || nvm install 20
+        - npm ci
         - npx prisma generate
     build:
       commands:
+        # Securely pass permitted runtime environment variables to Next.js server runtime without logging secrets
+        - env | grep -E '^(DATABASE_URL|DIRECT_URL|SECONDARY_DATABASE_URL|SECONDARY_DIRECT_URL|NEXTAUTH_SECRET|NEXTAUTH_URL|NEXT_PUBLIC_APP_URL|NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY|SUPABASE_SECRET_KEY|SETTINGS_INITIAL_PASSWORD|GOOGLE_CLIENT_ID|GOOGLE_CLIENT_SECRET|SMTP_EMAIL|SMTP_PASSWORD|SMTP_HOST|SMTP_PORT|CRON_SECRET|NODE_ENV)=' > .env.production || true
         - npm run build
   artifacts:
     baseDirectory: .next
@@ -14,5 +17,5 @@ frontend:
       - '**/*'
   cache:
     paths:
-      - .next/cache/**/*
       - node_modules/**/*
+      - .next/cache/**/*

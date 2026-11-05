@@ -20,6 +20,7 @@ COPY . .
 # Generate Prisma Client for target architectures
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV BUILD_TARGET=docker
 # Provide dummy NEXTAUTH_SECRET and DB URLs during static build analysis if needed
 ENV NEXTAUTH_SECRET="build-time-secret-placeholder-minimum-32-chars"
 ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"

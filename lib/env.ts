@@ -29,6 +29,11 @@ export type Env = z.infer<typeof envSchema>;
 let cachedEnv: Env | null = null;
 
 export function validateEnv(): Env {
+  // Skip strict validation during Next.js production build / page collection phase
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return process.env as unknown as Env;
+  }
+
   if (cachedEnv) return cachedEnv;
 
   const result = envSchema.safeParse(process.env);
