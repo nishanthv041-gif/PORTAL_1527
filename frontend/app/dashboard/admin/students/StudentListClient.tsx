@@ -17,6 +17,7 @@ import {
 import type { StudentData } from "./StudentEditDrawer";
 import { SearchBar, ResultsContainer } from "@/frontend/components/ui";
 import { SingleSelect } from "@/frontend/components/ui/form";
+import { useOptimisticList } from "@/frontend/hooks/useOptimisticList";
 
 const StudentEditDrawer = dynamic(() => import("./StudentEditDrawer"), {
   ssr: false,
@@ -40,6 +41,13 @@ interface StudentListClientProps {
 export default function StudentListClient({ students, classes }: StudentListClientProps) {
   const router = useRouter();
   const confirm = useConfirm();
+
+  const {
+    items: localStudents,
+    optimisticDelete,
+    optimisticUpdate,
+    setItems: setLocalStudents,
+  } = useOptimisticList<StudentData>(students);
 
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -67,20 +75,20 @@ export default function StudentListClient({ students, classes }: StudentListClie
   // Compute student counts per class
   const classStudentCounts = useMemo(() => {
     const map = new Map<string, number>();
-    students.forEach((s) => {
+    localStudents.forEach((s) => {
       if (s.classId) {
         map.set(s.classId, (map.get(s.classId) || 0) + 1);
       }
     });
     return map;
-  }, [students]);
+  }, [localStudents]);
 
   // Compute search matches per class when searching
   const classSearchMatches = useMemo(() => {
     if (!debouncedSearch.trim()) return null;
     const q = debouncedSearch.toLowerCase().trim();
     const map = new Map<string, number>();
-    students.forEach((student) => {
+    localStudents.forEach((student) => {
       if (!student.classId) return;
       const fullName = `${student.firstName} ${student.lastName}`.toLowerCase();
       const rollMatch = student.rollNumber.toLowerCase().includes(q);
@@ -95,12 +103,12 @@ export default function StudentListClient({ students, classes }: StudentListClie
       }
     });
     return map;
-  }, [students, debouncedSearch]);
+  }, [localStudents, debouncedSearch]);
 
   // Existing parents for sibling linking
   const existingParents = useMemo(() => {
     const map = new Map<string, { id: string; name: string; email: string; phone: string | null }>();
-    students.forEach((s) => {
+    localStudents.forEach((s) => {
       s.parents?.forEach((pRel) => {
         const p = pRel.parent;
         if (p && !map.has(p.id)) {
@@ -114,11 +122,11 @@ export default function StudentListClient({ students, classes }: StudentListClie
       });
     });
     return Array.from(map.values());
-  }, [students]);
+  }, [localStudents]);
 
   // Filter & Sort Students
   const filteredStudents = useMemo(() => {
-    return students
+    return localStudents
       .filter((student) => {
         // Search
         if (debouncedSearch.trim()) {
@@ -167,7 +175,7 @@ export default function StudentListClient({ students, classes }: StudentListClie
         }
         return 0;
       });
-  }, [students, debouncedSearch, selectedClassId, statusFilter, residenceFilter, sortBy]);
+  }, [localStudents, debouncedSearch, selectedClassId, statusFilter, residenceFilter, sortBy]);
 
   // Pagination (20 per page)
   const [currentPage, setCurrentPage] = useState(1);
@@ -207,8 +215,15 @@ export default function StudentListClient({ students, classes }: StudentListClie
 
     if (!confirmed) return;
 
-    await toggleStudentStatusAction(student.id);
-    router.refresh();
+    // Instant optimistic update
+    const targetStatus = !student.isActive;
+    optimisticUpdate(student.id, { isActive: targetStatus }, async () => {
+      const res = await toggleStudentStatusAction(student.id);
+      if (res && "error" in res && res.error) {
+        throw new Error(String(res.error));
+      }
+      return { ...student, isActive: targetStatus };
+    });
   };
 
   const handleDeleteStudent = async (student: StudentData) => {
@@ -223,20 +238,19 @@ export default function StudentListClient({ students, classes }: StudentListClie
 
     if (!confirmed) return;
 
-    try {
-      setDeletingStudentId(student.id);
-      const res = await deleteStudentPermanentlyAction(student.id);
-      if (res?.error) {
-        alert(res.error);
-      } else {
-        router.refresh();
+    // Instant optimistic delete (< 20ms) with 5-second Undo action toast!
+    optimisticDelete(
+      student.id,
+      async (id) => {
+        const res = await deleteStudentPermanentlyAction(id);
+        if (res?.error) {
+          throw new Error(res.error);
+        }
+      },
+      {
+        itemName: `Student ${studentFullName}`,
       }
-    } catch (err) {
-      console.error("Delete student failed:", err);
-      alert(err instanceof Error ? err.message : "Failed to delete student.");
-    } finally {
-      setDeletingStudentId(null);
-    }
+    );
   };
 
   const selectedClassObj = classes.find(c => c.id === selectedClassId);

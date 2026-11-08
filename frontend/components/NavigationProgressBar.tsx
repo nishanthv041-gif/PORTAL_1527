@@ -81,9 +81,9 @@ function ProgressBarInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, searchParams]);
 
-  // Intercept clicks on links for immediate progress feedback
+  // Intercept pointerdown and clicks on links for immediate progress feedback (< 50ms)
   useEffect(() => {
-    const handleDocumentClick = (e: MouseEvent) => {
+    const handleNavigationStart = (e: MouseEvent | PointerEvent) => {
       const target = (e.target as HTMLElement)?.closest("a");
       if (!target || !target.href) return;
 
@@ -128,11 +128,13 @@ function ProgressBarInner() {
       startProgress();
     };
 
-    document.addEventListener("click", handleDocumentClick, true);
+    document.addEventListener("pointerdown", handleNavigationStart, { capture: true, passive: true });
+    document.addEventListener("click", handleNavigationStart, true);
     window.addEventListener("popstate", handlePopState);
 
     return () => {
-      document.removeEventListener("click", handleDocumentClick, true);
+      document.removeEventListener("pointerdown", handleNavigationStart, { capture: true } as any);
+      document.removeEventListener("click", handleNavigationStart, true);
       window.removeEventListener("popstate", handlePopState);
       clearAllTimers();
     };

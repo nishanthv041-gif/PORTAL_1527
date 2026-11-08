@@ -159,6 +159,60 @@ export default async function ParentDashboard({
   let examDate = "";
   const subjectBreakdown: { name: string; avgPercentage: number }[] = [];
 
+  // Check if any child has birthday today in Asia/Kolkata
+  const isLeap = (y: number) => (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+  const isNonLeapFeb28 = !isLeap(schoolToday.year) && schoolToday.month === 2 && schoolToday.day === 28;
+
+  const birthdayChildren = children.filter((child) => {
+    if (!child.dateOfBirth) return false;
+    const d = new Date(child.dateOfBirth);
+    const m = d.getUTCMonth() + 1;
+    const day = d.getUTCDate();
+    if (m === schoolToday.month && day === schoolToday.day) return true;
+    if (isNonLeapFeb28 && m === 2 && day === 29) return true;
+    return false;
+  });
+
+  // Self-healing fallback: Ensure BirthdayWish notification exists for each birthday child
+  if (birthdayChildren.length > 0 && parent.userId) {
+    for (const bChild of birthdayChildren) {
+      try {
+        const existing = await prisma.birthdayWish.findUnique({
+          where: {
+            studentId_year: {
+              studentId: bChild.id,
+              year: schoolToday.year,
+            },
+          },
+        });
+        if (!existing) {
+          const notif = await prisma.notification.create({
+            data: {
+              userId: parent.userId,
+              title: `Happy Birthday, ${bChild.firstName}! 🎂`,
+              content: `Dear Parent, SRT School wishes ${bChild.firstName} ${bChild.lastName || ""} a very happy birthday! May this year bring happiness, good health, and abundant success. - SRT Universal School`,
+              type: "ANNOUNCEMENT",
+              category: "GENERAL",
+              priority: "NORMAL",
+              link: "/dashboard/parent",
+              isRead: false,
+            },
+          });
+          await prisma.birthdayWish.create({
+            data: {
+              studentId: bChild.id,
+              year: schoolToday.year,
+              notificationId: notif.id,
+              status: "SENT",
+            },
+          });
+        }
+      } catch {
+        // Ignored if already created concurrently
+      }
+    }
+  }
+
   if (lastExamWithMarks) {
     examName = lastExamWithMarks.name;
     try {
@@ -248,6 +302,24 @@ export default async function ParentDashboard({
         studentList={children}
         activePage="dashboard"
       />
+
+      {/* Festive Student Birthday Celebration Card */}
+      {birthdayChildren.map((bChild) => (
+        <div key={bChild.id} className={styles.birthdayCard}>
+          <div className={styles.birthdayCardLeft}>
+            <div className={styles.birthdayIconWrapper}>🎂</div>
+            <div>
+              <h2 className={styles.birthdayTitle}>
+                Happy Birthday, {bChild.firstName}! 🎉
+              </h2>
+              <p className={styles.birthdaySubtitle}>
+                SRT School wishes {bChild.firstName} {bChild.lastName || ""} a wonderful birthday filled with happiness, good health, and abundant academic success!
+              </p>
+            </div>
+          </div>
+          <div className={styles.birthdayBadge}>SRT School Wishes You</div>
+        </div>
+      ))}
 
       {/* 5 Stats Cards Grid: Percentage, Presented Days, Absented Days, Class Details, Total Subjects */}
       <div className={styles.statsGrid}>

@@ -7,13 +7,33 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
+const studentDobSchema = z.string().min(1, "Date of Birth is required").refine((val) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) return false;
+  const parts = val.split("-").map(Number);
+  const y = parts[0];
+  const m = parts[1];
+  const d = parts[2];
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const daysInMonth = new Date(y, m, 0).getDate();
+  if (d > daysInMonth) return false;
+
+  const birthDate = new Date(y, m - 1, d);
+  const now = new Date();
+  if (birthDate > now) return false;
+
+  const age = (now.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+  return age >= 2 && age <= 25;
+}, {
+  message: "Valid Date of Birth is required (student age must be between 2 and 25 years).",
+});
+
 const studentCreateSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().default(""),
   rollNumber: z.string().min(1, "Roll number is required"),
   admissionNo: z.string().min(1, "Admission number is required"),
   classId: z.string().min(1, "Class is required"),
-  dateOfBirth: z.string().optional().or(z.literal("")),
+  dateOfBirth: studentDobSchema,
   gender: z.string().optional().or(z.literal("")),
   bloodGroup: z.string().optional().or(z.literal("")),
   address: z.string().optional().or(z.literal("")),

@@ -1016,17 +1016,31 @@ export async function validateAndCorrelateBatch(
         conflictWarnings.push(`Student with admission number '${adm}' already exists in school records.`);
       }
 
-      // 5. Date of Birth (Optional in school records)
-      if (row.studentDob && String(row.studentDob).trim()) {
+      // 5. Date of Birth (Required stored field for student records & birthday wishes)
+      if (!row.studentDob || !String(row.studentDob).trim()) {
+        fieldErrors.studentDob = "Date of Birth is required for student registration.";
+        invalidFields.push("studentDob");
+      } else {
         const dobResult = parseDateSafe(row.studentDob);
         if (!dobResult.isValid) {
           fieldErrors.studentDob = "Invalid date of birth. Enter valid date (YYYY-MM-DD or DD/MM/YYYY).";
           invalidFields.push("studentDob");
-        } else {
-          row.studentDob = dobResult.isoDate;
+        } else if (dobResult.isoDate) {
+          const birthDate = new Date(dobResult.isoDate);
+          const now = new Date();
+          if (birthDate > now) {
+            fieldErrors.studentDob = "Date of Birth cannot be in the future.";
+            invalidFields.push("studentDob");
+          } else {
+            const age = (now.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+            if (age < 2 || age > 25) {
+              fieldErrors.studentDob = `Student age (${Math.floor(age)} yrs) outside typical school range (2-25 yrs).`;
+              invalidFields.push("studentDob");
+            } else {
+              row.studentDob = dobResult.isoDate;
+            }
+          }
         }
-      } else {
-        row.studentDob = null;
       }
 
       // 6. Class resolution

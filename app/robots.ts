@@ -1,7 +1,8 @@
 import { MetadataRoute } from 'next';
+import { getAppUrl } from '@/lib/appUrl';
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = 'https://nipoportal.vercel.app';
+  const baseUrl = getAppUrl();
 
   return {
     rules: [

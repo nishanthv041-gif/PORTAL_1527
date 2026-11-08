@@ -98,7 +98,7 @@ model Student {
   admissionNo String    @unique
   firstName   String
   lastName    String
-  dateOfBirth DateTime?
+  dateOfBirth DateTime? @db.Date
   gender      String?
   bloodGroup  String?
   address     String?
@@ -128,6 +128,7 @@ model Student {
   busMessages    BusMessage[]
   busMessageTargets BusMessageTarget[]
   markAuditLogs MarkAuditLog[]
+  birthdayWishes BirthdayWish[]
 
   @@index([classId])
   @@index([classId, isActive])
@@ -135,6 +136,20 @@ model Student {
   @@index([enrollmentStatus])
   @@index([createdAt])
   @@index([residenceType, isActive])
+}
+
+model BirthdayWish {
+  id             String    @id @default(cuid())
+  studentId      String
+  year           Int
+  sentAt         DateTime  @default(now())
+  notificationId String?
+  status         String    @default("SENT") // SENT, SKIPPED_NO_PARENT, FAILED
+  student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, year])
+  @@index([studentId])
+  @@index([year])
 }
 
 model Teacher {

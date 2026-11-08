@@ -4,6 +4,7 @@ import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import NavigationProgressBar from "@/frontend/components/NavigationProgressBar";
 import { ThemeProvider } from "@/frontend/components/ThemeProvider";
 import { ConfirmDialogProvider } from "@/frontend/components/ui/ConfirmDialog";
+import { ToastProvider } from "@/frontend/components/ui/Toast";
 import SessionGuard from "@/frontend/components/auth/SessionGuard";
 import PwaRegistration from "@/frontend/components/pwa/PwaRegistration";
 import PwaWelcomeNotificationPrompt from "@/frontend/components/pwa/PwaWelcomeNotificationPrompt";
@@ -12,6 +13,7 @@ import Script from "next/script";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/settings/actions";
+import { getAppUrl } from "@/lib/appUrl";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -24,24 +26,25 @@ export const viewport: Viewport = {
   ],
 };
 
-const CANONICAL_URL = "https://nipoportal.vercel.app";
+
 const DEFAULT_TITLE = "SRT Universal School Portal";
 const DEFAULT_DESCRIPTION =
   "Official Academic & Management Portal of SRT Universal School. Access school records, attendance, report cards, announcements, and authorized administrative services.";
 
 export async function generateMetadata(): Promise<Metadata> {
   let schoolName = "SRT Universal School";
-  let schoolLogo = `${CANONICAL_URL}/logo/srt-logo.png`;
+  const appUrl = getAppUrl();
+  const ogImageUrl = `${appUrl}/images/og-preview.png`;
   try {
     const settings = await getSystemSettings();
     if (settings.SCHOOL_NAME) schoolName = settings.SCHOOL_NAME;
-    if (settings.SCHOOL_LOGO) schoolLogo = settings.SCHOOL_LOGO;
+
   } catch (err) { }
 
   const dynamicTitle = DEFAULT_TITLE;
 
   return {
-    metadataBase: new URL(CANONICAL_URL),
+    metadataBase: new URL(appUrl),
     title: {
       default: dynamicTitle,
       template: `%s | ${dynamicTitle}`,
@@ -63,13 +66,13 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       title: dynamicTitle,
       description: DEFAULT_DESCRIPTION,
-      url: CANONICAL_URL,
+      url: appUrl,
       siteName: dynamicTitle,
       locale: "en_US",
       type: "website",
       images: [
         {
-          url: schoolLogo,
+          url: ogImageUrl,
           width: 1120,
           height: 1120,
           alt: `${schoolName} Official Crest`,
@@ -80,7 +83,7 @@ export async function generateMetadata(): Promise<Metadata> {
       card: "summary_large_image",
       title: dynamicTitle,
       description: DEFAULT_DESCRIPTION,
-      images: [schoolLogo],
+      images: [ogImageUrl],
     },
     icons: {
       icon: [
@@ -173,14 +176,17 @@ export default async function RootLayout({
 
   // Verified JSON-LD structured data
   const orgName = settings.SCHOOL_NAME || "School Portal";
-  const orgLogo = settings.SCHOOL_LOGO || `${CANONICAL_URL}/images/school_3d_moss_campus.jpg`;
+  const appUrl = getAppUrl();
+  const orgLogo = (settings.SCHOOL_LOGO && !settings.SCHOOL_LOGO.startsWith("data:"))
+    ? settings.SCHOOL_LOGO
+    : `${appUrl}/images/og-preview.png`;
 
   const structuredData = [
     {
       "@context": "https://schema.org",
       "@type": "EducationalOrganization",
       "name": orgName,
-      "url": CANONICAL_URL,
+      "url": appUrl,
       "description": DEFAULT_DESCRIPTION,
       "logo": orgLogo,
       ...(settings.SCHOOL_EMAIL ? { "email": settings.SCHOOL_EMAIL } : {}),
@@ -198,7 +204,7 @@ export default async function RootLayout({
       "@context": "https://schema.org",
       "@type": "WebSite",
       "name": orgName,
-      "url": CANONICAL_URL,
+      "url": appUrl,
       "description": DEFAULT_DESCRIPTION,
     },
   ];
@@ -215,7 +221,7 @@ export default async function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="SRT Portal" />
         <meta name="application-name" content="SRT Universal School Portal" />
-        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         {/* Flash-prevention: runs synchronously before paint */}
         <Script
           id="flash-prevention-script"
@@ -234,10 +240,12 @@ export default async function RootLayout({
           initialTheme={initialTheme}
           isAuthenticated={isAuthenticated}
         >
+          <ToastProvider>
           <ConfirmDialogProvider>
             <SessionGuard />
             {children}
           </ConfirmDialogProvider>
+          </ToastProvider>
         </ThemeProvider>
         <SpeedInsights />
         <PwaRegistration />

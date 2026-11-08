@@ -248,6 +248,15 @@ export default function StudentEditDrawer({
       setErrorMsg("Please select a target class.");
       return;
     }
+    if (!dateOfBirth) {
+      setErrorMsg("Date of Birth is required for student records & birthday wishes.");
+      return;
+    }
+    const birthDate = new Date(dateOfBirth);
+    if (birthDate > new Date()) {
+      setErrorMsg("Date of Birth cannot be in the future.");
+      return;
+    }
 
     // If moving class, confirm with user
     if (!isAddMode && student.classId && student.classId !== classId) {
@@ -288,7 +297,7 @@ export default function StudentEditDrawer({
           rollNumber: rollNumber.trim(),
           admissionNo: admissionNo.trim(),
           classId,
-          dateOfBirth: dateOfBirth || undefined,
+          dateOfBirth: dateOfBirth.trim(),
           gender: gender || undefined,
           bloodGroup: bloodGroup || undefined,
           address: address.trim() || undefined,
@@ -324,7 +333,7 @@ export default function StudentEditDrawer({
           rollNumber: rollNumber.trim(),
           admissionNo: admissionNo.trim(),
           classId,
-          dateOfBirth: dateOfBirth || undefined,
+          dateOfBirth: dateOfBirth.trim(),
           gender: gender || undefined,
           bloodGroup: bloodGroup || undefined,
           address: address.trim() || undefined,
@@ -732,10 +741,11 @@ export default function StudentEditDrawer({
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "var(--text-primary, #f8fafc)", marginBottom: "0.35rem" }}>
-                      Date of Birth
+                      Date of Birth <span style={{ color: "#ef4444" }}>*</span>
                     </label>
                     <input
                       type="date"
+                      required
                       value={dateOfBirth}
                       onChange={(e) => setDateOfBirth(e.target.value)}
                       style={{
