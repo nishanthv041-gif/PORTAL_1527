@@ -236,6 +236,11 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                   desc: "Parent receives wish for their child's birthday",
                 },
                 {
+                  key: "notifyClassTeacher",
+                  label: "Class Teacher Digest",
+                  desc: "Send a consolidated notification to the class teacher when students celebrate",
+                },
+                {
                   key: "notifyTeachers",
                   label: "Teachers",
                   desc: "Congratulate teachers on their birthday",
@@ -254,6 +259,21 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                   key: "notifyStudents",
                   label: "Student Accounts",
                   desc: "Display celebration banner on student login",
+                },
+                {
+                  key: "whatsappShortcut",
+                  label: "WhatsApp Wish Shortcut",
+                  desc: "Allow class teachers to send 1-tap WhatsApp greetings to parents",
+                },
+                {
+                  key: "teacherCanEditExistingDob",
+                  label: "Allow Teachers to Edit Existing DOBs",
+                  desc: "Permit class teachers to update previously saved student dates",
+                },
+                {
+                  key: "requireAdminApprovalForDobChange",
+                  label: "Require Admin Approval for Date Changes",
+                  desc: "Teacher date changes must be approved in Admin Approval Log",
                 },
               ].map((item) => (
                 <div key={item.key} className="flex items-start justify-between py-1">

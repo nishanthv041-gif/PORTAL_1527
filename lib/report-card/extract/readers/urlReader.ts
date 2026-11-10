@@ -118,3 +118,4 @@ export async function readDocumentFromUrl(url: string): Promise<ParsedWebDocumen
     sourceUrl: fetched.finalUrl
   };
 }
+

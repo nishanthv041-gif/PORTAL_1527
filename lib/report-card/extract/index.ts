@@ -393,3 +393,4 @@ export async function runReportCardExtraction(
     durationMs: Date.now() - startTime
   };
 }
+

@@ -275,3 +275,4 @@ export class BedrockProvider implements ExtractionProvider {
     };
   }
 }
+

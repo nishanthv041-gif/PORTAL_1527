@@ -4,6 +4,7 @@ import { getSchoolNow } from "@/lib/time";
 import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { sendUserNotification } from "@/backend/services/push/notificationDispatcher";
 import { Prisma } from "@prisma/client";
+import { formatClassName } from "@/lib/teacher/formatClassName";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +57,7 @@ interface TargetCelebrant {
   personId: string;
   name: string;
   className?: string;
+  classId?: string;
   recipients: Array<{
     userId: string;
     audience: "STUDENT_SELF" | "PARENT_OF_STUDENT" | "TEACHER" | "STAFF" | "ADMIN" | "PARENT_SELF";
@@ -120,10 +122,11 @@ export async function processUniversalBirthdayWishes(
       id: string;
       firstName: string;
       lastName: string | null;
+      classId: string | null;
       className: string | null;
       section: string | null;
     }>>`
-      SELECT s."id", s."firstName", s."lastName", c."name" as "className", c."section"
+      SELECT s."id", s."firstName", s."lastName", s."classId", c."name" as "className", c."section"
       FROM "Student" s
       LEFT JOIN "Class" c ON s."classId" = c."id"
       WHERE s."isActive" = true
@@ -158,7 +161,7 @@ export async function processUniversalBirthdayWishes(
 
       for (const st of students) {
         const studentName = `${st.firstName} ${st.lastName || ""}`.trim();
-        const clsName = st.className ? `${st.className} - ${st.section || ""}`.trim() : undefined;
+        const clsName = st.className ? formatClassName(st.className, st.section) : undefined;
         const recipients: TargetCelebrant["recipients"] = [];
 
         // Parent recipient(s)
@@ -174,6 +177,7 @@ export async function processUniversalBirthdayWishes(
           personId: st.id,
           name: studentName,
           className: clsName,
+          classId: st.classId || undefined,
           recipients,
         });
       }
@@ -482,6 +486,104 @@ export async function processUniversalBirthdayWishes(
     }
   }
 
+  // 3b. Dispatch Class Teacher Digests (grouped by classId)
+  if (settings.notifyClassTeacher) {
+    const classCelebrantMap = new Map<string, { className: string; students: string[] }>();
+    for (const c of celebrants) {
+      if (c.personType === "student" && c.classId) {
+        const item = classCelebrantMap.get(c.classId) || { className: c.className || "Class", students: [] };
+        item.students.push(c.name);
+        classCelebrantMap.set(c.classId, item);
+      }
+    }
+
+    for (const [clsId, info] of classCelebrantMap.entries()) {
+      try {
+        const clsRecord = await prisma.class.findUnique({
+          where: { id: clsId },
+          select: {
+            name: true,
+            section: true,
+            classTeacher: {
+              select: {
+                id: true,
+                user: { select: { id: true, name: true, status: true } },
+              },
+            },
+          },
+        });
+
+        const teacherUser = clsRecord?.classTeacher?.user;
+        if (!teacherUser || teacherUser.status !== "ACTIVE") {
+          continue;
+        }
+
+        // Check if class teacher digest was already sent for this class and year
+        const existingDigest = await prisma.birthdayWish.findFirst({
+          where: {
+            audience: "CLASS_TEACHER_DIGEST",
+            personType: "class",
+            personId: clsId,
+            recipientUserId: teacherUser.id,
+            year,
+          },
+        });
+
+        if (existingDigest) {
+          continue;
+        }
+
+        const classDisplayName = formatClassName(clsRecord.name, clsRecord.section);
+        const namesList =
+          info.students.length === 1
+            ? info.students[0]
+            : info.students.length === 2
+            ? `${info.students[0]} and ${info.students[1]}`
+            : `${info.students.slice(0, -1).join(", ")} and ${info.students[info.students.length - 1]}`;
+
+        const verb = info.students.length === 1 ? "has a birthday" : "have birthdays";
+        const digestTitle = `Birthdays today in ${classDisplayName} 🎂`;
+        const digestBody = `${namesList} ${verb} today. SRT School has sent their wishes. You can add a personal message.`;
+
+        const notif = await prisma.notification.create({
+          data: {
+            userId: teacherUser.id,
+            title: digestTitle,
+            content: digestBody,
+            type: "ANNOUNCEMENT",
+            category: "GENERAL",
+            priority: "HIGH",
+            link: "/dashboard/teacher/birthdays",
+            isRead: false,
+          },
+        });
+
+        sendUserNotification(
+          teacherUser.id,
+          digestTitle,
+          digestBody,
+          "academic",
+          "/dashboard/teacher/birthdays",
+          "URGENT"
+        ).catch(() => {});
+
+        await prisma.birthdayWish.create({
+          data: {
+            audience: "CLASS_TEACHER_DIGEST",
+            personType: "class",
+            personId: clsId,
+            recipientUserId: teacherUser.id,
+            year,
+            notificationId: notif.id,
+            status: "SENT",
+          },
+        });
+      } catch (err: any) {
+        console.error(`Failed to send class teacher digest for class ${clsId}:`, err?.message);
+      }
+    }
+  }
+
   // 4. Record Run in BirthdayJobRun
   await prisma.birthdayJobRun.create({
     data: {
@@ -562,4 +664,219 @@ export async function GET(req: NextRequest) {
     console.error("Universal birthday engine execution error:", error?.message);
     return NextResponse.json({ error: "Failed to process birthday wishes" }, { status: 500 });
   }
+}
+
+/**
+ * Immediate birthday trigger:
+ * When a DOB is saved or updated and matches today in Asia/Kolkata,
+ * immediately dispatches wishes to the celebrant and parents, and creates/updates the class teacher digest!
+ */
+export async function dispatchImmediateBirthdayWishForPerson(params: {
+  personType: string;
+  personId: string;
+  classId?: string;
+  forceSend?: boolean;
+}): Promise<{ success: boolean; sentCount: number; isBirthdayToday: boolean; message: string }> {
+  const schoolNow = getSchoolNow();
+  const year = schoolNow.year;
+  const month = schoolNow.month;
+  const day = schoolNow.day;
+  const isFeb28InNonLeapYear = !isLeapYear(year) && month === 2 && day === 28;
+
+  let settings = await prisma.birthdaySettings.findUnique({ where: { id: "default" } });
+  if (!settings) {
+    settings = await prisma.birthdaySettings.create({ data: { id: "default" } });
+  }
+
+  if (!settings.enabled) {
+    return { success: true, sentCount: 0, isBirthdayToday: false, message: "Birthday system disabled." };
+  }
+
+  const pType = params.personType.toLowerCase();
+
+  if (pType === "student") {
+    const student = await prisma.student.findUnique({
+      where: { id: params.personId },
+      include: {
+        class: { select: { id: true, name: true, section: true } },
+        parents: {
+          include: {
+            parent: {
+              include: { user: { select: { id: true, status: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    if (!student || !student.dateOfBirth) {
+      return { success: false, sentCount: 0, isBirthdayToday: false, message: "Student has no Date of Birth." };
+    }
+
+    const dobMonth = student.dateOfBirth.getUTCMonth() + 1;
+    const dobDay = student.dateOfBirth.getUTCDate();
+
+    const isMatch =
+      Boolean(params.forceSend) ||
+      (dobMonth === month && dobDay === day) ||
+      (isFeb28InNonLeapYear && dobMonth === 2 && dobDay === 29);
+
+    if (!isMatch) {
+      return { success: true, sentCount: 0, isBirthdayToday: false, message: "Date saved. Birthday is not today." };
+    }
+
+    const studentName = `${student.firstName} ${student.lastName || ""}`.trim();
+    const className = student.class ? formatClassName(student.class.name, student.class.section) : "Class";
+    let sentCount = 0;
+
+    // 1. Parent wishes
+    if (settings.notifyParents) {
+      for (const rel of student.parents) {
+        const parentUser = rel.parent?.user;
+        if (parentUser && parentUser.status === "ACTIVE") {
+          const existing = await prisma.birthdayWish.findFirst({
+            where: {
+              audience: "PARENT_OF_STUDENT",
+              personType: "student",
+              personId: student.id,
+              recipientUserId: parentUser.id,
+              year,
+            },
+          });
+
+          if (!existing || params.forceSend) {
+            const title = `Happy Birthday, ${studentName}! 🎂`;
+            const baseEn =
+              settings.parentTemplateEn ||
+              "Dear Parent, SRT School wishes {studentName} a very happy birthday! May this year bring happiness, good health, and abundant success. - SRT Universal School";
+            const renderedEn = baseEn.replace(/{studentName}/g, studentName).replace(/{name}/g, studentName);
+
+            const notif = await prisma.notification.create({
+              data: {
+                userId: parentUser.id,
+                title,
+                content: renderedEn,
+                type: "ANNOUNCEMENT",
+                category: "GENERAL",
+                priority: "NORMAL",
+                link: "/dashboard/parent",
+                isRead: false,
+              },
+            });
+
+            sendUserNotification(parentUser.id, title, renderedEn, "academic", "/dashboard/parent", "NORMAL").catch(() => {});
+
+            if (!existing) {
+              await prisma.birthdayWish.create({
+                data: {
+                  audience: "PARENT_OF_STUDENT",
+                  personType: "student",
+                  personId: student.id,
+                  studentId: student.id,
+                  recipientUserId: parentUser.id,
+                  year,
+                  notificationId: notif.id,
+                  status: "SENT",
+                },
+              });
+            }
+            sentCount++;
+          }
+        }
+      }
+    }
+
+    // 2. Class Teacher notification
+    if (settings.notifyClassTeacher && student.classId) {
+      const clsRecord = await prisma.class.findUnique({
+        where: { id: student.classId },
+        select: {
+          name: true,
+          section: true,
+          classTeacher: {
+            select: {
+              id: true,
+              user: { select: { id: true, name: true, status: true } },
+            },
+          },
+        },
+      });
+
+      const teacherUser = clsRecord?.classTeacher?.user;
+      if (teacherUser && teacherUser.status === "ACTIVE") {
+        const existingDigest = await prisma.birthdayWish.findFirst({
+          where: {
+            audience: "CLASS_TEACHER_DIGEST",
+            personType: "class",
+            personId: student.classId,
+            recipientUserId: teacherUser.id,
+            year,
+          },
+        });
+
+        if (!existingDigest) {
+          // Send initial digest
+          const digestTitle = `Birthdays today in ${className} 🎂`;
+          const digestBody = `${studentName} has a birthday today. SRT School has sent their wishes. You can add a personal message.`;
+
+          const notif = await prisma.notification.create({
+            data: {
+              userId: teacherUser.id,
+              title: digestTitle,
+              content: digestBody,
+              type: "ANNOUNCEMENT",
+              category: "GENERAL",
+              priority: "HIGH",
+              link: "/dashboard/teacher/birthdays",
+              isRead: false,
+            },
+          });
+
+          sendUserNotification(teacherUser.id, digestTitle, digestBody, "academic", "/dashboard/teacher/birthdays", "URGENT").catch(() => {});
+
+          await prisma.birthdayWish.create({
+            data: {
+              audience: "CLASS_TEACHER_DIGEST",
+              personType: "class",
+              personId: student.classId,
+              recipientUserId: teacherUser.id,
+              year,
+              notificationId: notif.id,
+              status: "SENT",
+            },
+          });
+          sentCount++;
+        } else {
+          // Digest already sent earlier today; send follow-up note
+          const followUpTitle = `Also today in ${className} 🎂`;
+          const followUpBody = `Also celebrating today: ${studentName}. You can add a personal message.`;
+
+          await prisma.notification.create({
+            data: {
+              userId: teacherUser.id,
+              title: followUpTitle,
+              content: followUpBody,
+              type: "ANNOUNCEMENT",
+              category: "GENERAL",
+              priority: "NORMAL",
+              link: "/dashboard/teacher/birthdays",
+              isRead: false,
+            },
+          });
+
+          sendUserNotification(teacherUser.id, followUpTitle, followUpBody, "academic", "/dashboard/teacher/birthdays", "NORMAL").catch(() => {});
+          sentCount++;
+        }
+      }
+    }
+
+    return {
+      success: true,
+      sentCount,
+      isBirthdayToday: true,
+      message: `Birthday wish sent to ${studentName} and parents! 🎉`,
+    };
+  }
+
+  return { success: true, sentCount: 0, isBirthdayToday: false, message: "Date saved successfully." };
 }

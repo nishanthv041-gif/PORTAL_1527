@@ -131,6 +131,7 @@ model Student {
   busMessageTargets BusMessageTarget[]
   markAuditLogs MarkAuditLog[]
   birthdayWishes BirthdayWish[]
+  birthdayNotes  BirthdayNote[]
 
   @@index([classId])
   @@index([classId, isActive])
@@ -168,6 +169,12 @@ model BirthdaySettings {
   notifyTeachers     Boolean  @default(true)
   notifyStaff        Boolean  @default(true)
   notifyAdmins       Boolean  @default(true)
+  notifyClassTeacher Boolean  @default(true)
+  teacherCanEditExistingDob Boolean @default(true)
+  requireAdminApprovalForDobChange Boolean @default(false)
+  dayBeforeReminder  Boolean  @default(false)
+  adminDailySummary  Boolean  @default(false)
+  whatsappShortcut   Boolean  @default(false)
   sendTimeLocal      String   @default("07:00")
   language           String   @default("EN") // EN | TA | BOTH
   templateRotation   Boolean  @default(false)
@@ -205,6 +212,43 @@ model BirthdayJobRun {
   @@index([forDate])
 }
 
+model BirthdayNote {
+  id         String   @id @default(cuid())
+  studentId  String
+  teacherId  String
+  year       Int
+  message    String   // max 250 chars
+  createdAt  DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, teacherId, year])
+  @@index([studentId, year])
+  @@index([teacherId, year])
+}
+
+model DobChangeLog {
+  id            String   @id @default(cuid())
+  personType    String   // student | teacher | staff | admin | parent | driver
+  personId      String
+  personName    String
+  classId       String?
+  changedById   String
+  changedByName String
+  changedByRole String
+  oldDateStr    String?
+  newDateStr    String
+  status        String   @default("APPROVED") // APPROVED | PENDING_APPROVAL | REJECTED
+  reason        String?
+  createdAt     DateTime @default(now())
+
+  @@index([personId])
+  @@index([classId])
+  @@index([changedById])
+  @@index([createdAt])
+}
+
 model Teacher {
   id            String    @id @default(cuid())
   userId        String    @unique
@@ -237,6 +281,7 @@ model Teacher {
   absentSubstitutions   Substitution[]      @relation("AbsentTeacher")
   assignedSubstitutions Substitution[]      @relation("SubstituteTeacher")
   dispatchedExams       Exam[]              @relation("ExamDispatchedBy")
+  birthdayNotes         BirthdayNote[]
 }
 
 model Staff {

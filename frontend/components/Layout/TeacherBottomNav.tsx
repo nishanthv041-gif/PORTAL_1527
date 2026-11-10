@@ -20,6 +20,7 @@ import {
   AlertCircle,
   Settings,
   Bus,
+  Sparkles,
   LogOut,
 } from "lucide-react";
 import styles from "./TeacherBottomNav.module.css";
@@ -105,6 +106,11 @@ export function TeacherBottomNav() {
       label: "Announce",
       href: "/dashboard/teacher/announcements",
       icon: <Bell size={22} />,
+    },
+    {
+      label: "Birthdays",
+      href: "/dashboard/teacher/birthdays",
+      icon: <Sparkles size={22} />,
     },
     {
       label: "Messages",

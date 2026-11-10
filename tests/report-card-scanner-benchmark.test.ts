@@ -418,3 +418,4 @@ runAllBenchmarks().catch(err => {
   console.error("Fatal benchmark runner error:", err);
   process.exit(1);
 });
+

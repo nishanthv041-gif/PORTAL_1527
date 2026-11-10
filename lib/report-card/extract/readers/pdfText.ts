@@ -147,3 +147,4 @@ export async function extractFromPdfText(
     return null;
   }
 }
+

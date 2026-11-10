@@ -109,6 +109,13 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
       ],
     },
     {
+      title: "BIRTHDAYS",
+      items: [
+        { href: "/dashboard/teacher/birthdays", label: "Birthday Wishes", icon: <Sparkles size={20} /> },
+        { href: "/dashboard/teacher/birthdays/missing", label: "Missing Date of Birth", icon: <Calendar size={20} /> },
+      ],
+    },
+    {
       title: "COMMUNICATION",
       items: [
         { href: "/dashboard/teacher/messages", label: "Messages", icon: <MessageSquare size={20} /> },
