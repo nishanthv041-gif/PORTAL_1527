@@ -276,7 +276,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
                   <div key={link.href} className={styles.navItemWrapper}>
                     <Link
                       href={link.href}
-                      prefetch={false}
+                      prefetch={true}
                       onMouseEnter={() => {
                         try { router.prefetch(link.href); } catch {}
                       }}

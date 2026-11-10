@@ -5,6 +5,7 @@ import Link from "next/link";
 import { GraduationCap, ArrowLeft, CheckCircle2, Clock, Sparkles } from "lucide-react";
 import { submitClassTeacherRequestAction } from "@/backend/api/actions/dashboard/teacher/classTeacherRequestActions";
 import type { TeacherClass } from "@/lib/teacher/getTeacherClasses";
+import styles from "./BirthdayStudio.module.css";
 
 interface WaitingForAccessCardProps {
   taughtClasses: TeacherClass[];
@@ -33,7 +34,7 @@ export default function WaitingForAccessCard({
       const res = await submitClassTeacherRequestAction(classId);
       if (res.isPending || res.success) {
         setPendingMap((prev) => ({ ...prev, [classId]: true }));
-        setSuccessMessage(`Request submitted for ${className}. School administrator will be notified.`);
+        setSuccessMessage(`Request submitted for ${className}. School administrator has been notified.`);
         setTimeout(() => setSuccessMessage(null), 5000);
       }
     } catch (err) {
@@ -44,88 +45,148 @@ export default function WaitingForAccessCard({
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 py-8 sm:py-12">
-      <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-slate-200/80 dark:border-slate-800 shadow-xl text-left">
+    <div className={styles.container} style={{ maxWidth: "700px" }}>
+      <div
+        style={{
+          background: "var(--card-bg)",
+          borderRadius: "24px",
+          padding: "2rem",
+          border: "1px solid var(--border-color)",
+          boxShadow: "0 10px 40px rgba(0, 0, 0, 0.08)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "1.25rem",
+        }}
+      >
         {/* Header Icon + Title */}
-        <div className="flex items-start gap-4 mb-5">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/20">
-            <GraduationCap className="w-6 h-6" />
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem" }}>
+          <div
+            style={{
+              width: "52px",
+              height: "52px",
+              borderRadius: "16px",
+              background: "rgba(242, 184, 75, 0.15)",
+              color: "#d97706",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              border: "1px solid rgba(242, 184, 75, 0.3)",
+            }}
+          >
+            <GraduationCap size={28} />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-              You&apos;re not set as a class teacher yet
+            <h1 style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--foreground)", margin: 0 }}>
+              Class Teacher Designation Required
             </h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+            <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", margin: "0.4rem 0 0", lineHeight: "1.5" }}>
               Student Date of Birth records and classroom birthday celebrations are managed by each section&apos;s designated Class Teacher.
             </p>
           </div>
         </div>
 
+        {/* Success Alert */}
         {successMessage && (
-          <div className="mb-6 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-sm flex items-center gap-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+          <div
+            style={{
+              padding: "0.85rem 1rem",
+              borderRadius: "12px",
+              background: "rgba(16, 185, 129, 0.1)",
+              border: "1px solid rgba(16, 185, 129, 0.3)",
+              color: "#059669",
+              fontSize: "0.875rem",
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            <CheckCircle2 size={18} />
             <span>{successMessage}</span>
           </div>
         )}
 
-        {/* Classes List */}
-        <div className="mt-6 space-y-4">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Your Assigned Classes ({taughtClasses.length})
-          </h2>
+        {/* Assigned Classes List */}
+        <div>
+          <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.5rem" }}>
+            YOUR ASSIGNED CLASSES ({taughtClasses.length}):
+          </div>
 
           {taughtClasses.length === 0 ? (
-            <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 text-center">
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                No classes are currently assigned to your teacher profile. Please contact the school administrator.
-              </p>
+            <div
+              style={{
+                padding: "1rem",
+                borderRadius: "12px",
+                background: "rgba(0,0,0,0.02)",
+                border: "1px solid var(--border-color)",
+                fontSize: "0.85rem",
+                color: "var(--text-muted)",
+              }}
+            >
+              You do not have any teaching classes assigned yet. Please contact the administrator to link your profile to a class.
             </div>
           ) : (
-            <div className="space-y-3">
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
               {taughtClasses.map((cls) => {
                 const isPending = pendingMap[cls.classId];
                 const isLoading = loadingMap[cls.classId];
-                const subjectsText = cls.subjects && cls.subjects.length > 0 ? cls.subjects.join(", ") : "Class Subjects";
 
                 return (
                   <div
                     key={cls.classId}
-                    className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:border-slate-300 dark:hover:border-slate-600"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "0.85rem 1rem",
+                      borderRadius: "14px",
+                      background: "rgba(0, 0, 0, 0.02)",
+                      border: "1px solid var(--border-color)",
+                      gap: "0.75rem",
+                      flexWrap: "wrap",
+                    }}
                   >
                     <div>
-                      <div className="flex items-center gap-2.5">
-                        <span className="font-bold text-base text-slate-900 dark:text-white">
-                          {cls.displayName}
-                        </span>
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                          {cls.isClassTeacher ? "Class Teacher" : "Subject Teacher"}
-                        </span>
+                      <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--foreground)" }}>
+                        {cls.displayName}
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        {subjectsText} · {cls.studentCount} {cls.studentCount === 1 ? "student" : "students"}
-                      </p>
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
+                        Role: {cls.isClassTeacher ? "Class Teacher" : "Subject Teacher"}
+                      </div>
                     </div>
 
-                    {!cls.isClassTeacher && (
-                      <div className="shrink-0">
-                        {isPending ? (
-                          <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-semibold">
-                            <Clock className="w-4 h-4 animate-spin text-amber-500" />
-                            <span>Request Pending</span>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={isLoading}
-                            onClick={() => handleRequest(cls.classId, cls.displayName)}
-                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-98 text-slate-950 font-bold text-xs shadow-sm transition-all min-h-[44px]"
-                          >
-                            <Sparkles className="w-4 h-4" />
-                            <span>{isLoading ? "Submitting..." : `Ask Admin for ${cls.displayName}`}</span>
-                          </button>
-                        )}
-                      </div>
-                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      {isPending ? (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            padding: "0.4rem 0.75rem",
+                            borderRadius: "9999px",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            background: "rgba(245, 158, 11, 0.15)",
+                            color: "#d97706",
+                            border: "1px solid rgba(245, 158, 11, 0.3)",
+                          }}
+                        >
+                          <Clock size={13} />
+                          <span>Request Pending Admin Approval</span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleRequest(cls.classId, cls.displayName)}
+                          disabled={isLoading}
+                          className={`${styles.actionBtn} ${styles.actionBtnWarning}`}
+                          style={{ minHeight: "38px", fontSize: "0.8rem", padding: "0.4rem 0.85rem" }}
+                        >
+                          {isLoading ? "Submitting..." : "Ask Admin to Make Me Class Teacher"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -133,36 +194,48 @@ export default function WaitingForAccessCard({
           )}
         </div>
 
-        {/* View-Only Option if enabled */}
-        {canViewBirthdays && (
-          <div className="mt-6 pt-5 border-t border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              You have view-only access to see today&apos;s celebrants in the classes you teach.
-            </p>
-            <Link
-              href="/dashboard/teacher/birthdays"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold min-h-[44px] transition-colors"
-            >
-              <span>See Today&apos;s Birthdays</span>
-            </Link>
-          </div>
-        )}
-
-        {/* Footer Back Link */}
-        <div className="mt-6 pt-5 border-t border-slate-200/80 dark:border-slate-800 flex justify-between items-center text-xs">
+        {/* Footer Navigation */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingTop: "1rem",
+            borderTop: "1px solid var(--border-color)",
+            marginTop: "0.5rem",
+            flexWrap: "wrap",
+            gap: "0.75rem",
+          }}
+        >
           <Link
             href="/dashboard/teacher"
-            className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white font-medium py-2 min-h-[44px]"
+            prefetch={true}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              color: "var(--text-secondary)",
+              textDecoration: "none",
+            }}
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to Dashboard</span>
+            <ArrowLeft size={16} />
+            <span>Return to Teacher Dashboard</span>
           </Link>
-          <span className="text-slate-400 dark:text-slate-500">
-            SRT School Portal
-          </span>
+
+          {canViewBirthdays && (
+            <Link
+              href="/dashboard/teacher/birthdays"
+              prefetch={true}
+              className={`${styles.actionBtn} ${styles.actionBtnSecondary}`}
+              style={{ minHeight: "38px", fontSize: "0.8rem" }}
+            >
+              <span>View Today&apos;s Celebrations (View-Only) →</span>
+            </Link>
+          )}
         </div>
       </div>
     </div>
   );
 }
-

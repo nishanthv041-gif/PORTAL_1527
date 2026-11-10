@@ -139,6 +139,8 @@ model Student {
   @@index([enrollmentStatus])
   @@index([createdAt])
   @@index([residenceType, isActive])
+  @@index([dateOfBirth])
+  @@index([classId, dateOfBirth])
 }
 
 model BirthdayWish {
@@ -285,6 +287,9 @@ model Teacher {
   assignedSubstitutions Substitution[]      @relation("SubstituteTeacher")
   dispatchedExams       Exam[]              @relation("ExamDispatchedBy")
   birthdayNotes         BirthdayNote[]
+
+  @@index([isActive])
+  @@index([dateOfBirth])
 }
 
 model Staff {
@@ -304,6 +309,9 @@ model Staff {
   statusLogs    BusStatusLog[] @relation("StaffReportedStatusLogs")
   sentMessages  BusMessage[]   @relation("StaffSentBusMessages")
   attendances   StaffAttendance[]
+
+  @@index([isActive])
+  @@index([dateOfBirth])
 }
 
 model Parent {
@@ -320,6 +328,9 @@ model Parent {
   children ParentStudent[]
   meetings Meeting[]
   complaints Complaint[]
+
+  @@index([isActive])
+  @@index([dateOfBirth])
 }
 
 model ParentStudent {

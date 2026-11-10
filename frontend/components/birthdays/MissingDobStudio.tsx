@@ -8,7 +8,6 @@ import {
   RefreshCw,
   FileSpreadsheet,
   Search,
-  Sparkles,
   X,
   Clock,
   ArrowRight,
@@ -19,7 +18,6 @@ import {
   AlertCircleIcon as AlertCircle,
   CheckCircle2Icon as CheckCircle2,
   XCircleIcon as XCircle,
-  FilterIcon as Filter,
 } from "@/frontend/components/birthdays/BirthdayIcons";
 import {
   saveStudentDobAction,
@@ -29,6 +27,7 @@ import {
   reviewDobChangeApprovalAction,
 } from "@/backend/api/actions/dashboard/admin/birthdays/actions";
 import { TeacherClass } from "@/lib/teacher/getTeacherClasses";
+import styles from "./BirthdayStudio.module.css";
 
 export interface StudentDobRecord {
   id: string;
@@ -59,7 +58,6 @@ interface MissingDobStudioProps {
   };
   canEditDob?: boolean;
   isClassTeacher?: boolean;
-  // Optional admin audit data
   adminLogs?: any[];
   onClassChange?: (classId: string) => void;
 }
@@ -84,9 +82,11 @@ export default function MissingDobStudio({
   const [searchQuery, setSearchQuery] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  // Tracking pending edits: map studentId -> draft date string (YYYY-MM-DD)
+  // Map of studentId -> draft date string (YYYY-MM-DD)
   const [draftDates, setDraftDates] = useState<{ [studentId: string]: string }>({});
-  const [statusMessages, setStatusMessages] = useState<{ [studentId: string]: { type: "success" | "error" | "pending"; text: string } }>({});
+  const [statusMessages, setStatusMessages] = useState<{
+    [studentId: string]: { type: "success" | "error" | "pending"; text: string };
+  }>({});
 
   // Excel Modal state
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
@@ -199,7 +199,6 @@ export default function MissingDobStudio({
       });
 
       if (res.success) {
-        // Optimistically apply all
         setStudents((prev) =>
           prev.map((s) => {
             const update = updates.find((u) => u.studentId === s.id);
@@ -229,8 +228,8 @@ export default function MissingDobStudio({
       } else if (res.preview) {
         setExcelPreview(res.preview);
       }
-    } catch (err: any) {
-      alert(err?.message || "Failed to parse Excel file.");
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to parse Excel file.");
     } finally {
       setIsUploading(false);
     }
@@ -249,63 +248,63 @@ export default function MissingDobStudio({
       if (res.success) {
         setStudents((prev) =>
           prev.map((s) => {
-            const matched = itemsToSave.find((it) => it.studentId === s.id);
-            if (matched) {
-              return { ...s, dateOfBirth: matched.dateOfBirth, hasDob: true };
+            const update = itemsToSave.find((u) => u.studentId === s.id);
+            if (update) {
+              return { ...s, dateOfBirth: update.dateOfBirth, hasDob: true };
             }
             return s;
           })
         );
         setIsExcelModalOpen(false);
-        setExcelFile(null);
         setExcelPreview(null);
+        setExcelFile(null);
+      } else {
+        alert(res.errors?.join(", ") || "Failed to commit Excel records.");
       }
-    } catch (err: any) {
-      alert(err?.message || "Failed to commit dates.");
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to commit records.");
     } finally {
       setIsUploading(false);
     }
   };
 
-  const handleAdminApprovalDecision = async (changeLogId: string, decision: "APPROVED" | "REJECTED") => {
-    startTransition(async () => {
-      await reviewDobChangeApprovalAction({ changeLogId, decision });
-    });
+  const getInitials = (name: string) => {
+    const parts = name.trim().split(" ");
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return name.slice(0, 2).toUpperCase();
   };
 
   return (
-    <div className="space-y-6 pb-24">
-      {/* Top Header Card */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-5 sm:p-7 text-white shadow-xl relative overflow-hidden border border-slate-800">
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-amber-500/5 blur-3xl pointer-events-none" />
-
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/20 text-xs font-semibold mb-2">
-              <Sparkles size={14} className="text-amber-400 animate-pulse" />
-              <span>Universal Birthday Engine</span>
+    <div className={styles.container}>
+      {/* Hero Header Banner */}
+      <section className={styles.heroBanner}>
+        <div className={styles.heroContent}>
+          <div className={styles.heroText}>
+            <div className={styles.badgePill}>
+              <Calendar size={14} />
+              <span>Student Records</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Missing Date of Birth</h1>
-            <p className="text-slate-300 text-sm mt-1 max-w-xl">
-              Dates of birth power automated birthday greetings from SRT School and keep classroom notice board calendars up to date.
+            <h1 className={styles.heroTitle}>Missing Dates of Birth</h1>
+            <p className={styles.heroSubtitle}>
+              Accurate birth dates enable automatic birthday wishes, parent communications, and class notice board notices.
             </p>
           </div>
 
-          {/* Class Switcher */}
-          <div className="flex flex-wrap items-center gap-3">
+          <div className={styles.heroActions}>
             {classes.length > 1 && (
-              <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700">
-                <span className="text-xs text-slate-400 font-medium">Class:</span>
+              <div className={styles.classSelectWrapper}>
+                <span className={styles.classSelectLabel}>Class:</span>
                 <select
                   value={currentClassId}
                   onChange={(e) => {
-                    setCurrentClassId(e.target.value);
-                    if (onClassChange) onClassChange(e.target.value);
+                    const newId = e.target.value;
+                    setCurrentClassId(newId);
+                    if (onClassChange) onClassChange(newId);
                   }}
-                  className="bg-transparent text-sm font-semibold text-white focus:outline-none cursor-pointer"
+                  className={styles.classSelect}
                 >
                   {classes.map((c) => (
-                    <option key={c.classId} value={c.classId} className="bg-slate-900 text-white">
+                    <option key={c.classId} value={c.classId}>
                       {c.displayName}
                     </option>
                   ))}
@@ -315,8 +314,9 @@ export default function MissingDobStudio({
 
             {canEditDob && (
               <button
+                type="button"
                 onClick={() => setIsExcelModalOpen(true)}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm transition-all shadow-md active:scale-95 min-h-[44px]"
+                className={`${styles.actionBtn} ${styles.actionBtnSecondary}`}
               >
                 <FileSpreadsheet size={16} />
                 <span>Fill from Excel</span>
@@ -324,428 +324,337 @@ export default function MissingDobStudio({
             )}
           </div>
         </div>
+      </section>
 
-        {/* Progress Metric Bar */}
-        <div className="mt-6 pt-5 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-slate-800/80 border border-slate-700 flex items-center justify-center font-bold text-amber-400 text-base">
-              {percentage}%
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-white">
-                {completedCount} of {students.length} students completed
-              </div>
-              <div className="text-xs text-slate-400">
-                {missingCount === 0 ? "All dates recorded! 🎉" : `${missingCount} students need a date of birth`}
-              </div>
-            </div>
+      {/* Progress & Search Section */}
+      <div className={styles.progressCard}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div>
+            <span style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--foreground)" }}>{percentage}%</span>
+            <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginLeft: "0.5rem" }}>
+              ({completedCount} of {students.length} students completed)
+            </span>
           </div>
+          {missingCount > 0 ? (
+            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#f59e0b" }}>
+              ⚠️ {missingCount} {missingCount === 1 ? "student needs" : "students need"} a date of birth
+            </span>
+          ) : (
+            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#10b981" }}>
+              ✓ All students in this class have a date of birth!
+            </span>
+          )}
+        </div>
 
-          {/* Visual Progress bar */}
-          <div className="flex-1 max-w-xs">
-            <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden p-0.5 border border-slate-700">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  percentage === 100 ? "bg-emerald-400" : "bg-gradient-to-r from-amber-400 to-amber-500"
-                }`}
-                style={{ width: `${percentage}%` }}
-              />
-            </div>
-          </div>
+        <div className={styles.progressBarTrack}>
+          <div className={styles.progressBarFill} style={{ width: `${percentage}%` }} />
         </div>
       </div>
 
-      {/* Tabs and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="inline-flex p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
+      {/* Filter Tabs & Search Bar */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+        <div className={styles.tabBar}>
           <button
-            onClick={() => setActiveTab("missing")}
-            className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all ${
-              activeTab === "missing"
-                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-            }`}
+            onClick={() => startTransition(() => setActiveTab("missing"))}
+            className={`${styles.tabBtn} ${activeTab === "missing" ? styles.tabBtnActive : ""}`}
           >
-            Missing DOB ({missingCount})
+            <span>Missing Dates</span>
+            {missingCount > 0 && (
+              <span className={`${styles.tabBadge} ${activeTab === "missing" ? "" : styles.tabBadgeAlert}`}>
+                {missingCount}
+              </span>
+            )}
           </button>
           <button
-            onClick={() => setActiveTab("all")}
-            className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all ${
-              activeTab === "all"
-                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-            }`}
+            onClick={() => startTransition(() => setActiveTab("all"))}
+            className={`${styles.tabBtn} ${activeTab === "all" ? styles.tabBtnActive : ""}`}
           >
-            All Students ({students.length})
+            <span>All Students</span>
+            <span className={styles.tabBadge}>{students.length}</span>
           </button>
-          {userRole === "ADMIN" && (
+        </div>
+
+        <div className={styles.searchBarWrapper} style={{ minWidth: "260px" }}>
+          <Search size={16} style={{ color: "var(--text-muted)" }} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by student name, roll number..."
+            className={styles.searchInput}
+          />
+          {searchQuery && (
             <button
-              onClick={() => setActiveTab("audit")}
-              className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all ${
-                activeTab === "audit"
-                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-              }`}
+              onClick={() => setSearchQuery("")}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}
             >
-              Approval Log ({adminLogs.filter((l) => l.status === "PENDING_APPROVAL").length})
+              <X size={14} />
             </button>
           )}
         </div>
-
-        {/* Search */}
-        {activeTab !== "audit" && (
-          <div className="relative min-w-[220px]">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search by student name or roll #..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-900 dark:text-white"
-            />
-          </div>
-        )}
       </div>
 
-      {/* Main Student Cards List */}
-      {activeTab !== "audit" && (
-        <div className="space-y-3">
-          {filteredStudents.length === 0 ? (
-            <div className="text-center py-12 bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
-              <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 mx-auto flex items-center justify-center mb-3">
-                <CheckCircle2 size={24} />
-              </div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                {activeTab === "missing" ? "No missing dates of birth!" : "No students found."}
-              </h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                {activeTab === "missing"
-                  ? "Every student in this class has their date of birth recorded. You can view all students in the 'All Students' tab."
-                  : "Try clearing your search query to see students."}
-              </p>
-            </div>
-          ) : (
-            filteredStudents.map((student) => {
-              const draftVal = draftDates[student.id];
-              const isEdited = draftVal !== undefined && draftVal !== (student.dateOfBirth || "");
-              const status = statusMessages[student.id];
-
-              return (
-                <div
-                  key={student.id}
-                  className={`bg-white dark:bg-slate-800/90 rounded-2xl p-4 sm:p-5 border transition-all ${
-                    isEdited
-                      ? "border-amber-400 ring-2 ring-amber-400/20 shadow-md"
-                      : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
-                  }`}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    {/* Student Info */}
-                    <div className="flex items-center gap-3.5">
-                      <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-700/80 border border-slate-200 dark:border-slate-600 flex items-center justify-center font-bold text-slate-700 dark:text-slate-200 text-sm shrink-0">
-                        {student.firstName[0]}
-                        {student.lastName ? student.lastName[0] : ""}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-slate-900 dark:text-white text-base">
-                            {student.name}
-                          </h4>
-                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-                            #{student.rollNumber}
-                          </span>
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
-                          <span>Adm: {student.admissionNo}</span>
-                          <span>•</span>
-                          <span>Parent: {student.parentName}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Date Input & Save */}
-                    <div className="flex flex-wrap items-center gap-3 self-end sm:self-center w-full sm:w-auto">
-                      <div className="flex-1 sm:flex-initial">
-                        <input
-                          type="date"
-                          disabled={!canEditDob}
-                          value={draftVal !== undefined ? draftVal : student.dateOfBirth || ""}
-                          onChange={(e) => handleDateChange(student.id, e.target.value)}
-                          max={new Date().toISOString().split("T")[0]}
-                          className={`w-full sm:w-48 px-3 py-2 text-sm rounded-xl border focus:outline-none font-medium min-h-[44px] transition-all ${
-                            !canEditDob
-                              ? "bg-slate-100 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-slate-400 cursor-not-allowed"
-                              : student.hasDob && !isEdited
-                              ? "bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
-                              : isEdited
-                              ? "bg-amber-50 dark:bg-amber-950/30 border-amber-400 text-amber-900 dark:text-amber-200"
-                              : "bg-orange-50/50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-800 text-orange-900 dark:text-orange-200"
-                          }`}
-                        />
-                      </div>
-
-                      {/* Row Save button */}
-                      {canEditDob && isEdited && (
-                        <button
-                          onClick={() => handleSaveSingle(student.id)}
-                          disabled={isPending}
-                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-sm min-h-[44px]"
-                        >
-                          <Check size={14} />
-                          <span>Save</span>
-                        </button>
-                      )}
-
-                      {!student.hasDob && !isEdited && (
-                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 flex items-center gap-1">
-                          <AlertCircle size={12} />
-                          <span>Missing</span>
-                        </span>
-                      )}
-
-                      {student.hasDob && !isEdited && (
-                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
-                          <Check size={12} />
-                          <span>Saved</span>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Feedback Message Banner */}
-                  {status && (
-                    <div
-                      className={`mt-3 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 ${
-                        status.type === "success"
-                          ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200"
-                          : status.type === "pending"
-                          ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-200"
-                          : "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border border-rose-200"
-                      }`}
-                    >
-                      {status.type === "success" && <CheckCircle2 size={14} />}
-                      {status.type === "pending" && <Clock size={14} />}
-                      {status.type === "error" && <XCircle size={14} />}
-                      <span>{status.text}</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
-
-      {/* Admin Audit Log Tab */}
-      {activeTab === "audit" && userRole === "ADMIN" && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
-          <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-slate-900 dark:text-white text-base">Date of Birth Change Requests</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Approve or reject teacher date modification requests.</p>
-            </div>
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
-              {adminLogs.filter((l) => l.status === "PENDING_APPROVAL").length} Pending
-            </span>
-          </div>
-
-          <div className="divide-y divide-slate-100 dark:divide-slate-700">
-            {adminLogs.length === 0 ? (
-              <div className="p-8 text-center text-slate-500 text-sm">No change requests recorded.</div>
-            ) : (
-              adminLogs.map((log) => (
-                <div key={log.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 dark:text-white text-sm">{log.personName}</span>
-                      <span className="text-xs px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                        {log.personType}
-                      </span>
-                      <span
-                        className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                          log.status === "APPROVED"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : log.status === "PENDING_APPROVAL"
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-rose-100 text-rose-700"
-                        }`}
-                      >
-                        {log.status}
-                      </span>
-                    </div>
-                    <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
-                      <span>Changed by: {log.changedByName}</span>
-                      <span>•</span>
-                      <span>From: {log.oldDateStr || "None"}</span>
-                      <ArrowRight size={12} />
-                      <span className="font-semibold text-slate-700 dark:text-slate-200">To: {log.newDateStr}</span>
-                    </div>
-                    {log.reason && <p className="text-xs text-slate-400 mt-1 italic">Reason: {log.reason}</p>}
-                  </div>
-
-                  {log.status === "PENDING_APPROVAL" && (
-                    <div className="flex items-center gap-2 self-end sm:self-center">
-                      <button
-                        onClick={() => handleAdminApprovalDecision(log.id, "APPROVED")}
-                        disabled={isPending}
-                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all active:scale-95"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => handleAdminApprovalDecision(log.id, "REJECTED")}
-                        disabled={isPending}
-                        className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition-all active:scale-95"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Sticky Bottom Bar for Multi-Save */}
+      {/* Floating Save All Changes bar */}
       {changedCount > 0 && (
-        <div className="fixed bottom-16 sm:bottom-6 left-4 right-4 sm:left-auto sm:right-6 sm:w-96 bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-slate-700 z-40 flex items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-4">
-          <div>
-            <div className="font-bold text-sm text-white">{changedCount} unsaved date changes</div>
-            <div className="text-xs text-slate-400">Save all changes at once</div>
+        <div
+          style={{
+            position: "sticky",
+            top: "1rem",
+            zIndex: 40,
+            padding: "0.85rem 1.25rem",
+            borderRadius: "14px",
+            background: "var(--card-bg)",
+            border: "2px solid var(--primary)",
+            boxShadow: "0 8px 30px rgba(59, 130, 246, 0.2)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "1rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ fontSize: "0.875rem", fontWeight: 700, color: "var(--foreground)" }}>
+            💾 You have {changedCount} unsaved date {changedCount === 1 ? "change" : "changes"}
           </div>
-          <div className="flex items-center gap-2">
+          <div style={{ display: "flex", gap: "0.5rem" }}>
             <button
               onClick={() => setDraftDates({})}
-              className="px-3 py-1.5 text-xs text-slate-400 hover:text-white font-medium"
+              className={styles.footerBtn}
+              style={{ minHeight: "38px" }}
             >
               Discard
             </button>
             <button
               onClick={handleSaveAll}
               disabled={isPending}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all shadow-md active:scale-95 flex items-center gap-1.5"
+              className={`${styles.footerBtn} ${styles.footerBtnPrimary}`}
+              style={{ minHeight: "38px" }}
             >
-              <Check size={14} />
-              <span>Save All</span>
+              {isPending ? "Saving All..." : "Save All Changes"}
             </button>
           </div>
         </div>
       )}
 
-      {/* Excel Upload Modal */}
-      {isExcelModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl relative">
-            <button
-              onClick={() => {
-                setIsExcelModalOpen(false);
-                setExcelPreview(null);
-                setExcelFile(null);
-              }}
-              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-full"
-            >
-              <X size={20} />
-            </button>
+      {/* Student List */}
+      {filteredStudents.length === 0 ? (
+        <div className={styles.emptyState}>
+          <div style={{ fontSize: "2.5rem" }}>🎉</div>
+          <h3 className={styles.emptyTitle}>
+            {searchQuery
+              ? "No students match your search"
+              : activeTab === "missing"
+              ? "No missing birth dates in this class!"
+              : "No students found in this class."}
+          </h3>
+          <p className={styles.emptyDesc}>
+            {searchQuery
+              ? "Try adjusting your search terms."
+              : "Every student has an updated date of birth on record."}
+          </p>
+        </div>
+      ) : (
+        <div className={styles.cardsGrid}>
+          {filteredStudents.map((student) => {
+            const draft = draftDates[student.id];
+            const currentVal = draft !== undefined ? draft : student.dateOfBirth || "";
+            const isDirty = draft !== undefined && draft !== (student.dateOfBirth || "");
+            const statusMsg = statusMessages[student.id];
 
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
-                <FileSpreadsheet size={20} />
+            return (
+              <div key={student.id} className={styles.celebrantCard}>
+                <div className={styles.celebrantHeader}>
+                  <div className={styles.avatarCircle}>{getInitials(student.name)}</div>
+                  <div className={styles.celebrantMeta}>
+                    <h3 className={styles.celebrantName}>{student.name}</h3>
+                    <div className={styles.celebrantRoll}>
+                      Roll #{student.rollNumber} • Adm #{student.admissionNo}
+                    </div>
+                    {student.parentName && (
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.2rem" }}>
+                        Parent: <strong>{student.parentName}</strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Date Input Field */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                  <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)" }}>
+                    DATE OF BIRTH (DD/MM/YYYY):
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <input
+                      type="date"
+                      value={currentVal}
+                      disabled={!canEditDob}
+                      onChange={(e) => handleDateChange(student.id, e.target.value)}
+                      className={styles.dateInput}
+                      style={{ flex: 1 }}
+                    />
+                    {isDirty && (
+                      <button
+                        onClick={() => handleSaveSingle(student.id)}
+                        disabled={isPending}
+                        className={`${styles.footerBtn} ${styles.footerBtnPrimary}`}
+                        style={{ minHeight: "44px", flexShrink: 0 }}
+                      >
+                        <Check size={16} />
+                        <span>Save</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Status Feedback */}
+                {statusMsg ? (
+                  <div
+                    style={{
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      color:
+                        statusMsg.type === "success"
+                          ? "#10b981"
+                          : statusMsg.type === "error"
+                          ? "#ef4444"
+                          : "#f59e0b",
+                    }}
+                  >
+                    {statusMsg.text}
+                  </div>
+                ) : student.hasDob ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.75rem", color: "#10b981", fontWeight: 600 }}>
+                    <CheckCircle2 size={14} />
+                    <span>On Record</span>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.75rem", color: "#f59e0b", fontWeight: 600 }}>
+                    <AlertCircle size={14} />
+                    <span>Missing Date of Birth</span>
+                  </div>
+                )}
               </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* EXCEL IMPORT MODAL */}
+      {isExcelModalOpen && (
+        <div className={styles.modalOverlay} onClick={() => setIsExcelModalOpen(false)}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()} style={{ maxWidth: "600px" }}>
+            <div className={styles.modalHeader}>
               <div>
-                <h3 className="font-bold text-lg text-slate-900 dark:text-white">Fill Dates from Excel</h3>
-                <p className="text-xs text-slate-500">Upload class mark sheet or student register</p>
+                <h3 className={styles.modalTitle}>Import Birth Dates from Excel</h3>
+                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                  Upload a spreadsheet with Roll No / Name and Date of Birth
+                </div>
               </div>
+              <button
+                onClick={() => setIsExcelModalOpen(false)}
+                className={styles.iconBtn}
+                title="Close"
+              >
+                <X size={18} />
+              </button>
             </div>
 
-            {!excelPreview ? (
-              <form onSubmit={handleExcelPreview} className="space-y-4">
-                <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-6 text-center hover:border-amber-500 transition-colors cursor-pointer">
-                  <Upload size={32} className="mx-auto text-slate-400 mb-2" />
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                    {excelFile ? excelFile.name : "Choose an Excel or CSV file"}
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Columns recognized: Roll No, Admission No, Student Name, Date of Birth / DOB.
-                  </p>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    onChange={(e) => setExcelFile(e.target.files?.[0] || null)}
-                    className="mt-3 text-xs text-slate-500 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsExcelModalOpen(false)}
-                    className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900"
+            <div className={styles.modalBody}>
+              {!excelPreview ? (
+                <form onSubmit={handleExcelPreview} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  <div
+                    style={{
+                      border: "2px dashed var(--border-color)",
+                      borderRadius: "16px",
+                      padding: "2rem 1.5rem",
+                      textAlign: "center",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "0.75rem",
+                      background: "rgba(0,0,0,0.01)",
+                    }}
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!excelFile || isUploading}
-                    className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    {isUploading ? "Reading file..." : "Preview Matches"}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-800 p-3 rounded-xl">
-                  <div>
-                    <span className="font-bold text-emerald-600">{excelPreview.valid.length} updates found</span>
-                    <span className="text-slate-400 mx-2">•</span>
-                    <span className="text-slate-500">{excelPreview.unchanged.length} already match</span>
-                  </div>
-                  {excelPreview.errors.length > 0 && (
-                    <span className="text-rose-600 font-semibold">{excelPreview.errors.length} unmatched</span>
-                  )}
-                </div>
-
-                {/* Preview List */}
-                <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
-                  {excelPreview.valid.map((v) => (
-                    <div
-                      key={v.studentId}
-                      className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-between"
-                    >
-                      <div>
-                        <div className="font-semibold text-slate-900 dark:text-white">{v.studentName}</div>
-                        <div className="text-slate-400 text-[11px]">Roll #{v.rollNumber}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-emerald-600 dark:text-emerald-400">{v.newDob}</div>
-                        {v.oldDob && <div className="text-[10px] text-slate-400 line-through">{v.oldDob}</div>}
-                      </div>
+                    <FileSpreadsheet size={36} style={{ color: "var(--primary)" }} />
+                    <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--foreground)" }}>
+                      Choose an Excel (.xlsx, .xls) or CSV file
                     </div>
-                  ))}
-                </div>
+                    <input
+                      type="file"
+                      accept=".xlsx, .xls, .csv"
+                      onChange={(e) => setExcelFile(e.target.files?.[0] || null)}
+                      style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}
+                    />
+                  </div>
 
-                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setExcelPreview(null)}
-                    className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleExcelCommit}
-                    disabled={isUploading || excelPreview.valid.length === 0}
-                    className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    <Check size={14} />
-                    <span>Apply {excelPreview.valid.length} Updates</span>
-                  </button>
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => setIsExcelModalOpen(false)}
+                      className={styles.footerBtn}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!excelFile || isUploading}
+                      className={`${styles.footerBtn} ${styles.footerBtnPrimary}`}
+                    >
+                      {isUploading ? "Reading File..." : "Preview Import"}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                    <strong>{excelPreview.valid.length}</strong> new or updated dates found,{" "}
+                    <strong>{excelPreview.unchanged.length}</strong> already up to date,{" "}
+                    <strong>{excelPreview.errors.length}</strong> errors.
+                  </div>
+
+                  {excelPreview.valid.length > 0 && (
+                    <div style={{ maxHeight: "200px", overflowY: "auto", border: "1px solid var(--border-color)", borderRadius: "10px" }}>
+                      <table style={{ width: "100%", fontSize: "0.8rem", borderCollapse: "collapse" }}>
+                        <thead>
+                          <tr style={{ background: "rgba(0,0,0,0.03)", textAlign: "left" }}>
+                            <th style={{ padding: "0.5rem" }}>Student</th>
+                            <th style={{ padding: "0.5rem" }}>Roll #</th>
+                            <th style={{ padding: "0.5rem" }}>New Date</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {excelPreview.valid.map((v, i) => (
+                            <tr key={i} style={{ borderTop: "1px solid var(--border-color)" }}>
+                              <td style={{ padding: "0.5rem" }}>{v.studentName}</td>
+                              <td style={{ padding: "0.5rem" }}>{v.rollNumber}</td>
+                              <td style={{ padding: "0.5rem", fontWeight: 700, color: "#10b981" }}>{v.newDob}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => setExcelPreview(null)}
+                      className={styles.footerBtn}
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExcelCommit}
+                      disabled={isUploading || excelPreview.valid.length === 0}
+                      className={`${styles.footerBtn} ${styles.footerBtnPrimary}`}
+                    >
+                      {isUploading ? "Saving..." : `Apply ${excelPreview.valid.length} Dates`}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}

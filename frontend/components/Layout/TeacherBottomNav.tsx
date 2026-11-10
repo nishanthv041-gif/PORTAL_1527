@@ -152,7 +152,7 @@ export function TeacherBottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              prefetch={false}
+              prefetch={true}
               onMouseEnter={() => {
                 try { router.prefetch(item.href); } catch {}
               }}
@@ -211,7 +211,7 @@ export function TeacherBottomNav() {
               <Link
                 key={item.href}
                 href={item.href}
-                prefetch={false}
+                prefetch={true}
                 onMouseEnter={() => {
                   try { router.prefetch(item.href); } catch {}
                 }}

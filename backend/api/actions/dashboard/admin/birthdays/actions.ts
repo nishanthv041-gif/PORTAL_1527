@@ -28,70 +28,85 @@ export async function getMissingDobSummaryAction() {
     throw new Error("Unauthorized: Admin access required.");
   }
 
-  // 1. Students without DOB
-  const missingStudents = await prisma.student.findMany({
-    where: { isActive: true, dateOfBirth: null },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      rollNumber: true,
-      admissionNo: true,
-      classId: true,
-      class: { select: { name: true, section: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  // Fetch missing DOBs & totals concurrently across all 6 roles
+  const [
+    missingStudents,
+    totalStudents,
+    missingTeachers,
+    totalTeachers,
+    missingStaff,
+    totalStaff,
+    missingAdmins,
+    totalAdmins,
+    missingParents,
+    totalParents,
+    missingDrivers,
+    totalDrivers,
+  ] = await Promise.all([
+    // 1. Students without DOB
+    prisma.student.findMany({
+      where: { isActive: true, dateOfBirth: null },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        rollNumber: true,
+        admissionNo: true,
+        classId: true,
+        class: { select: { name: true, section: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.student.count({ where: { isActive: true } }),
 
-  const totalStudents = await prisma.student.count({ where: { isActive: true } });
+    // 2. Teachers without DOB
+    prisma.teacher.findMany({
+      where: { isActive: true, dateOfBirth: null },
+      select: {
+        id: true,
+        user: { select: { id: true, name: true, email: true } },
+        phone: true,
+      },
+    }),
+    prisma.teacher.count({ where: { isActive: true } }),
 
-  // 2. Teachers without DOB
-  const missingTeachers = await prisma.teacher.findMany({
-    where: { isActive: true, dateOfBirth: null },
-    select: {
-      id: true,
-      user: { select: { id: true, name: true, email: true } },
-      phone: true,
-    },
-  });
-  const totalTeachers = await prisma.teacher.count({ where: { isActive: true } });
+    // 3. Staff without DOB
+    prisma.staff.findMany({
+      where: { isActive: true, dateOfBirth: null },
+      select: {
+        id: true,
+        designation: true,
+        user: { select: { id: true, name: true, email: true } },
+        phone: true,
+      },
+    }),
+    prisma.staff.count({ where: { isActive: true } }),
 
-  // 3. Staff without DOB
-  const missingStaff = await prisma.staff.findMany({
-    where: { isActive: true, dateOfBirth: null },
-    select: {
-      id: true,
-      designation: true,
-      user: { select: { id: true, name: true, email: true } },
-      phone: true,
-    },
-  });
-  const totalStaff = await prisma.staff.count({ where: { isActive: true } });
+    // 4. Admins without DOB
+    prisma.user.findMany({
+      where: { role: "ADMIN", status: "ACTIVE", dateOfBirth: null },
+      select: { id: true, name: true, email: true },
+    }),
+    prisma.user.count({ where: { role: "ADMIN", status: "ACTIVE" } }),
 
-  // 4. Admins without DOB
-  const missingAdmins = await prisma.user.findMany({
-    where: { role: "ADMIN", status: "ACTIVE", dateOfBirth: null },
-    select: { id: true, name: true, email: true },
-  });
-  const totalAdmins = await prisma.user.count({ where: { role: "ADMIN", status: "ACTIVE" } });
+    // 5. Parents without DOB
+    prisma.parent.findMany({
+      where: { isActive: true, dateOfBirth: null },
+      select: {
+        id: true,
+        phone: true,
+        user: { select: { id: true, name: true, email: true } },
+      },
+    }),
+    prisma.parent.count({ where: { isActive: true } }),
 
-  // 5. Parents without DOB
-  const missingParents = await prisma.parent.findMany({
-    where: { isActive: true, dateOfBirth: null },
-    select: {
-      id: true,
-      phone: true,
-      user: { select: { id: true, name: true, email: true } },
-    },
-  });
-  const totalParents = await prisma.parent.count({ where: { isActive: true } });
-
-  // 6. Drivers without DOB
-  const missingDrivers = await prisma.bus.findMany({
-    where: { isActive: true, driverDob: null },
-    select: { id: true, busNumber: true, driverName: true, driverPhone: true },
-  });
-  const totalDrivers = await prisma.bus.count({ where: { isActive: true } });
+    // 6. Drivers without DOB
+    prisma.bus.findMany({
+      where: { isActive: true, driverDob: null },
+      select: { id: true, busNumber: true, driverName: true, driverPhone: true },
+    }),
+    prisma.bus.count({ where: { isActive: true } }),
+  ]);
 
   const totalPeople = totalStudents + totalTeachers + totalStaff + totalAdmins + totalParents + totalDrivers;
   const totalMissing =
