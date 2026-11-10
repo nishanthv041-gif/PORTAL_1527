@@ -4,6 +4,9 @@ frontend:
     preBuild:
       commands:
         - nvm use 20 || nvm install 20
+        # Restore build cache from previous build if available
+        - mkdir -p .next
+        - '[ -d .amplify-cache/cache ] && cp -r .amplify-cache/cache .next/cache || true'
         - npm ci
         - npx prisma generate
     build:
@@ -11,6 +14,16 @@ frontend:
         # Securely pass permitted runtime environment variables to Next.js server runtime without logging secrets
         - env | grep -E '^(DATABASE_URL|DIRECT_URL|SECONDARY_DATABASE_URL|SECONDARY_DIRECT_URL|NEXTAUTH_SECRET|NEXTAUTH_URL|NEXT_PUBLIC_APP_URL|NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY|SUPABASE_SECRET_KEY|SETTINGS_INITIAL_PASSWORD|GOOGLE_CLIENT_ID|GOOGLE_CLIENT_SECRET|SMTP_EMAIL|SMTP_PASSWORD|SMTP_HOST|SMTP_PORT|CRON_SECRET|NODE_ENV)=' > .env.production || true
         - npm run build
+    postBuild:
+      commands:
+        # 1. Clean server source maps from production output (.map files are never executed at runtime)
+        - find .next/server -name "*.map" -type f -delete || true
+        # 2. Print detailed size audit and enforce packaging budget (< 205 MB limit)
+        - node scripts/check-build-size.mjs
+        # 3. Move .next/cache into .amplify-cache to preserve fast builds while keeping deployed bundle slim
+        - mkdir -p .amplify-cache
+        - rm -rf .amplify-cache/cache
+        - '[ -d .next/cache ] && mv .next/cache .amplify-cache/cache || true'
   artifacts:
     baseDirectory: .next
     files:
@@ -18,4 +31,4 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
-      - .next/cache/**/*
+      - .amplify-cache/**/*

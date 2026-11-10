@@ -27,6 +27,16 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  outputFileTracingExcludes: {
+    '/*': [
+      './.next/server/**/*.map',
+      './node_modules/@swc/**/*',
+      './node_modules/esbuild/**/*',
+      './node_modules/typescript/**/*',
+      './node_modules/@prisma/engines/**/*',
+      './node_modules/prisma/**/*',
+    ],
+  },
   async redirects() {
     return [
       {

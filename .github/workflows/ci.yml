@@ -39,11 +39,14 @@ jobs:
           NEXTAUTH_SECRET: ci-test-secret-min-32-chars-long-placeholder
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
 
-      - name: Verify Standalone Output Exists
+      - name: Verify Build Output Size Guard (< 205 MB)
+        run: node scripts/check-build-size.mjs
+
+      - name: Verify Build Output Directory Exists
         run: |
-          if [ ! -d ".next/standalone" ]; then
-            echo "❌ Error: Standalone output directory (.next/standalone) was not generated!"
+          if [ ! -d ".next/server" ]; then
+            echo "❌ Error: Production server output (.next/server) was not generated!"
             exit 1
           fi
-          echo "✅ Standalone output verified successfully."
+          echo "✅ Next.js build output verified successfully."
 
