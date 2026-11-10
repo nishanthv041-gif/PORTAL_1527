@@ -5,7 +5,8 @@ import {
   Upload, FileText, FileSpreadsheet,
   CheckCircle2, AlertCircle, RefreshCw, Trash2, Plus,
   Award, Calendar, Users, Eye, EyeOff, RotateCcw,
-  Check, X, ArrowRight, Layers, Send, Sliders, Edit3, Download, HelpCircle
+  Check, X, ArrowRight, Layers, Send, Sliders, Edit3, Download, HelpCircle,
+  Globe, Link as LinkIcon
 } from "lucide-react";
 import type { TeacherClass, ClassSubject, ClassStudent, HistoryItem } from "./TeacherReportCardsClient";
 import type { ScanReportCardResult, ScannedReportCardSubject, DetectedStudentEntry } from "@/backend/api/actions/dashboard/teacher/report-cards/scanReportCardTypes";
@@ -39,10 +40,12 @@ import styles from "./ReportCardDocumentStudio.module.css";
 
 export interface QueuedFile {
   id: string;
-  file: File;
+  file?: File;
   name: string;
   size: number;
   ext: string;
+  isWebUrl?: boolean;
+  webUrl?: string;
   previewUrl?: string;
   status: "QUEUED" | "PROCESSING" | "EXTRACTED" | "FAILED";
   progressText?: string;
@@ -96,6 +99,8 @@ export default function ReportCardDocumentStudio({
   // File Queue State (Scanned in browser memory only, never uploaded to server storage)
   const [fileQueue, setFileQueue] = useState<QueuedFile[]>([]);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
+  const [inputMode, setInputMode] = useState<"UPLOAD" | "URL">("UPLOAD");
+  const [webUrlInput, setWebUrlInput] = useState<string>("");
 
   // Active Document Extraction State
   // NEVER default exam name or date if not detected in document
@@ -404,12 +409,153 @@ export default function ReportCardDocumentStudio({
     }
   };
 
-  // Process a Queued Item via Self-Hosted In-Browser Scan Engine (No server upload)
+  // Process a Queued Item via Self-Hosted In-Browser Scan Engine or Secure Web Pipeline
+  const handleImportFromUrl = () => {
+    const trimmed = webUrlInput.trim();
+    if (!trimmed) {
+      setGlobalError("Please enter a valid HTTPS URL.");
+      return;
+    }
+    if (!trimmed.startsWith("https://")) {
+      setGlobalError("Only secure HTTPS URLs (starting with https://) are supported.");
+      return;
+    }
+
+    setGlobalError(null);
+    const entry: QueuedFile = {
+      id: `web-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      name: trimmed.replace(/^https?:\/\//, "").slice(0, 45),
+      size: 0,
+      ext: "url",
+      isWebUrl: true,
+      webUrl: trimmed,
+      status: "QUEUED",
+      progressText: "Ready to scan link..."
+    };
+
+    setFileQueue(prev => [...prev, entry]);
+    if (!activeFileId) {
+      setActiveFileId(entry.id);
+    }
+    setWebUrlInput("");
+    processQueueItem(entry);
+  };
+
   const processQueueItem = async (entry: QueuedFile) => {
     if (!activeClassId) {
       setGlobalError("Please select a target class before scanning documents.");
       return;
     }
+
+    // Pathway 1: Web Link Import via SSRF-Guarded Server API
+    if (entry.isWebUrl && entry.webUrl) {
+      setFileQueue(prev =>
+        prev.map(f => (f.id === entry.id ? { ...f, status: "PROCESSING", progressText: "Fetching document via secure SSRF guard...", progressPercent: 25 } : f))
+      );
+
+      try {
+        const fd = new FormData();
+        fd.append("webUrl", entry.webUrl);
+        fd.append("classId", activeClassId);
+        fd.append("defaultMaxMarks", String(examMaxMarks));
+        fd.append("defaultPassMarks", String(examPassMarks));
+
+        const res = await fetch("/api/report-cards/extract", {
+          method: "POST",
+          body: fd
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Web document extraction failed.");
+        }
+
+        const detectedStudents: DetectedStudentEntry[] = (data.allDetectedStudents || []).map((st: any) => ({
+          studentId: st.studentId || "",
+          studentName: st.studentName || st.extractedName || "Student",
+          rollNumber: st.rollNumber || "",
+          extractedName: st.extractedName,
+          confidence: st.studentConfidence || (st.studentId ? "HIGH" : "NONE"),
+          subjects: (st.subjects || []).map((sb: any) => ({
+            id: sb.id || `sub-${Date.now()}-${Math.random()}`,
+            subjectId: sb.subjectId || "",
+            subjectName: sb.subjectName,
+            score: sb.score,
+            marksScored: sb.score,
+            maxScore: sb.maxScore || examMaxMarks,
+            passMarks: sb.passMarks || examPassMarks,
+            remarks: sb.remarks || "",
+            grade: sb.grade || "-",
+            status: sb.status || "NEEDS_REVIEW",
+            confidence: "HIGH"
+          })),
+          remarks: st.generalRemarks || "",
+          docTotal: st.docTotal,
+          docPercentage: st.docPercentage,
+          printedTotal: st.docTotal
+        }));
+
+        if (detectedStudents.length === 0) {
+          throw new Error("No students detected in the linked document.");
+        }
+
+        const firstStudent = detectedStudents[0];
+        const result: ScanReportCardResult = {
+          success: true,
+          fileDetails: data.fileDetails || { name: entry.name, type: "text/html", size: entry.size },
+          studentId: firstStudent.studentId,
+          studentName: firstStudent.studentName,
+          rollNumber: firstStudent.rollNumber,
+          extractedName: firstStudent.extractedName,
+          studentConfidence: firstStudent.confidence === "HIGH" ? "HIGH" : firstStudent.confidence === "MEDIUM" ? "MEDIUM" : "LOW",
+          examName: data.examName || "Examination",
+          examDate: data.examDate || new Date().toISOString().split("T")[0],
+          defaultMaxMarks: data.defaultMaxMarks || examMaxMarks,
+          defaultPassMarks: data.defaultPassMarks || examPassMarks,
+          generalRemarks: firstStudent.remarks || "",
+          subjects: firstStudent.subjects,
+          allDetectedStudents: detectedStudents,
+          detectedStudents,
+          rawTextPreview: data.fileName,
+          docTotal: firstStudent.printedTotal
+        };
+
+        setFileQueue(prev =>
+          prev.map(f =>
+            f.id === entry.id
+              ? {
+                  ...f,
+                  status: "EXTRACTED",
+                  progressText: `Extracted ${detectedStudents.length} student(s) successfully`,
+                  progressPercent: 100,
+                  result
+                }
+              : f
+          )
+        );
+
+        if (!activeFileId || activeFileId === entry.id) {
+          setActiveFileId(entry.id);
+        }
+        return;
+      } catch (err: any) {
+        setFileQueue(prev =>
+          prev.map(f =>
+            f.id === entry.id
+              ? {
+                  ...f,
+                  status: "FAILED",
+                  error: err.message || "Failed to scan web link",
+                  progressText: "Scan failed"
+                }
+              : f
+          )
+        );
+        return;
+      }
+    }
+
+    if (!entry.file) return;
 
     setFileQueue(prev =>
       prev.map(f => (f.id === entry.id ? { ...f, status: "PROCESSING", stage: "image-load", progressText: `Reading ${entry.ext.toUpperCase()} document...`, progressPercent: 10 } : f))
@@ -1587,59 +1733,167 @@ export default function ReportCardDocumentStudio({
         )}
       </div>
 
-      {/* Drag & Drop Upload Zone */}
-      <div
-        onDragOver={e => e.preventDefault()}
-        onDrop={e => {
-          e.preventDefault();
-          handleAddFiles(e.dataTransfer.files);
-        }}
-        onClick={() => fileInputRef.current?.click()}
-        style={{
-          border: "2px dashed rgba(59, 130, 246, 0.4)",
-          borderRadius: "16px",
-          padding: "clamp(1.5rem, 4vw, 2.2rem)",
-          textAlign: "center",
-          background: "rgba(59, 130, 246, 0.03)",
-          cursor: "pointer",
-          transition: "all 0.2s ease",
-          width: "100%",
-          boxSizing: "border-box"
-        }}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".xlsx,.xls,.csv,.pdf,.jpg,.jpeg,.png,.webp,.bmp"
-          multiple
-          style={{ display: "none" }}
-          onChange={e => handleAddFiles(e.target.files)}
-        />
-        <div style={{
-          width: "50px",
-          height: "50px",
-          borderRadius: "14px",
-          background: "rgba(59, 130, 246, 0.15)",
-          color: "var(--primary)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          margin: "0 auto 0.75rem"
-        }}>
-          <Upload size={24} />
-        </div>
-        <h3 style={{ margin: "0 0 0.35rem 0", fontSize: "1.05rem", fontWeight: 800 }}>
-          Drag &amp; drop document, or click to browse
-        </h3>
-        <p style={{ margin: "0 0 0.75rem 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-          Accepts Excel (.xlsx / .xls), CSV, Text PDF, Photos &amp; Scans (JPG / PNG) up to 10MB
-        </p>
-        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "0.5rem" }}>
-          <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(16, 185, 129, 0.12)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.25)" }}>📊 Excel / CSV</span>
-          <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(239, 68, 68, 0.12)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.25)" }}>📕 PDF</span>
-          <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(59, 130, 246, 0.12)", color: "#60a5fa", border: "1px solid rgba(59, 130, 246, 0.25)" }}>📷 Photo / Scanned Mark Sheet</span>
-        </div>
+      {/* Source Selector: File Upload vs Web Link Import */}
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
+        <button
+          type="button"
+          onClick={() => setInputMode("UPLOAD")}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.4rem",
+            padding: "0.45rem 0.9rem",
+            borderRadius: "8px",
+            fontSize: "0.85rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            border: inputMode === "UPLOAD" ? "1.5px solid var(--primary, #3b82f6)" : "1px solid var(--border-color, #334155)",
+            background: inputMode === "UPLOAD" ? "rgba(59, 130, 246, 0.15)" : "transparent",
+            color: inputMode === "UPLOAD" ? "var(--primary, #3b82f6)" : "var(--text-secondary)"
+          }}
+        >
+          <Upload size={16} />
+          Upload Document File
+        </button>
+        <button
+          type="button"
+          onClick={() => setInputMode("URL")}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.4rem",
+            padding: "0.45rem 0.9rem",
+            borderRadius: "8px",
+            fontSize: "0.85rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            border: inputMode === "URL" ? "1.5px solid var(--primary, #3b82f6)" : "1px solid var(--border-color, #334155)",
+            background: inputMode === "URL" ? "rgba(59, 130, 246, 0.15)" : "transparent",
+            color: inputMode === "URL" ? "var(--primary, #3b82f6)" : "var(--text-secondary)"
+          }}
+        >
+          <Globe size={16} />
+          Import from Web Link (SSRF Protected)
+        </button>
       </div>
+
+      {inputMode === "UPLOAD" ? (
+        /* Drag & Drop Upload Zone */
+        <div
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => {
+            e.preventDefault();
+            handleAddFiles(e.dataTransfer.files);
+          }}
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            border: "2px dashed rgba(59, 130, 246, 0.4)",
+            borderRadius: "16px",
+            padding: "clamp(1.5rem, 4vw, 2.2rem)",
+            textAlign: "center",
+            background: "rgba(59, 130, 246, 0.03)",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+            width: "100%",
+            boxSizing: "border-box"
+          }}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv,.pdf,.jpg,.jpeg,.png,.webp,.bmp"
+            multiple
+            style={{ display: "none" }}
+            onChange={e => handleAddFiles(e.target.files)}
+          />
+          <div style={{
+            width: "50px",
+            height: "50px",
+            borderRadius: "14px",
+            background: "rgba(59, 130, 246, 0.15)",
+            color: "var(--primary)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto 0.75rem"
+          }}>
+            <Upload size={24} />
+          </div>
+          <h3 style={{ margin: "0 0 0.35rem 0", fontSize: "1.05rem", fontWeight: 800 }}>
+            Drag &amp; drop document, or click to browse
+          </h3>
+          <p style={{ margin: "0 0 0.75rem 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+            Accepts Excel (.xlsx / .xls), CSV, Text PDF, Photos &amp; Scans (JPG / PNG) up to 10MB
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(16, 185, 129, 0.12)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.25)" }}>📊 Excel / CSV</span>
+            <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(239, 68, 68, 0.12)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.25)" }}>📕 PDF</span>
+            <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: "rgba(59, 130, 246, 0.12)", color: "#60a5fa", border: "1px solid rgba(59, 130, 246, 0.25)" }}>📷 Photo / Scanned Mark Sheet</span>
+          </div>
+        </div>
+      ) : (
+        /* Web Link Import Box */
+        <div style={{
+          border: "1.5px solid rgba(59, 130, 246, 0.4)",
+          borderRadius: "16px",
+          padding: "1.5rem",
+          background: "rgba(59, 130, 246, 0.03)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.75rem"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <Globe size={20} color="var(--primary, #3b82f6)" />
+            <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800 }}>Scan Report Card from Web URL</h3>
+          </div>
+          <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+            Enter a publicly accessible HTTPS link containing tabular mark sheet HTML, CSV, or PDF. Private networks (10.x, 192.168.x, 127.x, 169.254.x) are strictly blocked by SSRF filters.
+          </p>
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
+            <input
+              type="url"
+              placeholder="https://example.com/marksheet.html"
+              value={webUrlInput}
+              onChange={e => setWebUrlInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleImportFromUrl();
+                }
+              }}
+              style={{
+                flex: 1,
+                padding: "0.6rem 0.85rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color, #334155)",
+                background: "var(--card-bg, #0f172a)",
+                color: "var(--text-primary, #f8fafc)",
+                fontSize: "0.88rem"
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleImportFromUrl}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                padding: "0.6rem 1.2rem",
+                borderRadius: "8px",
+                background: "var(--primary, #3b82f6)",
+                color: "#ffffff",
+                fontWeight: 700,
+                fontSize: "0.88rem",
+                border: "none",
+                cursor: "pointer"
+              }}
+            >
+              <LinkIcon size={16} />
+              Fetch &amp; Scan Link
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Document Queue Bar */}
       {fileQueue.length > 0 && (

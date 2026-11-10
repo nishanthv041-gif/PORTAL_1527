@@ -47,6 +47,7 @@ model User {
   homeworkComments HomeworkComment[]
   complaintMessages ComplaintMessage[]
   sessions         UserSession[]
+  reportCardExtractions ReportCardExtraction[]
 
   @@index([role, status])
   @@index([googleEmail])
@@ -304,6 +305,7 @@ model Class {
   attendances    Attendance[]
   batchId        String?
   batch          AcademicBatch? @relation(fields: [batchId], references: [id])
+  reportCardExtractions ReportCardExtraction[]
 
   @@index([isActive])
   @@index([teacherId])
@@ -602,6 +604,33 @@ model ReportCardAuditLog {
   @@index([reportCardId])
   @@index([changedBy])
   @@index([createdAt])
+}
+
+model ReportCardExtraction {
+  id           String   @id @default(cuid())
+  sourceType   String   // 'UPLOAD' | 'URL'
+  sourceRef    String?  // Original filename or sanitized domain/path
+  classId      String
+  examId       String?
+  provider     String   // 'GEMINI' | 'BEDROCK' | 'TESSERACT' | 'SHEETJS' | 'UNPDF' | 'CHEERIO'
+  modelId      String?
+  status       String   @default("STAGED") // 'STAGED' | 'COMMITTED' | 'DISCARDED' | 'FAILED'
+  subjectCount Int      @default(0)
+  studentCount Int      @default(0)
+  extractedData Json    // Full extraction payload
+  warnings     Json?
+  tokensIn     Int?     @default(0)
+  tokensOut    Int?     @default(0)
+  costUsd      Float?   @default(0.0)
+  createdById  String
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime // Set to createdAt + 30 days
+
+  class     Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  createdBy User  @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([classId, status])
+  @@index([expiresAt])
 }
 
 model Timetable {
