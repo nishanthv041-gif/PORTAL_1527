@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  Sparkles,
+  Eye,
   Save,
   CheckCircle2,
   AlertTriangle,
@@ -15,6 +15,7 @@ import {
   Send,
   History,
 } from "lucide-react";
+import { CakeIcon as Cake } from "@/frontend/components/birthdays/BirthdayIcons";
 import Link from "next/link";
 
 function LanguageIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
@@ -96,7 +97,7 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
-            <Sparkles className="w-7 h-7 text-amber-500" />
+            <Cake className="w-7 h-7 text-amber-500" />
             Automatic Birthday Wishes
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -428,7 +429,7 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                 {/* Live Preview Card */}
                 <div className="p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-200 dark:border-amber-900/50">
                   <div className="text-[11px] font-semibold text-amber-800 dark:text-amber-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5" />
+                    <Eye className="w-3.5 h-3.5" />
                     Live Notification Preview (Parent View)
                   </div>
                   <div className="text-xs font-bold text-gray-900 dark:text-white">

@@ -158,6 +158,7 @@ export async function sendPushToSubscription(
     if (statusCode === 404 || statusCode === 410) {
       console.info(`[WebPush] Subscription expired or unsubscribed (${statusCode}). Removing: ${sub.id}`);
       await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+      await (prisma as any).pwaSubscription?.deleteMany({ where: { endpoint: sub.endpoint } }).catch(() => {});
     }
 
     // Record failed delivery attempt
@@ -238,6 +239,39 @@ export async function dispatchPushToRecipients(
       auth: true,
     },
   });
+
+  // Also include matching active subscriptions from pwa_subscriptions
+  try {
+    const pwaSubs = await (prisma as any).pwaSubscription.findMany({
+      where: {
+        userId: { in: allowedUserIds },
+        lastActiveAt: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+      },
+      select: {
+        id: true,
+        userId: true,
+        endpoint: true,
+        p256dhKey: true,
+        authKey: true,
+      },
+    });
+
+    const knownEndpoints = new Set(subscriptions.map((s) => s.endpoint));
+    for (const p of pwaSubs) {
+      if (!knownEndpoints.has(p.endpoint)) {
+        knownEndpoints.add(p.endpoint);
+        subscriptions.push({
+          id: p.id,
+          userId: p.userId,
+          endpoint: p.endpoint,
+          p256dh: p.p256dhKey,
+          auth: p.authKey,
+        });
+      }
+    }
+  } catch {
+    // pwaSubscription table optional fallback
+  }
 
   // If no direct subscription matched for the target users, only fallback to anonymous subscriptions
   // for general public broadcasts / emergency alerts — NEVER leak student/parent private data to other users' devices

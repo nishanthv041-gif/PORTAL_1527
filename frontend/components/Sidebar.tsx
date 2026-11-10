@@ -7,6 +7,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import SrtLogo from "@/frontend/components/ui/SrtLogo";
 import { getActiveNavItemHref } from "@/lib/navigation/sidebarActive";
+import { CakeIcon as Cake } from "@/frontend/components/birthdays/BirthdayIcons";
 import styles from "./Sidebar.module.css";
 import {
   Menu,
@@ -35,7 +36,6 @@ import {
   Layers,
   Bus,
   Activity,
-  Sparkles,
   X
 } from "lucide-react";
 
@@ -79,7 +79,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     { href: "/dashboard/admin/login-status", label: "Log In Status", icon: <Clock size={20} /> },
     { href: "/dashboard/admin/notifications", label: "Notifications", icon: <Bell size={20} /> },
     { href: "/dashboard/admin/birthdays/missing", label: "Missing Date of Birth", icon: <Calendar size={20} /> },
-    { href: "/dashboard/admin/settings/birthdays", label: "Birthday Wishes", icon: <Sparkles size={20} /> },
+    { href: "/dashboard/admin/settings/birthdays", label: "Birthday Wishes", icon: <Cake size={20} /> },
     { href: "/dashboard/admin/settings", label: "Settings", icon: <Settings size={20} /> },
   ];
 
@@ -112,7 +112,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     {
       title: "BIRTHDAYS",
       items: [
-        { href: "/dashboard/teacher/birthdays", label: "Birthday Wishes", icon: <Sparkles size={20} /> },
+        { href: "/dashboard/teacher/birthdays", label: "Birthday Wishes", icon: <Cake size={20} /> },
         { href: "/dashboard/teacher/birthdays/missing", label: "Missing Date of Birth", icon: <Calendar size={20} /> },
       ],
     },

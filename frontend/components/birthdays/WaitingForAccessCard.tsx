@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { GraduationCap, ArrowLeft, CheckCircle2, Clock, Sparkles } from "lucide-react";
+import { GraduationCap, ArrowLeft, CheckCircle2, Clock } from "lucide-react";
 import { submitClassTeacherRequestAction } from "@/backend/api/actions/dashboard/teacher/classTeacherRequestActions";
 import type { TeacherClass } from "@/lib/teacher/getTeacherClasses";
 import styles from "./BirthdayStudio.module.css";

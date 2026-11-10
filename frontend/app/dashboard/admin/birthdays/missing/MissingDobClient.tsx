@@ -28,6 +28,7 @@ import {
   commitBulkDobUpdatesAction,
   BulkDobPreviewItem,
 } from "@/backend/api/actions/dashboard/admin/birthdays/actions";
+import styles from "./MissingDobClient.module.css";
 
 interface MissingDobClientProps {
   initialData: {
@@ -226,148 +227,121 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
   const roleBadge = (role: string) => {
     switch (role) {
       case "STUDENT":
-        return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">Student</span>;
+        return <span className={`${styles.badge} ${styles.badgeStudent}`}>Student</span>;
       case "TEACHER":
-        return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300">Teacher</span>;
+        return <span className={`${styles.badge} ${styles.badgeTeacher}`}>Teacher</span>;
       case "STAFF":
-        return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Staff</span>;
+        return <span className={`${styles.badge} ${styles.badgeStaff}`}>Staff</span>;
       case "ADMIN":
-        return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">Admin</span>;
+        return <span className={`${styles.badge} ${styles.badgeAdmin}`}>Admin</span>;
       case "PARENT":
-        return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">Parent</span>;
+        return <span className={`${styles.badge} ${styles.badgeParent}`}>Parent</span>;
       case "DRIVER":
-        return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300">Bus Driver</span>;
+        return <span className={`${styles.badge} ${styles.badgeDriver}`}>Bus Driver</span>;
       default:
-        return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">{role}</span>;
+        return <span className={styles.badge}>{role}</span>;
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className={styles.container}>
       {/* Header and Action Buttons */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className={styles.headerRow}>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
-            <Calendar className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
-            Missing Date of Birth Records
+          <h1 className={styles.title}>
+            <Calendar size={24} style={{ color: "var(--primary)" }} />
+            <span>Missing Date of Birth Records</span>
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className={styles.subtitle}>
             Ensure every student, teacher, staff, admin, parent, and bus driver has their Date of Birth recorded for accurate automated birthday wishes.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className={styles.btnGroup}>
           <button
             onClick={handleDownloadDobTemplate}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm"
+            className={styles.btnSecondary}
           >
-            <Download className="w-4 h-4" />
-            Template
+            <Download size={15} />
+            <span>Template</span>
           </button>
           <button
             onClick={() => setShowUploadModal(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-colors"
+            className={styles.btnPrimary}
           >
-            <Upload className="w-4 h-4" />
-            Update DOB from Excel
+            <Upload size={15} />
+            <span>Update DOB from Excel</span>
           </button>
         </div>
       </div>
 
       {/* Overview Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total People</span>
-            <Users className="w-4 h-4 text-gray-400" />
+      <div className={styles.statsGrid}>
+        <div className={styles.statCard}>
+          <div className={styles.statTop}>
+            <span className={styles.statLabel}>Total People</span>
+            <Users size={16} style={{ color: "var(--text-muted)" }} />
           </div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{data.totalPeople}</div>
-          <p className="text-xs text-gray-400 mt-1">Students, staff, parents & fleet</p>
+          <div className={styles.statValue}>{data.totalPeople}</div>
+          <div className={styles.statCaption}>Students, staff, parents &amp; fleet</div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">DOB Completed</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+        <div className={styles.statCard}>
+          <div className={styles.statTop}>
+            <span className={styles.statLabel} style={{ color: "#10b981" }}>DOB Completed</span>
+            <CheckCircle2 size={16} style={{ color: "#10b981" }} />
           </div>
-          <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">{data.completedCount}</div>
-          <p className="text-xs text-emerald-600/70 mt-1">{data.percentage}% recorded</p>
+          <div className={styles.statValue} style={{ color: "#10b981" }}>{data.completedCount}</div>
+          <div className={styles.statCaption} style={{ color: "#10b981" }}>{data.percentage}% recorded</div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider">Missing DOB</span>
-            <AlertCircle className="w-4 h-4 text-amber-500" />
+        <div className={styles.statCard}>
+          <div className={styles.statTop}>
+            <span className={styles.statLabel} style={{ color: "#f59e0b" }}>Missing DOB</span>
+            <AlertCircle size={16} style={{ color: "#f59e0b" }} />
           </div>
-          <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-2">{data.totalMissing}</div>
-          <p className="text-xs text-amber-600/70 mt-1">Require immediate entry</p>
+          <div className={styles.statValue} style={{ color: "#f59e0b" }}>{data.totalMissing}</div>
+          <div className={styles.statCaption} style={{ color: "#f59e0b" }}>Require entry</div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Completion Progress</span>
-            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{data.percentage}%</span>
+        <div className={styles.statCard}>
+          <div className={styles.statTop}>
+            <span className={styles.statLabel}>Completion Progress</span>
+            <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--primary)" }}>{data.percentage}%</span>
           </div>
-          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mt-3 overflow-hidden">
+          <div className={styles.progressBarTrack}>
             <div
-              className={`h-2.5 rounded-full transition-all duration-500 ${
-                data.percentage === 100 ? "bg-emerald-500" : data.percentage > 70 ? "bg-indigo-600" : "bg-amber-500"
-              }`}
+              className={styles.progressBarFill}
               style={{ width: `${Math.min(100, Math.max(2, data.percentage))}%` }}
             />
           </div>
-          <p className="text-xs text-gray-400 mt-2">Target: 100% for full birthday coverage</p>
+          <div className={styles.statCaption}>Target: 100% coverage</div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 shadow-sm space-y-3">
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+      <div className={styles.filterToolbar}>
+        <div className={styles.filterRow}>
           {/* Search box */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <div className={styles.searchBox}>
+            <Search size={16} className={styles.searchIcon} />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name, roll number, admission no, email, or bus number..."
-              className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={styles.searchInput}
             />
-          </div>
-
-          {/* Role Filter Tabs */}
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">
-            {[
-              { key: "ALL", label: "All Roles" },
-              { key: "STUDENT", label: "Students" },
-              { key: "TEACHER", label: "Teachers" },
-              { key: "STAFF", label: "Staff" },
-              { key: "ADMIN", label: "Admins" },
-              { key: "PARENT", label: "Parents" },
-              { key: "DRIVER", label: "Drivers" },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setRoleFilter(tab.key)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-colors ${
-                  roleFilter === tab.key
-                    ? "bg-indigo-600 text-white shadow-sm"
-                    : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
           </div>
 
           {/* Class Filter (active when student role is selected or all) */}
           {(roleFilter === "ALL" || roleFilter === "STUDENT") && (
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-400" />
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <Filter size={15} style={{ color: "var(--text-muted)" }} />
               <select
                 value={classFilter}
                 onChange={(e) => setClassFilter(e.target.value)}
-                className="text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 py-2 px-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className={styles.classSelect}
               >
                 <option value="ALL">All Classes</option>
                 {classes.map((c) => (
@@ -379,35 +353,56 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
             </div>
           )}
         </div>
+
+        {/* Role Filter Tabs */}
+        <div className={styles.roleTabs}>
+          {[
+            { key: "ALL", label: "All Roles" },
+            { key: "STUDENT", label: "Students" },
+            { key: "TEACHER", label: "Teachers" },
+            { key: "STAFF", label: "Staff" },
+            { key: "ADMIN", label: "Admins" },
+            { key: "PARENT", label: "Parents" },
+            { key: "DRIVER", label: "Drivers" },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setRoleFilter(tab.key)}
+              className={`${styles.roleTabBtn} ${roleFilter === tab.key ? styles.roleTabBtnActive : ""}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Main Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+      <div className={styles.tableCard}>
         {filteredPeople.length === 0 ? (
-          <div className="text-center py-16 px-4">
-            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+          <div style={{ textAlign: "center", padding: "4rem 1.5rem" }}>
+            <CheckCircle2 size={44} style={{ color: "#10b981", margin: "0 auto 0.75rem" }} />
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--foreground)", margin: 0 }}>
               {data.totalMissing === 0 ? "All Records Complete!" : "No Missing Records Match Your Filter"}
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto mt-1">
+            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", maxWidth: "400px", margin: "0.35rem auto 0" }}>
               {data.totalMissing === 0
                 ? "Every person in the system has a valid Date of Birth. Automatic birthday wishes will reach everyone."
                 : "Try clearing search filters or selecting a different role."}
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
-              <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs uppercase text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+          <div className={styles.tableWrapper}>
+            <table className={styles.table}>
+              <thead>
                 <tr>
-                  <th scope="col" className="px-4 py-3">Person Name</th>
-                  <th scope="col" className="px-4 py-3">Role</th>
-                  <th scope="col" className="px-4 py-3">Identifier / Details</th>
-                  <th scope="col" className="px-4 py-3">Enter Date of Birth</th>
-                  <th scope="col" className="px-4 py-3 text-right">Action</th>
+                  <th scope="col" className={styles.th}>Person Name</th>
+                  <th scope="col" className={styles.th}>Role</th>
+                  <th scope="col" className={styles.th}>Identifier / Details</th>
+                  <th scope="col" className={styles.th}>Enter Date of Birth</th>
+                  <th scope="col" className={styles.th} style={{ textAlign: "right" }}>Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody>
                 {filteredPeople.map((person) => {
                   const isSaving = savingId === person.id;
                   const isSuccess = successIds.has(person.id);
@@ -417,31 +412,37 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
                   return (
                     <tr
                       key={person.id}
-                      className={`transition-colors ${
-                        isSuccess
-                          ? "bg-emerald-50 dark:bg-emerald-950/20"
-                          : "hover:bg-gray-50/70 dark:hover:bg-gray-750"
-                      }`}
+                      className={styles.tr}
+                      style={{
+                        background: isSuccess ? "rgba(16, 185, 129, 0.08)" : undefined,
+                      }}
                     >
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900 dark:text-white">{person.name}</div>
-                        {person.className && (
-                          <div className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">
-                            {person.className}
+                      <td className={styles.td}>
+                        <div className={styles.personCell}>
+                          <div className={styles.avatarMini}>
+                            {person.name.slice(0, 2).toUpperCase()}
                           </div>
-                        )}
+                          <div>
+                            <div className={styles.personName}>{person.name}</div>
+                            {person.className && (
+                              <div className={styles.personMeta} style={{ color: "var(--primary)", fontWeight: 600 }}>
+                                {person.className}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </td>
-                      <td className="px-4 py-3">{roleBadge(person.role)}</td>
-                      <td className="px-4 py-3 text-xs text-gray-600 dark:text-gray-300 font-mono">
+                      <td className={styles.td}>{roleBadge(person.role)}</td>
+                      <td className={styles.td} style={{ fontFamily: "monospace", fontSize: "0.8rem" }}>
                         {person.identifier}
                         {!person.hasPortalAccount && person.role === "DRIVER" && (
-                          <span className="block text-[10px] text-amber-600 dark:text-amber-400 font-sans mt-0.5">
+                          <span style={{ display: "block", fontSize: "0.7rem", color: "#f59e0b", fontFamily: "sans-serif" }}>
                             (Fleet record - no login)
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col gap-1 max-w-[200px]">
+                      <td className={styles.td}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", maxWidth: "180px" }}>
                           <input
                             type="date"
                             value={currentVal}
@@ -450,32 +451,32 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
                             }
                             max={new Date().toISOString().split("T")[0]}
                             disabled={isSaving || isSuccess}
-                            className="px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                            className={styles.dateInput}
                           />
-                          {errorMsg && <p className="text-[11px] text-red-500">{errorMsg}</p>}
+                          {errorMsg && <p style={{ fontSize: "0.75rem", color: "#ef4444", margin: 0 }}>{errorMsg}</p>}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className={styles.td} style={{ textAlign: "right" }}>
                         {isSuccess ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                            <Check className="w-4 h-4" />
-                            Saved
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8rem", fontWeight: 700, color: "#10b981" }}>
+                            <Check size={16} />
+                            <span>Saved</span>
                           </span>
                         ) : (
                           <button
                             onClick={() => handleSaveDob(person)}
                             disabled={isSaving || !currentVal}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white shadow-sm transition-colors"
+                            className={`${styles.actionBtn} ${styles.actionBtnSave}`}
                           >
                             {isSaving ? (
                               <>
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                Saving...
+                                <Loader2 size={14} className={styles.spin} />
+                                <span>Saving...</span>
                               </>
                             ) : (
                               <>
-                                <Save className="w-3.5 h-3.5" />
-                                Save
+                                <Save size={14} />
+                                <span>Save</span>
                               </>
                             )}
                           </button>
@@ -492,12 +493,17 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
 
       {/* Bulk Upload Modal */}
       {showUploadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full p-6 shadow-xl border border-gray-200 dark:border-gray-700 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-2">
-                <FileSpreadsheet className="w-5 h-5 text-indigo-600" />
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Update Date of Birth from Excel / CSV</h3>
+        <div className={styles.modalOverlay} onClick={() => {
+          setShowUploadModal(false);
+          setPreviewItems(null);
+          setSelectedFile(null);
+          setCommitMessage(null);
+        }}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <FileSpreadsheet size={20} style={{ color: "var(--primary)" }} />
+                <h3 className={styles.modalTitle}>Update Date of Birth from Excel / CSV</h3>
               </div>
               <button
                 onClick={() => {
@@ -506,20 +512,23 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
                   setSelectedFile(null);
                   setCommitMessage(null);
                 }}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}
               >
-                <X className="w-5 h-5" />
+                <X size={18} />
               </button>
             </div>
 
-            <div className="py-4 space-y-4 overflow-y-auto flex-1">
+            <div className={styles.modalBody}>
               {commitMessage && (
                 <div
-                  className={`p-3 rounded-lg text-sm ${
-                    commitMessage.includes("Successfully")
-                      ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-                      : "bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300"
-                  }`}
+                  style={{
+                    padding: "0.75rem 1rem",
+                    borderRadius: "10px",
+                    fontSize: "0.85rem",
+                    background: commitMessage.includes("Successfully") ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
+                    color: commitMessage.includes("Successfully") ? "#059669" : "#dc2626",
+                    fontWeight: 600,
+                  }}
                 >
                   {commitMessage}
                 </div>
@@ -527,44 +536,53 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
 
               {/* Upload Dropzone */}
               {!previewItems && (
-                <div className="space-y-3">
-                  <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-8 text-center hover:border-indigo-500 transition-colors">
-                    <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  <div
+                    style={{
+                      border: "2px dashed var(--border-color)",
+                      borderRadius: "16px",
+                      padding: "2rem 1.5rem",
+                      textAlign: "center",
+                      background: "rgba(0, 0, 0, 0.015)",
+                    }}
+                  >
+                    <Upload size={36} style={{ color: "var(--text-muted)", margin: "0 auto 0.75rem" }} />
+                    <p style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--foreground)", margin: 0 }}>
                       Upload .xlsx, .xls, or .csv file
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Columns recognized: <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">identifier</code> (Roll No / Admission No / Email / Bus No) and <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">dateOfBirth</code> (DD-MM-YYYY or YYYY-MM-DD).
+                    <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.35rem 0 0" }}>
+                      Columns recognized: <code>identifier</code> (Roll No / Admission No / Email) and <code>dateOfBirth</code>.
                     </p>
                     <input
                       type="file"
                       accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
                       onChange={handleFileChange}
-                      className="hidden"
+                      style={{ display: "none" }}
                       id="bulk-dob-upload"
                       disabled={isUploading}
                     />
                     <label
                       htmlFor="bulk-dob-upload"
-                      className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 text-white cursor-pointer hover:bg-indigo-700 shadow-sm"
+                      className={styles.btnPrimary}
+                      style={{ marginTop: "1rem", cursor: "pointer" }}
                     >
                       {isUploading ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Processing file...
+                          <Loader2 size={15} className={styles.spin} />
+                          <span>Processing file...</span>
                         </>
                       ) : (
-                        "Browse File"
+                        <span>Browse File</span>
                       )}
                     </label>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-gray-500">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", color: "var(--text-muted)" }}>
                     <span>Need a sample template?</span>
                     <button
                       type="button"
                       onClick={handleDownloadDobTemplate}
-                      className="text-indigo-600 hover:underline font-medium"
+                      style={{ background: "none", border: "none", color: "var(--primary)", fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
                     >
                       Download CSV Template
                     </button>
@@ -574,61 +592,51 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
 
               {/* Preview Table */}
               {previewItems && uploadStats && (
-                <div className="space-y-4">
-                  {/* Stats summary banner */}
-                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                    <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded-lg">
-                      <div className="text-gray-500">Rows in File</div>
-                      <div className="text-base font-bold text-gray-900 dark:text-white">{uploadStats.total}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem", textAlign: "center" }}>
+                    <div style={{ padding: "0.6rem", borderRadius: "10px", background: "var(--background)", border: "1px solid var(--border-color)" }}>
+                      <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>Rows</div>
+                      <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--foreground)" }}>{uploadStats.total}</div>
                     </div>
-                    <div className="bg-emerald-50 dark:bg-emerald-950/30 p-2 rounded-lg">
-                      <div className="text-emerald-700 dark:text-emerald-400 font-medium">Matched</div>
-                      <div className="text-base font-bold text-emerald-600">{uploadStats.matched}</div>
+                    <div style={{ padding: "0.6rem", borderRadius: "10px", background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(16, 185, 129, 0.25)" }}>
+                      <div style={{ fontSize: "0.7rem", color: "#059669" }}>Matched</div>
+                      <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#059669" }}>{uploadStats.matched}</div>
                     </div>
-                    <div className="bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg">
-                      <div className="text-amber-700 dark:text-amber-400 font-medium">Unmatched</div>
-                      <div className="text-base font-bold text-amber-600">{uploadStats.unmatched}</div>
+                    <div style={{ padding: "0.6rem", borderRadius: "10px", background: "rgba(245, 158, 11, 0.1)", border: "1px solid rgba(245, 158, 11, 0.25)" }}>
+                      <div style={{ fontSize: "0.7rem", color: "#d97706" }}>Unmatched</div>
+                      <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#d97706" }}>{uploadStats.unmatched}</div>
                     </div>
-                    <div className="bg-red-50 dark:bg-red-950/30 p-2 rounded-lg">
-                      <div className="text-red-700 dark:text-red-400 font-medium">Invalid Date</div>
-                      <div className="text-base font-bold text-red-600">{uploadStats.invalid}</div>
+                    <div style={{ padding: "0.6rem", borderRadius: "10px", background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.25)" }}>
+                      <div style={{ fontSize: "0.7rem", color: "#dc2626" }}>Invalid</div>
+                      <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#dc2626" }}>{uploadStats.invalid}</div>
                     </div>
                   </div>
 
-                  {/* List preview */}
-                  <div className="max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg text-xs">
-                    <table className="w-full text-left">
-                      <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0 border-b border-gray-200 dark:border-gray-700">
+                  <div style={{ maxHeight: "240px", overflowY: "auto", border: "1px solid var(--border-color)", borderRadius: "12px" }}>
+                    <table className={styles.table}>
+                      <thead>
                         <tr>
-                          <th className="p-2">Identifier</th>
-                          <th className="p-2">Name</th>
-                          <th className="p-2">Role</th>
-                          <th className="p-2">New DOB</th>
-                          <th className="p-2">Status</th>
+                          <th className={styles.th}>Identifier</th>
+                          <th className={styles.th}>Name</th>
+                          <th className={styles.th}>Role</th>
+                          <th className={styles.th}>New DOB</th>
+                          <th className={styles.th}>Status</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                      <tbody>
                         {previewItems.map((item, idx) => (
-                          <tr key={idx}>
-                            <td className="p-2 font-mono">{item.identifier}</td>
-                            <td className="p-2 font-medium text-gray-900 dark:text-white">
-                              {item.personName || "—"}
-                            </td>
-                            <td className="p-2">{item.role ? roleBadge(item.role) : "—"}</td>
-                            <td className="p-2 font-mono">{item.newDob}</td>
-                            <td className="p-2">
+                          <tr key={idx} className={styles.tr}>
+                            <td className={styles.td} style={{ fontFamily: "monospace" }}>{item.identifier}</td>
+                            <td className={styles.td} style={{ fontWeight: 600 }}>{item.personName || "—"}</td>
+                            <td className={styles.td}>{item.role ? roleBadge(item.role) : "—"}</td>
+                            <td className={styles.td} style={{ fontFamily: "monospace" }}>{item.newDob}</td>
+                            <td className={styles.td}>
                               {item.status === "MATCHED" ? (
-                                <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                                  <Check className="w-3.5 h-3.5" /> Ready
-                                </span>
+                                <span style={{ color: "#10b981", fontWeight: 700 }}>✓ Ready</span>
                               ) : item.status === "INVALID_DOB" ? (
-                                <span className="text-red-500 font-medium flex items-center gap-1">
-                                  <AlertCircle className="w-3.5 h-3.5" /> Invalid Date
-                                </span>
+                                <span style={{ color: "#ef4444", fontWeight: 600 }}>Invalid Date</span>
                               ) : (
-                                <span className="text-amber-500 font-medium flex items-center gap-1">
-                                  <AlertCircle className="w-3.5 h-3.5" /> Not Found
-                                </span>
+                                <span style={{ color: "#f59e0b", fontWeight: 600 }}>Not Found</span>
                               )}
                             </td>
                           </tr>
@@ -640,8 +648,7 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-2">
+            <div className={styles.modalFooter}>
               <button
                 type="button"
                 onClick={() => {
@@ -650,7 +657,7 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
                   setSelectedFile(null);
                   setCommitMessage(null);
                 }}
-                className="px-4 py-2 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                className={styles.btnSecondary}
               >
                 Cancel
               </button>
@@ -659,15 +666,15 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
                   type="button"
                   onClick={handleCommitBulk}
                   disabled={isCommitting}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm disabled:opacity-50"
+                  className={styles.btnPrimary}
                 >
                   {isCommitting ? (
                     <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Applying {uploadStats.matched} updates...
+                      <Loader2 size={15} className={styles.spin} />
+                      <span>Applying {uploadStats.matched} updates...</span>
                     </>
                   ) : (
-                    `Apply ${uploadStats.matched} Updates`
+                    <span>Apply {uploadStats.matched} Updates</span>
                   )}
                 </button>
               )}

@@ -21,9 +21,9 @@ import {
   AlertCircle,
   Settings,
   Bus,
-  Sparkles,
   LogOut,
 } from "lucide-react";
+import { CakeIcon as Cake } from "@/frontend/components/birthdays/BirthdayIcons";
 import styles from "./TeacherBottomNav.module.css";
 import BottomSheet from "@/components/ui/BottomSheet";
 
@@ -91,7 +91,7 @@ export function TeacherBottomNav() {
     {
       label: "Birthdays",
       href: "/dashboard/teacher/birthdays",
-      icon: <Sparkles size={22} />,
+      icon: <Cake size={22} />,
     },
     {
       label: "Missing DOB",

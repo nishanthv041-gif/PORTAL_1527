@@ -241,7 +241,7 @@ export default function BirthdayWishesStudio({
           </div>
           <div className={styles.statCard}>
             <span className={styles.statValue}>{completionPercent}%</span>
-            <span className={styles.statLabel}>Records Completed ✨</span>
+            <span className={styles.statLabel}>Records Completed</span>
           </div>
         </div>
       </section>
@@ -417,7 +417,7 @@ export default function BirthdayWishesStudio({
                         >
                           {isResending ? (
                             <>
-                              <Clock size={14} className="animate-spin" />
+                              <Clock size={14} className={styles.spin} />
                               <span>Sending...</span>
                             </>
                           ) : resendSuccess ? (

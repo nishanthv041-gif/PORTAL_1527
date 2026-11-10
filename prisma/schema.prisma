@@ -41,6 +41,7 @@ model User {
   receivedMessages Message[]      @relation("ReceivedMessages")
   notifications          Notification[]
   pushSubscriptions      PushSubscription[]
+  pwaSubscriptions       PwaSubscription[]
   notificationPreference NotificationPreference?
   notificationRecipients NotificationRecipient[]
   loginActivities        UserLoginActivity[]
@@ -1160,6 +1161,24 @@ model PushSubscription {
   @@index([deviceFingerprint])
   @@index([lastLoginAt])
   @@index([userId, isActive, lastLoginAt])
+}
+
+model PwaSubscription {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint     String   @unique
+  p256dhKey    String   @map("p256dh_key")
+  authKey      String   @map("auth_key")
+  deviceType   String   @default("mobile") @map("device_type")
+  lastActiveAt DateTime @default(now()) @map("last_active_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([lastActiveAt])
+  @@index([userId, lastActiveAt])
+  @@map("pwa_subscriptions")
 }
 
 model NotificationPreference {

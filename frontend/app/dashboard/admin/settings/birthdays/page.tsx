@@ -10,8 +10,9 @@ import { getAuthorizedBirthdayClasses } from "@/lib/teacher/classAccess";
 import BirthdaySettingsClient from "./BirthdaySettingsClient";
 import BirthdayWishesStudio from "@/frontend/components/birthdays/BirthdayWishesStudio";
 import Link from "next/link";
-import { Sparkles, Sliders } from "lucide-react";
+import { Sliders } from "lucide-react";
 import { CakeIcon as Cake } from "@/frontend/components/birthdays/BirthdayIcons";
+import styles from "@/frontend/components/birthdays/BirthdayStudio.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -48,38 +49,30 @@ export default async function BirthdaySettingsPage(props: PageProps) {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className={styles.adminPageWrapper}>
       {/* Top Switcher Navigation */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+      <div className={styles.adminHubNav}>
         <div>
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Sparkles size={20} className="text-amber-500" />
-            <span>Universal Birthday Center</span>
+          <h2 className={styles.adminHubTitle}>
+            <Cake size={22} style={{ color: "#f59e0b" }} />
+            <span>Birthday Celebrations Hub</span>
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Configure automated greetings, notification templates, or inspect classroom celebrant studios.
+          <p className={styles.adminHubSubtitle}>
+            Configure automated greetings, notification preferences, or view classroom celebrant studios.
           </p>
         </div>
 
-        <div className="inline-flex p-1 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+        <div className={styles.adminSegmentControl}>
           <Link
             href="/dashboard/admin/settings/birthdays?view=settings"
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
-              viewMode === "settings"
-                ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-            }`}
+            className={`${styles.adminSegmentBtn} ${viewMode === "settings" ? styles.adminSegmentBtnActive : ""}`}
           >
             <Sliders size={14} />
             <span>Settings &amp; Audit</span>
           </Link>
           <Link
             href="/dashboard/admin/settings/birthdays?view=classes"
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
-              viewMode === "classes"
-                ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-            }`}
+            className={`${styles.adminSegmentBtn} ${viewMode === "classes" ? styles.adminSegmentBtnActive : ""}`}
           >
             <Cake size={14} />
             <span>Classroom Studio</span>

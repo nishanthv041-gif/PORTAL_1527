@@ -44,7 +44,7 @@ export default async function TeacherMissingDobPage(props: PageProps) {
   const summary = await getClassMissingDobSummaryAction(activeClassId);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+    <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       <MissingDobStudio
         userRole={session.user.role as "ADMIN" | "TEACHER"}
         classes={classes}

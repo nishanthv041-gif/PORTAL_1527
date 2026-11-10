@@ -11,7 +11,8 @@ import { getAuthorizedBirthdayClasses } from "@/lib/teacher/classAccess";
 import MissingDobClient from "./MissingDobClient";
 import MissingDobStudio from "@/frontend/components/birthdays/MissingDobStudio";
 import Link from "next/link";
-import { Sparkles, Users, UserCheck } from "lucide-react";
+import { Calendar, Users, UserCheck } from "lucide-react";
+import styles from "@/frontend/components/birthdays/BirthdayStudio.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -53,38 +54,30 @@ export default async function AdminMissingDobPage(props: PageProps) {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className={styles.adminPageWrapper}>
       {/* Top Switcher Navigation */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+      <div className={styles.adminHubNav}>
         <div>
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Sparkles size={20} className="text-amber-500" />
-            <span>Date of Birth Completion Hub</span>
+          <h2 className={styles.adminHubTitle}>
+            <Calendar size={22} style={{ color: "#f59e0b" }} />
+            <span>Date of Birth Records Registry</span>
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Switch between whole-school staff &amp; student roles or class-by-class teacher views.
+          <p className={styles.adminHubSubtitle}>
+            Manage student and staff birth dates across the entire school or section-by-section.
           </p>
         </div>
 
-        <div className="inline-flex p-1 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+        <div className={styles.adminSegmentControl}>
           <Link
             href="/dashboard/admin/birthdays/missing?view=all"
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
-              viewMode === "all"
-                ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-            }`}
+            className={`${styles.adminSegmentBtn} ${viewMode === "all" ? styles.adminSegmentBtnActive : ""}`}
           >
             <Users size={14} />
             <span>All School Roles</span>
           </Link>
           <Link
             href="/dashboard/admin/birthdays/missing?view=class"
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
-              viewMode === "class"
-                ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-            }`}
+            className={`${styles.adminSegmentBtn} ${viewMode === "class" ? styles.adminSegmentBtnActive : ""}`}
           >
             <UserCheck size={14} />
             <span>Classroom Studio</span>
