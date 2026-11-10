@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
+import { getOrCreateDeviceFingerprint } from "@/frontend/hooks/usePushNotification";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -91,6 +92,7 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
 
           if (p256dh && auth) {
             lastSyncRef.current = Date.now();
+            const fingerprint = getOrCreateDeviceFingerprint();
             const res = await fetch("/api/notifications/push/subscribe", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -98,6 +100,7 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
                 endpoint: sub.endpoint,
                 keys: { p256dh, auth },
                 userId,
+                deviceFingerprint: fingerprint,
                 userAgent: navigator.userAgent,
                 deviceName: navigator.userAgent.includes("Android")
                   ? "Android PWA"
@@ -127,6 +130,7 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
                       endpoint: freshSub.endpoint,
                       keys: rawFresh.keys,
                       userId,
+                      deviceFingerprint: fingerprint,
                       userAgent: navigator.userAgent,
                     }),
                   }).catch(() => {});

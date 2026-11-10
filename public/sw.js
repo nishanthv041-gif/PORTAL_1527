@@ -44,6 +44,13 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// Immediate Activation Message Listener (prevents Service Worker from getting stuck in waiting phase)
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
 // 3. Fetch Event: Strict security and intelligent routing
 self.addEventListener("fetch", (event) => {
   const request = event.request;
@@ -192,6 +199,11 @@ self.addEventListener("push", (event) => {
 // 5. Notification Click Event: Navigate to relevant portal page
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+
+  // If user clicked the "Dismiss" action button, don't focus or navigate
+  if (event.action === "close") {
+    return;
+  }
 
   const targetUrl =
     (event.notification.data && event.notification.data.url) || "/dashboard";

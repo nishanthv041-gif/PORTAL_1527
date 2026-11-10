@@ -287,3 +287,110 @@ export async function dispatchPushToRecipients(
   return { sent, failed, totalSubscriptions: subscriptions.length };
 }
 
+/**
+ * Core Requirement: Target and send push notifications ONLY to devices/browser sessions
+ * that have actively logged into an account within the last 24 hours.
+ * Uses Promise.allSettled for concurrent, resilient delivery.
+ * Automatically deletes 410 Gone / 404 Not Found expired subscriptions from PostgreSQL.
+ */
+export async function dispatchPushToActiveDevicesLast24Hours(
+  payload: PushPayload,
+  options?: {
+    userIds?: string[];
+    role?: string;
+    notificationId?: string;
+    maxAgeHours?: number;
+  }
+): Promise<{
+  totalEligible: number;
+  sent: number;
+  failed: number;
+  prunedExpired: number;
+  details: Array<{ subscriptionId: string; status: "fulfilled" | "rejected"; statusCode?: number; error?: string }>;
+}> {
+  const maxAgeHours = options?.maxAgeHours ?? 24;
+  const cutoffTime = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
+
+  // 1. Query: WHERE is_active = true AND last_login_at >= NOW() - INTERVAL '24 hours'
+  const activeSubscriptions = await prisma.pushSubscription.findMany({
+    where: {
+      isActive: true,
+      lastLoginAt: { gte: cutoffTime },
+      ...(options?.userIds && options.userIds.length > 0
+        ? { userId: { in: options.userIds } }
+        : {}),
+      ...(options?.role
+        ? { user: { role: options.role as any } }
+        : {}),
+    },
+    select: {
+      id: true,
+      userId: true,
+      endpoint: true,
+      p256dh: true,
+      auth: true,
+      deviceFingerprint: true,
+      lastLoginAt: true,
+    },
+    orderBy: { lastLoginAt: "desc" },
+  });
+
+  if (activeSubscriptions.length === 0) {
+    return { totalEligible: 0, sent: 0, failed: 0, prunedExpired: 0, details: [] };
+  }
+
+  // 2. Dispatch concurrently using Promise.allSettled
+  const results = await Promise.allSettled(
+    activeSubscriptions.map(async (sub) => {
+      const res = await sendPushToSubscription(sub, payload, options?.notificationId);
+      if (!res.success) {
+        throw { statusCode: res.statusCode, error: res.error, subId: sub.id };
+      }
+      return { subId: sub.id, statusCode: res.statusCode };
+    })
+  );
+
+  let sent = 0;
+  let failed = 0;
+  let prunedExpired = 0;
+  const details: Array<{ subscriptionId: string; status: "fulfilled" | "rejected"; statusCode?: number; error?: string }> = [];
+
+  for (let i = 0; i < results.length; i++) {
+    const outcome = results[i];
+    const sub = activeSubscriptions[i];
+
+    if (outcome.status === "fulfilled") {
+      sent++;
+      details.push({
+        subscriptionId: sub.id,
+        status: "fulfilled",
+        statusCode: outcome.value.statusCode,
+      });
+    } else {
+      failed++;
+      const reason = outcome.reason as { statusCode?: number; error?: string };
+      const statusCode = reason?.statusCode || 500;
+      const isExpired = statusCode === 410 || statusCode === 404;
+
+      if (isExpired) {
+        prunedExpired++;
+      }
+
+      details.push({
+        subscriptionId: sub.id,
+        status: "rejected",
+        statusCode,
+        error: reason?.error || "Push delivery failed",
+      });
+    }
+  }
+
+  return {
+    totalEligible: activeSubscriptions.length,
+    sent,
+    failed,
+    prunedExpired,
+    details,
+  };
+}
+

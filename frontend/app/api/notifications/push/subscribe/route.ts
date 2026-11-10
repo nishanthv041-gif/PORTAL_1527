@@ -29,7 +29,15 @@ export async function POST(req: Request) {
       );
     }
 
-    const { endpoint, keys, userAgent, deviceName, platform: rawPlatform, userId: bodyUserId } = body;
+    const {
+      endpoint,
+      keys,
+      userAgent,
+      deviceName,
+      platform: rawPlatform,
+      userId: bodyUserId,
+      deviceFingerprint,
+    } = body;
 
     if (!endpoint || typeof endpoint !== "string") {
       return NextResponse.json(
@@ -67,20 +75,24 @@ export async function POST(req: Request) {
         endpoint,
         p256dh: keys.p256dh,
         auth: keys.auth,
+        deviceFingerprint: typeof deviceFingerprint === "string" ? deviceFingerprint.trim() : null,
         userAgent: userAgent || null,
         deviceName: resolvedDeviceName,
         platform: detectedPlatform,
         isActive: true,
+        lastLoginAt: new Date(),
         lastUsedAt: new Date(),
       },
       update: {
         ...(finalUserId ? { userId: finalUserId } : {}),
         p256dh: keys.p256dh,
         auth: keys.auth,
+        deviceFingerprint: typeof deviceFingerprint === "string" ? deviceFingerprint.trim() : undefined,
         userAgent: userAgent || null,
         deviceName: resolvedDeviceName,
         platform: detectedPlatform,
         isActive: true,
+        lastLoginAt: new Date(),
         lastUsedAt: new Date(),
       },
     });
