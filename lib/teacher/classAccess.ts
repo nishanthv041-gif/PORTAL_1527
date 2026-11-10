@@ -3,13 +3,14 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { getLoggedInTeacherClasses, getTeacherClasses, TeacherClass } from "./getTeacherClasses";
 import { prisma } from "@/backend/db/prisma";
 
-export interface ClassTeacherAccessResult {
+export interface ClassAccessResult {
   teacherId: string;
   userId: string;
   userRole: "ADMIN" | "TEACHER";
   classId: string;
   className: string;
   isClassTeacher: boolean;
+  canEditDob: boolean;
 }
 
 export class ClassAccessError extends Error {
@@ -22,13 +23,16 @@ export class ClassAccessError extends Error {
 }
 
 /**
- * Server-side authorization authority:
- * Verifies that the current user has Class Teacher permission for the specified classId.
- * - Admin: Allowed for any valid class.
- * - Teacher: Allowed ONLY if designated as the Class Teacher for this class.
- * - Subject-only teachers / parents / students: Blocked with 403.
+ * Server-side authorization authority for Birthday Suite operations.
+ * Modes:
+ * - "admin" : Strict administrator-only operations (settings, bulk logs, whole school operations).
+ * - "edit-dob": Entering or changing Date of Birth records.
+ * - "view-birthdays": Viewing birthday celebrants and calendar.
  */
-export async function requireClassTeacherAccess(classId: string): Promise<ClassTeacherAccessResult> {
+export async function requireClassAccess(
+  classId: string,
+  mode: "view-birthdays" | "edit-dob" | "admin" = "view-birthdays"
+): Promise<ClassAccessResult> {
   const session = await getServerSession(getAuthOptions());
   if (!session?.user?.id) {
     throw new ClassAccessError("Unauthorized: Session required.", 401);
@@ -52,7 +56,13 @@ export async function requireClassTeacherAccess(classId: string): Promise<ClassT
       classId: cls.id,
       className: `${cls.name} - ${cls.section}`,
       isClassTeacher: true,
+      canEditDob: true,
     };
+  }
+
+  // Admin-only mode blocks non-admins
+  if (mode === "admin") {
+    throw new ClassAccessError("Forbidden: Administrator privileges required.", 403);
   }
 
   // 2. Teacher access
@@ -62,43 +72,104 @@ export async function requireClassTeacherAccess(classId: string): Promise<ClassT
       throw new ClassAccessError("Teacher profile not found.", 403);
     }
 
-    const assigned = teacherInfo.classes.find(
-      (c) => c.classId === classId && c.isClassTeacher
-    );
-
+    const assigned = teacherInfo.classes.find((c) => c.classId === classId);
     if (!assigned) {
       throw new ClassAccessError(
-        "Forbidden: You are not designated as the Class Teacher for this class.",
+        "Forbidden: You are not assigned to this class/section.",
         403
       );
     }
 
-    return {
-      teacherId: teacherInfo.teacherId,
-      userId: session.user.id,
-      userRole: "TEACHER",
-      classId: assigned.classId,
-      className: assigned.displayName,
-      isClassTeacher: true,
-    };
+    // Designated Class Teacher has full permissions
+    if (assigned.isClassTeacher) {
+      return {
+        teacherId: teacherInfo.teacherId,
+        userId: session.user.id,
+        userRole: "TEACHER",
+        classId: assigned.classId,
+        className: assigned.displayName,
+        isClassTeacher: true,
+        canEditDob: true,
+      };
+    }
+
+    // Subject teacher: inspect BirthdaySettings switches
+    const settings = await prisma.birthdaySettings.findUnique({ where: { id: "default" } });
+    const switchA = settings?.subjectTeachersCanViewBirthdays ?? true;
+    const switchB = settings?.subjectTeachersCanEnterDob ?? false;
+
+    if (mode === "edit-dob") {
+      if (!switchB) {
+        throw new ClassAccessError(
+          "Forbidden: Date of birth entry is managed by the designated Class Teacher for this section.",
+          403
+        );
+      }
+      return {
+        teacherId: teacherInfo.teacherId,
+        userId: session.user.id,
+        userRole: "TEACHER",
+        classId: assigned.classId,
+        className: assigned.displayName,
+        isClassTeacher: false,
+        canEditDob: true,
+      };
+    }
+
+    if (mode === "view-birthdays") {
+      if (!switchA) {
+        throw new ClassAccessError(
+          "Forbidden: Classroom birthday visibility for subject teachers is currently disabled by administrator.",
+          403
+        );
+      }
+      return {
+        teacherId: teacherInfo.teacherId,
+        userId: session.user.id,
+        userRole: "TEACHER",
+        classId: assigned.classId,
+        className: assigned.displayName,
+        isClassTeacher: false,
+        canEditDob: switchB,
+      };
+    }
   }
 
   // 3. Other roles
-  throw new ClassAccessError("Forbidden: Class Teacher or Admin access required.", 403);
+  throw new ClassAccessError("Forbidden: Teacher or Admin access required.", 403);
 }
 
 /**
- * Returns all classes where the logged-in user is Class Teacher (or all classes if Admin).
+ * Backward-compatible wrapper for requireClassAccess with edit-dob mode.
  */
-export async function getAuthorizedBirthdayClasses(): Promise<{
+export async function requireClassTeacherAccess(classId: string) {
+  return requireClassAccess(classId, "edit-dob");
+}
+
+export interface AuthorizedBirthdayClassesResult {
   role: "ADMIN" | "TEACHER";
   classes: TeacherClass[];
+  allTaughtClasses: TeacherClass[];
   selectedClassId: string | null;
-}> {
+  isDesignatedClassTeacher: boolean;
+  canViewBirthdays: boolean;
+  canEditDob: boolean;
+  switchA_subjectView: boolean;
+  switchB_subjectEdit: boolean;
+}
+
+/**
+ * Resolves authorized classes and capability flags for the logged-in user.
+ */
+export async function getAuthorizedBirthdayClasses(): Promise<AuthorizedBirthdayClassesResult> {
   const session = await getServerSession(getAuthOptions());
   if (!session?.user?.id) {
     throw new ClassAccessError("Unauthorized.", 401);
   }
+
+  const settings = await prisma.birthdaySettings.findUnique({ where: { id: "default" } });
+  const switchA = settings?.subjectTeachersCanViewBirthdays ?? true;
+  const switchB = settings?.subjectTeachersCanEnterDob ?? false;
 
   if (session.user.role === "ADMIN") {
     const allDbClasses = await prisma.class.findMany({
@@ -122,26 +193,62 @@ export async function getAuthorizedBirthdayClasses(): Promise<{
     return {
       role: "ADMIN",
       classes: formatted,
+      allTaughtClasses: formatted,
       selectedClassId: formatted[0]?.classId || null,
+      isDesignatedClassTeacher: true,
+      canViewBirthdays: true,
+      canEditDob: true,
+      switchA_subjectView: true,
+      switchB_subjectEdit: true,
     };
   }
 
   if (session.user.role === "TEACHER") {
     const teacherInfo = await getLoggedInTeacherClasses();
     if (!teacherInfo) {
-      return { role: "TEACHER", classes: [], selectedClassId: null };
+      return {
+        role: "TEACHER",
+        classes: [],
+        allTaughtClasses: [],
+        selectedClassId: null,
+        isDesignatedClassTeacher: false,
+        canViewBirthdays: false,
+        canEditDob: false,
+        switchA_subjectView: switchA,
+        switchB_subjectEdit: switchB,
+      };
     }
 
-    // Filter ONLY classes where this teacher is the Class Teacher
     const classTeacherClasses = teacherInfo.classes.filter((c) => c.isClassTeacher);
+    const hasClassTeacherClass = classTeacherClasses.length > 0;
+
+    // Accessible classes: Class Teacher classes always; if switchA is ON, also all classes taught
+    const accessibleClasses = hasClassTeacherClass
+      ? classTeacherClasses
+      : (switchA ? teacherInfo.classes : []);
 
     return {
       role: "TEACHER",
-      classes: classTeacherClasses,
-      selectedClassId: classTeacherClasses[0]?.classId || null,
+      classes: accessibleClasses,
+      allTaughtClasses: teacherInfo.classes,
+      selectedClassId: accessibleClasses[0]?.classId || null,
+      isDesignatedClassTeacher: hasClassTeacherClass,
+      canViewBirthdays: hasClassTeacherClass || (switchA && teacherInfo.classes.length > 0),
+      canEditDob: hasClassTeacherClass || switchB,
+      switchA_subjectView: switchA,
+      switchB_subjectEdit: switchB,
     };
   }
 
-  return { role: "TEACHER", classes: [], selectedClassId: null };
+  return {
+    role: "TEACHER",
+    classes: [],
+    allTaughtClasses: [],
+    selectedClassId: null,
+    isDesignatedClassTeacher: false,
+    canViewBirthdays: false,
+    canEditDob: false,
+    switchA_subjectView: switchA,
+    switchB_subjectEdit: switchB,
+  };
 }
-

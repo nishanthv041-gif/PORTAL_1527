@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { getActiveNavItemHref } from "@/lib/navigation/sidebarActive";
 import {
   Home,
   Users,
@@ -59,31 +60,11 @@ export function TeacherBottomNav() {
     await signOut({ callbackUrl: "/" });
   };
 
-  const navItems = [
-    {
-      label: "Home",
-      href: "/dashboard/teacher",
-      icon: <Home size={20} />,
-      isActive: pathname === "/dashboard/teacher",
-    },
-    {
-      label: "Classes",
-      href: "/dashboard/teacher/classes",
-      icon: <Users size={20} />,
-      isActive: pathname?.startsWith("/dashboard/teacher/classes"),
-    },
-    {
-      label: "Report Cards",
-      href: "/dashboard/teacher/report-cards",
-      icon: <Award size={20} />,
-      isActive: pathname?.startsWith("/dashboard/teacher/report-cards"),
-    },
-    {
-      label: "Attendance",
-      href: "/dashboard/teacher/attendance",
-      icon: <CalendarCheck size={20} />,
-      isActive: pathname?.startsWith("/dashboard/teacher/attendance"),
-    },
+  const rawNavItems = [
+    { label: "Home", href: "/dashboard/teacher", icon: <Home size={20} /> },
+    { label: "Classes", href: "/dashboard/teacher/classes", icon: <Users size={20} /> },
+    { label: "Report Cards", href: "/dashboard/teacher/report-cards", icon: <Award size={20} /> },
+    { label: "Attendance", href: "/dashboard/teacher/attendance", icon: <CalendarCheck size={20} /> },
   ];
 
   const moreItems = [
@@ -113,6 +94,11 @@ export function TeacherBottomNav() {
       icon: <Sparkles size={22} />,
     },
     {
+      label: "Missing DOB",
+      href: "/dashboard/teacher/birthdays/missing",
+      icon: <Calendar size={22} />,
+    },
+    {
       label: "Messages",
       href: "/dashboard/teacher/messages",
       icon: <MessageSquare size={22} />,
@@ -140,14 +126,20 @@ export function TeacherBottomNav() {
     },
   ];
 
-  const isMoreActive =
-    !navItems.some((item) => item.isActive) &&
-    moreItems.some(
-      (item) =>
-        !item.isLogout &&
-        (pathname?.startsWith(item.href) ||
-          (item.href === "/dashboard/teacher/assignments" && pathname?.startsWith("/dashboard/teacher/homework")))
-    );
+  const allNavLinks = useMemo(() => {
+    return [...rawNavItems.map((n) => ({ href: n.href })), ...moreItems.map((m) => ({ href: m.href }))];
+  }, [rawNavItems, moreItems]);
+
+  const activeHref = useMemo(() => {
+    return getActiveNavItemHref(pathname, allNavLinks);
+  }, [pathname, allNavLinks]);
+
+  const navItems = rawNavItems.map((n) => ({
+    ...n,
+    isActive: activeHref === n.href,
+  }));
+
+  const isMoreActive = moreItems.some((m) => !m.isLogout && activeHref === m.href);
 
   if (!mounted) return null;
 

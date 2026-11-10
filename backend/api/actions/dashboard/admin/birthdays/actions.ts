@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { parseAndValidateDob, RoleType } from "@/lib/validations/dob";
 import { getSchoolNow } from "@/lib/time";
-import { requireClassTeacherAccess } from "@/lib/teacher/classAccess";
+import { requireClassAccess, requireClassTeacherAccess } from "@/lib/teacher/classAccess";
 import { dispatchImmediateBirthdayWishForPerson } from "@/app/api/internal/cron/birthdays/route";
 import { sendUserNotification } from "@/backend/services/push/notificationDispatcher";
 import { formatClassName } from "@/lib/teacher/formatClassName";
@@ -537,7 +537,7 @@ export interface ClassStudentDobItem {
 }
 
 export async function getClassMissingDobSummaryAction(classId: string) {
-  const access = await requireClassTeacherAccess(classId);
+  const access = await requireClassAccess(classId, "view-birthdays");
 
   const [students, settings] = await Promise.all([
     prisma.student.findMany({
@@ -566,12 +566,13 @@ export async function getClassMissingDobSummaryAction(classId: string) {
   ]);
 
   const mappedStudents: ClassStudentDobItem[] = students.map((s) => {
-    const dobStr = s.dateOfBirth
+    // If user cannot edit DOB (view-only subject teacher), do not expose the exact raw date or private phone
+    const dobStr = access.canEditDob && s.dateOfBirth
       ? s.dateOfBirth.toISOString().split("T")[0]
       : null;
     const parentRec = s.parents[0]?.parent;
     const parentName = parentRec?.user?.name || "Parent";
-    const parentPhone = parentRec?.phone || parentRec?.alternatePhone || null;
+    const parentPhone = access.canEditDob ? (parentRec?.phone || parentRec?.alternatePhone || null) : null;
     const hasPortalAccount = Boolean(parentRec?.user?.name);
 
     return {
@@ -582,7 +583,7 @@ export async function getClassMissingDobSummaryAction(classId: string) {
       rollNumber: s.rollNumber,
       admissionNo: s.admissionNo,
       dateOfBirth: dobStr,
-      hasDob: Boolean(dobStr),
+      hasDob: Boolean(s.dateOfBirth),
       parentName,
       parentPhone,
       hasPortalAccount,
@@ -598,6 +599,8 @@ export async function getClassMissingDobSummaryAction(classId: string) {
     classId: access.classId,
     className: access.className,
     userRole: access.userRole,
+    isClassTeacher: access.isClassTeacher,
+    canEditDob: access.canEditDob,
     students: mappedStudents,
     totalStudents,
     missingCount,
@@ -935,7 +938,7 @@ export interface BirthdayCelebrantItem {
 }
 
 export async function getClassBirthdayWishesSummaryAction(classId: string) {
-  const access = await requireClassTeacherAccess(classId);
+  const access = await requireClassAccess(classId, "view-birthdays");
   const schoolNow = getSchoolNow();
   const year = schoolNow.year;
   const month = schoolNow.month;
@@ -1062,6 +1065,8 @@ export async function getClassBirthdayWishesSummaryAction(classId: string) {
     classId: access.classId,
     className: access.className,
     userRole: access.userRole,
+    isClassTeacher: access.isClassTeacher,
+    canEditDob: access.canEditDob,
     todayCelebrants,
     upcoming7Days,
     upcoming30Days,
@@ -1072,6 +1077,8 @@ export async function getClassBirthdayWishesSummaryAction(classId: string) {
       whatsappShortcut: Boolean(settings?.whatsappShortcut),
       teacherCanEditExistingDob: settings?.teacherCanEditExistingDob ?? true,
       notifyClassTeacher: settings?.notifyClassTeacher ?? true,
+      subjectTeachersCanViewBirthdays: settings?.subjectTeachersCanViewBirthdays ?? true,
+      subjectTeachersCanEnterDob: settings?.subjectTeachersCanEnterDob ?? false,
     },
   };
 }

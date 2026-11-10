@@ -291,6 +291,36 @@ const ROUTE_MAP: Record<string, BreadcrumbInfo> = {
     parentLabel: "Dashboard",
     currentLabel: "Account Settings"
   },
+  "/dashboard/teacher/birthdays": {
+    parentHref: "/dashboard/teacher",
+    parentLabel: "Dashboard",
+    currentLabel: "Birthday Wishes"
+  },
+  "/dashboard/teacher/birthdays/missing": {
+    parentHref: "/dashboard/teacher/birthdays",
+    parentLabel: "Birthday Wishes",
+    currentLabel: "Missing Date of Birth"
+  },
+  "/dashboard/admin/birthdays": {
+    parentHref: "/dashboard/admin",
+    parentLabel: "Dashboard",
+    currentLabel: "Birthday Wishes"
+  },
+  "/dashboard/admin/birthdays/missing": {
+    parentHref: "/dashboard/admin",
+    parentLabel: "Dashboard",
+    currentLabel: "Missing Date of Birth"
+  },
+  "/dashboard/admin/settings/birthdays": {
+    parentHref: "/dashboard/admin/settings",
+    parentLabel: "Settings",
+    currentLabel: "Birthday Wishes"
+  },
+  "/dashboard/admin/classes/reconciliation": {
+    parentHref: "/dashboard/admin/classes",
+    parentLabel: "Class Management",
+    currentLabel: "Class Teacher Check"
+  },
 
   // ================= PARENT ROUTES =================
   "/dashboard/parent/classes": {

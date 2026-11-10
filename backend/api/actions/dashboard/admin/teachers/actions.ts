@@ -31,7 +31,11 @@ export async function deactivateTeacher(id: string) {
 export async function assignClassTeacher(teacherId: string, classId: string) {
   try {
     if (!classId) {
-      // Disconnect
+      // Disconnect from any currently linked class
+      await prisma.class.updateMany({
+        where: { OR: [{ classTeacherId: teacherId }, { teacherId: teacherId }] },
+        data: { classTeacherId: null, teacherId: null }
+      });
       await prisma.teacher.update({
         where: { id: teacherId },
         data: {
@@ -41,6 +45,11 @@ export async function assignClassTeacher(teacherId: string, classId: string) {
         }
       });
     } else {
+      // Connect to target class and sync both classTeacherId and teacherId
+      await prisma.class.update({
+        where: { id: classId },
+        data: { classTeacherId: teacherId, teacherId: teacherId }
+      });
       await prisma.teacher.update({
         where: { id: teacherId },
         data: {
@@ -52,6 +61,7 @@ export async function assignClassTeacher(teacherId: string, classId: string) {
     }
 
     revalidatePath('/dashboard/admin/teachers');
+    revalidatePath('/dashboard/admin/classes');
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) {

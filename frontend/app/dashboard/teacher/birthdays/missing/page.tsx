@@ -3,8 +3,9 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { redirect } from "next/navigation";
 import { getAuthorizedBirthdayClasses } from "@/lib/teacher/classAccess";
 import { getClassMissingDobSummaryAction } from "@/backend/api/actions/dashboard/admin/birthdays/actions";
+import { getTeacherPendingClassRequestsAction } from "@/backend/api/actions/dashboard/teacher/classTeacherRequestActions";
 import MissingDobStudio from "@/frontend/components/birthdays/MissingDobStudio";
-import { Calendar, Users, ShieldAlert } from "lucide-react";
+import WaitingForAccessCard from "@/frontend/components/birthdays/WaitingForAccessCard";
 
 export const dynamic = "force-dynamic";
 
@@ -19,27 +20,23 @@ export default async function TeacherMissingDobPage(props: PageProps) {
   }
 
   const searchParams = props.searchParams ? await props.searchParams : {};
-  const { classes, selectedClassId } = await getAuthorizedBirthdayClasses();
+  const {
+    classes,
+    allTaughtClasses,
+    selectedClassId,
+    canEditDob,
+    canViewBirthdays,
+  } = await getAuthorizedBirthdayClasses();
 
-  if (classes.length === 0) {
+  // If teacher is not allowed to edit DOB (e.g. subject teacher with Switch B OFF, or unassigned teacher)
+  if (!canEditDob || classes.length === 0) {
+    const pendingRequests = await getTeacherPendingClassRequestsAction();
     return (
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
-        <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 border border-slate-200 dark:border-slate-700 text-center shadow-sm">
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center mb-4">
-            <Users size={28} />
-          </div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Class Teacher Assignment Required</h2>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-2 max-w-md mx-auto leading-relaxed">
-            You are currently assigned to subject classes. Date of birth management and classroom birthday calendars are assigned to each section&apos;s designated Class Teacher.
-          </p>
-          <div className="mt-6 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 text-xs text-slate-500 max-w-md mx-auto text-left flex items-start gap-3">
-            <ShieldAlert size={18} className="text-amber-500 shrink-0 mt-0.5" />
-            <span>
-              If you are the Class Teacher for a class, please ask your school administrator to link your profile as the Class Teacher for your section in <strong>Admin &gt; Classes &amp; Sections</strong>.
-            </span>
-          </div>
-        </div>
-      </div>
+      <WaitingForAccessCard
+        taughtClasses={allTaughtClasses}
+        pendingClassIds={pendingRequests}
+        canViewBirthdays={canViewBirthdays}
+      />
     );
   }
 
@@ -61,4 +58,3 @@ export default async function TeacherMissingDobPage(props: PageProps) {
     </div>
   );
 }
-

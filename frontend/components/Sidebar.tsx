@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import SrtLogo from "@/frontend/components/ui/SrtLogo";
+import { getActiveNavItemHref } from "@/lib/navigation/sidebarActive";
 import styles from "./Sidebar.module.css";
 import {
   Menu,
@@ -209,6 +210,14 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     sections = filteredTeacherSections;
   }
 
+  const allSidebarLinks = useMemo(() => {
+    return sections.flatMap((sec) => sec.items);
+  }, [sections]);
+
+  const activeHref = useMemo(() => {
+    return getActiveNavItemHref(pathname, allSidebarLinks);
+  }, [pathname, allSidebarLinks]);
+
   const schoolName = settings.SCHOOL_NAME || "SRT UNIVERSAL SCHOOL";
   const schoolLogo = settings.SCHOOL_LOGO || null;
 
@@ -260,18 +269,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
                 <div className={styles.sectionHeader}>{section.title}</div>
               )}
               {section.items.map((link) => {
-                const isActive =
-                  pathname === link.href ||
-                  (link.href !== "/dashboard/parent" &&
-                    link.href !== "/dashboard/teacher" &&
-                    link.href !== "/dashboard/admin" &&
-                    pathname.startsWith(link.href + "/")) ||
-                  (link.href === "/admin/buses" && pathname === "/dashboard/admin/transport") ||
-                  (link.href === "/staff/my-bus" && pathname === "/dashboard/teacher/transport") ||
-                  (link.href === "/parent/bus" && pathname === "/dashboard/parent/transport") ||
-                  (link.href === "/dashboard/teacher/assignments" && (pathname === "/dashboard/teacher/homework" || pathname.startsWith("/dashboard/teacher/homework/"))) ||
-                  (link.href === "/dashboard/teacher/homework" && (pathname === "/dashboard/teacher/assignments" || pathname.startsWith("/dashboard/teacher/assignments/"))) ||
-                  (link.href === "/dashboard/parent/assignments" && (pathname === "/dashboard/parent/homework" || pathname.startsWith("/dashboard/parent/homework/")));
+                const isActive = activeHref === link.href;
                 const isPending = pendingHref === link.href && !isActive;
 
                 return (

@@ -49,7 +49,7 @@ if (isDryRun) {
   }
 } else {
   try {
-    execSync('npx prisma db push --skip-generate', {
+    execSync('npx prisma db push --accept-data-loss --skip-generate', {
       stdio: 'inherit',
       cwd: repoRoot,
       env: { ...process.env },
@@ -95,7 +95,7 @@ if (supaUrl) {
     }
   } else {
     try {
-      execSync('npx prisma db push --skip-generate', {
+      execSync('npx prisma db push --accept-data-loss --skip-generate', {
         stdio: 'inherit',
         cwd: repoRoot,
         env: supaEnv,

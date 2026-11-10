@@ -266,6 +266,16 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                   desc: "Allow class teachers to send 1-tap WhatsApp greetings to parents",
                 },
                 {
+                  key: "subjectTeachersCanViewBirthdays",
+                  label: "Switch A: Subject Teachers Can View Birthdays",
+                  desc: "Allow subject teachers to see today's celebrants for classes they teach (names only, no raw DOB)",
+                },
+                {
+                  key: "subjectTeachersCanEnterDob",
+                  label: "Switch B: Subject Teachers Can Enter Missing DOB",
+                  desc: "Permit subject teachers to enter missing student dates of birth for classes they teach",
+                },
+                {
                   key: "teacherCanEditExistingDob",
                   label: "Allow Teachers to Edit Existing DOBs",
                   desc: "Permit class teachers to update previously saved student dates",

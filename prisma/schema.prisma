@@ -175,6 +175,8 @@ model BirthdaySettings {
   dayBeforeReminder  Boolean  @default(false)
   adminDailySummary  Boolean  @default(false)
   whatsappShortcut   Boolean  @default(false)
+  subjectTeachersCanViewBirthdays Boolean @default(true)
+  subjectTeachersCanEnterDob     Boolean @default(false)
   sendTimeLocal      String   @default("07:00")
   language           String   @default("EN") // EN | TA | BOTH
   templateRotation   Boolean  @default(false)
@@ -270,6 +272,7 @@ model Teacher {
   complaints            Complaint[]
   meetings              Meeting[]
   classTeacherOf        Class?              @relation("ClassTeacher")
+  classTeacherRequests  ClassTeacherRequest[]
   examRequests          ExamRequest[]
   staffExamRequests     ExamRequest[]       @relation("StaffExamRequests")
   examSubjects          ExamSubject[]
@@ -341,6 +344,7 @@ model Class {
   teacher        Teacher?      @relation(fields: [teacherId], references: [id])
   classTeacherId String?       @unique
   classTeacher   Teacher?      @relation("ClassTeacher", fields: [classTeacherId], references: [id])
+  classTeacherRequests ClassTeacherRequest[]
   students       Student[]
   timetable      Timetable[]
   subjects       Subject[]
@@ -355,6 +359,23 @@ model Class {
   @@index([isActive])
   @@index([teacherId])
   @@index([batchId, isActive])
+}
+
+model ClassTeacherRequest {
+  id          String    @id @default(cuid())
+  teacherId   String
+  teacher     Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  classId     String
+  class       Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  status      String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  requestedAt DateTime  @default(now())
+  reviewedAt  DateTime?
+  reviewedBy  String?
+  reviewNote  String?
+
+  @@index([teacherId, status])
+  @@index([classId, status])
+  @@index([status])
 }
 
 model Subject {

@@ -44,6 +44,7 @@ interface BirthdayWishesStudioProps {
     teacherCanEditExistingDob: boolean;
     notifyClassTeacher: boolean;
   };
+  isClassTeacher?: boolean;
   onClassChange?: (classId: string) => void;
 }
 
@@ -59,6 +60,7 @@ export default function BirthdayWishesStudio({
   missingDobCount,
   totalStudents,
   settings,
+  isClassTeacher = true,
   onClassChange,
 }: BirthdayWishesStudioProps) {
   const [activeTab, setActiveTab] = useState<"today" | "upcoming">("today");
@@ -378,35 +380,43 @@ export default function BirthdayWishesStudio({
 
                   {/* Action Buttons */}
                   <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleOpenNoteModal(celebrant)}
-                        className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-semibold text-xs transition-all active:scale-95 flex items-center gap-1.5"
-                      >
-                        <MessageSquare size={14} />
-                        <span>{personalNote ? "Edit My Note" : "Add My Personal Message"}</span>
-                      </button>
+                    {isClassTeacher ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleOpenNoteModal(celebrant)}
+                            className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-semibold text-xs transition-all active:scale-95 flex items-center gap-1.5"
+                          >
+                            <MessageSquare size={14} />
+                            <span>{personalNote ? "Edit My Note" : "Add My Personal Message"}</span>
+                          </button>
 
-                      {settings.whatsappShortcut && celebrant.parentPhone && (
-                        <a
-                          href={buildWhatsAppLink(celebrant)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-sm"
+                          {settings.whatsappShortcut && celebrant.parentPhone && (
+                            <a
+                              href={buildWhatsAppLink(celebrant)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-sm"
+                            >
+                              <Share2 size={13} />
+                              <span>Wish on WhatsApp</span>
+                            </a>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={() => handleForceSendNow(celebrant.id)}
+                          disabled={isPending}
+                          className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium"
                         >
-                          <Share2 size={13} />
-                          <span>Wish on WhatsApp</span>
-                        </a>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => handleForceSendNow(celebrant.id)}
-                      disabled={isPending}
-                      className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium"
-                    >
-                      Resend Notification
-                    </button>
+                          Resend Notification
+                        </button>
+                      </>
+                    ) : (
+                      <div className="text-xs text-slate-500 dark:text-slate-400 italic">
+                        View-only mode: Classroom birthday greetings and messages are managed by the section&apos;s Class Teacher.
+                      </div>
+                    )}
                   </div>
                 </div>
               );

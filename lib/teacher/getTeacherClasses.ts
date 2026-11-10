@@ -72,10 +72,12 @@ export async function getTeacherClasses(teacherId: string): Promise<TeacherClass
     });
   }
 
-  // 2. Classes where teacher is assigned as Subject/General Teacher
+  // 2. Classes where teacher is assigned via Class.teacherId
   if (teacher.classes) {
     for (const c of teacher.classes) {
       if (!classMap.has(c.id)) {
+        // Gracefully honor class teacher role if classTeacherId is not set to another teacher
+        const isDesignatedClassTeacher = !c.classTeacherId || c.classTeacherId === teacher.id;
         classMap.set(c.id, {
           classId: c.id,
           sectionId: c.id,
@@ -83,7 +85,7 @@ export async function getTeacherClasses(teacherId: string): Promise<TeacherClass
           name: c.name,
           displayName: formatClassName(c.name, c.section),
           studentCount: c.students.length,
-          isClassTeacher: false,
+          isClassTeacher: isDesignatedClassTeacher,
           subjects: c.subjects.filter(s => s.teacherId === teacher.id).map(s => s.name)
         });
       }

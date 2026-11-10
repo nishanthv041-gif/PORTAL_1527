@@ -131,7 +131,7 @@ export async function createTeacherAction(rawData: z.infer<typeof teacherCreateS
       if (validated.classTeacherOfId) {
         await tx.class.update({
           where: { id: validated.classTeacherOfId },
-          data: { classTeacherId: teacher.id }
+          data: { classTeacherId: teacher.id, teacherId: teacher.id }
         });
       }
 
@@ -300,13 +300,13 @@ export async function updateTeacherAction(rawData: z.infer<typeof teacherUpdateS
       if (currentClassTeacherOf && currentClassTeacherOf.id !== validated.classTeacherOfId) {
         await tx.class.update({
           where: { id: currentClassTeacherOf.id },
-          data: { classTeacherId: null }
+          data: { classTeacherId: null, teacherId: null }
         });
       }
       if (validated.classTeacherOfId && (!currentClassTeacherOf || currentClassTeacherOf.id !== validated.classTeacherOfId)) {
         await tx.class.update({
           where: { id: validated.classTeacherOfId },
-          data: { classTeacherId: teacher.id }
+          data: { classTeacherId: teacher.id, teacherId: teacher.id }
         });
       }
 

@@ -58,6 +58,7 @@ export async function createClassAction(formData: FormData) {
           name,
           section,
           maxStrength: strength,
+          classTeacherId: teacherId,
           teacherId: teacherId,
           isActive: true
         }
@@ -100,6 +101,7 @@ export async function editClassAction(formData: FormData) {
         name,
         section,
         maxStrength,
+        classTeacherId: teacherId ? teacherId : null,
         teacherId: teacherId ? teacherId : null
       }
     });
@@ -160,6 +162,7 @@ export async function editClassGroupAction(formData: FormData) {
             name: newName,
             section: item.section,
             maxStrength: item.maxStrength || 40,
+            classTeacherId: item.teacherId || null,
             teacherId: item.teacherId || null
           }
         });

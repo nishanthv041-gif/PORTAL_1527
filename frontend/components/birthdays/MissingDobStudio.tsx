@@ -57,6 +57,8 @@ interface MissingDobStudioProps {
     requireAdminApprovalForDobChange: boolean;
     whatsappShortcut?: boolean;
   };
+  canEditDob?: boolean;
+  isClassTeacher?: boolean;
   // Optional admin audit data
   adminLogs?: any[];
   onClassChange?: (classId: string) => void;
@@ -71,6 +73,8 @@ export default function MissingDobStudio({
   initialMissingCount,
   initialCompletedCount,
   settings,
+  canEditDob = true,
+  isClassTeacher = true,
   adminLogs = [],
   onClassChange,
 }: MissingDobStudioProps) {
@@ -309,13 +313,15 @@ export default function MissingDobStudio({
               </div>
             )}
 
-            <button
-              onClick={() => setIsExcelModalOpen(true)}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm transition-all shadow-md active:scale-95"
-            >
-              <FileSpreadsheet size={16} />
-              <span>Fill from Excel</span>
-            </button>
+            {canEditDob && (
+              <button
+                onClick={() => setIsExcelModalOpen(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm transition-all shadow-md active:scale-95 min-h-[44px]"
+              >
+                <FileSpreadsheet size={16} />
+                <span>Fill from Excel</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -462,11 +468,14 @@ export default function MissingDobStudio({
                       <div className="flex-1 sm:flex-initial">
                         <input
                           type="date"
+                          disabled={!canEditDob}
                           value={draftVal !== undefined ? draftVal : student.dateOfBirth || ""}
                           onChange={(e) => handleDateChange(student.id, e.target.value)}
                           max={new Date().toISOString().split("T")[0]}
-                          className={`w-full sm:w-48 px-3 py-2 text-sm rounded-xl border focus:outline-none font-medium transition-all ${
-                            student.hasDob && !isEdited
+                          className={`w-full sm:w-48 px-3 py-2 text-sm rounded-xl border focus:outline-none font-medium min-h-[44px] transition-all ${
+                            !canEditDob
+                              ? "bg-slate-100 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-slate-400 cursor-not-allowed"
+                              : student.hasDob && !isEdited
                               ? "bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
                               : isEdited
                               ? "bg-amber-50 dark:bg-amber-950/30 border-amber-400 text-amber-900 dark:text-amber-200"
@@ -476,11 +485,11 @@ export default function MissingDobStudio({
                       </div>
 
                       {/* Row Save button */}
-                      {isEdited && (
+                      {canEditDob && isEdited && (
                         <button
                           onClick={() => handleSaveSingle(student.id)}
                           disabled={isPending}
-                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-sm"
+                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-sm min-h-[44px]"
                         >
                           <Check size={14} />
                           <span>Save</span>
