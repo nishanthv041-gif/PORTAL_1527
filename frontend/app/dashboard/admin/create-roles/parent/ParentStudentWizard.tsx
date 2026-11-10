@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import styles from "../../../dashboard.module.css";
 import { createParentStudentAction, getNextAdmissionNumberAction } from "@/backend/api/actions/dashboard/admin/create-roles/actions";
 import BulkUpload from "../BulkUpload";
+import { DateOfBirthField } from "@/frontend/components/ui/form";
 
 export default function ParentStudentWizard({ classes }: { classes: { id: string; name: string; section: string }[] }) {
   const router = useRouter();
@@ -106,6 +107,15 @@ export default function ParentStudentWizard({ classes }: { classes: { id: string
                 </select>
               </div>
               <div>
+                <DateOfBirthField
+                  name="dateOfBirth"
+                  label="Date of Birth"
+                  required={true}
+                  role="STUDENT"
+                  helperText="Required for student profile & birthday wishes."
+                />
+              </div>
+              <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Class & Section *</label>
                 <select required name="classId" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }}>
                   <option value="">Select a class...</option>
@@ -134,6 +144,15 @@ export default function ParentStudentWizard({ classes }: { classes: { id: string
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Parent Phone *</label>
                 <input required name="parentPhone" type="text" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
+              </div>
+              <div>
+                <DateOfBirthField
+                  name="parentDateOfBirth"
+                  label="Parent Date of Birth (Optional)"
+                  required={false}
+                  role="PARENT"
+                  helperText="Optional, used only for a birthday wish."
+                />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Address</label>

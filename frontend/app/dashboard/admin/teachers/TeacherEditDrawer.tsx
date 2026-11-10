@@ -13,11 +13,12 @@ import {
   toggleTeacherStatusAction,
   deleteTeacherPermanentlyAction
 } from "@/backend/api/actions/dashboard/admin/teachers/teacherManagementActions";
-import { SingleSelect } from "@/frontend/components/ui/form";
+import { SingleSelect, DateOfBirthField } from "@/frontend/components/ui/form";
 
 export interface TeacherData {
   id: string;
   userId: string;
+  dateOfBirth?: string | Date | null;
   phone: string | null;
   alternatePhone?: string | null;
   qualification: string | null;
@@ -68,6 +69,7 @@ export default function TeacherEditDrawer({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [googleEmail, setGoogleEmail] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [phone, setPhone] = useState("");
   const [alternatePhone, setAlternatePhone] = useState("");
   const [qualification, setQualification] = useState("");
@@ -98,6 +100,7 @@ export default function TeacherEditDrawer({
       setName(teacher.user.name || "");
       setEmail(teacher.user.email || "");
       setGoogleEmail(teacher.user.googleEmail || "");
+      setDateOfBirth(teacher.dateOfBirth ? (typeof teacher.dateOfBirth === "string" ? teacher.dateOfBirth.split("T")[0] : new Date(teacher.dateOfBirth).toISOString().split("T")[0]) : "");
       setPhone(teacher.phone || "");
       setAlternatePhone(teacher.alternatePhone || "");
       setQualification(teacher.qualification || "");
@@ -113,6 +116,7 @@ export default function TeacherEditDrawer({
       setName("");
       setEmail("");
       setGoogleEmail("");
+      setDateOfBirth("");
       setPhone("");
       setAlternatePhone("");
       setQualification("");
@@ -218,6 +222,7 @@ export default function TeacherEditDrawer({
           email: email.trim(),
           googleEmail: googleEmail.trim() || undefined,
           password: password || undefined,
+          dateOfBirth: dateOfBirth || undefined,
           phone: phone.trim() || undefined,
           alternatePhone: alternatePhone.trim() || undefined,
           qualification: qualification.trim() || undefined,
@@ -247,6 +252,7 @@ export default function TeacherEditDrawer({
           email: email.trim(),
           googleEmail: googleEmail.trim() || undefined,
           password: password || undefined,
+          dateOfBirth: dateOfBirth || undefined,
           phone: phone.trim() || undefined,
           alternatePhone: alternatePhone.trim() || undefined,
           qualification: qualification.trim() || undefined,
@@ -618,6 +624,18 @@ export default function TeacherEditDrawer({
                       color: "inherit",
                       fontSize: "0.9rem",
                     }}
+                  />
+                </div>
+
+                <div>
+                  <DateOfBirthField
+                    name="dateOfBirth"
+                    label="Date of Birth"
+                    value={dateOfBirth}
+                    onChange={setDateOfBirth}
+                    required={isAddMode}
+                    role="TEACHER"
+                    helperText="Required for teacher records and birthday wishes."
                   />
                 </div>
 

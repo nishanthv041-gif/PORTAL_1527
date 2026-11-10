@@ -193,7 +193,18 @@ export default function UserListClient({
                     <div style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 600 }}>
                       {user.name.charAt(0).toUpperCase()}
                     </div>
-                    {user.name}
+                    <div>
+                      <div>{user.name}</div>
+                      {user.dateOfBirth ? (
+                        <div style={{ fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 500 }}>
+                          🎂 {new Date(user.dateOfBirth).toLocaleDateString('en-GB')}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '0.72rem', color: '#f59e0b', fontWeight: 500 }}>
+                          ⚠️ No DOB
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </td>
                 <td style={{ padding: "1rem", fontSize: '0.875rem' }}>

@@ -1,9 +1,10 @@
 import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
+import { Prisma } from "@prisma/client";
 import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
 import { getSchoolNow, startOfSchoolDay } from "@/lib/time";
 import styles from "../dashboard.module.css";
-import { GraduationCap, Users, Clock, MessageSquare, Calendar as CalendarIcon, MapPin, Star, ArrowRight, ShieldAlert } from "lucide-react";
+import { GraduationCap, Users, Clock, MessageSquare, Calendar as CalendarIcon, MapPin, Star, ArrowRight, ShieldAlert, Sparkles, Gift } from "lucide-react";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -137,6 +138,37 @@ export default async function TeacherDashboard() {
     icon: <Users size={18} />
   }))].sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 5);
 
+  // Birthday checks in school timezone (Asia/Kolkata)
+  const isLeap = (y: number) => (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+  const isNonLeapFeb28 = !isLeap(schoolToday.year) && schoolToday.month === 2 && schoolToday.day === 28;
+
+  let isTeacherBirthday = false;
+  const teacherDob = teacher.dateOfBirth;
+  if (teacherDob) {
+    const td = new Date(teacherDob);
+    const tm = td.getUTCMonth() + 1;
+    const tday = td.getUTCDate();
+    if (tm === schoolToday.month && tday === schoolToday.day) isTeacherBirthday = true;
+    if (isNonLeapFeb28 && tm === 2 && tday === 29) isTeacherBirthday = true;
+  }
+
+  const teacherClassIds = teacher.classes.map((c) => c.id);
+  let classBirthdayStudents: Array<{ id: string; firstName: string; lastName: string | null; className: string; section: string }> = [];
+  if (teacherClassIds.length > 0) {
+    classBirthdayStudents = await prisma.$queryRaw<any[]>`
+      SELECT s."id", s."firstName", s."lastName", c."name" as "className", c."section"
+      FROM "Student" s
+      JOIN "Class" c ON s."classId" = c."id"
+      WHERE s."isActive" = true
+        AND s."classId" IN (${Prisma.join(teacherClassIds)})
+        AND s."dateOfBirth" IS NOT NULL
+        AND (
+          (EXTRACT(MONTH FROM s."dateOfBirth") = ${schoolToday.month} AND EXTRACT(DAY FROM s."dateOfBirth") = ${schoolToday.day})
+          ${isNonLeapFeb28 ? Prisma.sql`OR (EXTRACT(MONTH FROM s."dateOfBirth") = 2 AND EXTRACT(DAY FROM s."dateOfBirth") = 29)` : Prisma.empty}
+        );
+    `;
+  }
+
   return (
     <div className={styles.dashboard}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
@@ -154,6 +186,72 @@ export default async function TeacherDashboard() {
           </Link>
         </div>
       </div>
+
+      {/* Teacher Birthday Celebration Card */}
+      {isTeacherBirthday && (
+        <div style={{
+          background: "linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%)",
+          border: "1px solid #f59e0b",
+          borderRadius: "14px",
+          padding: "1.25rem 1.5rem",
+          marginBottom: "1.5rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          boxShadow: "0 4px 12px rgba(245, 158, 11, 0.15)",
+          color: "#78350f"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <div style={{ fontSize: "2rem" }}>🎂</div>
+            <div>
+              <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "#92400e" }}>
+                Happy Birthday, {session.user?.name || "Teacher"}! 🎉
+              </div>
+              <div style={{ fontSize: "0.85rem", color: "#b45309", marginTop: "2px" }}>
+                SRT School wishes you a joyful, healthy, and successful year ahead! Thank you for your inspiring service to our students.
+              </div>
+            </div>
+          </div>
+          <span style={{ fontSize: "0.75rem", fontWeight: 700, padding: "4px 10px", borderRadius: "999px", background: "#f59e0b", color: "#ffffff" }}>
+            SRT School Wishes You
+          </span>
+        </div>
+      )}
+
+      {/* Today's Student Birthdays in Teacher's Assigned Classes */}
+      {classBirthdayStudents.length > 0 && (
+        <div style={{
+          background: "linear-gradient(135deg, #e0f2fe 0%, #e0e7ff 100%)",
+          border: "1px solid #6366f1",
+          borderRadius: "14px",
+          padding: "1rem 1.25rem",
+          marginBottom: "1.5rem",
+          boxShadow: "0 2px 8px rgba(99, 102, 241, 0.1)"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem", color: "#3730a3", fontWeight: 700, fontSize: "0.95rem" }}>
+            <Sparkles size={18} style={{ color: "#4f46e5" }} />
+            Today&apos;s Student Birthdays in Your Classes ({classBirthdayStudents.length})
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
+            {classBirthdayStudents.map((st) => (
+              <span key={st.id} style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                padding: "0.35rem 0.75rem",
+                borderRadius: "8px",
+                background: "#ffffff",
+                border: "1px solid #c7d2fe",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                color: "#1e1b4b"
+              }}>
+                🎂 {st.firstName} {st.lastName || ""} ({st.className}-{st.section})
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Teacher on leave alert banner */}
       {teacherAbsenceToday && (

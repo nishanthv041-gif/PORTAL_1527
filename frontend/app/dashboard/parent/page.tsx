@@ -163,6 +163,17 @@ export default async function ParentDashboard({
   const isLeap = (y: number) => (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
   const isNonLeapFeb28 = !isLeap(schoolToday.year) && schoolToday.month === 2 && schoolToday.day === 28;
 
+  // Check if parent's own birthday is today
+  let isParentBirthday = false;
+  const parentDob = parent.dateOfBirth;
+  if (parentDob) {
+    const pd = new Date(parentDob);
+    const pm = pd.getUTCMonth() + 1;
+    const pday = pd.getUTCDate();
+    if (pm === schoolToday.month && pday === schoolToday.day) isParentBirthday = true;
+    if (isNonLeapFeb28 && pm === 2 && pday === 29) isParentBirthday = true;
+  }
+
   const birthdayChildren = children.filter((child) => {
     if (!child.dateOfBirth) return false;
     const d = new Date(child.dateOfBirth);
@@ -177,12 +188,13 @@ export default async function ParentDashboard({
   if (birthdayChildren.length > 0 && parent.userId) {
     for (const bChild of birthdayChildren) {
       try {
-        const existing = await prisma.birthdayWish.findUnique({
+        const existing = await prisma.birthdayWish.findFirst({
           where: {
-            studentId_year: {
-              studentId: bChild.id,
-              year: schoolToday.year,
-            },
+            audience: "PARENT_OF_STUDENT",
+            personType: "student",
+            personId: bChild.id,
+            recipientUserId: parent.userId,
+            year: schoolToday.year,
           },
         });
         if (!existing) {
@@ -200,6 +212,10 @@ export default async function ParentDashboard({
           });
           await prisma.birthdayWish.create({
             data: {
+              audience: "PARENT_OF_STUDENT",
+              personType: "student",
+              personId: bChild.id,
+              recipientUserId: parent.userId,
               studentId: bChild.id,
               year: schoolToday.year,
               notificationId: notif.id,
@@ -320,6 +336,24 @@ export default async function ParentDashboard({
           <div className={styles.birthdayBadge}>SRT School Wishes You</div>
         </div>
       ))}
+
+      {/* Festive Parent Birthday Celebration Card */}
+      {isParentBirthday && (
+        <div className={styles.birthdayCard}>
+          <div className={styles.birthdayCardLeft}>
+            <div className={styles.birthdayIconWrapper}>🎂</div>
+            <div>
+              <h2 className={styles.birthdayTitle}>
+                Happy Birthday, {(parent as any).user?.name || "Parent"}! 🎉
+              </h2>
+              <p className={styles.birthdaySubtitle}>
+                SRT School wishes you a wonderful birthday filled with happiness, good health, and abundant blessings!
+              </p>
+            </div>
+          </div>
+          <div className={styles.birthdayBadge}>SRT School Wishes You</div>
+        </div>
+      )}
 
       {/* 5 Stats Cards Grid: Percentage, Presented Days, Absented Days, Class Details, Total Subjects */}
       <div className={styles.statsGrid}>

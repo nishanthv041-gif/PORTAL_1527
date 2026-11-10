@@ -1,11 +1,12 @@
 import dynamic from "next/dynamic";
 import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
+import { Prisma } from "@prisma/client";
 import styles from "../dashboard.module.css";
-import { Users, GraduationCap, BookOpen, Briefcase, Mail, Phone, CheckCircle2, XCircle, UserCheck } from "lucide-react";
+import { Users, GraduationCap, BookOpen, Briefcase, Mail, Phone, CheckCircle2, XCircle, UserCheck, Sparkles } from "lucide-react";
 import ClassSelector from "./ClassSelector";
 import Link from "next/link";
-import { startOfSchoolDay, endOfSchoolDay } from "@/lib/time";
+import { startOfSchoolDay, endOfSchoolDay, getSchoolNow } from "@/lib/time";
 
 export const revalidate = 0;
 
@@ -226,9 +227,134 @@ export default async function AdminDashboardPage({
     }
   }
 
+  // School birthday check in Asia/Kolkata
+  const schoolToday = getSchoolNow();
+  const isLeap = (y: number) => (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+  const isNonLeapFeb28 = !isLeap(schoolToday.year) && schoolToday.month === 2 && schoolToday.day === 28;
+
+  const [adminUser, birthdayStudentCount, birthdayTeacherCount, birthdayStaffCount] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { dateOfBirth: true, name: true },
+    }),
+    prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*) as "count" FROM "Student" s
+      WHERE s."isActive" = true AND s."dateOfBirth" IS NOT NULL
+        AND ((EXTRACT(MONTH FROM s."dateOfBirth") = ${schoolToday.month} AND EXTRACT(DAY FROM s."dateOfBirth") = ${schoolToday.day})
+             ${isNonLeapFeb28 ? Prisma.sql`OR (EXTRACT(MONTH FROM s."dateOfBirth") = 2 AND EXTRACT(DAY FROM s."dateOfBirth") = 29)` : Prisma.empty});
+    `.catch(() => [{ count: BigInt(0) }]),
+    prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*) as "count" FROM "Teacher" t
+      JOIN "User" u ON t."userId" = u."id"
+      WHERE t."isActive" = true AND u."status" = 'ACTIVE'
+        AND COALESCE(t."dateOfBirth", u."dateOfBirth") IS NOT NULL
+        AND ((EXTRACT(MONTH FROM COALESCE(t."dateOfBirth", u."dateOfBirth")) = ${schoolToday.month} AND EXTRACT(DAY FROM COALESCE(t."dateOfBirth", u."dateOfBirth")) = ${schoolToday.day})
+             ${isNonLeapFeb28 ? Prisma.sql`OR (EXTRACT(MONTH FROM COALESCE(t."dateOfBirth", u."dateOfBirth")) = 2 AND EXTRACT(DAY FROM COALESCE(t."dateOfBirth", u."dateOfBirth")) = 29)` : Prisma.empty});
+    `.catch(() => [{ count: BigInt(0) }]),
+    prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*) as "count" FROM "Staff" st
+      JOIN "User" u ON st."userId" = u."id"
+      WHERE st."isActive" = true AND u."status" = 'ACTIVE'
+        AND COALESCE(st."dateOfBirth", u."dateOfBirth") IS NOT NULL
+        AND ((EXTRACT(MONTH FROM COALESCE(st."dateOfBirth", u."dateOfBirth")) = ${schoolToday.month} AND EXTRACT(DAY FROM COALESCE(st."dateOfBirth", u."dateOfBirth")) = ${schoolToday.day})
+             ${isNonLeapFeb28 ? Prisma.sql`OR (EXTRACT(MONTH FROM COALESCE(st."dateOfBirth", u."dateOfBirth")) = 2 AND EXTRACT(DAY FROM COALESCE(st."dateOfBirth", u."dateOfBirth")) = 29)` : Prisma.empty});
+    `.catch(() => [{ count: BigInt(0) }]),
+  ]);
+
+  let isAdminBirthday = false;
+  if (adminUser?.dateOfBirth) {
+    const ad = new Date(adminUser.dateOfBirth);
+    const am = ad.getUTCMonth() + 1;
+    const aday = ad.getUTCDate();
+    if (am === schoolToday.month && aday === schoolToday.day) isAdminBirthday = true;
+    if (isNonLeapFeb28 && am === 2 && aday === 29) isAdminBirthday = true;
+  }
+
+  const totalSchoolCelebrantsToday =
+    Number(birthdayStudentCount[0]?.count || 0) +
+    Number(birthdayTeacherCount[0]?.count || 0) +
+    Number(birthdayStaffCount[0]?.count || 0);
+
   return (
     <div className={styles.dashboard}>
       <h1 className={styles.title}>Admin Dashboard</h1>
+
+      {/* Admin Birthday Card */}
+      {isAdminBirthday && (
+        <div style={{
+          background: "linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%)",
+          border: "1px solid #f59e0b",
+          borderRadius: "14px",
+          padding: "1.25rem 1.5rem",
+          marginBottom: "1.5rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          boxShadow: "0 4px 12px rgba(245, 158, 11, 0.15)",
+          color: "#78350f"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <div style={{ fontSize: "2rem" }}>🎂</div>
+            <div>
+              <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "#92400e" }}>
+                Happy Birthday, {adminUser?.name || "Administrator"}! 🎉
+              </div>
+              <div style={{ fontSize: "0.85rem", color: "#b45309", marginTop: "2px" }}>
+                SRT School wishes you a prosperous, healthy, and successful year ahead! Thank you for your leadership and guidance.
+              </div>
+            </div>
+          </div>
+          <span style={{ fontSize: "0.75rem", fontWeight: 700, padding: "4px 10px", borderRadius: "999px", background: "#f59e0b", color: "#ffffff" }}>
+            SRT School Wishes You
+          </span>
+        </div>
+      )}
+
+      {/* School Birthday Celebrants Today Banner */}
+      {totalSchoolCelebrantsToday > 0 && (
+        <div style={{
+          background: "linear-gradient(135deg, #ede9fe 0%, #f3e8ff 100%)",
+          border: "1px solid #8b5cf6",
+          borderRadius: "14px",
+          padding: "1rem 1.25rem",
+          marginBottom: "1.5rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "1rem",
+          boxShadow: "0 2px 8px rgba(139, 92, 246, 0.1)"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <Sparkles size={22} style={{ color: "#7c3aed" }} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "#5b21b6" }}>
+                Today&apos;s School Birthday Celebrants: {totalSchoolCelebrantsToday} person{totalSchoolCelebrantsToday > 1 ? "s" : ""}
+              </div>
+              <div style={{ fontSize: "0.82rem", color: "#6d28d9" }}>
+                {Number(birthdayStudentCount[0]?.count || 0)} Students, {Number(birthdayTeacherCount[0]?.count || 0)} Teachers, {Number(birthdayStaffCount[0]?.count || 0)} Staff
+              </div>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/admin/settings/birthdays"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "0.45rem 0.9rem",
+              borderRadius: "8px",
+              background: "#7c3aed",
+              color: "#ffffff",
+              textDecoration: "none",
+              fontSize: "0.8rem",
+              fontWeight: 600
+            }}
+          >
+            Manage Birthday Wishes
+          </Link>
+        </div>
+      )}
 
       <div className={styles.statsGrid}>
         <Link href="/dashboard/admin/students" prefetch={false} style={{ textDecoration: 'none', color: 'inherit' }}>

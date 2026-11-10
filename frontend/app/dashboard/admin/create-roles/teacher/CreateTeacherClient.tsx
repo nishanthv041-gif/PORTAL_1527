@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import styles from "../../../dashboard.module.css";
 import { createTeacherAction } from "@/backend/api/actions/dashboard/admin/create-roles/actions";
 import BulkUpload from "../BulkUpload";
+import { DateOfBirthField } from "@/frontend/components/ui/form";
 
 import { Subject, Class } from "@prisma/client";
 
@@ -120,6 +121,15 @@ export default function CreateTeacherClient({
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>Phone *</label>
                 <input required name="phone" type="text" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
+              </div>
+              <div>
+                <DateOfBirthField
+                  name="dateOfBirth"
+                  label="Date of Birth"
+                  required={true}
+                  role="TEACHER"
+                  helperText="Required for teacher profile & birthday wishes."
+                />
               </div>
             </div>
           </div>

@@ -20,6 +20,7 @@ model User {
   role                String   @default("PARENT")
   status              String   @default("ACTIVE") // ACTIVE, INACTIVE
   name                String
+  dateOfBirth         DateTime? @db.Date
   googleEmail         String?
   googleEmailVerified Boolean  @default(false)
   theme               String   @default("light") // light | dark
@@ -140,22 +141,74 @@ model Student {
 
 model BirthdayWish {
   id             String    @id @default(cuid())
-  studentId      String
+  studentId      String?
+  audience       String    @default("PARENT_OF_STUDENT") // SELF | PARENT_OF_STUDENT
+  personType     String    @default("student") // student | teacher | staff | admin | parent | driver
+  personId       String?
+  recipientUserId String?
   year           Int
   sentAt         DateTime  @default(now())
   notificationId String?
-  status         String    @default("SENT") // SENT, SKIPPED_NO_PARENT, FAILED
-  student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status         String    @default("SENT") // SENT, SKIPPED_NO_ACCOUNT, FAILED
+  student        Student?  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
-  @@unique([studentId, year])
+  @@unique([audience, personType, personId, recipientUserId, year])
   @@index([studentId])
+  @@index([recipientUserId])
   @@index([year])
+  @@index([personType, personId])
+}
+
+model BirthdaySettings {
+  id                 String   @id @default("default")
+  enabled            Boolean  @default(true)
+  notifyParents      Boolean  @default(true)
+  notifyStudents     Boolean  @default(true)
+  notifyTeachers     Boolean  @default(true)
+  notifyStaff        Boolean  @default(true)
+  notifyAdmins       Boolean  @default(true)
+  sendTimeLocal      String   @default("07:00")
+  language           String   @default("EN") // EN | TA | BOTH
+  templateRotation   Boolean  @default(false)
+  dobRequiredStudent Boolean  @default(true)
+  dobRequiredTeacher Boolean  @default(true)
+  dobRequiredStaff   Boolean  @default(true)
+  dobRequiredAdmin   Boolean  @default(true)
+  dobRequiredDriver  Boolean  @default(true)
+  dobRequiredParent  Boolean  @default(false)
+  studentTemplateEn  String?
+  studentTemplateTa  String?
+  parentTemplateEn   String?
+  parentTemplateTa   String?
+  teacherTemplateEn  String?
+  teacherTemplateTa  String?
+  staffTemplateEn    String?
+  staffTemplateTa    String?
+  adminTemplateEn    String?
+  adminTemplateTa    String?
+  updatedAt          DateTime @default(now()) @updatedAt
+  updatedBy          String?
+}
+
+model BirthdayJobRun {
+  id                 String   @id @default(cuid())
+  runAt              DateTime @default(now())
+  forDate            String   // YYYY-MM-DD
+  sentCount          Int      @default(0)
+  skippedNoAccount   Int      @default(0)
+  skippedAlreadySent Int      @default(0)
+  failedCount        Int      @default(0)
+  durationMs         Int      @default(0)
+  triggeredBy        String   @default("scheduler") // scheduler | manual | fallback
+
+  @@index([forDate])
 }
 
 model Teacher {
   id            String    @id @default(cuid())
   userId        String    @unique
   user          User      @relation(fields: [userId], references: [id])
+  dateOfBirth   DateTime? @db.Date
   phone         String?
   alternatePhone String?
   qualification String?
@@ -192,7 +245,7 @@ model Staff {
   phone       String?
   designation String?
   gender      String?
-  dateOfBirth DateTime?
+  dateOfBirth DateTime? @db.Date
   address     String?
   joinDate    DateTime?
   isActive    Boolean   @default(true)
@@ -211,6 +264,7 @@ model Parent {
   phone      String?
   alternatePhone String?
   occupation String?
+  dateOfBirth DateTime? @db.Date
   isActive   Boolean @default(true)
 
   // Relationships
@@ -1215,6 +1269,7 @@ model Bus {
   capacity           Int            @default(40)
   driverName         String
   driverPhone        String
+  driverDob          DateTime?      @db.Date
   routeDescription   String?
   status             String         @default("RUNNING") // RUNNING | NOT_RUNNING | MAINTENANCE | DELAYED
   inChargeStaffId    String?

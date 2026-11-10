@@ -142,6 +142,7 @@ export const EXPECTED_TEACHER_HEADERS = [
   "email",
   "password",
   "phone",
+  "dateOfBirth",
   "joiningDate",
   "qualification"
 ];
@@ -814,6 +815,9 @@ export async function parseAndScanWorkbook(
       const password = getNormalizedValue(norm, ["password", "pwd", "pass"]) || (hasPasswordInSheet ? "" : "Teacher@123");
 
       const phone = getNormalizedValue(norm, ["phone", "phonenumber", "mobile", "contact", "contactno", "mobileno", "cell"]);
+      const dateOfBirth = getNormalizedValue(norm, [
+        "dateofbirth", "dob", "birthdate", "birthday", "d.o.b", "dateofbirth(dd-mm-yyyy)", "teacherdob"
+      ]);
       const joiningDate = getNormalizedValue(norm, ["joiningdate", "doj", "dateofjoining", "join", "joining"]) || new Date().toISOString().split("T")[0];
 
       const hasQualInSheet = normalizedFound.some(h => h.includes("qualification") || h.includes("qual") || h.includes("degree") || h.includes("education"));
@@ -833,6 +837,7 @@ export async function parseAndScanWorkbook(
         googleEmail,
         password,
         phone,
+        dateOfBirth,
         joiningDate,
         qualification,
         gender,
@@ -1187,6 +1192,19 @@ export async function validateAndCorrelateBatch(
       if (row.phone && !isValidPhone(String(row.phone).trim())) {
         fieldErrors.phone = "Invalid phone number format.";
         invalidFields.push("phone");
+      }
+
+      // 4b. Date of Birth (Optional with warning in bulk upload)
+      if (row.dateOfBirth) {
+        const dobResult = parseDateSafe(row.dateOfBirth);
+        if (!dobResult.isValid) {
+          fieldErrors.dateOfBirth = "Invalid date of birth. Enter valid date (YYYY-MM-DD or DD/MM/YYYY).";
+          invalidFields.push("dateOfBirth");
+        } else {
+          row.dateOfBirth = dobResult.isoDate;
+        }
+      } else {
+        conflictWarnings.push("Teacher Date of Birth is missing in sheet. Add later in Missing DOB page.");
       }
 
       // 5. Joining Date
@@ -1597,6 +1615,7 @@ export async function executeImportTransaction(
               googleEmail,
               password,
               phone,
+              dateOfBirth,
               joiningDate,
               qualification,
               classTeacherClassId,
@@ -1612,6 +1631,7 @@ export async function executeImportTransaction(
             const hashedPass = passwordHashMap.get(rawPwd) || await hash(rawPwd, 10);
             const teacherFullName = `${firstName} ${lastName || ""}`.trim();
             const joinDate = joiningDate ? new Date(joiningDate) : new Date();
+            const teacherDob = dateOfBirth ? new Date(dateOfBirth) : null;
 
             let targetClassId = classTeacherClassId;
             if (!targetClassId && classTeacherRaw) {
@@ -1638,6 +1658,7 @@ export async function executeImportTransaction(
                     data: {
                       userId: existing.id,
                       phone: phone ? String(phone).trim() : null,
+                      dateOfBirth: teacherDob,
                       qualification: qualification ? String(qualification).trim() : null,
                       joinDate,
                       isActive: true
@@ -1650,6 +1671,7 @@ export async function executeImportTransaction(
                     where: { id: teacherId },
                     data: {
                       ...(phone ? { phone: String(phone).trim() } : {}),
+                      ...(teacherDob ? { dateOfBirth: teacherDob } : {}),
                       ...(qualification ? { qualification: String(qualification).trim() } : {}),
                       isActive: true
                     }
@@ -1660,6 +1682,7 @@ export async function executeImportTransaction(
                   where: { id: existing.id },
                   data: {
                     name: teacherFullName,
+                    ...(teacherDob ? { dateOfBirth: teacherDob } : {}),
                     ...(cleanGoogleEmail ? { googleEmail: cleanGoogleEmail, googleEmailVerified: true } : {})
                   }
                 });
@@ -1679,11 +1702,13 @@ export async function executeImportTransaction(
                     password: hashedPass,
                     role: "TEACHER",
                     status: "ACTIVE",
+                    dateOfBirth: teacherDob,
                     googleEmail: cleanGoogleEmail,
                     googleEmailVerified: Boolean(cleanGoogleEmail),
                     teacher: {
                       create: {
                         phone: phone ? String(phone).trim() : null,
+                        dateOfBirth: teacherDob,
                         qualification: qualification ? String(qualification).trim() : null,
                         joinDate,
                         isActive: true

@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react";
 import { Shield } from "lucide-react";
 import { createAdminAction } from "@/backend/api/actions/dashboard/admin/create-roles/actions";
 import { useRouter } from "next/navigation";
+import { DateOfBirthField } from "@/frontend/components/ui/form";
 
 export default function CreateAdminClient() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,6 +53,15 @@ export default function CreateAdminClient() {
                 pattern=".+@(gmail\.com|googlemail\.com)"
                 title="Please enter a valid Gmail address (@gmail.com)"
                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} 
+              />
+            </div>
+            <div>
+              <DateOfBirthField
+                name="dateOfBirth"
+                label="Date of Birth"
+                required={true}
+                role="ADMIN"
+                helperText="Required for Admin birthday greetings."
               />
             </div>
           </div>

@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { DateOfBirthField } from "@/frontend/components/ui/form";
 import {
   Bus,
   Plus,
@@ -120,6 +121,7 @@ export default function AdminBusManagement({
   const [capacity, setCapacity] = useState<number>(35);
   const [driverName, setDriverName] = useState("");
   const [driverPhone, setDriverPhone] = useState("");
+  const [driverDob, setDriverDob] = useState("");
   const [routeDescription, setRouteDescription] = useState("");
   const [inChargeStaffId, setInChargeStaffId] = useState("");
 
@@ -131,6 +133,7 @@ export default function AdminBusManagement({
     setCapacity(35);
     setDriverName("");
     setDriverPhone("");
+    setDriverDob("");
     setRouteDescription("");
     setInChargeStaffId(allStaff[0]?.id || "");
     setIsBusModalOpen(true);
@@ -144,6 +147,7 @@ export default function AdminBusManagement({
     setCapacity(bus.capacity);
     setDriverName(bus.driverName);
     setDriverPhone(bus.driverPhone);
+    setDriverDob(bus.driverDob ? (typeof bus.driverDob === "string" ? bus.driverDob.split("T")[0] : new Date(bus.driverDob).toISOString().split("T")[0]) : "");
     setRouteDescription(bus.routeDescription || "");
     setInChargeStaffId(bus.inChargeStaffId || "");
     setIsBusModalOpen(true);
@@ -167,6 +171,7 @@ export default function AdminBusManagement({
       capacity: Number(capacity),
       driverName: driverName.trim(),
       driverPhone: driverPhone.trim(),
+      driverDob: driverDob || undefined,
       routeDescription: routeDescription.trim() || undefined,
       inChargeStaffId: inChargeStaffId || undefined,
     };
@@ -1517,6 +1522,17 @@ export default function AdminBusManagement({
                   fontSize: "0.85rem",
                   boxSizing: "border-box",
                 }}
+              />
+            </div>
+            <div>
+              <DateOfBirthField
+                name="driverDob"
+                label="Driver Date of Birth"
+                value={driverDob}
+                onChange={setDriverDob}
+                required={false}
+                role="DRIVER"
+                helperText="Required for driver birthday wishes."
               />
             </div>
           </div>

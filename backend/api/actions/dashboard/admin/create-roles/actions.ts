@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { isSuperAdmin } from "@/backend/lib/auth/superAdmin";
+import { parseAndValidateDob } from "@/lib/validations/dob";
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -21,8 +22,24 @@ export async function createTeacherAction(formData: FormData) {
 
     const name = formData.get("name") as string;
     const phone = formData.get("phone") as string;
+    const dateOfBirth = (formData.get("dateOfBirth") as string || "").trim();
     const qualification = formData.get("qualification") as string;
     const subjectIdsInput = formData.get("subjectIds") as string;
+    
+    // Validate Teacher DOB
+    let teacherDobDate: Date | null = null;
+    if (dateOfBirth) {
+      const dobValidation = parseAndValidateDob(dateOfBirth, "TEACHER", true);
+      if (!dobValidation.isValid) {
+        return { error: dobValidation.error || "A valid teacher Date of Birth is required." };
+      }
+      teacherDobDate = dobValidation.dateStr ? new Date(`${dobValidation.dateStr}T00:00:00Z`) : null;
+    } else {
+      const settings = await prisma.birthdaySettings.findUnique({ where: { id: "default" } }).catch(() => null);
+      if (settings?.dobRequiredTeacher !== false) {
+        return { error: "Teacher Date of Birth is required." };
+      }
+    }
     
     // Auth fields
     const email = ((formData.get("email") as string) || "").trim().toLowerCase();
@@ -82,6 +99,7 @@ export async function createTeacherAction(formData: FormData) {
 
     const teacherData: import("@prisma/client").Prisma.TeacherCreateWithoutUserInput = {
       phone,
+      dateOfBirth: teacherDobDate,
       qualification,
       resumeUrl,
       joinDate: new Date(),
@@ -107,6 +125,7 @@ export async function createTeacherAction(formData: FormData) {
         password: hashedPassword,
         role: "TEACHER",
         status: "ACTIVE",
+        dateOfBirth: teacherDobDate,
         googleEmail: googleEmail || null,
         googleEmailVerified: googleEmailVerified && !!googleEmail,
         teacher: {
@@ -192,6 +211,13 @@ export async function createParentStudentAction(formData: FormData) {
     const rawResidence = (formData.get("residenceType") as string) || "DAYSCHOLAR";
     const residenceType = rawResidence.toUpperCase().includes("HOSTEL") ? "HOSTEL" : "DAYSCHOLAR";
 
+    // Validate Student Date of Birth
+    const studentDobValidation = parseAndValidateDob(dateOfBirth, "STUDENT", true);
+    if (!studentDobValidation.isValid) {
+      return { error: studentDobValidation.error || "A valid student Date of Birth is required." };
+    }
+    const studentDobDate = studentDobValidation.dateStr ? new Date(`${studentDobValidation.dateStr}T00:00:00Z`) : null;
+
     // Parent fields
     const parentName = ((formData.get("parentName") as string) || "").trim();
     const parentPhone = ((formData.get("parentPhone") as string) || "").trim();
@@ -199,6 +225,16 @@ export async function createParentStudentAction(formData: FormData) {
     const parentPassword = ((formData.get("parentPassword") as string) || "").trim();
     const parentGoogleEmail = ((formData.get("parentGoogleEmail") as string) || "").trim().toLowerCase();
     const parentAddress = ((formData.get("parentAddress") as string) || "").trim();
+    const parentDateOfBirth = ((formData.get("parentDateOfBirth") as string) || "").trim();
+
+    let parentDobDate: Date | null = null;
+    if (parentDateOfBirth) {
+      const parentDobValidation = parseAndValidateDob(parentDateOfBirth, "PARENT", false);
+      if (!parentDobValidation.isValid) {
+        return { error: parentDobValidation.error || "Invalid parent Date of Birth." };
+      }
+      parentDobDate = parentDobValidation.dateStr ? new Date(`${parentDobValidation.dateStr}T00:00:00Z`) : null;
+    }
 
     if (!isValidEmail(parentEmail)) return { error: "Invalid official email address." };
     if (parentGoogleEmail) {
@@ -244,11 +280,13 @@ export async function createParentStudentAction(formData: FormData) {
             password: hashedPassword,
             role: "PARENT",
             status: "ACTIVE",
+            dateOfBirth: parentDobDate,
             googleEmail: parentGoogleEmail || null,
             googleEmailVerified: googleEmailVerified && !!parentGoogleEmail,
             parent: {
               create: {
                 phone: parentPhone,
+                dateOfBirth: parentDobDate,
                 isActive: true,
               }
             }
@@ -262,12 +300,19 @@ export async function createParentStudentAction(formData: FormData) {
             data: {
               userId: existingUser.id,
               phone: parentPhone,
+              dateOfBirth: parentDobDate,
               isActive: true
             }
           });
           parentId = newParent.id;
         } else {
           parentId = existingUser.parent.id;
+          if (parentDobDate && !existingUser.parent.dateOfBirth) {
+            await tx.parent.update({
+              where: { id: parentId },
+              data: { dateOfBirth: parentDobDate }
+            });
+          }
         }
       }
 
@@ -278,7 +323,7 @@ export async function createParentStudentAction(formData: FormData) {
           rollNumber,
           admissionNo,
           gender,
-          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+          dateOfBirth: studentDobDate,
           address: parentAddress,
           classId: classId || null,
           batch: batch || null,
@@ -325,8 +370,23 @@ export async function createAdminAction(formData: FormData) {
 
     const name = formData.get("name") as string;
     const email = formData.get("email") as string;
+    const dateOfBirth = (formData.get("dateOfBirth") as string || "").trim();
     
     if (!name || !email) return { error: "Name and Email ID are required." };
+
+    let adminDobDate: Date | null = null;
+    if (dateOfBirth) {
+      const dobValidation = parseAndValidateDob(dateOfBirth, "ADMIN", true);
+      if (!dobValidation.isValid) {
+        return { error: dobValidation.error || "A valid Admin Date of Birth is required." };
+      }
+      adminDobDate = dobValidation.dateStr ? new Date(`${dobValidation.dateStr}T00:00:00Z`) : null;
+    } else {
+      const settings = await prisma.birthdaySettings.findUnique({ where: { id: "default" } }).catch(() => null);
+      if (settings?.dobRequiredAdmin !== false) {
+        return { error: "Admin Date of Birth is required." };
+      }
+    }
 
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail.endsWith('@gmail.com') && !cleanEmail.endsWith('@googlemail.com')) {
@@ -342,6 +402,7 @@ export async function createAdminAction(formData: FormData) {
         email: cleanEmail,
         role: "ADMIN",
         status: "ACTIVE",
+        dateOfBirth: adminDobDate,
         googleEmail: cleanEmail,
         googleEmailVerified: true
       }

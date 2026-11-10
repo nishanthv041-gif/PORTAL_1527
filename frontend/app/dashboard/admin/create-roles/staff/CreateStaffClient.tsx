@@ -4,6 +4,7 @@ import { useState } from "react";
 import { User, Briefcase } from "lucide-react";
 import { createStaffAction } from "@/backend/api/actions/dashboard/admin/create-roles/staff/actions";
 import { useRouter } from "next/navigation";
+import { DateOfBirthField } from "@/frontend/components/ui/form";
 
 export default function CreateStaffClient() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,6 +68,15 @@ export default function CreateStaffClient() {
           <div>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>Phone Number (Optional)</label>
             <input name="phone" type="tel" placeholder="+1 234 567 890" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent' }} />
+          </div>
+          <div>
+            <DateOfBirthField
+              name="dateOfBirth"
+              label="Date of Birth"
+              required={true}
+              role="STAFF"
+              helperText="Required for Staff birthday greetings."
+            />
           </div>
         </div>
       </div>

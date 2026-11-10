@@ -17,6 +17,7 @@ import {
   getDayScholarBusStudentWhere,
   isDayScholarStudent,
 } from "@/backend/lib/transport/dayScholarHelper";
+import { parseAndValidateDob } from "@/lib/validations/dob";
 
 // Helper: resolve staff record for current session user (supports STAFF and TEACHER roles)
 async function getStaffForUser(userId: string) {
@@ -427,6 +428,14 @@ export async function createBusAction(rawData: any) {
       }
     }
 
+    let parsedDriverDob: Date | null = null;
+    if (data.driverDob) {
+      const parsed = parseAndValidateDob(data.driverDob, "DRIVER", false);
+      if (parsed.isValid && parsed.dateStr) {
+        parsedDriverDob = new Date(`${parsed.dateStr}T00:00:00Z`);
+      }
+    }
+
     const bus = await prisma.bus.create({
       data: {
         busNumber: data.busNumber,
@@ -435,6 +444,7 @@ export async function createBusAction(rawData: any) {
         capacity: data.capacity,
         driverName: data.driverName,
         driverPhone: data.driverPhone,
+        driverDob: parsedDriverDob,
         routeDescription: data.routeDescription || null,
         status: data.status,
         inChargeStaffId: data.inChargeStaffId || null,
@@ -526,6 +536,16 @@ export async function updateBusAction(busId: string, rawData: any) {
       }
     }
 
+    let parsedDriverDob: Date | null = null;
+    if (data.driverDob !== undefined) {
+      if (data.driverDob) {
+        const parsed = parseAndValidateDob(data.driverDob, "DRIVER", false);
+        if (parsed.isValid && parsed.dateStr) {
+          parsedDriverDob = new Date(`${parsed.dateStr}T00:00:00Z`);
+        }
+      }
+    }
+
     const updated = await prisma.bus.update({
       where: { id: busId },
       data: {
@@ -535,6 +555,7 @@ export async function updateBusAction(busId: string, rawData: any) {
         ...(data.capacity !== undefined ? { capacity: data.capacity } : {}),
         ...(data.driverName ? { driverName: data.driverName } : {}),
         ...(data.driverPhone ? { driverPhone: data.driverPhone } : {}),
+        ...(data.driverDob !== undefined ? { driverDob: parsedDriverDob } : {}),
         ...(data.routeDescription !== undefined ? { routeDescription: data.routeDescription } : {}),
         ...(data.status ? { status: data.status } : {}),
         ...(data.inChargeStaffId !== undefined ? { inChargeStaffId: data.inChargeStaffId } : {}),

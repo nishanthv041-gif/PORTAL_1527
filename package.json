@@ -12,6 +12,7 @@
     "db:push:all": "node scripts/push-all-dbs.js",
     "db:status:all": "node scripts/db-status.js",
     "db:check": "node scripts/check-consistency.js",
+    "birthday:dry-run": "tsx scripts/birthday-dry-run.ts",
     "cap:sync": "cap sync android",
     "cap:open": "cap open android"
   },

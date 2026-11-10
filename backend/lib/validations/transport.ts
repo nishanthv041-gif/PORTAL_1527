@@ -12,6 +12,7 @@ export const CreateBusSchema = z.object({
   capacity: z.coerce.number().int().min(1, "Capacity must be at least 1").max(120, "Capacity cannot exceed 120").default(40),
   driverName: z.string().trim().min(1, "Driver Name is required"),
   driverPhone: z.string().trim().min(6, "Valid Driver Phone is required"),
+  driverDob: z.string().trim().optional().nullable(),
   routeDescription: z.string().trim().optional().nullable(),
   inChargeStaffId: z.string().trim().optional().nullable(),
   status: BusStatusEnum.default("RUNNING"),

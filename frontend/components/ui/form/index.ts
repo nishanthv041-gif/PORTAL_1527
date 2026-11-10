@@ -22,3 +22,6 @@ export type { SingleSelectProps } from "./SingleSelect";
 export { SearchInput } from "./SearchInput";
 export type { SearchInputProps } from "./SearchInput";
 
+export { DateOfBirthField } from "./DateOfBirthField";
+export type { DateOfBirthFieldProps } from "./DateOfBirthField";
+

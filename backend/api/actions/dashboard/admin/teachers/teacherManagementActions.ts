@@ -6,12 +6,14 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { parseAndValidateDob } from "@/lib/validations/dob";
 
 const teacherCreateSchema = z.object({
   name: z.string().min(2, "Full name must be at least 2 characters"),
   email: z.string().email("Valid email/username is required"),
   googleEmail: z.string().email("Valid Google email is required").optional().or(z.literal("")),
   password: z.string().min(6, "Password must be at least 6 characters").optional().or(z.literal("")),
+  dateOfBirth: z.string().optional().or(z.literal("")),
   phone: z.string().optional().or(z.literal("")),
   alternatePhone: z.string().optional().or(z.literal("")),
   qualification: z.string().optional().or(z.literal("")),
@@ -39,6 +41,21 @@ export async function createTeacherAction(rawData: z.infer<typeof teacherCreateS
     const validated = teacherCreateSchema.parse(rawData);
     const normalizedEmail = validated.email.trim().toLowerCase();
     const normalizedGoogleEmail = validated.googleEmail?.trim().toLowerCase() || null;
+
+    // Validate Teacher Date of Birth
+    let teacherDobDate: Date | null = null;
+    if (validated.dateOfBirth) {
+      const dobValidation = parseAndValidateDob(validated.dateOfBirth, "TEACHER", true);
+      if (!dobValidation.isValid) {
+        return { error: dobValidation.error || "A valid Teacher Date of Birth is required." };
+      }
+      teacherDobDate = dobValidation.dateStr ? new Date(`${dobValidation.dateStr}T00:00:00Z`) : null;
+    } else {
+      const settings = await prisma.birthdaySettings.findUnique({ where: { id: "default" } }).catch(() => null);
+      if (settings?.dobRequiredTeacher !== false) {
+        return { error: "Teacher Date of Birth is required." };
+      }
+    }
 
     // Check unique email
     const existingEmail = await prisma.user.findFirst({
@@ -76,6 +93,7 @@ export async function createTeacherAction(rawData: z.infer<typeof teacherCreateS
           name: validated.name.trim(),
           role: "TEACHER",
           status: validated.status,
+          dateOfBirth: teacherDobDate,
           googleEmail: normalizedGoogleEmail,
           googleEmailVerified: false,
           sessionVersion: 1,
@@ -86,6 +104,7 @@ export async function createTeacherAction(rawData: z.infer<typeof teacherCreateS
       const teacher = await tx.teacher.create({
         data: {
           userId: user.id,
+          dateOfBirth: teacherDobDate,
           phone: validated.phone?.trim() || null,
           alternatePhone: validated.alternatePhone?.trim() || null,
           qualification: validated.qualification?.trim() || null,
@@ -155,6 +174,21 @@ export async function updateTeacherAction(rawData: z.infer<typeof teacherUpdateS
     const normalizedEmail = validated.email.trim().toLowerCase();
     const normalizedGoogleEmail = validated.googleEmail?.trim().toLowerCase() || null;
 
+    // Validate Teacher Date of Birth
+    let teacherDobDate: Date | null = null;
+    if (validated.dateOfBirth) {
+      const dobValidation = parseAndValidateDob(validated.dateOfBirth, "TEACHER", true);
+      if (!dobValidation.isValid) {
+        return { error: dobValidation.error || "A valid Teacher Date of Birth is required." };
+      }
+      teacherDobDate = dobValidation.dateStr ? new Date(`${dobValidation.dateStr}T00:00:00Z`) : null;
+    } else {
+      const settings = await prisma.birthdaySettings.findUnique({ where: { id: "default" } }).catch(() => null);
+      if (settings?.dobRequiredTeacher !== false) {
+        return { error: "Teacher Date of Birth is required." };
+      }
+    }
+
     const teacher = await prisma.teacher.findUnique({
       where: { id: validated.teacherId },
       include: { user: true, classTeacherOf: true }
@@ -200,6 +234,29 @@ export async function updateTeacherAction(rawData: z.infer<typeof teacherUpdateS
         status: validated.status,
       };
 
+      const teacherUpdateData: any = {
+        phone: validated.phone?.trim() || null,
+        alternatePhone: validated.alternatePhone?.trim() || null,
+        qualification: validated.qualification?.trim() || null,
+        joinDate: validated.joinDate ? new Date(validated.joinDate) : teacher.joinDate,
+        resumeUrl: validated.resumeUrl?.trim() || null,
+        maxPeriodsPerDay: validated.maxPeriodsPerDay,
+        maxPeriodsPerWeek: validated.maxPeriodsPerWeek,
+        isActive: validated.status === "ACTIVE",
+        classes: {
+          set: validated.classIds.map(id => ({ id }))
+        }
+      };
+
+      if (validated.dateOfBirth) {
+        const dobValidation = parseAndValidateDob(validated.dateOfBirth, "TEACHER", false);
+        if (dobValidation.isValid && dobValidation.dateStr) {
+          const parsedDob = new Date(`${dobValidation.dateStr}T00:00:00Z`);
+          userUpdateData.dateOfBirth = parsedDob;
+          teacherUpdateData.dateOfBirth = parsedDob;
+        }
+      }
+
       if (passwordProvided) {
         userUpdateData.password = await bcrypt.hash(validated.password!, 10);
       }
@@ -218,19 +275,7 @@ export async function updateTeacherAction(rawData: z.infer<typeof teacherUpdateS
       // 2. Update Teacher
       await tx.teacher.update({
         where: { id: teacher.id },
-        data: {
-          phone: validated.phone?.trim() || null,
-          alternatePhone: validated.alternatePhone?.trim() || null,
-          qualification: validated.qualification?.trim() || null,
-          joinDate: validated.joinDate ? new Date(validated.joinDate) : teacher.joinDate,
-          resumeUrl: validated.resumeUrl?.trim() || null,
-          maxPeriodsPerDay: validated.maxPeriodsPerDay,
-          maxPeriodsPerWeek: validated.maxPeriodsPerWeek,
-          isActive: validated.status === "ACTIVE",
-          classes: {
-            set: validated.classIds.map(id => ({ id }))
-          }
-        }
+        data: teacherUpdateData,
       });
 
       // 3. Update Subjects assignment

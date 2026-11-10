@@ -34,6 +34,7 @@ import {
   Layers,
   Bus,
   Activity,
+  Sparkles,
   X
 } from "lucide-react";
 
@@ -76,6 +77,8 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
     { href: "/dashboard/admin/create-roles", label: "Create New Roles", icon: <UserPlus size={20} /> },
     { href: "/dashboard/admin/login-status", label: "Log In Status", icon: <Clock size={20} /> },
     { href: "/dashboard/admin/notifications", label: "Notifications", icon: <Bell size={20} /> },
+    { href: "/dashboard/admin/birthdays/missing", label: "Missing Date of Birth", icon: <Calendar size={20} /> },
+    { href: "/dashboard/admin/settings/birthdays", label: "Birthday Wishes", icon: <Sparkles size={20} /> },
     { href: "/dashboard/admin/settings", label: "Settings", icon: <Settings size={20} /> },
   ];
 
