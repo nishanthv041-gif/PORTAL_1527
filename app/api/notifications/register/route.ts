@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
-import { prisma } from "@/backend/db/prisma";
+import { registerDevicePushSubscription } from "@/backend/services/push/nativePushDispatcher";
 
 export const dynamic = "force-dynamic";
 
@@ -39,56 +39,21 @@ export async function POST(req: NextRequest) {
 
     const type = device_type || deviceType || "BROWSER";
     const fingerprint = device_fingerprint || deviceFingerprint || null;
-    const now = new Date();
 
-    // Upsert into pwa_subscriptions
-    await (prisma as any).pwaSubscription.upsert({
-      where: { endpoint },
-      create: {
-        userId: resolvedUserId,
-        endpoint,
-        p256dhKey: keys.p256dh,
-        authKey: keys.auth,
-        deviceType: type,
-        lastActiveAt: now,
-      },
-      update: {
-        userId: resolvedUserId,
-        p256dhKey: keys.p256dh,
-        authKey: keys.auth,
-        deviceType: type,
-        lastActiveAt: now,
-      },
+    // Persist into device_notifications_registry (and mirrored tables)
+    await registerDevicePushSubscription({
+      userId: resolvedUserId,
+      endpoint,
+      p256dh: keys.p256dh,
+      auth: keys.auth,
+      deviceId: fingerprint || undefined,
+      deviceType: type,
     });
-
-    // Also update legacy/pushSubscription table if present
-    try {
-      await prisma.pushSubscription.upsert({
-        where: { endpoint },
-        create: {
-          userId: resolvedUserId,
-          endpoint,
-          p256dh: keys.p256dh,
-          auth: keys.auth,
-          deviceFingerprint: fingerprint,
-          lastLoginAt: now,
-        },
-        update: {
-          userId: resolvedUserId,
-          p256dh: keys.p256dh,
-          auth: keys.auth,
-          deviceFingerprint: fingerprint || undefined,
-          lastLoginAt: now,
-        },
-      });
-    } catch {
-      // Non-fatal if legacy table constraint differs
-    }
 
     return NextResponse.json({
       success: true,
       message: "Push device registered successfully with 24-hour activity tracking.",
-      lastActiveAt: now.toISOString(),
+      registeredAt: new Date().toISOString(),
     });
   } catch (error: unknown) {
     console.error("[Push Notification Register Error]:", error);

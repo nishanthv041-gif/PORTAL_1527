@@ -129,12 +129,12 @@ self.addEventListener("fetch", (event) => {
 // 4. Push Event: Show OS-level notifications from Web Push API
 self.addEventListener("push", (event) => {
   const showPushNotification = async () => {
-    let title = "Nipo Portal";
-    let body = "You have a new school update.";
+    let title = "SRT School Portal";
+    let body = "You have a new school message.";
     let targetUrl = "/dashboard";
     let iconUrl = self.location.origin + "/icons/icon-192x192.png";
     let badgeUrl = self.location.origin + "/icons/icon-192x192.png";
-    let tag = "nipo-" + Date.now();
+    let tag = "srt-" + Date.now();
 
     if (event.data) {
       try {
@@ -169,9 +169,7 @@ self.addEventListener("push", (event) => {
       },
       tag: tag,
       renotify: true,
-      actions: [
-        { action: "open", title: "Open" }
-      ],
+      requireInteraction: true,
     };
 
     try {
@@ -205,8 +203,8 @@ self.addEventListener("notificationclick", (event) => {
     return;
   }
 
-  const targetUrl =
-    (event.notification.data && event.notification.data.url) || "/dashboard";
+  const rawUrl = (event.notification.data && event.notification.data.url) || "/dashboard";
+  const fullTargetUrl = new URL(rawUrl, self.location.origin).href;
 
   event.waitUntil(
     clients
@@ -214,20 +212,19 @@ self.addEventListener("notificationclick", (event) => {
       .then((windowClients) => {
         // If an open window matches our origin, focus and navigate it
         for (const client of windowClients) {
-          if (
-            client.url.startsWith(self.location.origin) &&
-            "focus" in client
-          ) {
-            client.focus();
+          if (client.url.startsWith(self.location.origin)) {
             if ("navigate" in client) {
-              return client.navigate(targetUrl);
+              client.navigate(fullTargetUrl);
+            }
+            if ("focus" in client) {
+              return client.focus();
             }
             return;
           }
         }
         // Otherwise, open a new window
         if (clients.openWindow) {
-          return clients.openWindow(targetUrl);
+          return clients.openWindow(fullTargetUrl);
         }
       })
   );

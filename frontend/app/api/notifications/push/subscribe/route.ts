@@ -97,7 +97,26 @@ export async function POST(req: Request) {
       },
     });
 
-    // 2. If user is authenticated, ensure default notification preferences exist
+    // 2. Mirror into device_notifications_registry for 24h active device targeting
+    if (finalUserId) {
+      try {
+        const { registerDevicePushSubscription } = await import(
+          "@/backend/services/push/nativePushDispatcher"
+        );
+        await registerDevicePushSubscription({
+          userId: finalUserId,
+          endpoint,
+          p256dh: keys.p256dh,
+          auth: keys.auth,
+          deviceId: typeof deviceFingerprint === "string" ? deviceFingerprint.trim() : undefined,
+          deviceType: detectedPlatform,
+        });
+      } catch (regErr) {
+        console.warn("[Push API] Could not mirror to device_notifications_registry:", regErr);
+      }
+    }
+
+    // 3. If user is authenticated, ensure default notification preferences exist
     if (finalUserId) {
       await prisma.notificationPreference.upsert({
         where: { userId: finalUserId },

@@ -42,6 +42,7 @@ model User {
   notifications          Notification[]
   pushSubscriptions      PushSubscription[]
   pwaSubscriptions       PwaSubscription[]
+  deviceRegistries       DeviceNotificationsRegistry[]
   notificationPreference NotificationPreference?
   notificationRecipients NotificationRecipient[]
   loginActivities        UserLoginActivity[]
@@ -1179,6 +1180,26 @@ model PwaSubscription {
   @@index([lastActiveAt])
   @@index([userId, lastActiveAt])
   @@map("pwa_subscriptions")
+}
+
+model DeviceNotificationsRegistry {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint    String   @unique
+  p256dh      String
+  auth        String
+  deviceId    String   @map("device_id")
+  lastLoginAt DateTime @default(now()) @map("last_login_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, deviceId])
+  @@index([userId])
+  @@index([endpoint])
+  @@index([lastLoginAt])
+  @@index([userId, lastLoginAt])
+  @@map("device_notifications_registry")
 }
 
 model NotificationPreference {

@@ -85,10 +85,10 @@ export function useSystemNotification(userId?: string): PushRegistrationResult {
                   device_fingerprint: getOrCreateDeviceFingerprint(),
                   userId,
                 }),
-              }).catch(() => {});
+              }).catch(() => { });
             }
           }
-        }).catch(() => {});
+        }).catch(() => { });
       });
     }
   }, [userId]);
@@ -181,7 +181,7 @@ export function useSystemNotification(userId?: string): PushRegistrationResult {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ endpoint: sub.endpoint }),
-        }).catch(() => {});
+        }).catch(() => { });
         await sub.unsubscribe();
       }
       setIsSubscribed(false);
@@ -204,4 +204,3 @@ export function useSystemNotification(userId?: string): PushRegistrationResult {
     unsubscribeFromPush,
   };
 }
-

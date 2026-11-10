@@ -164,14 +164,12 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
           <button
             type="button"
             onClick={() => handleToggle("enabled")}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-              settings.enabled ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-600"
-            }`}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${settings.enabled ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-600"
+              }`}
           >
             <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                settings.enabled ? "translate-x-5" : "translate-x-0"
-              }`}
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${settings.enabled ? "translate-x-5" : "translate-x-0"
+                }`}
             />
           </button>
         </div>
@@ -382,11 +380,10 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                 <button
                   key={tab.id}
                   onClick={() => setActiveTemplateTab(tab.id as any)}
-                  className={`pb-2 border-b-2 transition-colors ${
-                    activeTemplateTab === tab.id
+                  className={`pb-2 border-b-2 transition-colors ${activeTemplateTab === tab.id
                       ? "border-indigo-600 text-indigo-600 dark:text-indigo-400"
                       : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -439,8 +436,8 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                     {(settings.language === "TA"
                       ? settings.parentTemplateTa
                       : settings.language === "BOTH"
-                      ? `${settings.parentTemplateEn || ""}\n\n${settings.parentTemplateTa || ""}`
-                      : settings.parentTemplateEn) ||
+                        ? `${settings.parentTemplateEn || ""}\n\n${settings.parentTemplateTa || ""}`
+                        : settings.parentTemplateEn) ||
                       "Dear Parent, SRT School wishes Aarav Sharma a very happy birthday! May this year bring happiness, good health, and abundant success. - SRT Universal School"
                     }
                   </p>
@@ -550,11 +547,10 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                         <td className="p-2 font-mono">{r.forDate}</td>
                         <td className="p-2">
                           <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                              r.failedCount === 0
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${r.failedCount === 0
                                 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
                                 : "bg-amber-100 text-amber-800"
-                            }`}
+                              }`}
                           >
                             {r.failedCount === 0 ? "SUCCESS" : "PARTIAL"}
                           </span>

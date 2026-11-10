@@ -6,6 +6,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
 import { sendUnifiedNotification } from "@/backend/services/notifications/unifiedNotificationEngine";
+import { sendNativeChatPushNotification } from "@/backend/services/push/nativePushDispatcher";
 
 export async function POST(request: Request) {
   try {
@@ -115,6 +116,15 @@ export async function POST(request: Request) {
           type: "MESSAGE",
           category: "admin",
           link: recipientLink,
+        });
+
+        // Native OS lock screen push notification (targeting 24h active device sessions)
+        await sendNativeChatPushNotification({
+          recipientId: receiverId,
+          senderName: session.user.name || "Portal User",
+          senderRole: senderRoleLabel,
+          messageSnippet: `${session.user.name || "User"}: "${previewSnippet}"`,
+          targetUrl: recipientLink,
         });
       } catch (err) {
         console.error("Background notification error on message send:", err);

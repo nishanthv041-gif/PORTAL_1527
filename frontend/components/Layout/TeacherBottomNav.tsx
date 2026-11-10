@@ -154,10 +154,10 @@ export function TeacherBottomNav() {
               href={item.href}
               prefetch={true}
               onMouseEnter={() => {
-                try { router.prefetch(item.href); } catch {}
+                try { router.prefetch(item.href); } catch { }
               }}
               onTouchStart={() => {
-                try { router.prefetch(item.href); } catch {}
+                try { router.prefetch(item.href); } catch { }
               }}
               onClick={() => setPendingHref(item.href)}
               className={`${styles.navItem} ${item.isActive ? styles.navItemActive : ""} ${isPending ? styles.navItemPending : ""}`}
@@ -213,10 +213,10 @@ export function TeacherBottomNav() {
                 href={item.href}
                 prefetch={true}
                 onMouseEnter={() => {
-                  try { router.prefetch(item.href); } catch {}
+                  try { router.prefetch(item.href); } catch { }
                 }}
                 onTouchStart={() => {
-                  try { router.prefetch(item.href); } catch {}
+                  try { router.prefetch(item.href); } catch { }
                 }}
                 className={styles.moreItem}
                 onClick={() => {

@@ -168,11 +168,11 @@ export default function BirthdayWishesStudio({
           <div className={styles.heroText}>
             <div className={styles.badgePill}>
               <PartyPopper size={14} />
-              <span>Student Birthdays</span>
+              <span>SRT Public School • Celebrations</span>
             </div>
             <h1 className={styles.heroTitle}>Birthday Wishes &amp; Celebrations</h1>
             <p className={styles.heroSubtitle}>
-              Celebrate student birthdays with greetings from SRT School. Add your personal teacher message, connect with parents, and download printable classroom notice board notices.
+              Celebrate student birthdays across your classroom with official SRT greetings, personal teacher notes, and printable notice board schedules.
             </p>
           </div>
 
@@ -232,16 +232,16 @@ export default function BirthdayWishesStudio({
             <span className={styles.statLabel}>Celebrating Today 🎂</span>
           </div>
           <div className={styles.statCard}>
-            <span className={styles.statValue}>{upcoming7Days.length}</span>
+            <span className={`${styles.statValue} ${styles.statValueBlue}`}>{upcoming7Days.length}</span>
             <span className={styles.statLabel}>Next 7 Days 🎈</span>
           </div>
           <div className={styles.statCard}>
-            <span className={styles.statValue}>{totalCelebrantsThisMonth}</span>
+            <span className={`${styles.statValue} ${styles.statValueIndigo}`}>{totalCelebrantsThisMonth}</span>
             <span className={styles.statLabel}>This Month 📅</span>
           </div>
           <div className={styles.statCard}>
-            <span className={styles.statValue}>{completionPercent}%</span>
-            <span className={styles.statLabel}>Records Completed</span>
+            <span className={`${styles.statValue} ${styles.statValueEmerald}`}>{completionPercent}%</span>
+            <span className={styles.statLabel}>Directory Completed</span>
           </div>
         </div>
       </section>

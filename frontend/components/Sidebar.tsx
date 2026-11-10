@@ -7,7 +7,6 @@ import { useState, useEffect, useMemo } from "react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import SrtLogo from "@/frontend/components/ui/SrtLogo";
 import { getActiveNavItemHref } from "@/lib/navigation/sidebarActive";
-import { CakeIcon as Cake } from "@/frontend/components/birthdays/BirthdayIcons";
 import styles from "./Sidebar.module.css";
 import {
   Menu,
@@ -38,6 +37,7 @@ import {
   Activity,
   X
 } from "lucide-react";
+import { CakeIcon as Cake } from "@/frontend/components/birthdays/BirthdayIcons";
 
 interface NavItem {
   href: string;
@@ -278,10 +278,10 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
                       href={link.href}
                       prefetch={true}
                       onMouseEnter={() => {
-                        try { router.prefetch(link.href); } catch {}
+                        try { router.prefetch(link.href); } catch { }
                       }}
                       onTouchStart={() => {
-                        try { router.prefetch(link.href); } catch {}
+                        try { router.prefetch(link.href); } catch { }
                       }}
                       onClick={() => {
                         setPendingHref(link.href);

@@ -277,16 +277,17 @@ export default function MissingDobStudio({
   return (
     <div className={styles.container}>
       {/* Hero Header Banner */}
+      {/* Hero Banner */}
       <section className={styles.heroBanner}>
         <div className={styles.heroContent}>
           <div className={styles.heroText}>
             <div className={styles.badgePill}>
               <Calendar size={14} />
-              <span>Student Records</span>
+              <span>SRT Public School • Records Management</span>
             </div>
-            <h1 className={styles.heroTitle}>Missing Dates of Birth</h1>
+            <h1 className={styles.heroTitle}>Date of Birth Directory</h1>
             <p className={styles.heroSubtitle}>
-              Accurate birth dates enable automatic birthday wishes, parent communications, and class notice board notices.
+              Maintain student birth dates to ensure timely classroom birthday celebrations, parent greetings, and official school records.
             </p>
           </div>
 
@@ -464,7 +465,7 @@ export default function MissingDobStudio({
             return (
               <div key={student.id} className={styles.celebrantCard}>
                 <div className={styles.celebrantHeader}>
-                  <div className={styles.avatarCircle}>{getInitials(student.name)}</div>
+                  <div className={`${styles.avatarCircle} ${styles.avatarCircleDob}`}>{getInitials(student.name)}</div>
                   <div className={styles.celebrantMeta}>
                     <h3 className={styles.celebrantName}>{student.name}</h3>
                     <div className={styles.celebrantRoll}>
