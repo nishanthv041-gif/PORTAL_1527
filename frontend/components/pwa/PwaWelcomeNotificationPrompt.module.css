@@ -183,3 +183,39 @@
   }
 }
 
+.floatingEnablePill {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 9999;
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 9999px;
+  padding: 0.65rem 1.15rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.45), 0 4px 10px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+  animation: pulsePill 3s infinite;
+}
+
+.floatingEnablePill:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 14px 30px -4px rgba(37, 99, 235, 0.6);
+}
+
+@keyframes pulsePill {
+  0%, 100% {
+    box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.45);
+  }
+  50% {
+    box-shadow: 0 12px 30px 2px rgba(37, 99, 235, 0.65);
+  }
+}
+
+

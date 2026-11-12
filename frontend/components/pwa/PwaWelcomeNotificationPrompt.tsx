@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
-import { Bell, CheckCircle2, Loader2, X } from "lucide-react";
+import { Bell, CheckCircle2, Loader2, X, AlertTriangle } from "lucide-react";
 import styles from "./PwaWelcomeNotificationPrompt.module.css";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -18,60 +18,68 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 export default function PwaWelcomeNotificationPrompt() {
   const [isOpen, setIsOpen] = useState(false);
+  const [showFloatingPill, setShowFloatingPill] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [loading, setLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Check notification permission on portal opening
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // 1. Check if notification permission is already granted or unsupported
     if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+      setPermission("unsupported");
       return;
     }
 
-    if (Notification.permission === "granted") {
-      return; // Already granted; no prompt needed
-    }
+    const currentPerm = Notification.permission;
+    setPermission(currentPerm);
 
-    if (Notification.permission === "denied") {
-      return; // User has previously blocked notifications
-    }
-
-    // 2. Check if previously dismissed (cooldown 3 days)
-    const dismissedUntil = localStorage.getItem("nipo_pwa_welcome_dismissed");
-    if (dismissedUntil && Date.now() < Number(dismissedUntil)) {
+    // If already granted, no need to show any prompt or floating button
+    if (currentPerm === "granted") {
+      setIsOpen(false);
+      setShowFloatingPill(false);
       return;
     }
 
-    // Delay display slightly for smooth page entrance
+    // PERSISTENT: Show prompt while opening the portal until user enables notifications
     const timer = setTimeout(() => {
       setIsOpen(true);
-    }, 1800);
+      setShowFloatingPill(false);
+    }, 1200);
 
     return () => clearTimeout(timer);
   }, []);
 
   const handleDismiss = () => {
     setIsOpen(false);
-    try {
-      localStorage.setItem(
-        "nipo_pwa_welcome_dismissed",
-        String(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      );
-    } catch {}
+    // Keep floating trigger available on screen until user enables notifications
+    setShowFloatingPill(true);
   };
 
-  const handleEnableNotifications = async () => {
+  const handleOpenPrompt = () => {
+    setErrorMsg(null);
+    setIsOpen(true);
+    setShowFloatingPill(false);
+  };
+
+  const handleEnableNotifications = useCallback(async () => {
     setErrorMsg(null);
     setLoading(true);
 
     try {
       // 1. Request user permission
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
+      const requestedPerm = await Notification.requestPermission();
+      setPermission(requestedPerm);
+
+      if (requestedPerm !== "granted") {
         setLoading(false);
-        setErrorMsg("Notification permission was not granted.");
+        setErrorMsg(
+          requestedPerm === "denied"
+            ? "Notifications are blocked. Please click the tune/lock icon in your browser URL bar and change Notifications to 'Allow'."
+            : "Notification permission was not granted."
+        );
         return;
       }
 
@@ -85,11 +93,7 @@ export default function PwaWelcomeNotificationPrompt() {
       // 3. Fetch VAPID Public Key
       const keyRes = await fetch("/api/notifications/push/public-key");
       const keyData = await keyRes.json();
-      const vapidPublicKey = keyData.publicKey;
-
-      if (!vapidPublicKey) {
-        throw new Error("Unable to retrieve push notification security key.");
-      }
+      const vapidPublicKey = keyData?.publicKey || "BBIHzbc-DVhlpPB_plCE0gUMpCSsHiqA1Y5FVyP-ax6p0HWnFZILFISth4FYfyAp0gywswCBxz4GfDnXm_c-Agk";
 
       // 4. Subscribe with PushManager
       const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
@@ -128,138 +132,163 @@ export default function PwaWelcomeNotificationPrompt() {
         } catch {}
       }
 
-      const res = await fetch("/api/notifications/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          endpoint: subscription.endpoint,
-          keys: { p256dh, auth },
-          userAgent: navigator.userAgent,
-          deviceName: navigator.userAgent.includes("Android")
-            ? "Android PWA"
-            : navigator.userAgent.includes("iPhone")
-            ? "iOS PWA"
-            : "Desktop PWA",
+      const payload = {
+        endpoint: subscription.endpoint,
+        keys: { p256dh, auth },
+        userAgent: navigator.userAgent,
+        deviceName: navigator.userAgent.includes("Android")
+          ? "Android PWA"
+          : navigator.userAgent.includes("iPhone")
+          ? "iOS PWA"
+          : "Desktop PWA",
+      };
+
+      await Promise.allSettled([
+        fetch("/api/notifications/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
         }),
-      });
+        fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }),
+      ]);
 
-      const resData = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        throw new Error(
-          resData?.error || `Registration failed with server status ${res.status}.`
-        );
-      }
-
-      // Store endpoint locally so it can be associated automatically on login
+      // Store endpoint locally
       try {
         localStorage.setItem("nipo_pwa_push_endpoint", subscription.endpoint);
       } catch {}
 
       setIsSuccess(true);
       setLoading(false);
+      setShowFloatingPill(false);
 
-      // Auto close after showing success
+      // Auto-close after showing success
       setTimeout(() => {
         setIsOpen(false);
-        try {
-          localStorage.setItem(
-            "nipo_pwa_welcome_dismissed",
-            String(Date.now() + 365 * 24 * 60 * 60 * 1000)
-          );
-        } catch {}
-      }, 2200);
+      }, 2000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error enabling notifications.";
       console.error("[PwaWelcome] Enable push error:", err);
       setErrorMsg(msg);
       setLoading(false);
     }
-  };
+  }, []);
 
-  if (!isOpen) return null;
+  if (permission === "granted" || permission === "unsupported") {
+    return null;
+  }
 
   return (
-    <div className={styles.backdrop} role="dialog" aria-modal="true" aria-labelledby="welcome-notif-title">
-      <div className={styles.modal}>
-        <div className={styles.header}>
-          <div className={styles.logoRow}>
-            <div className={styles.logoBox}>
-              <Image
-                src="/icons/icon-192x192.png"
-                alt="Nipo Portal"
-                width={38}
-                height={38}
-                priority
-              />
+    <>
+      {/* Floating Action Pill: Always available on screen until user enables notifications */}
+      {showFloatingPill && !isOpen && (
+        <button
+          type="button"
+          className={styles.floatingEnablePill}
+          onClick={handleOpenPrompt}
+          aria-label="Enable notifications"
+        >
+          <Bell size={18} />
+          <span>Enable Notifications</span>
+        </button>
+      )}
+
+      {/* Main Notification Prompt Modal */}
+      {isOpen && (
+        <div className={styles.backdrop} role="dialog" aria-modal="true" aria-labelledby="welcome-notif-title">
+          <div className={styles.modal}>
+            <div className={styles.header}>
+              <div className={styles.logoRow}>
+                <div className={styles.logoBox}>
+                  <Image
+                    src="/icons/icon-192x192.png"
+                    alt="SRT School Portal"
+                    width={38}
+                    height={38}
+                    priority
+                  />
+                </div>
+                <div>
+                  <span className={styles.appBadge}>SRT SCHOOL PORTAL</span>
+                  <h3 id="welcome-notif-title" className={styles.title}>
+                    Enable Lock Screen Notifications
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={styles.closeBtn}
+                onClick={handleDismiss}
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
             </div>
-            <div>
-              <span className={styles.appBadge}>DEVICE ALERTS</span>
-              <h3 id="welcome-notif-title" className={styles.title}>
-                Enable Lock Screen Notifications
-              </h3>
+
+            <div className={styles.body}>
+              <p className={styles.desc}>
+                Stay updated with instant alerts on your phone lock screen for homework assignments, timetable changes, birthday wishes, report cards, and school announcements.
+              </p>
+
+              {permission === "denied" && (
+                <div style={{ marginTop: "0.85rem", padding: "0.75rem", background: "rgba(239, 68, 68, 0.08)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: "8px", fontSize: "0.85rem", color: "#dc2626" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                    <AlertTriangle size={16} /> Notifications Currently Blocked
+                  </div>
+                  <div>To enable: Tap the lock/tune icon next to the URL in your browser bar, choose <strong>Permissions &gt; Notifications</strong>, and switch to <strong>Allow</strong>.</div>
+                </div>
+              )}
+
+              {isSuccess ? (
+                <div className={styles.successCard}>
+                  <CheckCircle2 size={20} color="#059669" />
+                  <span>Notifications enabled successfully!</span>
+                </div>
+              ) : errorMsg ? (
+                <div style={{ color: "#ef4444", fontSize: "0.875rem", marginTop: "0.75rem" }}>
+                  {errorMsg}
+                </div>
+              ) : null}
+            </div>
+
+            <div className={styles.actions}>
+              {!isSuccess && (
+                <>
+                  <button
+                    type="button"
+                    className={styles.enableBtn}
+                    onClick={handleEnableNotifications}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 size={18} className="animate-spin" />
+                        <span>Enabling...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Bell size={18} />
+                        <span>Enable Notifications</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.laterBtn}
+                    onClick={handleDismiss}
+                    disabled={loading}
+                  >
+                    Maybe Later
+                  </button>
+                </>
+              )}
             </div>
           </div>
-          <button
-            type="button"
-            className={styles.closeBtn}
-            onClick={handleDismiss}
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
         </div>
-
-        <div className={styles.body}>
-          <p className={styles.desc}>
-            Receive instant alerts on your phone lock screen for homework assignments, timetable updates, report cards, and school announcements.
-          </p>
-
-          {isSuccess ? (
-            <div className={styles.successCard}>
-              <CheckCircle2 size={20} color="#059669" />
-              <span>Notifications enabled successfully!</span>
-            </div>
-          ) : errorMsg ? (
-            <div style={{ color: "#ef4444", fontSize: "0.875rem", marginTop: "0.75rem" }}>
-              {errorMsg}
-            </div>
-          ) : null}
-        </div>
-
-        <div className={styles.actions}>
-          {!isSuccess && (
-            <>
-              <button
-                type="button"
-                className={styles.enableBtn}
-                onClick={handleEnableNotifications}
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    <span>Enabling...</span>
-                  </>
-                ) : (
-                  <>
-                    <Bell size={18} />
-                    <span>Enable Notifications</span>
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                className={styles.laterBtn}
-                onClick={handleDismiss}
-                disabled={loading}
-              >
-                Maybe Later
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }

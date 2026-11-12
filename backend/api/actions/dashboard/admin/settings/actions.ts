@@ -130,7 +130,7 @@ const DEFAULT_SYSTEM_SETTINGS: Record<string, string> = {
   THEME_MODE: "System",
   MAINTENANCE_MODE: "false",
   SYSTEM_LOGS: "false",
-  SCHOOL_NAME: "Modern School Portal",
+  SCHOOL_NAME: "SRT School Portal",
   SCHOOL_LOGO: "",
   SCHOOL_ADDRESS: "123 Education Lane, Knowledge Park",
   SCHOOL_CONTACT: "+1 (555) 019-2834",

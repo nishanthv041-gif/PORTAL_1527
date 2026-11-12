@@ -78,7 +78,7 @@ export default function SettingsClient({
   // ----------------------------------------------------
   const [settingsValues, setSettingsValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {
-      SCHOOL_NAME: "Modern School Portal",
+      SCHOOL_NAME: "SRT School Portal",
       SCHOOL_LOGO: "",
       SCHOOL_ADDRESS: "123 Education Lane, Knowledge Park",
       SCHOOL_CONTACT: "+1 (555) 019-2834",

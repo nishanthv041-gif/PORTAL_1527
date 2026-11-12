@@ -5,9 +5,11 @@ const config: CapacitorConfig = {
   appName: "SRT Universal School",
   webDir: "www",
   server: {
-    url: "https://nipoportal.vercel.app",
+    url: "https://main.d3bt7u4517jg0f.amplifyapp.com",
     cleartext: false,
     allowNavigation: [
+      "main.d3bt7u4517jg0f.amplifyapp.com",
+      "*.amplifyapp.com",
       "nipoportal.vercel.app",
       "*.vercel.app",
       "accounts.google.com",

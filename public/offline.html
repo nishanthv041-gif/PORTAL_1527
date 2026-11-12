@@ -100,8 +100,27 @@
     </div>
     <h1>You are currently offline</h1>
     <p>Please check your internet connection. Once your connection is restored, click the button below to reload the portal.</p>
-    <button class="btn" onclick="window.location.reload()">Retry Connection</button>
+    <button class="btn" id="retryBtn" onclick="retryConnection()">Retry Connection</button>
   </div>
+  <script>
+    function retryConnection() {
+      const btn = document.getElementById('retryBtn');
+      if (btn) btn.textContent = 'Connecting...';
+      window.location.reload();
+    }
+    // Auto-reconnect as soon as connection is restored
+    window.addEventListener('online', () => {
+      window.location.reload();
+    });
+    // Check connection every 3 seconds
+    setInterval(() => {
+      if (navigator.onLine) {
+        fetch('/api/health', { method: 'HEAD', cache: 'no-store' })
+          .then(() => window.location.reload())
+          .catch(() => {});
+      }
+    }, 3000);
+  </script>
 </body>
 </html>
 

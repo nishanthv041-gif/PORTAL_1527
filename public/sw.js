@@ -5,7 +5,7 @@
  * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
 
-const CACHE_NAME = "srt-pwa-v8";
+const CACHE_NAME = "srt-pwa-v9";
 const PRECACHE_ASSETS = [
   "/offline.html",
   "/manifest.webmanifest",
@@ -44,10 +44,13 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Immediate Activation Message Listener (prevents Service Worker from getting stuck in waiting phase)
+// Immediate Activation and Cache Management Message Listener
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
+  }
+  if (event.data && event.data.type === "CLEAR_CACHES") {
+    caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))));
   }
 });
 
@@ -73,11 +76,19 @@ self.addEventListener("fetch", (event) => {
     return; // Pass through to network directly
   }
 
-  // Handle HTML Page Navigations (Network-First with Offline Fallback)
+  // Handle HTML Page Navigations (Network-First with Resilient Retry and Offline Fallback)
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .catch(async () => {
+          // If network failed, attempt a quick resilient retry before showing offline screen
+          try {
+            const retryResponse = await fetch(request);
+            if (retryResponse && retryResponse.ok) {
+              return retryResponse;
+            }
+          } catch {}
+
           const cache = await caches.open(CACHE_NAME);
           const cachedOffline = await cache.match("/offline.html");
           return cachedOffline || Response.error();
