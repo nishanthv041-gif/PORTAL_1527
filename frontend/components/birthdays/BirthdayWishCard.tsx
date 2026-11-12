@@ -6,7 +6,7 @@ import styles from "./BirthdayWishCard.module.css";
 
 export interface BirthdayWishCardProps {
   recipientName: string;
-  classNameLabel?: string; // Optional e.g. "Class 10-A"
+  classNameLabel?: string; // Optional e.g. "Class 2 - A"
   deityName?: string;
   cardLine1?: string;
   cardLine2?: string;
@@ -16,7 +16,7 @@ export interface BirthdayWishCardProps {
   schoolLogo?: string;
   schoolTagline?: string;
   ammanPhotoUrl?: string;
-  signatureUrl?: string;
+  signatureUrl?: string | null;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -24,16 +24,16 @@ export interface BirthdayWishCardProps {
 export default function BirthdayWishCard({
   recipientName,
   classNameLabel,
-  deityName = "Lord Bannari Amman",
+  deityName = "Amman",
   cardLine1 = "I have great pleasure in conveying my best wishes on the eve of your birthday",
   cardLine2 = "My prayers are to {deityName} to bless you with peace, prosperity and happiness",
-  senderName = "S V Balasubramaniam",
-  senderDesignation = "Chairman",
-  schoolName = "Bannari Amman Institute of Technology",
-  schoolLogo = "/assets/birthday/bit-logo-circle.png",
-  schoolTagline = "Stay Ahead",
+  senderName = "PRANAV.J",
+  senderDesignation = "Correspondent",
+  schoolName = "SRT SCHOOL",
+  schoolLogo = "/logo/srt-logo.svg",
+  schoolTagline = "UNIVERSAL SCHOOL",
   ammanPhotoUrl = "/assets/birthday/amman.jpg",
-  signatureUrl = "/assets/birthday/signature.png",
+  signatureUrl = null,
   className = "",
   style,
 }: BirthdayWishCardProps) {
@@ -80,7 +80,7 @@ export default function BirthdayWishCard({
         <div className={styles.headerSection}>
           <h2 className={styles.headingMain}>Happy Birthday</h2>
           <div className={styles.salutation}>
-            My Dear <span className={styles.recipientName}>{recipientName}</span>
+            My Dear <span className={styles.recipientName}>{formattedRecipient}</span>
           </div>
         </div>
 
@@ -104,9 +104,9 @@ export default function BirthdayWishCard({
                 />
               </div>
             )}
-            <span className={styles.senderName}>{senderName || "S V Balasubramaniam"}</span>
-            <span className={styles.senderDesignation}>{senderDesignation || "Chairman"}</span>
-            <span className={styles.schoolAffiliation}>{schoolName || "Bannari Amman Institute of Technology"}</span>
+            <span className={styles.senderName}>{senderName || "PRANAV.J"}</span>
+            <span className={styles.senderDesignation}>{senderDesignation || "Correspondent"}</span>
+            <span className={styles.schoolAffiliation}>{schoolName || "SRT SCHOOL"}</span>
           </div>
 
           {/* Circular School Logo Badge */}
@@ -115,7 +115,7 @@ export default function BirthdayWishCard({
               {!logoError && schoolLogo ? (
                 <img
                   src={schoolLogo}
-                  alt={schoolName}
+                  alt={schoolName || "SRT SCHOOL"}
                   className={styles.logoImage}
                   onError={() => setLogoError(true)}
                 />
@@ -128,9 +128,7 @@ export default function BirthdayWishCard({
                 </div>
               )}
               <span className={styles.badgeSchoolName}>{schoolName || "SRT SCHOOL"}</span>
-              {schoolTagline && (
-                <span className={styles.badgeTagline}>{schoolTagline}</span>
-              )}
+              <span className={styles.badgeTagline}>{schoolTagline || "UNIVERSAL SCHOOL"}</span>
             </div>
           </div>
         </div>

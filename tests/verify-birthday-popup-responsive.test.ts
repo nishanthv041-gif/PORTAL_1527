@@ -95,6 +95,10 @@ function generateHtml(options: {
         </span>
       </div>
 
+      <!-- Main Title & Subtitle matching live user screenshot -->
+      <h2 class="mainTitle">Happy Birthday Celebration</h2>
+      <h3 class="subTitle">Happy Birthday, ${options.recipientName}! 🎂</h3>
+
       <!-- Birthday Card Wrapper -->
       <div class="birthdayCardWrapper">
         <div class="cardContainer" id="test-card">
@@ -103,7 +107,7 @@ function generateHtml(options: {
             <div class="photoFrame">
               ${
                 !options.missingPhoto && ammanImgBase64
-                  ? `<img src="${ammanImgBase64}" alt="Lord Bannari Amman" class="deityImage" id="img-deity" />`
+                  ? `<img src="${ammanImgBase64}" alt="Amman Deity" class="deityImage" id="img-deity" />`
                   : `<div class="deityFallback" id="fallback-deity"><span class="deityFallbackIcon">🕉️</span><strong>Amman</strong></div>`
               }
             </div>
@@ -122,32 +126,27 @@ function generateHtml(options: {
             <!-- 4. Message Body -->
             <div class="bodySection" id="elem-body">
               <p class="messageLine">I have great pleasure in conveying my best wishes on the eve of your birthday</p>
-              <p class="messageLine">My prayers are to Lord Bannari Amman to bless you with peace, prosperity and happiness</p>
+              <p class="messageLine">My prayers are to Amman to bless you with peace, prosperity and happiness</p>
             </div>
 
             <!-- Footer: 5 & 6 Signature, then 7 Logo Badge -->
             <div class="footerSection" id="elem-footer">
               <div class="signatureBlock" id="elem-signature">
                 <span class="closing">Yours Sincerely</span>
-                ${
-                  signatureBase64
-                    ? `<div class="signatureGraphicWrapper"><img src="${signatureBase64}" alt="Signature" class="signatureGraphic" /></div>`
-                    : ""
-                }
-                <span class="senderName">S V Balasubramaniam</span>
-                <span class="senderDesignation">Chairman</span>
-                <span class="schoolAffiliation">Bannari Amman Institute of Technology</span>
+                <span class="senderName">PRANAV.J</span>
+                <span class="senderDesignation">Correspondent</span>
+                <span class="schoolAffiliation">SRT SCHOOL</span>
               </div>
 
               <div class="logoBadgeWrapper" id="elem-logo">
                 <div class="logoBadgeCircle">
                   ${
                     !options.missingLogo && logoImgBase64
-                      ? `<img src="${logoImgBase64}" alt="Bannari Amman Institute of Technology" class="logoImage" />`
-                      : `<div class="logoFallbackBadge">BIT</div>`
+                      ? `<img src="${logoImgBase64}" alt="SRT SCHOOL" class="logoImage" />`
+                      : `<div class="logoFallbackBadge">SRT</div>`
                   }
-                  <span class="badgeSchoolName">Bannari Amman</span>
-                  <span class="badgeTagline">Stay Ahead</span>
+                  <span class="badgeSchoolName">SRT SCHOOL</span>
+                  <span class="badgeTagline">UNIVERSAL SCHOOL</span>
                 </div>
               </div>
             </div>

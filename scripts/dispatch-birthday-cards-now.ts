@@ -20,36 +20,36 @@ async function main() {
   await prisma.birthdaySettings.upsert({
     where: { id: "default" },
     update: {
-      senderName: "S V Balasubramaniam",
-      senderDesignation: "Chairman",
-      deityName: "Lord Bannari Amman",
+      senderName: "PRANAV.J",
+      senderDesignation: "Correspondent",
+      deityName: "Amman",
       enabled: true,
       notifyParents: true,
       notifyStudents: true,
     },
     create: {
       id: "default",
-      senderName: "S V Balasubramaniam",
-      senderDesignation: "Chairman",
-      deityName: "Lord Bannari Amman",
+      senderName: "PRANAV.J",
+      senderDesignation: "Correspondent",
+      deityName: "Amman",
       enabled: true,
       notifyParents: true,
       notifyStudents: true,
     },
   });
-  console.log("✓ Updated BirthdaySettings with Chairman S V Balasubramaniam & Lord Bannari Amman.");
+  console.log("✓ Updated BirthdaySettings with Correspondent PRANAV.J & SRT SCHOOL.");
 
   // 2. Celebrants to send cards to
   const celebrants = [
     {
-      studentName: "Anushka A",
-      className: "Class 2 - A",
-      parentEmail: "anushkaa.ad25@bitsathy.ac.in",
-    },
-    {
       studentName: "Iniya K",
       className: "Class 2 - A",
       parentEmail: "itsiniya.k@gmail.com",
+    },
+    {
+      studentName: "Anushka A",
+      className: "Class 2 - A",
+      parentEmail: "anushkaa.ad25@bitsathy.ac.in",
     },
   ];
 
@@ -66,22 +66,22 @@ async function main() {
     const payload: BirthdayCardPayload = {
       recipientName: c.studentName,
       classNameLabel: c.className,
-      deityName: "Lord Bannari Amman",
+      deityName: "Amman",
       cardLine1: "I have great pleasure in conveying my best wishes on the eve of your birthday",
-      cardLine2: "My prayers are to Lord Bannari Amman to bless you with peace, prosperity and happiness",
-      senderName: "S V Balasubramaniam",
-      senderDesignation: "Chairman",
-      schoolName: "Bannari Amman Institute of Technology",
-      schoolLogo: "/assets/birthday/bit-logo-circle.png",
-      schoolTagline: "Stay Ahead",
+      cardLine2: "My prayers are to Amman to bless you with peace, prosperity and happiness",
+      senderName: "PRANAV.J",
+      senderDesignation: "Correspondent",
+      schoolName: "SRT SCHOOL",
+      schoolLogo: "/logo/srt-logo.svg",
+      schoolTagline: "UNIVERSAL SCHOOL",
       ammanPhotoUrl: "/assets/birthday/amman.jpg",
-      signatureUrl: "/assets/birthday/signature.png",
+      signatureUrl: undefined,
       summaryText: buildBirthdaySummaryText({
         recipientName: c.studentName,
-        senderName: "S V Balasubramaniam",
-        senderDesignation: "Chairman",
-        schoolName: "Bannari Amman Institute of Technology",
-        deityName: "Lord Bannari Amman",
+        senderName: "PRANAV.J",
+        senderDesignation: "Correspondent",
+        schoolName: "SRT SCHOOL",
+        deityName: "Amman",
       }),
     };
 

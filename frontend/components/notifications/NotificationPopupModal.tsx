@@ -426,17 +426,15 @@ export default function NotificationPopupModal({
           </span>
         </div>
 
-        {/* Main Title & Subtitle (only shown for standard notifications; omitted for designed birthday cards to prevent duplicate headers and optimize mobile screen space) */}
-        {!birthdayCard && (
-          <>
-            <h2 id="notif-title" className={styles.mainTitle}>
-              Notification
-            </h2>
-            <h3 className={styles.subTitle}>
-              {current.title}
-            </h3>
-          </>
-        )}
+        {/* Main Title */}
+        <h2 id="notif-title" className={styles.mainTitle}>
+          {current.category === "BIRTHDAY" ? "Happy Birthday Celebration" : "Notification"}
+        </h2>
+
+        {/* Specific Notification Title */}
+        <h3 className={styles.subTitle}>
+          {current.title}
+        </h3>
 
         {/* Detailed Description or Designed Birthday Card */}
         {birthdayCard ? (
@@ -444,16 +442,16 @@ export default function NotificationPopupModal({
             <BirthdayWishCard
               recipientName={birthdayCard.recipientName}
               classNameLabel={birthdayCard.classNameLabel}
-              deityName={birthdayCard.deityName}
+              deityName={birthdayCard.deityName || "Amman"}
               cardLine1={birthdayCard.cardLine1}
               cardLine2={birthdayCard.cardLine2}
-              senderName={birthdayCard.senderName}
-              senderDesignation={birthdayCard.senderDesignation}
-              schoolName={birthdayCard.schoolName}
-              schoolLogo={birthdayCard.schoolLogo}
-              schoolTagline={birthdayCard.schoolTagline}
-              ammanPhotoUrl={birthdayCard.ammanPhotoUrl}
-              signatureUrl={birthdayCard.signatureUrl || "/assets/birthday/signature.png"}
+              senderName={birthdayCard.senderName || "PRANAV.J"}
+              senderDesignation={birthdayCard.senderDesignation || "Correspondent"}
+              schoolName={birthdayCard.schoolName || "SRT SCHOOL"}
+              schoolLogo={birthdayCard.schoolLogo || "/logo/srt-logo.svg"}
+              schoolTagline={birthdayCard.schoolTagline || "UNIVERSAL SCHOOL"}
+              ammanPhotoUrl={birthdayCard.ammanPhotoUrl || "/assets/birthday/amman.jpg"}
+              signatureUrl={birthdayCard.signatureUrl || null}
             />
           </div>
         ) : (
