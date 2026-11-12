@@ -6,6 +6,11 @@ import { sendUserNotification } from "@/backend/services/push/notificationDispat
 import { Prisma } from "@prisma/client";
 import { formatClassName } from "@/lib/teacher/formatClassName";
 import crypto from "crypto";
+import {
+  serializeBirthdayCardPayload,
+  buildBirthdaySummaryText,
+  BirthdayCardPayload,
+} from "@/frontend/components/birthdays/birthdayCardUtils";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +93,9 @@ export async function processUniversalBirthdayWishes(
   if (!settings) {
     settings = await prisma.birthdaySettings.create({ data: { id: "default" } });
   }
+
+  const schoolSetting = await prisma.systemSetting.findUnique({ where: { key: "SCHOOL_NAME" } }).catch(() => null);
+  const schoolNameSetting = schoolSetting?.value || "SRT SCHOOL";
 
   // If master switch is disabled, record skipped run and exit
   if (!settings.enabled) {
@@ -439,14 +447,37 @@ export async function processUniversalBirthdayWishes(
               ? "/dashboard/admin"
               : "/dashboard/student";
 
-          // Create in-app notification
+          const cardPayload: BirthdayCardPayload = {
+            recipientName: celebrant.name,
+            classNameLabel: celebrant.className,
+            deityName: settings.deityName || "Amman",
+            cardLine1: settings.cardLine1 || "I have great pleasure in conveying my best wishes on the eve of your birthday",
+            cardLine2: (settings.cardLine2 || "My prayers are to {deityName} to bless you with peace, prosperity and happiness").replace(/{deityName}/g, settings.deityName || "Amman"),
+            senderName: settings.senderName || "PRANAV.J",
+            senderDesignation: settings.senderDesignation || "Correspondent",
+            schoolName: schoolNameSetting,
+            schoolLogo: "/logo/srt-logo.svg",
+            schoolTagline: "Universal School",
+            ammanPhotoUrl: "/assets/birthday/amman.jpg",
+            summaryText: buildBirthdaySummaryText({
+              recipientName: celebrant.name,
+              senderName: settings.senderName,
+              senderDesignation: settings.senderDesignation,
+              schoolName: schoolNameSetting,
+              deityName: settings.deityName,
+            }),
+          };
+
+          const notificationContent = serializeBirthdayCardPayload(cardPayload);
+
+          // Create in-app notification with rich birthday card
           const notif = await prisma.notification.create({
             data: {
               userId: recipient.userId,
-              title,
-              content: message,
-              type: "ANNOUNCEMENT",
-              category: "GENERAL",
+              title: "Happy Birthday 🎉",
+              content: notificationContent,
+              type: "BIRTHDAY",
+              category: "BIRTHDAY",
               priority: "NORMAL",
               link: dashboardLink,
               isRead: false,
@@ -456,8 +487,8 @@ export async function processUniversalBirthdayWishes(
           // Dispatch web push / native notification asynchronously
           sendUserNotification(
             recipient.userId,
-            title,
-            message,
+            "Happy Birthday 🎉",
+            cardPayload.summaryText,
             "academic",
             dashboardLink,
             "NORMAL"
@@ -729,8 +760,36 @@ export async function dispatchImmediateBirthdayWishForPerson(params: {
     const className = student.class ? formatClassName(student.class.name, student.class.section) : "Class";
     let sentCount = 0;
 
-    // 1. Parent wishes
+    const schoolSetting = await prisma.systemSetting.findUnique({
+      where: { key: "school_name" },
+    });
+    const schoolNameSetting = schoolSetting?.value || "SRT SCHOOL";
+
+    // 1. Parent wishes with designed official birthday card
     if (settings.notifyParents) {
+      const cardPayload: BirthdayCardPayload = {
+        recipientName: studentName,
+        classNameLabel: className,
+        deityName: settings.deityName || "Amman",
+        cardLine1: settings.cardLine1 || "I have great pleasure in conveying my best wishes on the eve of your birthday",
+        cardLine2: (settings.cardLine2 || "My prayers are to {deityName} to bless you with peace, prosperity and happiness").replace(/{deityName}/g, settings.deityName || "Amman"),
+        senderName: settings.senderName || "PRANAV.J",
+        senderDesignation: settings.senderDesignation || "Correspondent",
+        schoolName: schoolNameSetting,
+        schoolLogo: "/logo/srt-logo.svg",
+        schoolTagline: "Universal School",
+        ammanPhotoUrl: "/assets/birthday/amman.jpg",
+        summaryText: buildBirthdaySummaryText({
+          recipientName: studentName,
+          senderName: settings.senderName,
+          senderDesignation: settings.senderDesignation,
+          schoolName: schoolNameSetting,
+          deityName: settings.deityName,
+        }),
+      };
+
+      const serializedContent = serializeBirthdayCardPayload(cardPayload);
+
       for (const rel of student.parents) {
         const parentUser = rel.parent?.user;
         if (parentUser && parentUser.status === "ACTIVE") {
@@ -746,25 +805,21 @@ export async function dispatchImmediateBirthdayWishForPerson(params: {
 
           if (!existing || params.forceSend) {
             const title = `Happy Birthday, ${studentName}! 🎂`;
-            const baseEn =
-              settings.parentTemplateEn ||
-              "Dear Parent, SRT School wishes {studentName} a very happy birthday! May this year bring happiness, good health, and abundant success. - SRT Universal School";
-            const renderedEn = baseEn.replace(/{studentName}/g, studentName).replace(/{name}/g, studentName);
 
             const notif = await prisma.notification.create({
               data: {
                 userId: parentUser.id,
                 title,
-                content: renderedEn,
-                type: "ANNOUNCEMENT",
-                category: "GENERAL",
+                content: serializedContent,
+                type: "BIRTHDAY",
+                category: "BIRTHDAY",
                 priority: "NORMAL",
                 link: "/dashboard/parent",
                 isRead: false,
               },
             });
 
-            sendUserNotification(parentUser.id, title, renderedEn, "academic", "/dashboard/parent", "NORMAL").catch(() => {});
+            sendUserNotification(parentUser.id, title, cardPayload.summaryText, "academic", "/dashboard/parent", "NORMAL").catch(() => {});
 
             if (!existing) {
               await prisma.birthdayWish.create({

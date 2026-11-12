@@ -7,7 +7,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 
 export type UnifiedNotification = {
   id: string;
-  category: "ANNOUNCEMENT" | "INSTRUCTION" | "MEETING" | "MESSAGE" | "REPORT_CARD" | "ASSIGNMENT" | "ATTENDANCE" | "SYSTEM" | "GENERAL" | "BUS";
+  category: "ANNOUNCEMENT" | "INSTRUCTION" | "MEETING" | "MESSAGE" | "REPORT_CARD" | "ASSIGNMENT" | "ATTENDANCE" | "SYSTEM" | "GENERAL" | "BUS" | "BIRTHDAY";
   title: string;
   description: string;
   senderOrAuthor?: string;
@@ -133,10 +133,21 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
         badgeColors = notif.priority === "URGENT"
           ? { bg: "rgba(239, 68, 68, 0.18)", text: "#ef4444", border: "rgba(239, 68, 68, 0.4)" }
           : { bg: "rgba(245, 158, 11, 0.15)", text: "#f59e0b", border: "rgba(245, 158, 11, 0.35)" };
+      } else if (
+        typeStr.includes("BIRTHDAY") ||
+        notif.category === "BIRTHDAY" ||
+        titleLower.includes("birthday") ||
+        (notif.content && notif.content.startsWith("CARD_PAYLOAD:::"))
+      ) {
+        category = "BIRTHDAY";
+        badgeLabel = "Birthday Wish 🎂";
+        badgeColors = { bg: "rgba(245, 158, 11, 0.16)", text: "#b45309", border: "rgba(245, 158, 11, 0.35)" };
       }
 
       let defaultLink = userRole === "PARENT" ? "/dashboard/parent/notifications" : userRole === "TEACHER" ? "/dashboard/teacher/notifications" : "/dashboard/admin/notifications";
-      if (typeStr.includes("PROGRAM")) {
+      if (category === "BIRTHDAY") {
+        defaultLink = userRole === "PARENT" ? "/dashboard/parent" : userRole === "TEACHER" ? "/dashboard/teacher/birthdays" : "/dashboard/admin/birthdays";
+      } else if (typeStr.includes("PROGRAM")) {
         defaultLink = userRole === "PARENT" ? "/dashboard/parent/programs" : userRole === "ADMIN" ? "/dashboard/admin/programs" : "/dashboard/teacher/calendar";
       } else if (typeStr.includes("COMPLAINT") || titleLower.includes("complaint")) {
         defaultLink = userRole === "PARENT" ? "/dashboard/parent/complaints" : userRole === "ADMIN" ? "/dashboard/admin/complaints" : "/dashboard/teacher/complaints";

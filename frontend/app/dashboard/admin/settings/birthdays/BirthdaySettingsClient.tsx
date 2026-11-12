@@ -28,7 +28,9 @@ function LanguageIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
 import {
   updateBirthdaySettingsAction,
   sendTestBirthdayWishAction,
+  triggerSendTodayWishesAction,
 } from "@/backend/api/actions/dashboard/admin/birthdays/actions";
+import BirthdayWishCard from "@/frontend/components/birthdays/BirthdayWishCard";
 
 interface BirthdaySettingsClientProps {
   initialSettings: any;
@@ -49,8 +51,12 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
 
+  // Manual Trigger state
+  const [isTriggeringNow, setIsTriggeringNow] = useState(false);
+  const [triggerResult, setTriggerResult] = useState<string | null>(null);
+
   // Active template preview tab
-  const [activeTemplateTab, setActiveTemplateTab] = useState<"STUDENT_PARENT" | "TEACHER" | "STAFF" | "ADMIN">("STUDENT_PARENT");
+  const [activeTemplateTab, setActiveTemplateTab] = useState<"CARD" | "STUDENT_PARENT" | "TEACHER" | "STAFF" | "ADMIN">("CARD");
 
   const handleToggle = (field: string) => {
     setSettings((prev: any) => ({ ...prev, [field]: !prev[field] }));
@@ -91,6 +97,22 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
     }
   };
 
+  const handleTriggerNow = async () => {
+    if (!confirm("Trigger today's automated birthday wishes now for all celebrants?")) return;
+    setIsTriggeringNow(true);
+    setTriggerResult(null);
+
+    const res = await triggerSendTodayWishesAction();
+    setIsTriggeringNow(false);
+
+    if ("error" in res && res.error) {
+      setTriggerResult(`Error: ${res.error}`);
+    } else if ("eligibleCount" in res) {
+      setTriggerResult(`Successfully processed today's wishes! Eligible: ${res.eligibleCount}, Sent: ${res.sentCount}, Skipped: ${res.skippedAlreadySent}`);
+      setTimeout(() => setTriggerResult(null), 6000);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -116,6 +138,17 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
           </Link>
 
           <button
+            type="button"
+            onClick={handleTriggerNow}
+            disabled={isTriggeringNow}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white shadow-sm transition-colors"
+            title="Immediately evaluate and send birthday wishes for today"
+          >
+            {isTriggeringNow ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {isTriggeringNow ? "Evaluating..." : "Trigger Today's Wishes"}
+          </button>
+
+          <button
             onClick={handleSave}
             disabled={isSaving}
             className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white shadow-sm transition-colors"
@@ -125,6 +158,17 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
           </button>
         </div>
       </div>
+
+      {triggerResult && (
+        <div className={`p-3.5 rounded-xl border text-xs font-medium flex items-center gap-2 ${
+          triggerResult.startsWith("Error")
+            ? "bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300"
+            : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-300"
+        }`}>
+          <Cake className="w-4 h-4 flex-shrink-0" />
+          {triggerResult}
+        </div>
+      )}
 
       {saveSuccess && (
         <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-medium flex items-center gap-2">
@@ -372,6 +416,7 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
             {/* Template Selector Tabs */}
             <div className="flex border-b border-gray-200 dark:border-gray-700 gap-4 text-xs font-medium">
               {[
+                { id: "CARD", label: "Official Birthday Card" },
                 { id: "STUDENT_PARENT", label: "Student & Parent" },
                 { id: "TEACHER", label: "Teacher" },
                 { id: "STAFF", label: "Staff" },
@@ -381,7 +426,7 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                   key={tab.id}
                   onClick={() => setActiveTemplateTab(tab.id as any)}
                   className={`pb-2 border-b-2 transition-colors ${activeTemplateTab === tab.id
-                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400"
+                      ? "border-amber-600 text-amber-600 dark:text-amber-400 font-bold"
                       : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
                     }`}
                 >
@@ -389,6 +434,102 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                 </button>
               ))}
             </div>
+
+            {/* Official Birthday Card Editor & Live Interactive Preview */}
+            {activeTemplateTab === "CARD" && (
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                      Correspondent / Sender Name
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.senderName ?? "PRANAV.J"}
+                      onChange={(e) => handleTextChange("senderName", e.target.value)}
+                      placeholder="e.g. PRANAV.J"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                      Designation
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.senderDesignation ?? "Correspondent"}
+                      onChange={(e) => handleTextChange("senderDesignation", e.target.value)}
+                      placeholder="e.g. Correspondent"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                      Deity / God Name in Prayer
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.deityName ?? "Amman"}
+                      onChange={(e) => handleTextChange("deityName", e.target.value)}
+                      placeholder="e.g. Amman"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                      Card Message Line 1 (Greeting)
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.cardLine1 ?? "I have great pleasure in conveying my best wishes on the eve of your birthday"}
+                      onChange={(e) => handleTextChange("cardLine1", e.target.value)}
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                      Card Message Line 2 (Blessings) &bull; Use <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">&#123;deityName&#125;</code> for deity substitution
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.cardLine2 ?? "My prayers are to {deityName} to bless you with peace, prosperity and happiness"}
+                      onChange={(e) => handleTextChange("cardLine2", e.target.value)}
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Live Interactive Designed Card Preview */}
+                <div className="pt-2">
+                  <div className="text-[11px] font-semibold text-amber-800 dark:text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Eye className="w-3.5 h-3.5" />
+                    Live Designed Card Preview (Sample Celebrant: Anushka A)
+                  </div>
+
+                  <div className="p-3 sm:p-5 rounded-2xl bg-slate-900/10 dark:bg-slate-950/40 border border-amber-500/20 flex justify-center">
+                    <BirthdayWishCard
+                      recipientName="Anushka A"
+                      classNameLabel="Class 10-A"
+                      deityName={settings.deityName || "Amman"}
+                      cardLine1={settings.cardLine1}
+                      cardLine2={settings.cardLine2}
+                      senderName={settings.senderName}
+                      senderDesignation={settings.senderDesignation}
+                      schoolName="SRT SCHOOL"
+                      schoolLogo="/logo/srt-logo.svg"
+                      schoolTagline="Universal School"
+                      ammanPhotoUrl="/assets/birthday/amman.jpg"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Template Editors */}
             {activeTemplateTab === "STUDENT_PARENT" && (

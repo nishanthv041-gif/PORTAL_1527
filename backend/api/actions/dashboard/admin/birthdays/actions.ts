@@ -7,7 +7,8 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { parseAndValidateDob, RoleType } from "@/lib/validations/dob";
 import { getSchoolNow } from "@/lib/time";
 import { requireClassAccess, requireClassTeacherAccess } from "@/lib/teacher/classAccess";
-import { dispatchImmediateBirthdayWishForPerson } from "@/app/api/internal/cron/birthdays/route";
+import { dispatchImmediateBirthdayWishForPerson, processUniversalBirthdayWishes } from "@/app/api/internal/cron/birthdays/route";
+import { serializeBirthdayCardPayload, BirthdayCardPayload, buildBirthdaySummaryText } from "@/frontend/components/birthdays/birthdayCardUtils";
 import { sendUserNotification } from "@/backend/services/push/notificationDispatcher";
 import { formatClassName } from "@/lib/teacher/formatClassName";
 import * as XLSX from "xlsx";
@@ -488,13 +489,44 @@ export async function sendTestBirthdayWishAction() {
   }
 
   try {
+    const settings = await prisma.birthdaySettings.findUnique({
+      where: { id: "default" },
+    });
+
+    const schoolSetting = await prisma.systemSetting.findUnique({
+      where: { key: "school_name" },
+    });
+    const schoolName = schoolSetting?.value || "SRT SCHOOL";
+
+    const recipientName = session.user.name || "Administrator";
+    const cardPayload: BirthdayCardPayload = {
+      recipientName,
+      classNameLabel: "Staff & Faculty",
+      deityName: settings?.deityName || "Amman",
+      cardLine1: settings?.cardLine1 || "I have great pleasure in conveying my best wishes on the eve of your birthday",
+      cardLine2: (settings?.cardLine2 || "My prayers are to {deityName} to bless you with peace, prosperity and happiness").replace(/{deityName}/g, settings?.deityName || "Amman"),
+      senderName: settings?.senderName || "PRANAV.J",
+      senderDesignation: settings?.senderDesignation || "Correspondent",
+      schoolName,
+      schoolLogo: "/logo/srt-logo.svg",
+      schoolTagline: "Universal School",
+      ammanPhotoUrl: "/assets/birthday/amman.jpg",
+      summaryText: buildBirthdaySummaryText({
+        recipientName,
+        senderName: settings?.senderName,
+        senderDesignation: settings?.senderDesignation,
+        schoolName,
+        deityName: settings?.deityName,
+      }),
+    };
+
     const notif = await prisma.notification.create({
       data: {
         userId: session.user.id,
-        title: `Happy Birthday, ${session.user.name || "Administrator"}! 🎂`,
-        content: `Dear ${session.user.name || "Administrator"}, SRT School wishes you a very happy birthday and a wonderful year ahead! - SRT School (Test Sample)`,
+        title: `Happy Birthday, ${recipientName}! 🎂`,
+        content: serializeBirthdayCardPayload(cardPayload),
         type: "BIRTHDAY",
-        category: "GENERAL",
+        category: "BIRTHDAY",
         priority: "NORMAL",
         link: "/dashboard/admin",
         isRead: false,
@@ -504,6 +536,21 @@ export async function sendTestBirthdayWishAction() {
     return { success: true, notificationId: notif.id };
   } catch (err: any) {
     return { error: err?.message || "Failed to dispatch test birthday wish." };
+  }
+}
+
+export async function triggerSendTodayWishesAction() {
+  const session = await getServerSession(getAuthOptions());
+  if (!session || session.user.role !== "ADMIN") {
+    return { error: "Unauthorized: Admin privileges required." };
+  }
+
+  try {
+    const result = await processUniversalBirthdayWishes(undefined, session.user.email || "admin");
+    revalidatePath("/dashboard/admin/birthdays");
+    return result;
+  } catch (err: any) {
+    return { error: err?.message || "Failed to trigger birthday wishes." };
   }
 }
 

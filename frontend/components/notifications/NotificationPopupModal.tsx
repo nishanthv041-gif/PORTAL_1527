@@ -7,6 +7,9 @@ import {
   Megaphone, MessageSquare, Award, BookOpen, Calendar, Info,
   FileText, Clock, Users, AlertCircle, BellOff, CheckCheck, Bus
 } from "lucide-react";
+import { CakeIcon as Cake } from "@/frontend/components/birthdays/BirthdayIcons";
+import BirthdayWishCard from "@/frontend/components/birthdays/BirthdayWishCard";
+import { parseBirthdayCardPayload } from "@/frontend/components/birthdays/birthdayCardUtils";
 import styles from "./NotificationPopupModal.module.css";
 import { 
   UnifiedNotification, 
@@ -346,16 +349,25 @@ export default function NotificationPopupModal({
         return <Clock size={13} />;
       case "BUS":
         return <Bus size={13} />;
+      case "BIRTHDAY":
+        return <Cake size={13} />;
       default:
         return <Info size={13} />;
     }
   };
 
+  const birthdayCard = current ? parseBirthdayCardPayload(current.description) : null;
+
   return (
     <div className={styles.overlay} onClick={(e) => {
       if (e.target === e.currentTarget) handleClose();
     }}>
-      <div className={styles.modalCard} role="dialog" aria-modal="true" aria-labelledby="notif-title">
+      <div
+        className={`${styles.modalCard} ${birthdayCard ? styles.modalCardWide : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="notif-title"
+      >
         {/* Floating circular bell icon badge overlapping the card top */}
         <div className={styles.bellBadgeCircle}>
           <Bell size={34} className={styles.bellIcon} />
@@ -383,7 +395,7 @@ export default function NotificationPopupModal({
 
         {/* Main Title */}
         <h2 id="notif-title" className={styles.mainTitle}>
-          Notification
+          {current.category === "BIRTHDAY" ? "Happy Birthday Celebration" : "Notification"}
         </h2>
 
         {/* Specific Notification Title */}
@@ -391,10 +403,28 @@ export default function NotificationPopupModal({
           {current.title}
         </h3>
 
-        {/* Detailed Description */}
-        <div className={styles.descriptionBox}>
-          {current.description}
-        </div>
+        {/* Detailed Description or Designed Birthday Card */}
+        {birthdayCard ? (
+          <div style={{ width: "100%", margin: "1rem 0" }}>
+            <BirthdayWishCard
+              recipientName={birthdayCard.recipientName}
+              classNameLabel={birthdayCard.classNameLabel}
+              deityName={birthdayCard.deityName}
+              cardLine1={birthdayCard.cardLine1}
+              cardLine2={birthdayCard.cardLine2}
+              senderName={birthdayCard.senderName}
+              senderDesignation={birthdayCard.senderDesignation}
+              schoolName={birthdayCard.schoolName}
+              schoolLogo={birthdayCard.schoolLogo}
+              schoolTagline={birthdayCard.schoolTagline}
+              ammanPhotoUrl={birthdayCard.ammanPhotoUrl}
+            />
+          </div>
+        ) : (
+          <div className={styles.descriptionBox}>
+            {current.description}
+          </div>
+        )}
 
         {/* Metadata: Timestamp & Sender / Target */}
         <div className={styles.metaInfoRow}>

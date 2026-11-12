@@ -14,6 +14,7 @@ import {
   Phone,
   Smile,
   X,
+  Eye,
 } from "lucide-react";
 import {
   PartyPopperIcon as PartyPopper,
@@ -25,6 +26,7 @@ import {
   triggerSendNowForStudentAction,
 } from "@/backend/api/actions/dashboard/admin/birthdays/actions";
 import { TeacherClass } from "@/lib/teacher/getTeacherClasses";
+import BirthdayWishCard from "@/frontend/components/birthdays/BirthdayWishCard";
 import styles from "./BirthdayStudio.module.css";
 
 interface BirthdayWishesStudioProps {
@@ -76,6 +78,9 @@ export default function BirthdayWishesStudio({
   // Resend state
   const [resendingMap, setResendingMap] = useState<{ [studentId: string]: boolean }>({});
   const [resendSuccessMap, setResendSuccessMap] = useState<{ [studentId: string]: boolean }>({});
+
+  // Official Card Preview state
+  const [previewCardCelebrant, setPreviewCardCelebrant] = useState<BirthdayCelebrantItem | null>(null);
 
   const displayedUpcoming = upcomingFilter === "7days" ? upcoming7Days : upcoming30Days;
 
@@ -400,40 +405,52 @@ export default function BirthdayWishesStudio({
                     )}
 
                     {/* Card Actions */}
-                    {isClassTeacher && (
-                      <div className={styles.cardFooter}>
-                        <button
-                          onClick={() => handleOpenNoteModal(celebrant)}
-                          className={styles.footerBtn}
-                        >
-                          <MessageSquare size={15} />
-                          <span>{note ? "Edit Message" : "Add Personal Note"}</span>
-                        </button>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.75rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewCardCelebrant(celebrant)}
+                        className={styles.cardPreviewBtn}
+                        title="View official designed birthday card for this student"
+                      >
+                        <Eye size={14} />
+                        <span>View Official Card</span>
+                      </button>
 
-                        <button
-                          onClick={() => handleResendWish(celebrant)}
-                          disabled={isResending}
-                          className={`${styles.footerBtn} ${styles.footerBtnPrimary}`}
-                        >
-                          {isResending ? (
-                            <>
-                              <Clock size={14} className={styles.spin} />
-                              <span>Sending...</span>
-                            </>
-                          ) : resendSuccess ? (
-                            <>
-                              <Check size={14} />
-                              <span>Sent!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Send size={14} />
-                              <span>Resend Greeting</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
+                      {isClassTeacher && (
+                        <div className={styles.cardFooter}>
+                          <button
+                            onClick={() => handleOpenNoteModal(celebrant)}
+                            className={styles.footerBtn}
+                          >
+                            <MessageSquare size={15} />
+                            <span>{note ? "Edit Message" : "Add Personal Note"}</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleResendWish(celebrant)}
+                            disabled={isResending}
+                            className={`${styles.footerBtn} ${styles.footerBtnPrimary}`}
+                          >
+                            {isResending ? (
+                              <>
+                                <Clock size={14} className={styles.spin} />
+                                <span>Sending...</span>
+                              </>
+                            ) : resendSuccess ? (
+                              <>
+                                <Check size={14} />
+                                <span>Sent!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Send size={14} />
+                                <span>Resend Greeting</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -492,17 +509,29 @@ export default function BirthdayWishesStudio({
                     )}
                   </div>
 
-                  {isClassTeacher && (
-                    <div className={styles.cardFooter}>
-                      <button
-                        onClick={() => handleOpenNoteModal(celebrant)}
-                        className={styles.footerBtn}
-                      >
-                        <MessageSquare size={15} />
-                        <span>Pre-write Birthday Note</span>
-                      </button>
-                    </div>
-                  )}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.75rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewCardCelebrant(celebrant)}
+                      className={styles.cardPreviewBtn}
+                      title="View official designed birthday card for this student"
+                    >
+                      <Eye size={14} />
+                      <span>View Official Card</span>
+                    </button>
+
+                    {isClassTeacher && (
+                      <div className={styles.cardFooter}>
+                        <button
+                          onClick={() => handleOpenNoteModal(celebrant)}
+                          className={styles.footerBtn}
+                        >
+                          <MessageSquare size={15} />
+                          <span>Pre-write Birthday Note</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -588,6 +617,51 @@ export default function BirthdayWishesStudio({
               >
                 {noteSending ? "Saving..." : "Save Message"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OFFICIAL DESIGNED BIRTHDAY CARD PREVIEW MODAL */}
+      {previewCardCelebrant && (
+        <div className={styles.cardModalOverlay} onClick={() => setPreviewCardCelebrant(null)}>
+          <div className={styles.cardModalDialog} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.cardModalHeader}>
+              <h3 className={styles.cardModalTitle}>
+                Official Birthday Celebration Card
+              </h3>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className={styles.footerBtn}
+                  style={{ minHeight: "34px" }}
+                >
+                  Print Card
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewCardCelebrant(null)}
+                  className={styles.iconBtn}
+                  title="Close Card Preview"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+              <BirthdayWishCard
+                recipientName={previewCardCelebrant.name}
+                classNameLabel={className}
+                deityName="Amman"
+                senderName="PRANAV.J"
+                senderDesignation="Correspondent"
+                schoolName="SRT SCHOOL"
+                schoolLogo="/logo/srt-logo.svg"
+                schoolTagline="Universal School"
+                ammanPhotoUrl="/assets/birthday/amman.jpg"
+              />
             </div>
           </div>
         </div>

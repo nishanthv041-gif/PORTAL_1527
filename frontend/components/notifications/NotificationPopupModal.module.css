@@ -40,6 +40,11 @@
   box-sizing: border-box;
 }
 
+.modalCardWide {
+  max-width: 860px;
+  padding: 3rem 1.5rem 1.75rem 1.5rem;
+}
+
 @keyframes modalPopUp {
   from {
     transform: scale(0.85) translateY(20px);

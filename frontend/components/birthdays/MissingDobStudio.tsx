@@ -18,6 +18,7 @@ import {
   AlertCircleIcon as AlertCircle,
   CheckCircle2Icon as CheckCircle2,
   XCircleIcon as XCircle,
+  Share2Icon as Share2,
 } from "@/frontend/components/birthdays/BirthdayIcons";
 import {
   saveStudentDobAction,
@@ -272,6 +273,16 @@ export default function MissingDobStudio({
     const parts = name.trim().split(" ");
     if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
     return name.slice(0, 2).toUpperCase();
+  };
+
+  const buildWhatsAppRequestLink = (s: StudentDobRecord) => {
+    if (!s.parentPhone) return "#";
+    const cleanPhone = s.parentPhone.replace(/[^0-9]/g, "");
+    const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+    const text = encodeURIComponent(
+      `Dear ${s.parentName || "Parent"}, kindly share the Date of Birth for ${s.name} (Roll #${s.rollNumber}) to update official school records and birthday celebrations at SRT School. Thank you!`
+    );
+    return `https://wa.me/${formattedPhone}?text=${text}`;
   };
 
   return (
@@ -529,9 +540,24 @@ export default function MissingDobStudio({
                     <span>On Record</span>
                   </div>
                 ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.75rem", color: "#f59e0b", fontWeight: 600 }}>
-                    <AlertCircle size={14} />
-                    <span>Missing Date of Birth</span>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.75rem", color: "#f59e0b", fontWeight: 600 }}>
+                      <AlertCircle size={14} />
+                      <span>Missing Date of Birth</span>
+                    </div>
+
+                    {student.parentPhone && (
+                      <a
+                        href={buildWhatsAppRequestLink(student)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.whatsAppAskBtn}
+                        title="Send WhatsApp request to parent for Date of Birth"
+                      >
+                        <Share2 size={12} />
+                        <span>Ask Parent via WhatsApp</span>
+                      </a>
+                    )}
                   </div>
                 )}
               </div>

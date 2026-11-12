@@ -245,3 +245,4 @@ function hashString(str: string): number {
   }
   return hash;
 }
+

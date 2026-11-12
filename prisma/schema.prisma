@@ -200,6 +200,11 @@ model BirthdaySettings {
   staffTemplateTa    String?
   adminTemplateEn    String?
   adminTemplateTa    String?
+  senderName         String   @default("PRANAV.J")
+  senderDesignation  String   @default("Correspondent")
+  deityName          String   @default("Amman")
+  cardLine1          String?  @default("I have great pleasure in conveying my best wishes on the eve of your birthday")
+  cardLine2          String?  @default("My prayers are to {deityName} to bless you with peace, prosperity and happiness")
   updatedAt          DateTime @default(now()) @updatedAt
   updatedBy          String?
 }
