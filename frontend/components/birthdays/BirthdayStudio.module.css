@@ -1057,6 +1057,22 @@
   box-sizing: border-box;
 }
 
+@media (max-width: 767px) {
+  .cardModalOverlay {
+    padding: 0.5rem;
+  }
+  .cardModalDialog {
+    width: 95vw;
+    max-width: 440px;
+    padding: 1rem 0.65rem;
+    border-radius: 18px;
+    max-height: 90dvh;
+  }
+  .cardModalTitle {
+    font-size: 0.95rem;
+  }
+}
+
 [data-theme="dark"] .cardModalDialog {
   background: #1e293b;
   border-color: #334155;

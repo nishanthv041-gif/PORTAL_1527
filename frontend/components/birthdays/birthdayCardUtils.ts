@@ -15,6 +15,7 @@ export interface BirthdayCardPayload {
   schoolLogo: string;
   schoolTagline?: string;
   ammanPhotoUrl: string;
+  signatureUrl?: string;
   summaryText: string;
 }
 

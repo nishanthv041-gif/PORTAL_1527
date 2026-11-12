@@ -21,8 +21,15 @@ const ammanImgBase64 = fs.existsSync(path.join(process.cwd(), "public/assets/bir
   : "";
 
 // Read school logo as base64
-const logoImgBase64 = fs.existsSync(path.join(process.cwd(), "public/logo/srt-logo.svg"))
-  ? `data:image/svg+xml;base64,${fs.readFileSync(path.join(process.cwd(), "public/logo/srt-logo.svg")).toString("base64")}`
+const logoImgBase64 = fs.existsSync(path.join(process.cwd(), "public/assets/birthday/bit-logo-circle.png"))
+  ? `data:image/png;base64,${fs.readFileSync(path.join(process.cwd(), "public/assets/birthday/bit-logo-circle.png")).toString("base64")}`
+  : (fs.existsSync(path.join(process.cwd(), "public/logo/srt-logo.svg"))
+    ? `data:image/svg+xml;base64,${fs.readFileSync(path.join(process.cwd(), "public/logo/srt-logo.svg")).toString("base64")}`
+    : "");
+
+// Read signature as base64
+const signatureBase64 = fs.existsSync(path.join(process.cwd(), "public/assets/birthday/signature.png"))
+  ? `data:image/png;base64,${fs.readFileSync(path.join(process.cwd(), "public/assets/birthday/signature.png")).toString("base64")}`
   : "";
 
 function generateHtml(options: {
@@ -88,10 +95,6 @@ function generateHtml(options: {
         </span>
       </div>
 
-      <!-- Main Title -->
-      <h2 class="mainTitle">Happy Birthday Celebration</h2>
-      <h3 class="subTitle">Warm Wishes from SRT Public School</h3>
-
       <!-- Birthday Card Wrapper -->
       <div class="birthdayCardWrapper">
         <div class="cardContainer" id="test-card">
@@ -126,20 +129,25 @@ function generateHtml(options: {
             <div class="footerSection" id="elem-footer">
               <div class="signatureBlock" id="elem-signature">
                 <span class="closing">Yours Sincerely</span>
-                <span class="senderName">PRANAV.J</span>
-                <span class="senderDesignation">Correspondent</span>
-                <span class="schoolAffiliation">SRT SCHOOL</span>
+                ${
+                  signatureBase64
+                    ? `<div class="signatureGraphicWrapper"><img src="${signatureBase64}" alt="Signature" class="signatureGraphic" /></div>`
+                    : ""
+                }
+                <span class="senderName">S V Balasubramaniam</span>
+                <span class="senderDesignation">Chairman</span>
+                <span class="schoolAffiliation">Bannari Amman Institute of Technology</span>
               </div>
 
               <div class="logoBadgeWrapper" id="elem-logo">
                 <div class="logoBadgeCircle">
                   ${
                     !options.missingLogo && logoImgBase64
-                      ? `<img src="${logoImgBase64}" alt="SRT SCHOOL" class="logoImage" />`
-                      : `<div class="logoFallbackBadge">SRT</div>`
+                      ? `<img src="${logoImgBase64}" alt="Bannari Amman Institute of Technology" class="logoImage" />`
+                      : `<div class="logoFallbackBadge">BIT</div>`
                   }
-                  <span class="badgeSchoolName">SRT SCHOOL</span>
-                  <span class="badgeTagline">Universal School</span>
+                  <span class="badgeSchoolName">Bannari Amman</span>
+                  <span class="badgeTagline">Stay Ahead</span>
                 </div>
               </div>
             </div>

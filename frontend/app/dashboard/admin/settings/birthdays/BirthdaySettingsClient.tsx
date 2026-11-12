@@ -516,15 +516,16 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                     <BirthdayWishCard
                       recipientName="Anushka A"
                       classNameLabel="Class 10-A"
-                      deityName={settings.deityName || "Amman"}
+                      deityName={settings.deityName || "Lord Bannari Amman"}
                       cardLine1={settings.cardLine1}
                       cardLine2={settings.cardLine2}
-                      senderName={settings.senderName}
-                      senderDesignation={settings.senderDesignation}
-                      schoolName="SRT SCHOOL"
-                      schoolLogo="/logo/srt-logo.svg"
-                      schoolTagline="Universal School"
+                      senderName={settings.senderName || "S V Balasubramaniam"}
+                      senderDesignation={settings.senderDesignation || "Chairman"}
+                      schoolName="Bannari Amman Institute of Technology"
+                      schoolLogo="/assets/birthday/bit-logo-circle.png"
+                      schoolTagline="Stay Ahead"
                       ammanPhotoUrl="/assets/birthday/amman.jpg"
+                      signatureUrl="/assets/birthday/signature.png"
                     />
                   </div>
                 </div>

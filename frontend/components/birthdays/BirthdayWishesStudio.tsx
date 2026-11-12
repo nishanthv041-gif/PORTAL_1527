@@ -654,13 +654,14 @@ export default function BirthdayWishesStudio({
               <BirthdayWishCard
                 recipientName={previewCardCelebrant.name}
                 classNameLabel={className}
-                deityName="Amman"
-                senderName="PRANAV.J"
-                senderDesignation="Correspondent"
-                schoolName="SRT SCHOOL"
-                schoolLogo="/logo/srt-logo.svg"
-                schoolTagline="Universal School"
+                deityName="Lord Bannari Amman"
+                senderName="S V Balasubramaniam"
+                senderDesignation="Chairman"
+                schoolName="Bannari Amman Institute of Technology"
+                schoolLogo="/assets/birthday/bit-logo-circle.png"
+                schoolTagline="Stay Ahead"
                 ammanPhotoUrl="/assets/birthday/amman.jpg"
+                signatureUrl="/assets/birthday/signature.png"
               />
             </div>
           </div>

@@ -426,15 +426,17 @@ export default function NotificationPopupModal({
           </span>
         </div>
 
-        {/* Main Title */}
-        <h2 id="notif-title" className={styles.mainTitle}>
-          {current.category === "BIRTHDAY" ? "Happy Birthday Celebration" : "Notification"}
-        </h2>
-
-        {/* Specific Notification Title */}
-        <h3 className={styles.subTitle}>
-          {current.title}
-        </h3>
+        {/* Main Title & Subtitle (only shown for standard notifications; omitted for designed birthday cards to prevent duplicate headers and optimize mobile screen space) */}
+        {!birthdayCard && (
+          <>
+            <h2 id="notif-title" className={styles.mainTitle}>
+              Notification
+            </h2>
+            <h3 className={styles.subTitle}>
+              {current.title}
+            </h3>
+          </>
+        )}
 
         {/* Detailed Description or Designed Birthday Card */}
         {birthdayCard ? (
@@ -451,6 +453,7 @@ export default function NotificationPopupModal({
               schoolLogo={birthdayCard.schoolLogo}
               schoolTagline={birthdayCard.schoolTagline}
               ammanPhotoUrl={birthdayCard.ammanPhotoUrl}
+              signatureUrl={birthdayCard.signatureUrl || "/assets/birthday/signature.png"}
             />
           </div>
         ) : (

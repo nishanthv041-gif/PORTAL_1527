@@ -165,7 +165,22 @@
   font-size: clamp(0.825rem, 1.8vw, 0.925rem);
   font-weight: 600;
   color: #4a3020;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.2rem;
+}
+
+.signatureGraphicWrapper {
+  display: flex;
+  align-items: center;
+  margin: 0.1rem 0 0.2rem 0;
+  max-width: 140px;
+}
+
+.signatureGraphic {
+  width: auto;
+  height: clamp(32px, 5.5vw, 42px);
+  object-fit: contain;
+  mix-blend-mode: multiply;
+  display: block;
 }
 
 .senderName {
@@ -356,6 +371,11 @@
   .signatureBlock {
     align-items: center;
     text-align: center;
+  }
+
+  .signatureGraphicWrapper {
+    justify-content: center;
+    margin: 0.15rem auto;
   }
 
   .logoBadgeWrapper {

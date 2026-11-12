@@ -16,6 +16,7 @@ export interface BirthdayWishCardProps {
   schoolLogo?: string;
   schoolTagline?: string;
   ammanPhotoUrl?: string;
+  signatureUrl?: string;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -23,15 +24,16 @@ export interface BirthdayWishCardProps {
 export default function BirthdayWishCard({
   recipientName,
   classNameLabel,
-  deityName = "Amman",
+  deityName = "Lord Bannari Amman",
   cardLine1 = "I have great pleasure in conveying my best wishes on the eve of your birthday",
   cardLine2 = "My prayers are to {deityName} to bless you with peace, prosperity and happiness",
-  senderName = "PRANAV.J",
-  senderDesignation = "Correspondent",
-  schoolName = "SRT SCHOOL",
-  schoolLogo = "/logo/srt-logo.svg",
-  schoolTagline = "Universal School",
+  senderName = "S V Balasubramaniam",
+  senderDesignation = "Chairman",
+  schoolName = "Bannari Amman Institute of Technology",
+  schoolLogo = "/assets/birthday/bit-logo-circle.png",
+  schoolTagline = "Stay Ahead",
   ammanPhotoUrl = "/assets/birthday/amman.jpg",
+  signatureUrl = "/assets/birthday/signature.png",
   className = "",
   style,
 }: BirthdayWishCardProps) {
@@ -78,7 +80,7 @@ export default function BirthdayWishCard({
         <div className={styles.headerSection}>
           <h2 className={styles.headingMain}>Happy Birthday</h2>
           <div className={styles.salutation}>
-            My Dear <span className={styles.recipientName}>{formattedRecipient}</span>
+            My Dear <span className={styles.recipientName}>{recipientName}</span>
           </div>
         </div>
 
@@ -90,12 +92,21 @@ export default function BirthdayWishCard({
 
         {/* Footer: Correspondent Signature Block & Circular School Logo Badge */}
         <div className={styles.footerSection}>
-          {/* Plain Text Signature Block */}
+          {/* Signature Block */}
           <div className={styles.signatureBlock} data-testid="birthday-signature-block">
             <span className={styles.closing}>Yours Sincerely</span>
-            <span className={styles.senderName}>{senderName || "PRANAV.J"}</span>
-            <span className={styles.senderDesignation}>{senderDesignation || "Correspondent"}</span>
-            <span className={styles.schoolAffiliation}>{schoolName || "SRT SCHOOL"}</span>
+            {signatureUrl && (
+              <div className={styles.signatureGraphicWrapper}>
+                <img
+                  src={signatureUrl}
+                  alt="Signature"
+                  className={styles.signatureGraphic}
+                />
+              </div>
+            )}
+            <span className={styles.senderName}>{senderName || "S V Balasubramaniam"}</span>
+            <span className={styles.senderDesignation}>{senderDesignation || "Chairman"}</span>
+            <span className={styles.schoolAffiliation}>{schoolName || "Bannari Amman Institute of Technology"}</span>
           </div>
 
           {/* Circular School Logo Badge */}
