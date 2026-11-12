@@ -45,8 +45,16 @@ export default function ModernLoginForm({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const formatLoginError = (err?: string | null) => {
+    if (!err) return "";
+    if (err === "CredentialsSignin") {
+      return "Invalid email, phone number, or password. Please verify your credentials.";
+    }
+    return err;
+  };
+
   const [error, setError] = useState<string>(
-    initialError || (initialReason && REASON_MESSAGES[initialReason]) || ""
+    formatLoginError(initialError) || (initialReason && REASON_MESSAGES[initialReason]) || ""
   );
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -122,7 +130,7 @@ export default function ModernLoginForm({
       const res = await signIn("credentials", signInOptions);
 
       if (res?.error) {
-        setError(res.error || "Invalid email or password. Please verify your credentials.");
+        setError(formatLoginError(res.error) || "Invalid email or password. Please verify your credentials.");
         setLoading(false);
       } else {
         try {

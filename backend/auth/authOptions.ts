@@ -49,15 +49,32 @@ export function getAuthOptions(): NextAuthOptions {
 
         const cleanEmail = (credentials.email || "").trim();
         const lowerEmail = cleanEmail.toLowerCase();
+        const digitsOnly = cleanEmail.replace(/[^0-9]/g, "");
+
         let user;
         try {
+          const searchConditions: any[] = [
+            { email: { equals: lowerEmail, mode: "insensitive" } },
+            { email: { equals: cleanEmail, mode: "insensitive" } },
+            { email: cleanEmail },
+            { alternateEmail: { equals: lowerEmail, mode: "insensitive" } },
+            { alternateEmail: { equals: cleanEmail, mode: "insensitive" } },
+            { alternateEmail: cleanEmail },
+            { googleEmail: { equals: lowerEmail, mode: "insensitive" } },
+            { googleEmail: { equals: cleanEmail, mode: "insensitive" } },
+            { googleEmail: cleanEmail },
+          ];
+
+          if (digitsOnly.length === 10) {
+            searchConditions.push(
+              { teacher: { phone: digitsOnly } },
+              { parent: { phone: digitsOnly } }
+            );
+          }
+
           user = await prisma.user.findFirst({
             where: {
-              OR: [
-                { email: { equals: lowerEmail, mode: "insensitive" } },
-                { email: { equals: cleanEmail, mode: "insensitive" } },
-                { email: cleanEmail },
-              ],
+              OR: searchConditions,
             },
           });
         } catch (error) {

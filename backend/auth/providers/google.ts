@@ -68,8 +68,10 @@ export async function verifyGoogleSignIn(user: any, account: any) {
           OR: [
             { email: { equals: cleanGoogleEmail, mode: "insensitive" } },
             { googleEmail: { equals: cleanGoogleEmail, mode: "insensitive" } },
+            { alternateEmail: { equals: cleanGoogleEmail, mode: "insensitive" } },
             { email: user.email },
-            { googleEmail: user.email }
+            { googleEmail: user.email },
+            { alternateEmail: user.email }
           ]
         },
       });

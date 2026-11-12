@@ -23,6 +23,7 @@ model User {
   dateOfBirth         DateTime? @db.Date
   googleEmail         String?
   googleEmailVerified Boolean  @default(false)
+  alternateEmail      String?
   theme               String   @default("light") // light | dark
   notificationsEnabled Boolean @default(true)
   sessionVersion      Int      @default(1)
