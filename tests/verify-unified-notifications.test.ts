@@ -1,5 +1,6 @@
 import { prisma } from "../backend/db/prisma";
 import { dispatchPortalNotification } from "../lib/notifications";
+import { sendInstantPortalNotification } from "../lib/pushDispatcher";
 import assert from "assert";
 
 async function runTestSuite() {
@@ -34,8 +35,33 @@ async function runTestSuite() {
     assert.strictEqual(result.inAppCount, 1, "Must insert exactly 1 in-app notification record");
     console.log(`✓ In-app notification created successfully (inAppCount: ${result.inAppCount}).\n`);
 
-    // 3. Verify in-app record in database
-    console.log("3. Verifying database record fields...");
+    // 3. Test sendInstantPortalNotification across key modules
+    console.log("3. Testing sendInstantPortalNotification across key modules...");
+    const modulesToTest = [
+      { category: "ANNOUNCEMENT", title: "School Circular", link: "/dashboard/parent/announcements" },
+      { category: "MEETING", title: "PTM Scheduled", link: "/dashboard/parent/meetings" },
+      { category: "BUS_MESSAGE", title: "Bus 12 Arrived", link: "/parent/bus" },
+      { category: "HOMEWORK", title: "Math Assignment", link: "/dashboard/parent/homework" },
+      { category: "ATTENDANCE", title: "Attendance Marked", link: "/dashboard/parent/attendance" },
+    ];
+
+    for (const mod of modulesToTest) {
+      const instantRes = await sendInstantPortalNotification({
+        targetUserIds: [tempUser.id],
+        category: mod.category,
+        title: mod.title,
+        body: `Test body for ${mod.title}`,
+        link: mod.link,
+        priority: "HIGH",
+        bypass48h: true,
+      });
+      assert(instantRes.success, `Failed to dispatch for ${mod.category}`);
+      assert.strictEqual(instantRes.inAppCount, 1, `Must insert in-app record for ${mod.category}`);
+    }
+    console.log("✓ All module categories successfully created and verified in database.\n");
+
+    // 4. Verify in-app record in database
+    console.log("4. Verifying database record fields...");
     const createdRecord = await prisma.notification.findFirst({
       where: {
         userId: tempUser.id,
@@ -49,32 +75,32 @@ async function runTestSuite() {
     assert.strictEqual(createdRecord.isRead, false, "Must default isRead = false");
     console.log(`✓ Database record verified: ID ${createdRecord.id}, type: ${createdRecord.type}, isRead: ${createdRecord.isRead}.\n`);
 
-    // 4. Test Endpoint Deduplication
-    console.log("4. Testing endpoint deduplication with 1 active and 1 duplicate...");
-    const dummyEndpoint = `https://fcm.googleapis.com/fcm/send/test-dedup-${Date.now()}`;
-    const dummyP256dh = "BBIHzbc-DVhlpPB_plCE0gUMpCSsHiqA1Y5FVyP-ax6p0HWnFZILFISth4FYfyAp0gywswCBxz4GfDnXm_c-Agk";
-    const dummyAuth = "ExZi6lTrD-JWJN9cqk88AA6Y8-vxTYaxwhaY4AUwMFc";
+    // 5. Setup duplicate test subscription on BOTH PushSubscription and DeviceNotificationsRegistry
+    console.log("5. Testing endpoint deduplication with 1 active and 1 duplicate...");
+    const sharedEndpoint = `https://fcm.googleapis.com/fcm/send/test-device-${Date.now()}`;
+    const p256dh = "BC_valid_mock_p256dh_key_for_testing_purposes_only_here";
+    const auth = "mock_auth_secret_key";
 
-    // Create 1 primary subscription
-    const sub = await prisma.pushSubscription.create({
+    // Insert into PushSubscription
+    await prisma.pushSubscription.create({
       data: {
         userId: tempUser.id,
-        endpoint: dummyEndpoint,
-        p256dh: dummyP256dh,
-        auth: dummyAuth,
-        lastLoginAt: new Date(),
+        endpoint: sharedEndpoint,
+        p256dh,
+        auth,
         isActive: true,
+        lastLoginAt: new Date(),
       },
     });
 
-    // Create a duplicate record in deviceNotificationsRegistry with the same endpoint
+    // Insert identical endpoint into DeviceNotificationsRegistry
     await prisma.deviceNotificationsRegistry.create({
       data: {
         userId: tempUser.id,
-        endpoint: dummyEndpoint,
-        p256dh: dummyP256dh,
-        auth: dummyAuth,
-        deviceId: `dev_${tempUser.id}`,
+        deviceId: `test-device-${Date.now()}`,
+        endpoint: sharedEndpoint,
+        p256dh,
+        auth,
         lastLoginAt: new Date(),
       },
     });
@@ -92,13 +118,13 @@ async function runTestSuite() {
     assert.strictEqual(dedupDispatch.pushEligible, 1, "Must deduplicate to exactly 1 unique device endpoint");
     console.log(`✓ Deduplication verified: Exactly ${dedupDispatch.pushEligible} unique endpoint targeted across tables.\n`);
 
-    // Clean up subscriptions
-    await prisma.pushSubscription.deleteMany({ where: { userId: tempUser.id } });
-    await prisma.deviceNotificationsRegistry.deleteMany({ where: { userId: tempUser.id } });
-    await prisma.notification.deleteMany({ where: { userId: tempUser.id } });
   } finally {
-    // Clean up isolated test user
-    await prisma.user.delete({ where: { id: tempUser.id } });
+    // Clean up all user dependencies before deleting user
+    await prisma.pushSubscription.deleteMany({ where: { userId: tempUser.id } }).catch(() => {});
+    await prisma.deviceNotificationsRegistry.deleteMany({ where: { userId: tempUser.id } }).catch(() => {});
+    await prisma.notificationRecipient.deleteMany({ where: { userId: tempUser.id } }).catch(() => {});
+    await prisma.notification.deleteMany({ where: { userId: tempUser.id } }).catch(() => {});
+    await prisma.user.delete({ where: { id: tempUser.id } }).catch(() => {});
     console.log("✓ Cleaned up isolated test user.\n");
   }
 

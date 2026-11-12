@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
 import {
   CreateBusSchema,
   UpdateBusSchema,
@@ -973,6 +974,18 @@ export async function updateBusStatusAction(busId: string, rawPayload: any) {
           invalidateUserNotifCache(uid);
         }
 
+        // Dispatch instant lock-screen push notification
+        sendInstantPortalNotification({
+          targetUserIds: parentUserIds,
+          category: "BUS_MESSAGE",
+          title: notifTitle,
+          body: notifContent,
+          link: "/parent/bus",
+          tag: `admin-bus-status-${bus.id}`,
+          priority: "URGENT",
+          bypass48h: true,
+        }).catch(() => {});
+
         parentAlertCount = parentUserIds.length;
       }
     }
@@ -1172,6 +1185,20 @@ export async function sendBusMessageAction(busId: string, rawPayload: any) {
     // Invalidate user notification caches
     for (const uid of targetParentUserIds) {
       invalidateUserNotifCache(uid);
+    }
+
+    if (targetParentUserIds.length > 0) {
+      const notifIcon = priority === "URGENT" ? "🚨 " : "🚌 ";
+      sendInstantPortalNotification({
+        targetUserIds: targetParentUserIds,
+        category: "BUS_MESSAGE",
+        title: `${notifIcon}Bus ${bus.busNumber}: ${title.trim()}`,
+        body: message.trim(),
+        link: "/parent/bus",
+        tag: `admin-bus-msg-${bus.id}-${result.id}`,
+        priority: priority === "URGENT" ? "URGENT" : "HIGH",
+        bypass48h: true,
+      }).catch(() => {});
     }
 
     revalidatePath("/admin/buses");

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { sendUnifiedBroadcast } from "@/backend/services/notifications/unifiedNotificationEngine";
+import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
 
 export async function createAnnouncementAction(formData: FormData) {
   try {
@@ -27,7 +28,7 @@ export async function createAnnouncementAction(formData: FormData) {
       return { error: "Please select a specific class for this announcement." };
     }
 
-    await prisma.announcement.create({
+    const newAnnouncement = await prisma.announcement.create({
       data: {
         title,
         content,
@@ -82,13 +83,15 @@ export async function createAnnouncementAction(formData: FormData) {
           ? "INSTRUCTION" 
           : "ANNOUNCEMENT";
 
-        await sendUnifiedBroadcast({
-          userIds: targetUserIds,
-          title,
-          content,
-          type: notifType,
-          category: "general",
-          link: "/dashboard",
+        await sendInstantPortalNotification({
+          targetUserIds,
+          category: notifType,
+          title: `📢 ${title}`,
+          body: content.slice(0, 150),
+          link: "/dashboard/parent/announcements",
+          tag: `announcement-${newAnnouncement.id}`,
+          priority: priority === "HIGH" ? "HIGH" : "NORMAL",
+          bypass48h: true, // Urgent school announcements reach all active devices
         });
       }
     } catch (notifErr) {

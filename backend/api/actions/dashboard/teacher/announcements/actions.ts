@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
 
 export async function createTeacherAnnouncementAction(formData: FormData) {
   try {
@@ -31,7 +32,7 @@ export async function createTeacherAnnouncementAction(formData: FormData) {
       return { error: "Class must be selected" };
     }
 
-    await prisma.announcement.create({
+    const newAnnouncement = await prisma.announcement.create({
       data: {
         title,
         content,
@@ -67,14 +68,15 @@ export async function createTeacherAnnouncementAction(formData: FormData) {
           ? "INSTRUCTION" 
           : "ANNOUNCEMENT";
 
-        await prisma.notification.createMany({
-          data: targetUserIds.map(uid => ({
-            userId: uid,
-            title,
-            content,
-            type: notifType,
-            link: "/dashboard"
-          }))
+        await sendInstantPortalNotification({
+          targetUserIds,
+          category: notifType,
+          title: `📢 ${title}`,
+          body: content.slice(0, 150),
+          link: "/dashboard/parent/announcements",
+          tag: `teacher-announcement-${newAnnouncement.id}`,
+          priority: priority === "HIGH" ? "HIGH" : "NORMAL",
+          bypass48h: true,
         });
       }
     } catch (notifErr) {

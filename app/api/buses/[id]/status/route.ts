@@ -4,7 +4,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { UpdateBusStatusSchema } from "@/backend/lib/validations/transport";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
-import { sendUnifiedBroadcast } from "@/backend/services/notifications/unifiedNotificationEngine";
+import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
 
 export const dynamic = "force-dynamic";
 
@@ -102,14 +102,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         const notifTitle = `${statusPrefix}: Bus ${bus.busNumber}`;
         const notifContent = `Bus ${bus.busNumber} (${bus.name}): ${description}`;
 
-        await sendUnifiedBroadcast({
-          userIds: parentUserIds,
+        await sendInstantPortalNotification({
+          targetUserIds: parentUserIds,
+          category: "BUS_MESSAGE",
           title: notifTitle,
-          content: notifContent,
-          type: "BUS",
-          category: "alerts",
-          priority: "URGENT",
+          body: notifContent,
           link: "/parent/bus",
+          tag: `bus-status-${bus.id}-${Date.now().toString().slice(-6)}`,
+          priority: "URGENT",
+          bypass48h: true, // Urgent transit update reaches all subscribed devices
         });
 
         notifiedParentCount = parentUserIds.length;

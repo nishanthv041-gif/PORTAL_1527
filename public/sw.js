@@ -146,6 +146,7 @@ self.addEventListener("push", (event) => {
     let iconUrl = self.location.origin + "/icons/icon-192x192.png";
     let badgeUrl = self.location.origin + "/icons/icon-192x192.png";
     let tag = "srt-portal";
+    let notificationId = null;
 
     if (event.data) {
       try {
@@ -163,6 +164,7 @@ self.addEventListener("push", (event) => {
         if (payload.tag) tag = payload.tag;
         else if (payload.data && payload.data.tag) tag = payload.data.tag;
         else if (payload.data && payload.data.notificationId) tag = "notif-" + payload.data.notificationId;
+        if (payload.data && payload.data.notificationId) notificationId = payload.data.notificationId;
       } catch {
         try {
           const txt = event.data.text();
@@ -179,10 +181,12 @@ self.addEventListener("push", (event) => {
       timestamp: Date.now(),
       data: {
         url: targetUrl,
+        tag: tag,
+        notificationId: notificationId,
       },
       tag: tag,
       renotify: true,
-      requireInteraction: false,
+      requireInteraction: true,
     };
 
     try {
@@ -194,8 +198,12 @@ self.addEventListener("push", (event) => {
           body: body,
           icon: iconUrl,
           tag: tag,
+          renotify: true,
+          requireInteraction: true,
           data: {
             url: targetUrl,
+            tag: tag,
+            notificationId: notificationId,
           },
         });
       } catch (fallbackErr) {

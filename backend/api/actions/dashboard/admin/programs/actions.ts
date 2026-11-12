@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { sendUnifiedBroadcast } from "@/backend/services/notifications/unifiedNotificationEngine";
+import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
 
 export async function sendProgramNotificationToAllAction(programId: string) {
   try {
@@ -35,13 +36,15 @@ export async function sendProgramNotificationToAllAction(programId: string) {
     const notifContent = `📅 Program Scheduled for ${targetLabel}: "${prog.title}" on ${dateFormatted} at ${prog.startTime}${prog.endTime ? ` - ${prog.endTime}` : ""}${prog.location ? ` | Venue: ${prog.location}` : ""}. ${prog.description || "All are cordially invited."}`;
 
     // Dispatch unified real-time notifications to all active users
-    await sendUnifiedBroadcast({
-      userIds: activeUsers.map(u => u.id),
+    await sendInstantPortalNotification({
+      targetUserIds: activeUsers.map(u => u.id),
+      category: "GENERAL",
       title: notifTitle,
-      content: notifContent,
-      type: "PROGRAM",
-      category: "general",
-      link: "/dashboard",
+      body: notifContent,
+      link: "/dashboard/parent/programs",
+      tag: `program-${programId}`,
+      priority: "HIGH",
+      bypass48h: true,
     });
 
     revalidatePath("/dashboard/admin/programs");

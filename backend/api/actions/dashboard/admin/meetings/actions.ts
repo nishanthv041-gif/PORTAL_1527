@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
 import { dispatchPushToRecipients } from "@/backend/services/push/webPushService";
+import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
 
 export interface CreateMeetingInput {
   meetingType: "PARENTS" | "TEACHERS";
@@ -282,18 +283,33 @@ export async function createMeetingAction(formData: FormData) {
         // Invalidate notification cache so pop-up appears immediately
         await invalidateUserNotifCache();
 
-        // Dispatch real-time device push notifications
-        dispatchPushToRecipients(
-          notificationsToInsert.map(n => n.userId),
-          {
+        // Dispatch instant high-priority lock-screen push notifications
+        const parentUserIds = meeting.parents.map(p => p.userId).filter(Boolean) as string[];
+        const teacherUserIds = meeting.teachers.map(t => t.userId).filter(Boolean) as string[];
+
+        if (parentUserIds.length > 0) {
+          sendInstantPortalNotification({
+            targetUserIds: parentUserIds,
+            category: "MEETING",
             title: `📅 Meeting Scheduled: ${topic}`,
-            body: `${description ? description + " - " : ""}${date} at ${startTime}`,
-            url: "/dashboard",
-            category: "general",
-          },
-          undefined,
-          "general"
-        ).catch(() => {});
+            body: `${description ? description + " - " : ""}${date} at ${startTime}. Venue: ${mode === "ONLINE" ? "Online" : place || "Campus"}`,
+            link: "/dashboard/parent/meetings",
+            tag: `meeting-${meeting.id}-parent`,
+            priority: "HIGH",
+          }).catch(() => {});
+        }
+
+        if (teacherUserIds.length > 0) {
+          sendInstantPortalNotification({
+            targetUserIds: teacherUserIds,
+            category: "MEETING",
+            title: `📅 Staff Meeting: ${topic}`,
+            body: `${description ? description + " - " : ""}${date} at ${startTime}. Mode: ${mode === "ONLINE" ? "Online" : place || "Campus"}`,
+            link: "/dashboard/teacher/meetings",
+            tag: `meeting-${meeting.id}-teacher`,
+            priority: "HIGH",
+          }).catch(() => {});
+        }
       }
     }
 
@@ -433,17 +449,15 @@ export async function sendMeetingNotificationAction(meetingId: string) {
     await prisma.notification.createMany({ data: notifs });
     await invalidateUserNotifCache();
 
-    dispatchPushToRecipients(
-      notifs.map(n => n.userId),
-      {
-        title: `🔔 Reminder: ${meeting.agenda}`,
-        body: `Meeting on ${dateFormatted} (${meeting.time}). Staff In-charge: ${inchargeName}.`,
-        url: "/dashboard",
-        category: "general",
-      },
-      undefined,
-      "general"
-    ).catch(() => {});
+    sendInstantPortalNotification({
+      targetUserIds: notifs.map(n => n.userId),
+      category: "MEETING",
+      title: `🔔 Reminder: ${meeting.agenda}`,
+      body: `Meeting on ${dateFormatted} (${meeting.time}). In-charge: ${inchargeName}.`,
+      link: meetingType === "PARENTS" ? "/dashboard/parent/meetings" : "/dashboard/teacher/meetings",
+      tag: `reminder-meeting-${meeting.id}`,
+      priority: "HIGH",
+    }).catch(() => {});
 
     revalidatePath("/dashboard/admin/meetings");
     revalidatePath("/dashboard/teacher/meetings");

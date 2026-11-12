@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import {
   Bell, CheckCheck, Trash2, ArrowLeft, ExternalLink,
   BookOpen, FileText, MessageSquare, Megaphone, Calendar,
-  CheckCircle2, Clock, Filter, AlertCircle, ShieldAlert
+  CheckCircle2, Clock, Filter, AlertCircle, ShieldAlert,
+  Bus, Users, AlertTriangle
 } from "lucide-react";
 
 export interface PortalNotificationItem {
@@ -37,10 +38,11 @@ function formatRelativeTime(dateInput: Date | string): string {
   });
 }
 
-function getTypeBadge(type: string) {
-  const normalized = (type || "").toUpperCase();
+function getTypeBadge(type: string, category?: string | null) {
+  const normalized = (type || category || "").toUpperCase();
   switch (normalized) {
     case "REPORT_CARD":
+    case "EXAM":
       return {
         label: "Report Card",
         icon: <FileText size={15} />,
@@ -49,6 +51,7 @@ function getTypeBadge(type: string) {
         border: "rgba(59, 130, 246, 0.25)",
       };
     case "HOMEWORK":
+    case "ASSIGNMENT":
       return {
         label: "Homework",
         icon: <BookOpen size={15} />,
@@ -57,6 +60,7 @@ function getTypeBadge(type: string) {
         border: "rgba(168, 85, 247, 0.25)",
       };
     case "MESSAGE":
+    case "CHAT":
       return {
         label: "Message",
         icon: <MessageSquare size={15} />,
@@ -65,12 +69,32 @@ function getTypeBadge(type: string) {
         border: "rgba(16, 185, 129, 0.25)",
       };
     case "ANNOUNCEMENT":
+    case "INSTRUCTION":
+    case "NOTICE":
       return {
         label: "Notice",
         icon: <Megaphone size={15} />,
         bg: "rgba(245, 158, 11, 0.12)",
         color: "#d97706",
         border: "rgba(245, 158, 11, 0.25)",
+      };
+    case "MEETING":
+      return {
+        label: "Meeting",
+        icon: <Users size={15} />,
+        bg: "rgba(99, 102, 241, 0.12)",
+        color: "#4f46e5",
+        border: "rgba(99, 102, 241, 0.25)",
+      };
+    case "BUS":
+    case "BUS_MESSAGE":
+    case "TRANSPORT":
+      return {
+        label: "Bus Alert",
+        icon: <Bus size={15} />,
+        bg: "rgba(234, 179, 8, 0.14)",
+        color: "#b45309",
+        border: "rgba(234, 179, 8, 0.3)",
       };
     case "ATTENDANCE":
       return {
@@ -79,6 +103,14 @@ function getTypeBadge(type: string) {
         bg: "rgba(239, 68, 68, 0.12)",
         color: "#dc2626",
         border: "rgba(239, 68, 68, 0.25)",
+      };
+    case "COMPLAINT":
+      return {
+        label: "Notice",
+        icon: <AlertTriangle size={15} />,
+        bg: "rgba(244, 63, 94, 0.12)",
+        color: "#e11d48",
+        border: "rgba(244, 63, 94, 0.25)",
       };
     default:
       return {
@@ -109,20 +141,62 @@ export default function NotificationsCenterClient({
   }, [notifications]);
 
   const filteredNotifications = useMemo(() => {
-    if (activeFilter === "UNREAD") {
-      return notifications.filter((n) => !n.isRead);
-    }
-    if (activeFilter === "ACADEMIC") {
+    if (activeFilter === "ALL") return notifications;
+    if (activeFilter === "UNREAD") return notifications.filter((n) => !n.isRead);
+    if (activeFilter === "ANNOUNCEMENT") {
       return notifications.filter((n) => {
-        const t = (n.type || "").toUpperCase();
-        return t === "REPORT_CARD" || t === "HOMEWORK";
+        const t = (n.type || n.category || "").toUpperCase();
+        return t === "ANNOUNCEMENT" || t === "INSTRUCTION" || t === "NOTICE";
       });
     }
-    if (activeFilter === "MESSAGES") {
-      return notifications.filter((n) => (n.type || "").toUpperCase() === "MESSAGE");
+    if (activeFilter === "MEETING") {
+      return notifications.filter((n) => {
+        const t = (n.type || n.category || "").toUpperCase();
+        return t === "MEETING";
+      });
     }
-    if (activeFilter === "ANNOUNCEMENTS") {
-      return notifications.filter((n) => (n.type || "").toUpperCase() === "ANNOUNCEMENT");
+    if (activeFilter === "MESSAGE") {
+      return notifications.filter((n) => {
+        const t = (n.type || n.category || "").toUpperCase();
+        return t === "MESSAGE" || t === "CHAT";
+      });
+    }
+    if (activeFilter === "REPORT_CARD") {
+      return notifications.filter((n) => {
+        const t = (n.type || n.category || "").toUpperCase();
+        return t === "REPORT_CARD" || t === "EXAM";
+      });
+    }
+    if (activeFilter === "BUS") {
+      return notifications.filter((n) => {
+        const t = (n.type || n.category || "").toUpperCase();
+        return t === "BUS" || t === "BUS_MESSAGE" || t === "TRANSPORT";
+      });
+    }
+    if (activeFilter === "HOMEWORK") {
+      return notifications.filter((n) => {
+        const t = (n.type || n.category || "").toUpperCase();
+        return t === "HOMEWORK" || t === "ASSIGNMENT";
+      });
+    }
+    if (activeFilter === "ATTENDANCE") {
+      return notifications.filter((n) => {
+        const t = (n.type || n.category || "").toUpperCase();
+        return t === "ATTENDANCE";
+      });
+    }
+    if (activeFilter === "OTHER") {
+      const known = new Set([
+        "ANNOUNCEMENT", "INSTRUCTION", "NOTICE",
+        "MEETING", "MESSAGE", "CHAT",
+        "REPORT_CARD", "EXAM",
+        "BUS", "BUS_MESSAGE", "TRANSPORT",
+        "HOMEWORK", "ASSIGNMENT", "ATTENDANCE"
+      ]);
+      return notifications.filter((n) => {
+        const t = (n.type || n.category || "").toUpperCase();
+        return !known.has(t);
+      });
     }
     return notifications;
   }, [notifications, activeFilter]);
@@ -295,9 +369,14 @@ export default function NotificationsCenterClient({
         {[
           { key: "ALL", label: "All" },
           { key: "UNREAD", label: `Unread (${unreadCount})` },
-          { key: "ACADEMIC", label: "Academic" },
-          { key: "MESSAGES", label: "Messages" },
-          { key: "ANNOUNCEMENTS", label: "Notices" },
+          { key: "ANNOUNCEMENT", label: "Announcements" },
+          { key: "MEETING", label: "Meetings" },
+          { key: "MESSAGE", label: "Messages" },
+          { key: "REPORT_CARD", label: "Report Cards" },
+          { key: "BUS", label: "Bus Alerts" },
+          { key: "HOMEWORK", label: "Homework" },
+          { key: "ATTENDANCE", label: "Attendance" },
+          { key: "OTHER", label: "Others" },
         ].map((tab) => {
           const isActive = activeFilter === tab.key;
           return (
@@ -349,7 +428,7 @@ export default function NotificationsCenterClient({
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           {filteredNotifications.map((notif) => {
-            const badge = getTypeBadge(notif.type);
+            const badge = getTypeBadge(notif.type, notif.category);
             const isUnread = !notif.isRead;
 
             return (

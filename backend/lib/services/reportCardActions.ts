@@ -5,6 +5,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { sendStudentReportCardEmail, ReportCardEmailSubjectMark } from "@/backend/lib/services/emailService";
 import { revalidatePath } from "next/cache";
+import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
 
 export async function sendReportCardToParentAction(studentId: string) {
   const session = await getServerSession(getAuthOptions());
@@ -97,19 +98,19 @@ export async function sendReportCardToParentAction(studentId: string) {
       const parentUser = parentStudent.parent.user;
       if (!parentUser) continue;
 
-      // 1. In-app notification for the parent (unconditional, no skipping)
+      // 1. In-app notification & Native Lock-screen Push for the parent
       try {
-        await prisma.notification.create({
-          data: {
-            userId: parentUser.id,
-            title: "Report Card Available",
-            content: `The official report card for ${studentFullName} has been generated and is now available for viewing.`,
-            type: "REPORT_CARD",
-            link: `/dashboard/parent/report-cards/${student.id}`
-          }
+        await sendInstantPortalNotification({
+          targetUserIds: [parentUser.id],
+          category: "REPORT_CARD",
+          title: `Report Card: ${studentFullName}`,
+          body: `The official report card for ${studentFullName} has been generated and is now available for viewing.`,
+          link: `/dashboard/parent/report-cards/${student.id}`,
+          tag: `report-card-${student.id}`,
+          priority: "HIGH",
         });
       } catch (notifErr) {
-        console.error("Failed to create in-app notification for parent:", parentUser.id, notifErr);
+        console.error("Failed to dispatch report card notification to parent:", parentUser.id, notifErr);
       }
 
       // 2. Email dispatch to parent's email address
@@ -256,19 +257,19 @@ export async function sendClassReportCardsToAllParentsAction(classId: string) {
         const parentUser = parentStudent.parent.user;
         if (!parentUser) continue;
 
-        // In-app notification
+        // In-app notification & Native Lock-screen Push
         try {
-          await prisma.notification.create({
-            data: {
-              userId: parentUser.id,
-              title: "Report Card Available",
-              content: `The official report card for ${studentFullName} has been generated and is now available for viewing.`,
-              type: "REPORT_CARD",
-              link: `/dashboard/parent/report-cards/${student.id}`
-            }
+          await sendInstantPortalNotification({
+            targetUserIds: [parentUser.id],
+            category: "REPORT_CARD",
+            title: `Report Card: ${studentFullName}`,
+            body: `The official report card for ${studentFullName} has been generated and is now available for viewing.`,
+            link: `/dashboard/parent/report-cards/${student.id}`,
+            tag: `report-card-${student.id}`,
+            priority: "HIGH",
           });
         } catch (err) {
-          console.error("Failed to create in-app notification:", parentUser.id, err);
+          console.error("Failed to dispatch report card notification:", parentUser.id, err);
         }
 
         // Email sending
@@ -527,16 +528,16 @@ export async function createAndSendReportCardAction(payload: CreateReportCardPay
       const parentUser = parentStudent.parent?.user;
       if (!parentUser) continue;
 
-      // In-app Notification
+      // In-app Notification & Native Lock-screen Push
       try {
-        await prisma.notification.create({
-          data: {
-            userId: parentUser.id,
-            title: `Report Card: ${studentFullName}`,
-            content: `The official academic report card for ${examName.trim()} has been published. Total: ${totalScore}/${maxTotal} (${percentage}% - Grade ${grade}).`,
-            type: "REPORT_CARD",
-            link: `/dashboard/parent/report-cards`
-          }
+        await sendInstantPortalNotification({
+          targetUserIds: [parentUser.id],
+          category: "REPORT_CARD",
+          title: `Report Card: ${studentFullName}`,
+          body: `The official academic report card for ${examName.trim()} has been published. Total: ${totalScore}/${maxTotal} (${percentage}% - Grade ${grade}).`,
+          link: `/dashboard/parent/report-cards`,
+          tag: `exam-report-${student.id}`,
+          priority: "HIGH",
         });
         await invalidateUserNotifCache(parentUser.id);
       } catch (notifErr) {

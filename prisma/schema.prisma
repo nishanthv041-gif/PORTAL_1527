@@ -1122,9 +1122,10 @@ model Notification {
   user         User      @relation(fields: [userId], references: [id])
   title        String
   content      String
-  type         String // ATTENDANCE, EXAM, HOMEWORK, MEETING, ANNOUNCEMENT, SYSTEM, BUS
-  category     String?   @default("GENERAL") // BUS, ACADEMIC, SYSTEM
-  priority     String?   @default("NORMAL")  // NORMAL, URGENT
+  body         String?   // Mirror field for lock-screen readability and unified API
+  type         String // ATTENDANCE, EXAM, HOMEWORK, MEETING, ANNOUNCEMENT, SYSTEM, BUS, REPORT_CARD, MESSAGE, BUS_MESSAGE
+  category     String?   @default("GENERAL") // ANNOUNCEMENT, MEETING, MESSAGE, REPORT_CARD, BUS_MESSAGE, HOMEWORK, ATTENDANCE, GENERAL
+  priority     String?   @default("NORMAL")  // NORMAL, URGENT, HIGH
   link         String?
   isRead       Boolean   @default(false)
   targetType   String?   // ALL, ROLE, CLASS, USER

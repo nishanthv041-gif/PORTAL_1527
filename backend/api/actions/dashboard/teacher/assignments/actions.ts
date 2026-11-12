@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { sendUnifiedBroadcast } from "@/backend/services/notifications/unifiedNotificationEngine";
+import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
 import path from "path";
 import fs from "fs/promises";
 
@@ -256,13 +257,14 @@ export async function createAssignment(formData: FormData) {
       ));
 
       if (parentUserIds.length > 0) {
-        await sendUnifiedBroadcast({
-          userIds: parentUserIds,
-          title: `New Home Work: ${title}`,
-          content: `${subjectName ? `[${subjectName}] ` : ""}${title} assigned for ${assignment.class.name} - ${assignment.class.section}. Due on ${deadlineDate.toLocaleDateString()}.`,
-          type: "HOMEWORK",
-          category: "academic",
-          link: "/dashboard/parent/assignments",
+        await sendInstantPortalNotification({
+          targetUserIds: parentUserIds,
+          category: "HOMEWORK",
+          title: `📚 New Homework: ${title}`,
+          body: `${subjectName ? `[${subjectName}] ` : ""}${title} assigned for ${assignment.class.name} - ${assignment.class.section}. Due: ${deadlineDate.toLocaleDateString()}.`,
+          link: "/dashboard/parent/homework",
+          tag: `homework-${assignment.id}`,
+          priority: "HIGH",
         });
       }
     } catch (notifErr) {

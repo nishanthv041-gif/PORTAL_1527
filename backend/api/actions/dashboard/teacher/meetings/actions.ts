@@ -2,6 +2,7 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
 
 export async function scheduleMeetingAction(formData: FormData) {
   try {
@@ -37,14 +38,14 @@ export async function scheduleMeetingAction(formData: FormData) {
     });
 
     if (meeting.parents.length > 0) {
-      await prisma.notification.create({
-        data: {
-          userId: meeting.parents[0].userId,
-          title: "New Meeting Scheduled",
-          content: `A teacher has scheduled a meeting: ${agenda} on ${dateStr} at ${time}.`,
-          type: "MEETING",
-          link: "/dashboard/parent/meetings"
-        }
+      await sendInstantPortalNotification({
+        targetUserIds: [meeting.parents[0].userId],
+        category: "MEETING",
+        title: "New Meeting Scheduled",
+        body: `A teacher has scheduled a meeting: ${agenda} on ${dateStr} at ${time}. Venue: ${location || link || "School Campus"}`,
+        link: "/dashboard/parent/meetings",
+        tag: `meeting-sched-${meeting.id}`,
+        priority: "HIGH",
       }).catch(() => {});
     }
 

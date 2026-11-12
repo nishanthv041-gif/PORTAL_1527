@@ -4,6 +4,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { SendBusMessageSchema } from "@/backend/lib/validations/transport";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
 
 export const dynamic = "force-dynamic";
 
@@ -167,6 +168,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       return createdMsg;
     });
+
+    // Dispatch instant lock-screen push notifications to all parents
+    if (parentUserIds.length > 0) {
+      const notifIcon = priority === "URGENT" ? "🚨 " : "🚌 ";
+      sendInstantPortalNotification({
+        targetUserIds: parentUserIds,
+        category: "BUS_MESSAGE",
+        title: `${notifIcon}Bus ${bus.busNumber}: ${title.trim()}`,
+        body: message.trim(),
+        link: "/parent/bus",
+        tag: `bus-msg-${busId}-${result.id}`,
+        priority: priority === "URGENT" ? "URGENT" : "HIGH",
+        bypass48h: true, // Emergency bus alerts bypass 48h filter to wake all active devices
+      }).catch((e) => console.error("[BusMessage] Push delivery error:", e));
+    }
 
     for (const uid of parentUserIds) {
       invalidateUserNotifCache(uid);

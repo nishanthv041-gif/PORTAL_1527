@@ -2,6 +2,7 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
 
 export async function requestMeetingAction(formData: FormData) {
   try {
@@ -35,14 +36,14 @@ export async function requestMeetingAction(formData: FormData) {
     });
 
     if (meeting.teachers.length > 0) {
-      await prisma.notification.create({
-        data: {
-          userId: meeting.teachers[0].userId,
-          title: "New Meeting Request",
-          content: `A parent has requested a meeting: ${agenda} on ${dateStr} at ${time}.`,
-          type: "MEETING",
-          link: "/dashboard/teacher/meetings"
-        }
+      await sendInstantPortalNotification({
+        targetUserIds: [meeting.teachers[0].userId],
+        category: "MEETING",
+        title: "New Meeting Request",
+        body: `A parent has requested a meeting: ${agenda} on ${dateStr} at ${time}.`,
+        link: "/dashboard/teacher/meetings",
+        tag: `meeting-req-${meeting.id}`,
+        priority: "HIGH",
       }).catch(() => {});
     }
 

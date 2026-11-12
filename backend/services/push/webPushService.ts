@@ -118,6 +118,10 @@ export async function sendPushToSubscription(
     badge: payload.badge || "/icons/icon-192x192.png",
     url: payload.url || "/dashboard",
     tag: payload.tag || (notificationId ? `notif-${notificationId}` : `portal-${sub.userId || "alert"}`),
+    renotify: true,
+    vibrate: [200, 100, 200],
+    requireInteraction: true,
+    priority: "high",
     data: {
       url: payload.url || "/dashboard",
       notificationId: notificationId || null,
@@ -132,6 +136,9 @@ export async function sendPushToSubscription(
       {
         TTL: 86400,
         urgency: "high",
+        headers: {
+          Urgency: "high",
+        },
       }
     );
 
