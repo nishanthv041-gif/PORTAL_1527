@@ -16,6 +16,7 @@ import {
 import ToggleNotifications from "@/frontend/components/ToggleNotifications";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { getNotificationDisplayText } from "@/frontend/components/birthdays/birthdayCardUtils";
 
 type NotificationWithUser = Notification & { user: User };
 
@@ -652,7 +653,7 @@ export default function NotificationsClient({
                   )}
                 </div>
                 <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.875rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                  {notif.content}
+                  {getNotificationDisplayText(notif.content)}
                 </p>
                 {notif.link && notif.link !== "/dashboard" && (
                   <a

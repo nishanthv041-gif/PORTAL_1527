@@ -6,6 +6,7 @@ import { Bell, CheckCircle, Clock, Trash2 } from "lucide-react";
 import MarkReadButton from "./MarkReadButton";
 import ToggleNotifications from "@/frontend/components/ToggleNotifications";
 import { toggleNotificationsEnabled, deleteNotificationAction } from "@/backend/api/actions/dashboard/teacher/notifications/actions";
+import { getNotificationDisplayText } from "@/frontend/components/birthdays/birthdayCardUtils";
 
 export default async function TeacherNotificationsPage() {
   const session = await getServerSession(getAuthOptions());
@@ -69,7 +70,7 @@ export default async function TeacherNotificationsPage() {
                   {notification.title}
                 </h4>
                 <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                  {notification.content}
+                  {getNotificationDisplayText(notification.content)}
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', opacity: 0.7 }}>
                   <Clock size={12} /> {new Date(notification.createdAt).toLocaleString()}

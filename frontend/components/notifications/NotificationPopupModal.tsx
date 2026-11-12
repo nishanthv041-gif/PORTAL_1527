@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { 
   Bell, ChevronLeft, ChevronRight, ExternalLink, 
   Megaphone, MessageSquare, Award, BookOpen, Calendar, Info,
-  FileText, Clock, Users, AlertCircle, BellOff, CheckCheck, Bus
+  FileText, Clock, Users, AlertCircle, BellOff, CheckCheck, Bus, X
 } from "lucide-react";
 import { CakeIcon as Cake } from "@/frontend/components/birthdays/BirthdayIcons";
 import BirthdayWishCard from "@/frontend/components/birthdays/BirthdayWishCard";
-import { parseBirthdayCardPayload } from "@/frontend/components/birthdays/birthdayCardUtils";
+import { parseBirthdayCardPayload, getNotificationDisplayText } from "@/frontend/components/birthdays/birthdayCardUtils";
 import styles from "./NotificationPopupModal.module.css";
 import { 
   UnifiedNotification, 
@@ -259,17 +259,39 @@ export default function NotificationPopupModal({
     return () => window.removeEventListener("open-notification-popup", handleManualOpen);
   }, [notifications, router]);
 
-  if (!isOpen || !notifications || notifications.length === 0) {
-    return null;
-  }
-
-  const current = notifications[currentIndex] || notifications[0];
-
   const handleClose = () => {
     // When closed, ensure all seen notifications are marked as seen and stored in database
     markShownNotificationsAsSeen(notifications);
     setIsOpen(false);
   };
+
+  // Lock background body scroll when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, notifications]);
+
+  if (!isOpen || !notifications || notifications.length === 0) {
+    return null;
+  }
+
+  const current = notifications[currentIndex] || notifications[0];
 
   const handleOpen = async () => {
     if (!current) return;
@@ -368,6 +390,17 @@ export default function NotificationPopupModal({
         aria-modal="true"
         aria-labelledby="notif-title"
       >
+        {/* Top-right touch-friendly close (X) button: always in viewport */}
+        <button
+          type="button"
+          onClick={handleClose}
+          className={styles.topRightCloseBtn}
+          aria-label="Close dialog"
+          title="Close dialog"
+        >
+          <X size={20} />
+        </button>
+
         {/* Floating circular bell icon badge overlapping the card top */}
         <div className={styles.bellBadgeCircle}>
           <Bell size={34} className={styles.bellIcon} />
@@ -405,7 +438,7 @@ export default function NotificationPopupModal({
 
         {/* Detailed Description or Designed Birthday Card */}
         {birthdayCard ? (
-          <div style={{ width: "100%", margin: "1rem 0" }}>
+          <div className={styles.birthdayCardWrapper}>
             <BirthdayWishCard
               recipientName={birthdayCard.recipientName}
               classNameLabel={birthdayCard.classNameLabel}
@@ -422,7 +455,7 @@ export default function NotificationPopupModal({
           </div>
         ) : (
           <div className={styles.descriptionBox}>
-            {current.description}
+            {getNotificationDisplayText(current.description)}
           </div>
         )}
 

@@ -76,3 +76,18 @@ export function buildBirthdaySummaryText(params: {
 
   return `Happy Birthday ${params.recipientName}! May ${deity} bless you with peace, prosperity, and happiness. - ${sender}, ${desig}, ${school}`;
 }
+
+/**
+ * Returns a clean, human-readable display string for notification content,
+ * automatically decoding serialized birthday card payloads into friendly summaries.
+ */
+export function getNotificationDisplayText(content?: string | null): string {
+  if (!content) return "";
+  const card = parseBirthdayCardPayload(content);
+  if (card) {
+    if (card.summaryText) return card.summaryText;
+    return buildBirthdaySummaryText(card);
+  }
+  return content;
+}
+

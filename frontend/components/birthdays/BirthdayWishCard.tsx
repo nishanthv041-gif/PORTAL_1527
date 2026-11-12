@@ -64,22 +64,8 @@ export default function BirthdayWishCard({
               data-testid="birthday-deity-photo"
             />
           ) : (
-            <div
-              style={{
-                width: "100%",
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "#3b2318",
-                color: "#f5e6cc",
-                padding: "1rem",
-                textAlign: "center",
-                fontSize: "0.85rem",
-              }}
-            >
-              <span style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🕉️</span>
+            <div className={styles.deityFallback} data-testid="birthday-deity-fallback">
+              <span className={styles.deityFallbackIcon}>🕉️</span>
               <strong>{deityName || "Amman"}</strong>
             </div>
           )}
@@ -124,19 +110,7 @@ export default function BirthdayWishCard({
                 />
               ) : (
                 <div
-                  style={{
-                    width: "36px",
-                    height: "36px",
-                    borderRadius: "50%",
-                    backgroundColor: "#3d2314",
-                    color: "#fbf5e8",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: 800,
-                    fontSize: "0.85rem",
-                    marginBottom: "0.2rem",
-                  }}
+                  className={styles.logoFallbackBadge}
                   data-testid="birthday-logo-fallback"
                 >
                   SRT

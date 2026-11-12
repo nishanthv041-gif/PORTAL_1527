@@ -1,19 +1,23 @@
-/* NotificationPopupModal.module.css */
+/* ==========================================================================
+   NOTIFICATION POPUP MODAL STYLESHEET
+   Centered dialog with dimmed backdrop, responsive modal sizing,
+   44x44px touch-target close button, and support for designed birthday cards.
+   ========================================================================== */
 
 .overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(15, 23, 42, 0.65);
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.72);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 99999;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
+  padding: max(0.5rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-right)) max(0.5rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
   animation: overlayFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -26,33 +30,114 @@
   }
 }
 
+/* Base Modal Container */
 .modalCard {
   position: relative;
   background: var(--card-bg, #ffffff);
-  border: 1px solid var(--border-color, rgba(226, 232, 240, 0.8));
+  border: 1px solid var(--border-color, rgba(226, 232, 240, 0.85));
   border-radius: 28px;
-  width: 100%;
-  max-width: 460px;
-  padding: 3rem 2rem 2rem 2rem;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.03);
+  width: 92vw;
+  max-width: 420px;
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 2.75rem 1.25rem 1.5rem 1.25rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.04);
   text-align: center;
   animation: modalPopUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
   box-sizing: border-box;
+  margin: auto;
 }
 
+/* Wide Modal for Birthday Cards & Rich Content */
+/* Desktop (> 1024px): max-width 800px */
 .modalCardWide {
-  max-width: 860px;
-  padding: 3rem 1.5rem 1.75rem 1.5rem;
+  width: 100%;
+  max-width: 800px;
+  padding: 3.25rem 1.5rem 1.75rem 1.5rem;
+}
+
+/* Tablets (768px - 1024px): 85vw, max-width 640px */
+@media (max-width: 1024px) {
+  .modalCardWide {
+    width: 85vw;
+    max-width: 640px;
+    padding: 3rem 1.25rem 1.5rem 1.25rem;
+  }
+}
+
+/* Mobile Phones (< 768px): 92vw, max-width 420px */
+@media (max-width: 767px) {
+  .modalCard,
+  .modalCardWide {
+    width: 92vw;
+    max-width: 420px;
+    padding: 2.75rem 0.85rem 1.25rem 0.85rem;
+    border-radius: 22px;
+  }
+}
+
+/* Small Phones (< 360px): Extra compact margins */
+@media (max-width: 359px) {
+  .modalCard,
+  .modalCardWide {
+    width: 96vw;
+    max-width: 320px;
+    padding: 2.5rem 0.55rem 1rem 0.55rem;
+    border-radius: 18px;
+  }
 }
 
 @keyframes modalPopUp {
   from {
-    transform: scale(0.85) translateY(20px);
+    transform: scale(0.9) translateY(20px);
     opacity: 0;
   }
   to {
     transform: scale(1) translateY(0);
     opacity: 1;
+  }
+}
+
+/* Floating top-right close button: min 44x44px touch target, always visible */
+.topRightCloseBtn {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-color, rgba(226, 232, 240, 0.8));
+  color: var(--text-secondary, #64748b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 20;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+.topRightCloseBtn:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.35);
+  transform: scale(1.05);
+}
+
+.topRightCloseBtn:active {
+  transform: scale(0.95);
+}
+
+@media (max-width: 480px) {
+  .topRightCloseBtn {
+    top: 0.5rem;
+    right: 0.5rem;
   }
 }
 
@@ -66,15 +151,32 @@
   height: 76px;
   border-radius: 50%;
   background: #ffffff;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
   display: flex;
   align-items: center;
   justify-content: center;
   border: 4px solid var(--card-bg, #ffffff);
+  z-index: 10;
+}
+
+@media (max-width: 767px) {
+  .bellBadgeCircle {
+    width: 64px;
+    height: 64px;
+    top: -32px;
+  }
+}
+
+@media (max-width: 359px) {
+  .bellBadgeCircle {
+    width: 58px;
+    height: 58px;
+    top: -29px;
+  }
 }
 
 .bellIcon {
-  color: #f59e0b; /* Golden amber matching image */
+  color: #f59e0b; /* Golden amber */
   animation: bellWiggle 1.2s ease-in-out infinite;
   transform-origin: top center;
 }
@@ -95,7 +197,7 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background-color: #ef4444; /* Bright red matching image */
+  background-color: #ef4444; /* Bright red */
   color: #ffffff;
   font-size: 11px;
   font-weight: 800;
@@ -117,24 +219,31 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.65rem;
 }
 
 .mainTitle {
-  font-size: 1.55rem;
+  font-size: clamp(1.2rem, 3.5vw, 1.55rem);
   font-weight: 800;
   color: var(--foreground, #0f172a);
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.35rem 0;
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
 .subTitle {
-  font-size: 1.05rem;
+  font-size: clamp(0.925rem, 2.5vw, 1.05rem);
   font-weight: 700;
   color: var(--foreground, #0f172a);
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 0.65rem 0;
   line-height: 1.35;
+  word-break: break-word;
+}
+
+.birthdayCardWrapper {
+  width: 100%;
+  margin: 0.85rem 0;
+  box-sizing: border-box;
 }
 
 .descriptionBox {
@@ -146,6 +255,7 @@
   overflow-y: auto;
   padding: 0.25rem 0.5rem;
   border-radius: 8px;
+  word-break: break-word;
 }
 
 .metaInfoRow {
@@ -155,7 +265,7 @@
   gap: 0.5rem;
   font-size: 0.76rem;
   color: var(--text-muted, #64748b);
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.15rem;
   flex-wrap: wrap;
 }
 
@@ -167,7 +277,7 @@
   background-color: rgba(0, 0, 0, 0.03);
   padding: 0.4rem 0.85rem;
   border-radius: 12px;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-secondary, #475569);
@@ -197,21 +307,22 @@
   cursor: not-allowed;
 }
 
-/* Action Buttons exactly matching the user image */
+/* Action Buttons: Open & Close */
 .actionButtonGroup {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: 0.85rem;
   width: 100%;
 }
 
 .openBtn {
   flex: 1;
-  background-color: #0284c7; /* Classic bright blue pill from mockup */
+  background-color: #0284c7;
   color: #ffffff !important;
   border-radius: 999px;
-  padding: 0.75rem 1.75rem;
+  padding: 0.75rem 1.5rem;
+  min-height: 44px;
   font-size: 0.95rem;
   font-weight: 700;
   text-decoration: none;
@@ -234,10 +345,11 @@
 
 .closeBtn {
   flex: 1;
-  background-color: #dc2626; /* Classic vibrant red pill from mockup */
+  background-color: #dc2626;
   color: #ffffff !important;
   border-radius: 999px;
-  padding: 0.75rem 1.75rem;
+  padding: 0.75rem 1.5rem;
+  min-height: 44px;
   font-size: 0.95rem;
   font-weight: 700;
   border: none;
@@ -257,86 +369,14 @@
   box-shadow: 0 6px 18px rgba(220, 38, 38, 0.45);
 }
 
-
-/* Clear All & Don't Show Again row */
-.clearAllRow {
-  margin-top: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-top: 1px solid var(--border-color, rgba(226, 232, 240, 0.6));
-  padding-top: 0.85rem;
-}
-
-.clearAllBtn {
-  background: transparent;
-  border: 1px solid var(--border-color, rgba(226, 232, 240, 0.8));
-  border-radius: 999px;
-  padding: 0.45rem 1.1rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-secondary, #64748b);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  transition: all 0.2s ease;
-  letter-spacing: 0.01em;
-}
-
-.clearAllBtn:hover:not(:disabled) {
-  background-color: rgba(239, 68, 68, 0.07);
-  border-color: rgba(239, 68, 68, 0.35);
-  color: #dc2626;
-}
-
-.clearAllBtn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-/* Inline spinner for loading state */
-.spinner {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.65s linear infinite;
-  flex-shrink: 0;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 @media (max-width: 480px) {
-  .modalCard {
-    padding: 2.75rem 1.25rem 1.5rem 1.25rem;
-    border-radius: 24px;
-  }
-
-  .bellBadgeCircle {
-    width: 68px;
-    height: 68px;
-    top: -34px;
-  }
-
-  .mainTitle {
-    font-size: 1.35rem;
-  }
-
-  .subTitle {
-    font-size: 0.95rem;
-  }
-
   .actionButtonGroup {
-    gap: 0.65rem;
+    gap: 0.5rem;
   }
 
-  .openBtn, .closeBtn {
-    padding: 0.65rem 1.2rem;
-    font-size: 0.88rem;
+  .openBtn,
+  .closeBtn {
+    padding: 0.65rem 1rem;
+    font-size: 0.875rem;
   }
 }
