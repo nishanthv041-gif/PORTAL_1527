@@ -145,7 +145,7 @@ self.addEventListener("push", (event) => {
     let targetUrl = "/dashboard";
     let iconUrl = self.location.origin + "/icons/icon-192x192.png";
     let badgeUrl = self.location.origin + "/icons/icon-192x192.png";
-    let tag = "srt-" + Date.now();
+    let tag = "srt-portal";
 
     if (event.data) {
       try {
@@ -161,6 +161,8 @@ self.addEventListener("push", (event) => {
           badgeUrl = payload.badge.startsWith("http") ? payload.badge : self.location.origin + payload.badge;
         }
         if (payload.tag) tag = payload.tag;
+        else if (payload.data && payload.data.tag) tag = payload.data.tag;
+        else if (payload.data && payload.data.notificationId) tag = "notif-" + payload.data.notificationId;
       } catch {
         try {
           const txt = event.data.text();
@@ -180,7 +182,7 @@ self.addEventListener("push", (event) => {
       },
       tag: tag,
       renotify: true,
-      requireInteraction: true,
+      requireInteraction: false,
     };
 
     try {
@@ -214,8 +216,19 @@ self.addEventListener("notificationclick", (event) => {
     return;
   }
 
-  const rawUrl = (event.notification.data && event.notification.data.url) || "/dashboard";
+  const notifData = event.notification.data || {};
+  const notifId = notifData.notificationId;
+  const rawUrl = notifData.url || "/dashboard";
   const fullTargetUrl = new URL(rawUrl, self.location.origin).href;
+
+  // Background mark-as-read
+  if (notifId) {
+    fetch("/api/notifications/mark-read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notificationId: notifId }),
+    }).catch(() => {});
+  }
 
   event.waitUntil(
     clients

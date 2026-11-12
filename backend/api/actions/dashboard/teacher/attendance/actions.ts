@@ -8,6 +8,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { isDateInCurrentWeek } from "@/frontend/utils/attendanceDateUtils";
 import { getSessionDateTime } from "@/backend/lib/services/attendanceCalculation";
 import { verifyTeacherClassAccess } from "@/lib/teacher/getTeacherClasses";
+import { dispatchPortalNotification } from "@/lib/notifications";
 
 function formatRemarksWithSession(remarks: string | undefined | null, session: "FORENOON" | "AFTERNOON"): string {
   const cleanRemarks = (remarks || "").replace(/\s*\((FORENOON|AFTERNOON)\)/gi, "").trim();
@@ -91,6 +92,39 @@ export async function updateSingleAttendance(data: {
           remarks: finalRemarks,
         },
       });
+    }
+
+    // Trigger instant Parent Attendance Notification on Absence for single student
+    if (data.status === "ABSENT") {
+      (async () => {
+        try {
+          const studentInfo = await prisma.student.findUnique({
+            where: { id: data.studentId },
+            select: {
+              firstName: true,
+              lastName: true,
+              parents: {
+                select: { parent: { select: { userId: true } } },
+              },
+            },
+          });
+          const studentName = `${studentInfo?.firstName || ""} ${studentInfo?.lastName || ""}`.trim() || "Student";
+          const parentUserIds = studentInfo?.parents.map(p => p.parent.userId).filter((id): id is string => Boolean(id)) || [];
+          if (parentUserIds.length > 0) {
+            await dispatchPortalNotification({
+              userIds: parentUserIds,
+              type: "ATTENDANCE",
+              title: `Attendance Alert: ${studentName} Absent`,
+              message: `${studentName} was marked absent for the ${sessionType.toLowerCase()} session on ${data.date}.`,
+              link: "/dashboard/parent/attendance",
+              tag: `att-${data.studentId}-${data.date}-${sessionType}`,
+              priority: "URGENT",
+            });
+          }
+        } catch (notifErr) {
+          console.warn("[Attendance] Notification dispatch note:", notifErr);
+        }
+      })();
     }
 
     revalidatePath("/dashboard/teacher/attendance");
@@ -189,6 +223,44 @@ export async function saveBulkAttendance(
           },
         });
       }
+    }
+
+    // Trigger instant Parent Attendance Notification for absent students
+    const absentRecords = data.filter((record) => record.status === "ABSENT");
+    if (absentRecords.length > 0) {
+      (async () => {
+        try {
+          for (const record of absentRecords) {
+            const sessionType: "FORENOON" | "AFTERNOON" = record.session ||
+              (record.remarks?.toUpperCase().includes("AFTERNOON") ? "AFTERNOON" : "FORENOON");
+            const studentInfo = await prisma.student.findUnique({
+              where: { id: record.studentId },
+              select: {
+                firstName: true,
+                lastName: true,
+                parents: {
+                  select: { parent: { select: { userId: true } } },
+                },
+              },
+            });
+            const studentName = `${studentInfo?.firstName || ""} ${studentInfo?.lastName || ""}`.trim() || "Student";
+            const parentUserIds = studentInfo?.parents.map(p => p.parent.userId).filter((id): id is string => Boolean(id)) || [];
+            if (parentUserIds.length > 0) {
+              await dispatchPortalNotification({
+                userIds: parentUserIds,
+                type: "ATTENDANCE",
+                title: `Attendance Alert: ${studentName} Absent`,
+                message: `${studentName} was marked absent for the ${sessionType.toLowerCase()} session on ${record.date}.`,
+                link: "/dashboard/parent/attendance",
+                tag: `att-${record.studentId}-${record.date}-${sessionType}`,
+                priority: "URGENT",
+              });
+            }
+          }
+        } catch (notifErr) {
+          console.warn("[Attendance] Notification dispatch note:", notifErr);
+        }
+      })();
     }
 
     revalidatePath("/dashboard/teacher/attendance");

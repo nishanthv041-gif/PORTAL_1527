@@ -117,7 +117,7 @@ export async function sendPushToSubscription(
     icon: payload.icon || "/icons/icon-192x192.png",
     badge: payload.badge || "/icons/icon-192x192.png",
     url: payload.url || "/dashboard",
-    tag: payload.tag || `notif-${Date.now()}`,
+    tag: payload.tag || (notificationId ? `notif-${notificationId}` : `portal-${sub.userId || "alert"}`),
     data: {
       url: payload.url || "/dashboard",
       notificationId: notificationId || null,
@@ -221,9 +221,12 @@ export async function dispatchPushToRecipients(
     categoryKey === "alerts" ||
     categoryKey === "general";
 
-  let subscriptions = await prisma.pushSubscription.findMany({
+  const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
+  const rawSubscriptions = await prisma.pushSubscription.findMany({
     where: {
       isActive: true,
+      lastLoginAt: { gte: fortyEightHoursAgo },
       OR: [
         { userId: { in: allowedUserIds } },
         // For general announcements & emergency alerts, also deliver to anonymous PWA subscriptions
@@ -240,12 +243,20 @@ export async function dispatchPushToRecipients(
     },
   });
 
+  // Strict deduplication by endpoint so a device never receives duplicate notifications
+  const endpointMap = new Map<string, (typeof rawSubscriptions)[0]>();
+  for (const s of rawSubscriptions) {
+    if (s.endpoint && s.p256dh && s.auth && !endpointMap.has(s.endpoint)) {
+      endpointMap.set(s.endpoint, s);
+    }
+  }
+
   // Also include matching active subscriptions from pwa_subscriptions
   try {
     const pwaSubs = await (prisma as any).pwaSubscription.findMany({
       where: {
         userId: { in: allowedUserIds },
-        lastActiveAt: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+        lastActiveAt: { gte: fortyEightHoursAgo },
       },
       select: {
         id: true,
@@ -256,11 +267,9 @@ export async function dispatchPushToRecipients(
       },
     });
 
-    const knownEndpoints = new Set(subscriptions.map((s) => s.endpoint));
     for (const p of pwaSubs) {
-      if (!knownEndpoints.has(p.endpoint)) {
-        knownEndpoints.add(p.endpoint);
-        subscriptions.push({
+      if (p.endpoint && p.p256dhKey && p.authKey && !endpointMap.has(p.endpoint)) {
+        endpointMap.set(p.endpoint, {
           id: p.id,
           userId: p.userId,
           endpoint: p.endpoint,
@@ -272,6 +281,8 @@ export async function dispatchPushToRecipients(
   } catch {
     // pwaSubscription table optional fallback
   }
+
+  let subscriptions = Array.from(endpointMap.values());
 
   // If no direct subscription matched for the target users, only fallback to anonymous subscriptions
   // for general public broadcasts / emergency alerts — NEVER leak student/parent private data to other users' devices

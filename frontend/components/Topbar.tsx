@@ -1,7 +1,7 @@
 "use client";
 
 import styles from "./Topbar.module.css";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
 import { Bell } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
@@ -19,6 +19,7 @@ export default function Topbar({
   user: { name?: string | null; role?: string | null };
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [showRedDot, setShowRedDot] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [hasBusAlert, setHasBusAlert] = useState<boolean>(false);
@@ -125,6 +126,7 @@ export default function Topbar({
           type="button"
           onClick={() => {
             window.dispatchEvent(new CustomEvent("open-notification-popup"));
+            router.push("/notifications");
           }}
           title={hasBusAlert ? "Urgent Bus Transit Alert! View Notifications" : "View Notifications"}
           aria-label="View Notifications"

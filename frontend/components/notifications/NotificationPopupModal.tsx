@@ -518,6 +518,31 @@ export default function NotificationPopupModal({
 
           <button
             type="button"
+            onClick={() => {
+              handleClose();
+              router.push("/notifications");
+            }}
+            style={{
+              padding: "0.6rem 0.9rem",
+              borderRadius: "8px",
+              border: "1px solid var(--border-color)",
+              background: "transparent",
+              color: "var(--text-secondary)",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.35rem",
+            }}
+            title="View all in Notification Center"
+          >
+            <Bell size={14} />
+            <span>All Alerts</span>
+          </button>
+
+          <button
+            type="button"
             onClick={handleClose}
             className={styles.closeBtn}
             title="Close this notification and save in notifications page"

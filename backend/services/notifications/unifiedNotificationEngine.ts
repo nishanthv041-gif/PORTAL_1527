@@ -119,9 +119,11 @@ export async function sendUnifiedNotification(input: UnifiedNotificationInput) {
         url: link,
         priority,
         category: categoryKey,
+        tag: `notif-${notification.id}`,
         data: {
           notificationId: notification.id,
           url: link,
+          tag: `notif-${notification.id}`,
         },
       };
 
@@ -221,9 +223,11 @@ export async function sendUnifiedBroadcast(input: UnifiedBroadcastInput) {
         url: link,
         priority,
         category: categoryKey,
+        tag: `broadcast-${masterNotification.id}`,
         data: {
           notificationId: masterNotification.id,
           url: link,
+          tag: `broadcast-${masterNotification.id}`,
         },
       };
 

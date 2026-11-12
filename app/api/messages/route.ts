@@ -4,9 +4,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
-import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
-import { sendUnifiedNotification } from "@/backend/services/notifications/unifiedNotificationEngine";
-import { sendNativeChatPushNotification } from "@/backend/services/push/nativePushDispatcher";
+import { dispatchPortalNotification } from "@/lib/notifications";
 
 export async function POST(request: Request) {
   try {
@@ -109,22 +107,14 @@ export async function POST(request: Request) {
               ? cleanContent.slice(0, 97) + "..." 
               : cleanContent;
 
-        await sendUnifiedNotification({
-          userId: receiverId,
+        await dispatchPortalNotification({
+          userIds: [receiverId],
           title: `💬 New Message from ${session.user.name || "Portal User"} (${senderRoleLabel})`,
-          content: `${session.user.name || "User"}: "${previewSnippet}"`,
+          message: `${session.user.name || "User"}: "${previewSnippet}"`,
           type: "MESSAGE",
-          category: "admin",
           link: recipientLink,
-        });
-
-        // Native OS lock screen push notification (targeting 24h active device sessions)
-        await sendNativeChatPushNotification({
-          recipientId: receiverId,
-          senderName: session.user.name || "Portal User",
-          senderRole: senderRoleLabel,
-          messageSnippet: `${session.user.name || "User"}: "${previewSnippet}"`,
-          targetUrl: recipientLink,
+          tag: `chat-${session.user.id}`,
+          priority: "URGENT",
         });
       } catch (err) {
         console.error("Background notification error on message send:", err);

@@ -180,7 +180,7 @@ export async function sendNativeChatPushNotification(params: NativeChatMessagePu
     url: targetUrl,
     icon: "/icons/icon-192x192.png",
     badge: "/icons/icon-192x192.png",
-    tag: `chat-${Date.now()}`,
+    tag: `chat-${recipientId}`,
     data: {
       url: targetUrl,
       senderName,
