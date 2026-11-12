@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Plus, Users, LayoutDashboard, Trash2, Edit3, 
@@ -54,11 +54,12 @@ export default function ClassListClient({
   const [editingClassName, setEditingClassName] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editSections, setEditSections] = useState<{ id: string; section: string; maxStrength: number; teacherId: string | null }[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Sync state if server props change
-  useState(() => {
+  // Sync state when server props refresh
+  useEffect(() => {
     setClassList(classes);
-  });
+  }, [classes]);
 
   // Group classes by name
   const groupedClasses = classList.reduce((acc, curr) => {
@@ -109,6 +110,30 @@ export default function ClassListClient({
       return;
     }
 
+    // 0ms instant optimistic addition
+    const optimisticNewClasses: ClassWithRelations[] = selectedSections.map(sec => ({
+      id: `temp_${Date.now()}_${sec}`,
+      name: finalClassName,
+      section: sec,
+      isActive: true,
+      batchId: null,
+      academicYearId: null,
+      teacherId: sectionStaffMap[sec] || null,
+      classTeacherId: sectionStaffMap[sec] || null,
+      maxStrength: createMaxStrength,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      teacher: teachers.find(t => t.id === sectionStaffMap[sec]) || null,
+      students: [],
+    }));
+
+    setClassList(prev => [...prev, ...optimisticNewClasses]);
+    setShowCreate(false);
+    setSelectedSections(["A"]);
+    setSectionStaffMap({});
+    setClassNameInput("");
+    setCustomClassName("");
+
     setIsSubmitting(true);
 
     const formData = new FormData();
@@ -123,19 +148,23 @@ export default function ClassListClient({
     }));
     formData.set("sectionAssignments", JSON.stringify(assignments));
 
-    const result = await createClassAction(formData);
+    try {
+      const result = await createClassAction(formData);
+      setIsSubmitting(false);
 
-    setIsSubmitting(false);
-
-    if (result.error) {
-      setError(result.error);
-    } else {
-      setShowCreate(false);
-      setSelectedSections(["A"]);
-      setSectionStaffMap({});
-      setClassNameInput("");
-      setCustomClassName("");
-      router.refresh();
+      if (result.error) {
+        // Rollback
+        setClassList(prev => prev.filter(c => !c.id.startsWith("temp_")));
+        setError(result.error);
+        setShowCreate(true);
+      } else {
+        router.refresh();
+      }
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setClassList(prev => prev.filter(c => !c.id.startsWith("temp_")));
+      setError(err?.message || "Failed to create class.");
+      setShowCreate(true);
     }
   };
 
@@ -187,13 +216,21 @@ export default function ClassListClient({
     const previousList = [...classList];
     // 0ms instant optimistic removal
     setClassList(prev => prev.filter(c => c.name !== className));
+    setDeletingId(className);
 
-    const res = await deleteClassGroupByNameAction(className);
-    if (res?.error) {
-      alert(res.error);
-      setClassList(previousList); // Rollback on error
-    } else {
-      router.refresh();
+    try {
+      const res = await deleteClassGroupByNameAction(className);
+      setDeletingId(null);
+      if (res?.error) {
+        alert(res.error);
+        setClassList(previousList); // Rollback on error
+      } else {
+        router.refresh();
+      }
+    } catch (err: any) {
+      setDeletingId(null);
+      setClassList(previousList);
+      alert(err?.message || "Failed to delete class group");
     }
   };
 
@@ -209,14 +246,23 @@ export default function ClassListClient({
     if (!ok) return;
 
     const previousList = [...classList];
+    // 0ms instant optimistic removal
     setClassList(prev => prev.filter(c => c.id !== sectionId));
+    setDeletingId(sectionId);
 
-    const res = await deleteClassAction(sectionId);
-    if (res?.error) {
-      alert(res.error);
+    try {
+      const res = await deleteClassAction(sectionId);
+      setDeletingId(null);
+      if (res?.error) {
+        alert(res.error);
+        setClassList(previousList);
+      } else {
+        router.refresh();
+      }
+    } catch (err: any) {
+      setDeletingId(null);
       setClassList(previousList);
-    } else {
-      router.refresh();
+      alert(err?.message || "Failed to delete section");
     }
   };
 
@@ -663,20 +709,25 @@ export default function ClassListClient({
                         {sections.length > 1 && (
                           <button 
                             type="button"
+                            disabled={deletingId === s.id}
                             onClick={() => handleDeleteSection(s.id, className, s.section)}
                             style={{ 
                               background: 'transparent', 
                               border: 'none', 
                               color: 'var(--danger)', 
-                              cursor: 'pointer', 
+                              cursor: deletingId === s.id ? 'not-allowed' : 'pointer', 
                               padding: 0, 
                               display: 'flex', 
                               alignItems: 'center',
-                              opacity: 0.7 
+                              opacity: deletingId === s.id ? 0.4 : 0.7 
                             }}
                             title={`Delete Section ${s.section}`}
                           >
-                            ×
+                            {deletingId === s.id ? (
+                              <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />
+                            ) : (
+                              "×"
+                            )}
                           </button>
                         )}
                       </span>
@@ -759,6 +810,7 @@ export default function ClassListClient({
                 {/* Class-wise Delete Button */}
                 <button
                   type="button"
+                  disabled={deletingId === className}
                   onClick={() => handleDeleteClassGroup(className)}
                   title={`Delete ${className}`}
                   style={{ 
@@ -771,14 +823,20 @@ export default function ClassListClient({
                     borderRadius: '8px', 
                     fontSize: '0.85rem', 
                     fontWeight: 600, 
-                    cursor: 'pointer', 
+                    cursor: deletingId === className ? 'not-allowed' : 'pointer', 
+                    opacity: deletingId === className ? 0.4 : 1,
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center', 
                     gap: '0.4rem' 
                   }}
                 >
-                  <Trash2 size={15} /> Delete
+                  {deletingId === className ? (
+                    <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />
+                  ) : (
+                    <Trash2 size={15} />
+                  )}
+                  Delete
                 </button>
               </div>
             </div>

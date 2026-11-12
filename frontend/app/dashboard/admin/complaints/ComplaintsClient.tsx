@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
@@ -18,7 +18,8 @@ import {
   GraduationCap,
   ShieldAlert,
   CheckCircle2,
-  Edit3
+  Edit3,
+  Loader2
 } from "lucide-react";
 import {
   createAdminComplaintAction,
@@ -121,6 +122,11 @@ export default function ComplaintsClient({
   const router = useRouter();
   const confirm = useConfirm();
   const [complaints, setComplaints] = useState<AdminComplaintItem[]>(initialComplaints);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setComplaints(initialComplaints);
+  }, [initialComplaints]);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -198,32 +204,75 @@ export default function ComplaintsClient({
       return;
     }
 
+    const selectedStudent = studentsList.find(s => s.id === selectedStudentId);
+    const tempId = `temp_${Date.now()}`;
+    const tempComplaint: AdminComplaintItem = {
+      id: tempId,
+      title: createTitle.trim(),
+      description: createDescription.trim(),
+      category: createCategory,
+      severity: createSeverity,
+      status: "OPEN",
+      date: new Date().toISOString(),
+      remarks: null,
+      authorRole: "ADMIN",
+      authorId: currentUser.id,
+      teacher: null,
+      parent: null,
+      student: selectedStudent ? {
+        id: selectedStudent.id,
+        firstName: selectedStudent.firstName,
+        lastName: selectedStudent.lastName,
+        rollNumber: selectedStudent.rollNumber,
+        class: selectedStudent.class,
+        parents: []
+      } : {
+        id: selectedStudentId,
+        firstName: "Student",
+        lastName: "",
+        rollNumber: "",
+        class: null,
+        parents: []
+      },
+      messages: [],
+      _count: { messages: 0 }
+    };
+
+    // 0ms instant optimistic addition
+    setComplaints(prev => [tempComplaint, ...prev]);
+    setShowCreateModal(false);
+    setSelectedStudentId("");
+    setCreateTitle("");
+    setCreateDescription("");
+    setCreateStudentSearch("");
+
     setCreateSubmitting(true);
     setCreateError("");
 
     const formData = new FormData();
     formData.append("studentId", selectedStudentId);
-    formData.append("title", createTitle.trim());
+    formData.append("title", tempComplaint.title);
     formData.append("category", createCategory);
     formData.append("severity", createSeverity);
-    formData.append("description", createDescription.trim());
+    formData.append("description", tempComplaint.description);
     formData.append("status", "OPEN");
 
-    const res = await createAdminComplaintAction(formData);
+    try {
+      const res = await createAdminComplaintAction(formData);
+      setCreateSubmitting(false);
 
-    if (res.success) {
-      setShowCreateModal(false);
-      setSelectedStudentId("");
-      setCreateTitle("");
-      setCreateDescription("");
-      setCreateStudentSearch("");
-      router.refresh();
-      window.location.reload();
-    } else {
-      setCreateError(res.error || "Failed to create complaint.");
+      if (res.success) {
+        router.refresh();
+      } else {
+        // Rollback
+        setComplaints(prev => prev.filter(c => c.id !== tempId));
+        alert(res.error || "Failed to create complaint.");
+      }
+    } catch (err: any) {
+      setCreateSubmitting(false);
+      setComplaints(prev => prev.filter(c => c.id !== tempId));
+      alert(err?.message || "Failed to create complaint.");
     }
-
-    setCreateSubmitting(false);
   };
 
   // Handle Status Update
@@ -259,11 +308,25 @@ export default function ComplaintsClient({
     });
     if (!ok) return;
 
-    const res = await deleteComplaintAction(id);
-    if (res.success) {
-      setComplaints(prev => prev.filter(c => c.id !== id));
-    } else {
-      alert(res.error || "Failed to delete complaint");
+    const previousList = [...complaints];
+    // 0ms instant optimistic removal
+    setComplaints(prev => prev.filter(c => c.id !== id));
+    setDeletingId(id);
+
+    try {
+      const res = await deleteComplaintAction(id);
+      setDeletingId(null);
+      if (res.success) {
+        router.refresh();
+      } else {
+        // Rollback on server error
+        setComplaints(previousList);
+        alert(res.error || "Failed to delete complaint");
+      }
+    } catch (err: any) {
+      setDeletingId(null);
+      setComplaints(previousList);
+      alert(err?.message || "Failed to delete complaint");
     }
   };
 
@@ -528,17 +591,22 @@ export default function ComplaintsClient({
                 <button
                   type="button"
                   onClick={() => handleDelete(item.id)}
+                  disabled={deletingId === item.id}
                   title="Delete complaint"
                   style={{
                     background: "transparent",
                     border: "none",
                     color: "var(--danger)",
-                    cursor: "pointer",
+                    cursor: deletingId === item.id ? "not-allowed" : "pointer",
                     padding: "4px",
-                    opacity: 0.7
+                    opacity: deletingId === item.id ? 0.4 : 0.7
                   }}
                 >
-                  <Trash2 size={16} />
+                  {deletingId === item.id ? (
+                    <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+                  ) : (
+                    <Trash2 size={16} />
+                  )}
                 </button>
               </div>
 

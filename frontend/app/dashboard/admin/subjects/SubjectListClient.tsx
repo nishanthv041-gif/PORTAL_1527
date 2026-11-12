@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Plus, LayoutDashboard, Trash2, UserCheck, Check, School, Pencil } from "lucide-react";
+import { BookOpen, Plus, LayoutDashboard, Trash2, UserCheck, Check, School, Pencil, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { createSubjectAction, deleteSubjectGroupByName } from "@/backend/api/actions/dashboard/admin/subjects/actions";
 import { Subject, Class, Teacher, User, Student, Mark } from "@prisma/client";
@@ -39,11 +39,12 @@ export default function SubjectListClient({
   const [subjectName, setSubjectName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isPendingSearch, setIsPendingSearch] = useState(false);
+  const [deletingName, setDeletingName] = useState<string | null>(null);
 
-  // Sync state if props change
-  useState(() => {
+  // Keep subjectList in sync when server props refresh
+  useEffect(() => {
     setSubjectList(subjects);
-  });
+  }, [subjects]);
 
   const toggleClass = (classId: string) => {
     if (selectedClasses.includes(classId)) {
@@ -74,29 +75,68 @@ export default function SubjectListClient({
       return;
     }
 
+    // 0ms instant optimistic addition
+    const optimisticInstances: SubjectWithRelations[] = selectedClasses.map(classId => {
+      const cls = classes.find(c => c.id === classId);
+      const teacher = teachers.find(t => t.id === classStaffMap[classId]);
+      return {
+        id: `temp_${Date.now()}_${classId}`,
+        name: subjectName.trim(),
+        code: subjectName.trim().toUpperCase().slice(0, 4),
+        classId,
+        teacherId: classStaffMap[classId] || null,
+        maxMarks: 100,
+        passMarks: 35,
+        isActive: true,
+        requiredPeriodsPerWeek: 5,
+        class: cls ? { ...cls, students: [] } : ({} as any),
+        teacher: teacher || null,
+        marks: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    });
+
+    setSubjectList(prev => [...prev, ...optimisticInstances]);
+    setShowCreate(false);
+    const savedClasses = [...selectedClasses];
+    const savedMap = { ...classStaffMap };
+    const savedName = subjectName;
+
+    setSelectedClasses([]);
+    setClassStaffMap({});
+    setSubjectName("");
+
     setIsSubmitting(true);
 
     const formData = new FormData(e.currentTarget);
-    // Package class assignments: each class with its chosen teacher
-    const assignments = selectedClasses.map(classId => ({
+    const assignments = savedClasses.map(classId => ({
       classId,
-      teacherId: classStaffMap[classId] || null
+      teacherId: savedMap[classId] || null
     }));
     formData.set("classAssignments", JSON.stringify(assignments));
-    formData.set("classIds", selectedClasses.join(","));
+    formData.set("classIds", savedClasses.join(","));
 
-    const result = await createSubjectAction(formData);
+    try {
+      const result = await createSubjectAction(formData);
+      setIsSubmitting(false);
 
-    setIsSubmitting(false);
-
-    if (result.error) {
-      setError(result.error);
-    } else {
-      setShowCreate(false);
-      setSelectedClasses([]);
-      setClassStaffMap({});
-      setSubjectName("");
-      router.refresh();
+      if (result.error) {
+        // Rollback
+        setSubjectList(prev => prev.filter(s => !s.id.startsWith("temp_")));
+        setError(result.error);
+        setShowCreate(true);
+        setSelectedClasses(savedClasses);
+        setClassStaffMap(savedMap);
+        setSubjectName(savedName);
+      } else {
+        router.refresh();
+      }
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setSubjectList(prev => prev.filter(s => !s.id.startsWith("temp_")));
+      setError(err?.message || "Failed to create subject.");
+      setShowCreate(true);
     }
   };
 
@@ -117,13 +157,21 @@ export default function SubjectListClient({
     const previousSubjects = [...subjectList];
     // 0ms instant optimistic removal
     setSubjectList(prev => prev.filter(s => s.name !== name));
+    setDeletingName(name);
 
-    const res = await deleteSubjectGroupByName(name);
-    if (res?.error) {
-      alert(res.error);
-      setSubjectList(previousSubjects); // Rollback on error
-    } else {
-      router.refresh();
+    try {
+      const res = await deleteSubjectGroupByName(name);
+      setDeletingName(null);
+      if (res?.error) {
+        alert(res.error);
+        setSubjectList(previousSubjects); // Rollback on error
+      } else {
+        router.refresh();
+      }
+    } catch (err: any) {
+      setDeletingName(null);
+      setSubjectList(previousSubjects);
+      alert(err?.message || "Failed to delete subject");
     }
   };
 
@@ -550,6 +598,7 @@ export default function SubjectListClient({
                 
                 <button
                   type="button"
+                  disabled={deletingName === subjectName}
                   onClick={() => handleDeleteSubjectGroup(subjectName)}
                   title={`Delete ${subjectName}`}
                   style={{ 
@@ -562,7 +611,8 @@ export default function SubjectListClient({
                     borderRadius: '8px', 
                     fontSize: '0.85rem', 
                     fontWeight: 600, 
-                    cursor: 'pointer', 
+                    cursor: deletingName === subjectName ? 'not-allowed' : 'pointer', 
+                    opacity: deletingName === subjectName ? 0.4 : 1,
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center', 
@@ -570,7 +620,12 @@ export default function SubjectListClient({
                     transition: 'all 0.15s ease'
                   }}
                 >
-                  <Trash2 size={14} /> Delete
+                  {deletingName === subjectName ? (
+                    <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
+                  ) : (
+                    <Trash2 size={14} />
+                  )}
+                  Delete
                 </button>
               </div>
             </div>

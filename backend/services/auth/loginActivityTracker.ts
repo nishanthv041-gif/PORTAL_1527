@@ -97,7 +97,35 @@ export async function recordUserLogin(
         },
         data: {
           userId,
+          lastLoginAt: new Date(),
           lastUsedAt: new Date(),
+        },
+      }).catch(() => {}),
+      // 4. Update lastLoginAt on all user's active push subscriptions for 48-hour targeting
+      prisma.pushSubscription.updateMany({
+        where: {
+          userId,
+          isActive: true,
+        },
+        data: {
+          lastLoginAt: new Date(),
+          lastUsedAt: new Date(),
+        },
+      }).catch(() => {}),
+      prisma.deviceNotificationsRegistry.updateMany({
+        where: {
+          userId,
+        },
+        data: {
+          lastLoginAt: new Date(),
+        },
+      }).catch(() => {}),
+      prisma.pwaSubscription.updateMany({
+        where: {
+          userId,
+        },
+        data: {
+          lastActiveAt: new Date(),
         },
       }).catch(() => {}),
     ]);

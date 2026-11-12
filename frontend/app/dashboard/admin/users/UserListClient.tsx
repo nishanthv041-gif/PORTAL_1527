@@ -9,7 +9,7 @@ import { User, Teacher, Parent } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { SearchBar, ResultsContainer, Modal } from "@/frontend/components/ui";
 
-import { MoreVertical, Eye, Trash2 } from "lucide-react";
+import { MoreVertical, Eye, Trash2, Loader2 } from "lucide-react";
 
 type SessionSummary = {
   id: string;
@@ -33,6 +33,7 @@ export default function UserListClient({
   isCurrentUserSuperAdmin?: boolean;
 }) {
   const [userList, setUserList] = useState(users);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -97,9 +98,18 @@ export default function UserListClient({
     });
     if (!ok) return;
 
-    await deactivateUser(id);
     setOpenMenuId(null);
-    router.refresh();
+    const previousUsers = [...userList];
+    // 0ms instant optimistic update
+    setUserList(prev => prev.map(u => u.id === id ? { ...u, status: "INACTIVE" } : u));
+
+    try {
+      await deactivateUser(id);
+      router.refresh();
+    } catch (err: any) {
+      setUserList(previousUsers); // Rollback
+      alert(err?.message || "Failed to deactivate user");
+    }
   };
 
   const handleActivateAll = async () => {
@@ -320,9 +330,16 @@ export default function UserListClient({
                       {user.status === 'INACTIVE' && user.role !== 'ADMIN' && (
                         <button 
                           onClick={async () => {
-                            await activateUser(user.id);
                             setOpenMenuId(null);
-                            router.refresh();
+                            const previousUsers = [...userList];
+                            setUserList(prev => prev.map(u => u.id === user.id ? { ...u, status: "ACTIVE" } : u));
+                            try {
+                              await activateUser(user.id);
+                              router.refresh();
+                            } catch (err: any) {
+                              setUserList(previousUsers);
+                              alert(err?.message || "Failed to activate user");
+                            }
                           }}
                           style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--success)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
                         >
@@ -399,6 +416,7 @@ export default function UserListClient({
 
                         return (
                           <button 
+                            disabled={deletingId === user.id}
                             onClick={async () => {
                               const isTargetAdmin = user.role === 'ADMIN';
                               const ok = await confirm({
@@ -414,18 +432,45 @@ export default function UserListClient({
                               const previousUsers = [...userList];
                               // 0ms optimistic removal
                               setUserList(prev => prev.filter(u => u.id !== user.id));
+                              setDeletingId(user.id);
 
-                              const res = await deleteUser(user.id);
-                              if (res?.error) {
-                                alert(res.error);
-                                setUserList(previousUsers); // Rollback if error
-                              } else {
-                                router.refresh();
+                              try {
+                                const res = await deleteUser(user.id);
+                                setDeletingId(null);
+                                if (res?.error) {
+                                  alert(res.error);
+                                  setUserList(previousUsers); // Rollback if error
+                                } else {
+                                  router.refresh();
+                                }
+                              } catch (err: any) {
+                                setDeletingId(null);
+                                setUserList(previousUsers);
+                                alert(err?.message || "Failed to delete user");
                               }
                             }}
-                            style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--danger)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
+                            style={{
+                              padding: '0.5rem',
+                              textDecoration: 'none',
+                              color: 'var(--danger)',
+                              background: 'transparent',
+                              border: 'none',
+                              fontSize: '0.875rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.5rem',
+                              borderRadius: '4px',
+                              cursor: deletingId === user.id ? 'not-allowed' : 'pointer',
+                              opacity: deletingId === user.id ? 0.4 : 1,
+                              textAlign: 'left'
+                            }}
                           >
-                            <Trash2 size={16} /> Delete {user.role === 'ADMIN' ? 'Admin' : ''}
+                            {deletingId === user.id ? (
+                              <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+                            ) : (
+                              <Trash2 size={16} />
+                            )}
+                            Delete {user.role === 'ADMIN' ? 'Admin' : ''}
                           </button>
                         );
                       })()}

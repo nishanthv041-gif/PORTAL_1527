@@ -61,6 +61,7 @@ export function usePushNotification(
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [deviceFingerprint, setDeviceFingerprint] = useState<string>("");
 
   const deviceFingerprintRef = useRef<string>("");
   const lastSyncTimestampRef = useRef<number>(0);
@@ -75,7 +76,9 @@ export function usePushNotification(
       "Notification" in window;
 
     setIsSupported(supported);
-    deviceFingerprintRef.current = getOrCreateDeviceFingerprint();
+    const fp = getOrCreateDeviceFingerprint();
+    deviceFingerprintRef.current = fp;
+    setDeviceFingerprint(fp);
 
     if (!supported) {
       setPermission("unsupported");
@@ -282,7 +285,7 @@ export function usePushNotification(
     isSupported,
     permission,
     subscription,
-    deviceFingerprint: deviceFingerprintRef.current,
+    deviceFingerprint,
     isLoading,
     error,
     subscribe,

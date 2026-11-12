@@ -45,6 +45,13 @@ export default function TeacherListClient({
   const router = useRouter();
   const confirm = useConfirm();
 
+  // Teacher List state with props synchronization
+  const [teacherList, setTeacherList] = useState<TeacherData[]>(teachers);
+
+  useEffect(() => {
+    setTeacherList(teachers);
+  }, [teachers]);
+
   // Controls & State
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -102,7 +109,7 @@ export default function TeacherListClient({
 
   // Filtering & Sorting
   const filteredAndSortedTeachers = useMemo(() => {
-    return teachers
+    return teacherList
       .filter((teacher) => {
         // Search
         if (debouncedSearch.trim()) {
@@ -160,7 +167,7 @@ export default function TeacherListClient({
         }
         return 0;
       });
-  }, [teachers, debouncedSearch, statusFilter, subjectFilter, classFilter, sortBy]);
+  }, [teacherList, debouncedSearch, statusFilter, subjectFilter, classFilter, sortBy]);
 
   const handleOpenAdd = () => {
     setEditingTeacher(null);
@@ -186,8 +193,22 @@ export default function TeacherListClient({
 
     if (!confirmed) return;
 
-    await toggleTeacherStatusAction(teacher.id);
-    router.refresh();
+    const previousList = [...teacherList];
+    // 0ms instant optimistic toggle
+    setTeacherList(prev => prev.map(t => t.id === teacher.id ? { ...t, isActive: !t.isActive } : t));
+
+    try {
+      const res = await toggleTeacherStatusAction(teacher.id);
+      if (res?.error) {
+        setTeacherList(previousList);
+        alert(res.error);
+      } else {
+        router.refresh();
+      }
+    } catch (err: any) {
+      setTeacherList(previousList);
+      alert(err?.message || "Failed to toggle teacher status");
+    }
   };
 
   return (

@@ -1,21 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Megaphone, Clock, Trash2, Users, BookOpen, GraduationCap, Link as LinkIcon, AlertCircle, Edit2 } from "lucide-react";
+import { Plus, Megaphone, Clock, Trash2, Users, BookOpen, GraduationCap, Link as LinkIcon, AlertCircle, Edit2, Loader2 } from "lucide-react";
 import { createAnnouncementAction, deleteAnnouncementAction } from "@/backend/api/actions/dashboard/admin/announcements/actions";
 import { Announcement, Class } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 export default function AnnouncementsClient({ announcements, classes }: { announcements: Announcement[], classes: Class[] }) {
+  const [announcementList, setAnnouncementList] = useState<Announcement[]>(announcements);
   const [activeTab, setActiveTab] = useState<"TEACHER" | "PARENT">("TEACHER");
   const [showCreate, setShowCreate] = useState(false);
   const [targetType, setTargetType] = useState("ALL");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const router = useRouter();
   const confirm = useConfirm();
+
+  useEffect(() => {
+    setAnnouncementList(announcements);
+  }, [announcements]);
 
   const handleEditClick = (announcement: Announcement) => {
     setEditingId(announcement.id);
@@ -26,17 +32,20 @@ export default function AnnouncementsClient({ announcements, classes }: { announ
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
     
     // Automatically set targetType based on tab if not explicitly set
-    if (activeTab === "TEACHER" && formData.get("targetType") === "ALL") {
+    let resolvedTargetType = formData.get("targetType") as string;
+    if (activeTab === "TEACHER" && resolvedTargetType === "ALL") {
+      resolvedTargetType = "TEACHERS";
       formData.set("targetType", "TEACHERS");
-    } else if (activeTab === "PARENT" && formData.get("targetType") === "ALL") {
+    } else if (activeTab === "PARENT" && resolvedTargetType === "ALL") {
+      resolvedTargetType = "PARENTS";
       formData.set("targetType", "PARENTS");
     }
 
     if (editingId) {
+      setIsSubmitting(true);
       const res = await fetch(`/api/announcements/${editingId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -62,14 +71,40 @@ export default function AnnouncementsClient({ announcements, classes }: { announ
         router.refresh();
       }
     } else {
-      const res = await createAnnouncementAction(formData);
-      setIsSubmitting(false);
-      if (res.error) {
-        alert(res.error);
-      } else {
-        setShowCreate(false);
-        e.currentTarget.reset();
-        setTargetType("ALL");
+      // 0ms instant optimistic addition
+      const tempId = `temp_${Date.now()}`;
+      const tempAnnouncement: Announcement = {
+        id: tempId,
+        title: (formData.get("title") as string) || "New Announcement",
+        content: (formData.get("content") as string) || "",
+        targetType: resolvedTargetType || "ALL",
+        targetId: (formData.get("targetId") as string) || null,
+        priority: (formData.get("priority") as string) || "NORMAL",
+        expiryDate: formData.get("expiryDate") ? new Date(formData.get("expiryDate") as string) : null,
+        fileUrl: null,
+        authorId: "admin",
+        createdAt: new Date(),
+      };
+
+      setAnnouncementList(prev => [tempAnnouncement, ...prev]);
+      setShowCreate(false);
+      setTargetType("ALL");
+
+      setIsSubmitting(true);
+      try {
+        const res = await createAnnouncementAction(formData);
+        setIsSubmitting(false);
+        if (res.error) {
+          // Rollback on server error
+          setAnnouncementList(prev => prev.filter(a => a.id !== tempId));
+          alert(res.error);
+        } else {
+          router.refresh();
+        }
+      } catch (err: any) {
+        setIsSubmitting(false);
+        setAnnouncementList(prev => prev.filter(a => a.id !== tempId));
+        alert(err?.message || "Failed to create announcement");
       }
     }
   };
@@ -84,8 +119,26 @@ export default function AnnouncementsClient({ announcements, classes }: { announ
     });
     if (!ok) return;
 
-    const res = await deleteAnnouncementAction(id);
-    if (res.error) alert(res.error);
+    const previousList = [...announcementList];
+    // 0ms instant optimistic removal
+    setAnnouncementList(prev => prev.filter(a => a.id !== id));
+    setDeletingId(id);
+
+    try {
+      const res = await deleteAnnouncementAction(id);
+      setDeletingId(null);
+      if (res.error) {
+        // Rollback on server error
+        setAnnouncementList(previousList);
+        alert(res.error);
+      } else {
+        router.refresh();
+      }
+    } catch (err: any) {
+      setDeletingId(null);
+      setAnnouncementList(previousList);
+      alert(err?.message || "Failed to delete announcement");
+    }
   };
 
   const getTargetIcon = (type: string) => {
@@ -105,7 +158,7 @@ export default function AnnouncementsClient({ announcements, classes }: { announ
     return type === 'TEACHERS' ? 'All Teachers' : type === 'PARENTS' ? 'All Parents' : 'School Wide';
   };
 
-  const filteredAnnouncements = announcements.filter(a => {
+  const filteredAnnouncements = announcementList.filter(a => {
     if (activeTab === "TEACHER") {
       return a.targetType === "TEACHERS" || a.targetType === "ALL";
     } else {
@@ -273,8 +326,24 @@ export default function AnnouncementsClient({ announcements, classes }: { announ
                     }} style={{ background: 'transparent', border: 'none', color: "inherit", opacity: 0.7, cursor: 'pointer', padding: 0 }}>
                       <Edit2 size={16} />
                     </button>
-                    <button onClick={() => handleDelete(announcement.id)} style={{ background: 'transparent', border: 'none', color: "var(--danger)", cursor: 'pointer', padding: 0 }}>
-                      <Trash2 size={16} />
+                    <button
+                      onClick={() => handleDelete(announcement.id)}
+                      disabled={deletingId === announcement.id}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: "var(--danger)",
+                        cursor: deletingId === announcement.id ? 'not-allowed' : 'pointer',
+                        padding: 0,
+                        opacity: deletingId === announcement.id ? 0.4 : 1
+                      }}
+                      title="Delete Announcement"
+                    >
+                      {deletingId === announcement.id ? (
+                        <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+                      ) : (
+                        <Trash2 size={16} />
+                      )}
                     </button>
                   </div>
                 </div>

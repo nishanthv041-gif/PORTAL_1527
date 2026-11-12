@@ -112,6 +112,80 @@ const REMARK_PRESETS = [
   "🎯 Dedicated, disciplined, and actively participates in classroom learning."
 ];
 
+function computeGroupedExams(filteredHistory: HistoryItem[]) {
+  const map = new Map<string, {
+    key: string;
+    examName: string;
+    className: string;
+    classId: string | null;
+    examDate: string;
+    examId: string;
+    students: HistoryItem[];
+  }>();
+
+  filteredHistory.forEach(item => {
+    const key = `${item.examName}__${item.className || "Class"}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        examName: item.examName,
+        className: item.className || "Class",
+        classId: item.classId,
+        examDate: item.examDate,
+        examId: item.examId,
+        students: []
+      });
+    }
+    map.get(key)!.students.push(item);
+  });
+
+  return Array.from(map.values()).map(grp => {
+    const totalStudents = grp.students.length;
+    let passCount = 0;
+    let totalScoreSum = 0;
+    let highestScore = 0;
+    let topper = "-";
+
+    grp.students.forEach(st => {
+      if (st.percentage >= 35) passCount++;
+      totalScoreSum += st.percentage;
+      if (st.totalMarks > highestScore) {
+        highestScore = st.totalMarks;
+        topper = st.studentName;
+      }
+    });
+
+    const avgPercentage = totalStudents > 0 ? (totalScoreSum / totalStudents).toFixed(1) : "0";
+    const passPercentage = totalStudents > 0 ? ((passCount / totalStudents) * 100).toFixed(1) : "0";
+
+    // Collect unique subjects
+    const subMap = new Map<string, { id: string; name: string; maxMarks: number; passMarks: number }>();
+    grp.students.forEach(st => {
+      st.marks.forEach(m => {
+        if (!subMap.has(m.subjectName)) {
+          subMap.set(m.subjectName, {
+            id: m.subjectId || m.subjectName,
+            name: m.subjectName,
+            maxMarks: m.maxScore || 100,
+            passMarks: m.passMarks || 35
+          });
+        }
+      });
+    });
+
+    return {
+      ...grp,
+      totalStudents,
+      passCount,
+      avgPercentage,
+      passPercentage,
+      highestScore,
+      topper,
+      uniqueSubjects: Array.from(subMap.values())
+    };
+  });
+}
+
 export default function TeacherReportCardsClient({
   classes,
   initialHistory,
@@ -548,79 +622,7 @@ export default function TeacherReportCardsClient({
 
   const [expandedExamKeys, setExpandedExamKeys] = useState<Set<string>>(new Set());
 
-  const groupedExams = useMemo(() => {
-    const map = new Map<string, {
-      key: string;
-      examName: string;
-      className: string;
-      classId: string | null;
-      examDate: string;
-      examId: string;
-      students: HistoryItem[];
-    }>();
-
-    filteredHistory.forEach(item => {
-      const key = `${item.examName}__${item.className || "Class"}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          key,
-          examName: item.examName,
-          className: item.className || "Class",
-          classId: item.classId,
-          examDate: item.examDate,
-          examId: item.examId,
-          students: []
-        });
-      }
-      map.get(key)!.students.push(item);
-    });
-
-    return Array.from(map.values()).map(grp => {
-      const totalStudents = grp.students.length;
-      let passCount = 0;
-      let totalScoreSum = 0;
-      let highestScore = 0;
-      let topper = "-";
-
-      grp.students.forEach(st => {
-        if (st.percentage >= 35) passCount++;
-        totalScoreSum += st.percentage;
-        if (st.totalMarks > highestScore) {
-          highestScore = st.totalMarks;
-          topper = st.studentName;
-        }
-      });
-
-      const avgPercentage = totalStudents > 0 ? (totalScoreSum / totalStudents).toFixed(1) : "0";
-      const passPercentage = totalStudents > 0 ? ((passCount / totalStudents) * 100).toFixed(1) : "0";
-
-      // Collect unique subjects
-      const subMap = new Map<string, { id: string; name: string; maxMarks: number; passMarks: number }>();
-      grp.students.forEach(st => {
-        st.marks.forEach(m => {
-          if (!subMap.has(m.subjectName)) {
-            subMap.set(m.subjectName, {
-              id: m.subjectId || m.subjectName,
-              name: m.subjectName,
-              maxMarks: m.maxScore || 100,
-              passMarks: m.passMarks || 35
-            });
-          }
-        });
-      });
-
-      return {
-        ...grp,
-        totalStudents,
-        passCount,
-        avgPercentage,
-        passPercentage,
-        highestScore,
-        topper,
-        uniqueSubjects: Array.from(subMap.values())
-      };
-    });
-  }, [filteredHistory]);
+  const groupedExams = computeGroupedExams(filteredHistory);
 
   const toggleExamGroup = (key: string) => {
     setExpandedExamKeys(prev => {

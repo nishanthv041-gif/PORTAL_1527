@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useTransition } from "react";
+import React, { useState, useMemo, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DateOfBirthField } from "@/frontend/components/ui/form";
 import {
@@ -23,6 +23,7 @@ import {
   ChevronRight,
   Info,
   Calendar,
+  Loader2,
   Layers,
   ArrowRight,
   UserPlus,
@@ -86,9 +87,14 @@ export default function AdminBusManagement({
   const [isPending, startTransition] = useTransition();
 
   const [buses, setBuses] = useState<any[]>(initialBuses || []);
+  const [deletingBusId, setDeletingBusId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  useEffect(() => {
+    setBuses(initialBuses || []);
+  }, [initialBuses]);
 
   const showToast = (type: "success" | "error", message: string) => {
     setFeedback({ type, message });
@@ -214,14 +220,26 @@ export default function AdminBusManagement({
 
     if (!ok) return;
 
+    const previousBuses = [...buses];
+    // 0ms instant optimistic removal
+    setBuses((prev) => prev.filter((b) => b.id !== bus.id));
+    setDeletingBusId(bus.id);
+
     startTransition(async () => {
-      const res = await deleteBusAction(bus.id);
-      if (res.error) {
-        showToast("error", res.error);
-      } else {
-        showToast("success", res.message || "Bus deleted successfully.");
-        setBuses((prev) => prev.filter((b) => b.id !== bus.id));
-        router.refresh();
+      try {
+        const res = await deleteBusAction(bus.id);
+        setDeletingBusId(null);
+        if (res.error) {
+          showToast("error", res.error);
+          setBuses(previousBuses); // Rollback on error
+        } else {
+          showToast("success", res.message || "Bus deleted successfully.");
+          router.refresh();
+        }
+      } catch (err: any) {
+        setDeletingBusId(null);
+        setBuses(previousBuses);
+        showToast("error", err?.message || "Failed to delete bus.");
       }
     });
   };
@@ -426,16 +444,45 @@ export default function AdminBusManagement({
 
     if (!ok) return;
 
+    const previousRoster = rosterBusData;
+    // 0ms instant optimistic removal
+    setRosterBusData((prev: any) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        students: (prev.students || []).filter((s: any) => s.studentId !== studentId && s.student?.id !== studentId),
+        assignedCount: Math.max(0, (prev.assignedCount || prev.students?.length || 1) - 1),
+      };
+    });
+
+    // Also optimistically update the bus card's student count in the main bus list
+    setBuses((prev) =>
+      prev.map((b) =>
+        b.id === rosterBusData.id
+          ? {
+              ...b,
+              students: (b.students || []).filter((s: any) => s.studentId !== studentId && s.student?.id !== studentId),
+              _count: {
+                students: Math.max(0, (b._count?.students || b.students?.length || 1) - 1),
+              },
+            }
+          : b
+      )
+    );
+
     startTransition(async () => {
-      const res = await removeStudentFromBusAction(rosterBusData.id, studentId);
-      if (res.error) {
-        showToast("error", res.error);
-      } else {
-        showToast("success", res.message || "Student removed from bus.");
-        // Refresh roster view
-        const fresh = await getBusDetailAction(rosterBusData.id);
-        if (fresh.bus) setRosterBusData(fresh.bus);
-        router.refresh();
+      try {
+        const res = await removeStudentFromBusAction(rosterBusData.id, studentId);
+        if (res.error) {
+          showToast("error", res.error);
+          setRosterBusData(previousRoster); // Rollback on error
+        } else {
+          showToast("success", res.message || "Student removed from bus.");
+          router.refresh();
+        }
+      } catch (err: any) {
+        setRosterBusData(previousRoster);
+        showToast("error", err?.message || "Failed to remove student.");
       }
     });
   };
@@ -1344,6 +1391,7 @@ export default function AdminBusManagement({
 
                     <button
                       type="button"
+                      disabled={deletingBusId === bus.id}
                       onClick={() => handleDeleteBus(bus)}
                       style={{
                         padding: "0.45rem 0.35rem",
@@ -1353,7 +1401,8 @@ export default function AdminBusManagement({
                         border: "1px solid rgba(239, 68, 68, 0.25)",
                         fontSize: "0.76rem",
                         fontWeight: 600,
-                        cursor: "pointer",
+                        cursor: deletingBusId === bus.id ? "not-allowed" : "pointer",
+                        opacity: deletingBusId === bus.id ? 0.4 : 1,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -1361,7 +1410,11 @@ export default function AdminBusManagement({
                       }}
                       title="Delete this Bus"
                     >
-                      <Trash2 size={13} />
+                      {deletingBusId === bus.id ? (
+                        <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
+                      ) : (
+                        <Trash2 size={13} />
+                      )}
                       <span>Delete</span>
                     </button>
                   </div>

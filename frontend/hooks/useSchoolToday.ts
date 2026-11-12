@@ -47,10 +47,15 @@ export function useSchoolToday(options?: {
   });
 
   const todayRef = useRef(state.today);
-  todayRef.current = state.today;
-
   const onDayChangeRef = useRef(options?.onDayChange);
-  onDayChangeRef.current = options?.onDayChange;
+
+  useEffect(() => {
+    todayRef.current = state.today;
+  }, [state.today]);
+
+  useEffect(() => {
+    onDayChangeRef.current = options?.onDayChange;
+  }, [options?.onDayChange]);
 
   const applySchoolTime = useCallback(() => {
     const parts: SchoolDateTimeParts = getSchoolNow();

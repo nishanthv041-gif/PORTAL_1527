@@ -207,15 +207,21 @@ export default function ProfessionalSchoolCalendar({
     });
     if (!ok) return;
 
+    // 0ms instant optimistic removal
+    if (selectedDay) {
+      setSelectedDay({
+        ...selectedDay,
+        events: selectedDay.events.filter((e) => e.id !== id),
+      });
+    }
+
     startTransition(async () => {
-      await deleteEventAction(id);
-      if (selectedDay) {
-        setSelectedDay({
-          ...selectedDay,
-          events: selectedDay.events.filter((e) => e.id !== id),
-        });
+      try {
+        await deleteEventAction(id);
+        router.refresh();
+      } catch (err) {
+        console.error("Failed to delete event:", err);
       }
-      router.refresh();
     });
   };
 

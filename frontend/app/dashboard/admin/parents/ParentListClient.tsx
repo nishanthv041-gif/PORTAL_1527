@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Search, Eye, CheckCircle2, XCircle, MoreVertical, Trash2, Download } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Search, Eye, CheckCircle2, XCircle, MoreVertical, Trash2, Download, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { deactivateParent, activateParent, deleteParent } from "@/backend/api/actions/dashboard/admin/parents/actions";
 import { Parent, User, ParentStudent, Student, Class } from "@prisma/client";
@@ -22,6 +23,9 @@ export default function ParentListClient({
   classes: Class[];
   totalStudentsCount?: number;
 }) {
+  const router = useRouter();
+  const [parentList, setParentList] = useState<ParentWithRelations[]>(parents);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [classFilter, setClassFilter] = useState("");
@@ -31,6 +35,10 @@ export default function ParentListClient({
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
   const confirm = useConfirm();
+
+  useEffect(() => {
+    setParentList(parents);
+  }, [parents]);
 
   // Close action menu when clicking outside anywhere on the page or pressing Escape
   useEffect(() => {
@@ -68,7 +76,7 @@ export default function ParentListClient({
 
   const filteredParents = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
-    return parents.filter((parent) => {
+    return parentList.filter((parent) => {
       const fullName = parent.user.name.toLowerCase();
       
       const matchesSearch = !term || fullName.includes(term) || 
@@ -303,8 +311,16 @@ export default function ParentListClient({
                               });
                               if (!ok) return;
 
-                              await deactivateParent(parent.id);
                               setOpenMenuId(null);
+                              // 0ms instant optimistic toggle
+                              setParentList(prev => prev.map(p => p.id === parent.id ? { ...p, isActive: false, user: { ...p.user, status: "INACTIVE" } } : p));
+                              try {
+                                await deactivateParent(parent.id);
+                                router.refresh();
+                              } catch (err: any) {
+                                setParentList(prev => prev.map(p => p.id === parent.id ? { ...p, isActive: true, user: { ...p.user, status: "ACTIVE" } } : p));
+                                alert(err?.message || "Failed to deactivate parent");
+                              }
                             }}
                             style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--warning)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
                           >
@@ -322,8 +338,16 @@ export default function ParentListClient({
                               });
                               if (!ok) return;
 
-                              await activateParent(parent.id);
                               setOpenMenuId(null);
+                              // 0ms instant optimistic toggle
+                              setParentList(prev => prev.map(p => p.id === parent.id ? { ...p, isActive: true, user: { ...p.user, status: "ACTIVE" } } : p));
+                              try {
+                                await activateParent(parent.id);
+                                router.refresh();
+                              } catch (err: any) {
+                                setParentList(prev => prev.map(p => p.id === parent.id ? { ...p, isActive: false, user: { ...p.user, status: "INACTIVE" } } : p));
+                                alert(err?.message || "Failed to activate parent");
+                              }
                             }}
                             style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--success)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
                           >
@@ -331,6 +355,7 @@ export default function ParentListClient({
                           </button>
                         )}
                         <button 
+                          disabled={deletingId === parent.id}
                           onClick={async () => {
                             const ok = await confirm({
                               title: `Delete Parent "${parent.user.name}"?`,
@@ -341,13 +366,49 @@ export default function ParentListClient({
                             });
                             if (!ok) return;
 
-                            const res = await deleteParent(parent.id);
-                            if (res?.error) alert(res.error);
                             setOpenMenuId(null);
+                            const previousList = [...parentList];
+                            // 0ms instant optimistic removal
+                            setParentList(prev => prev.filter(p => p.id !== parent.id));
+                            setDeletingId(parent.id);
+
+                            try {
+                              const res = await deleteParent(parent.id);
+                              setDeletingId(null);
+                              if (res?.error) {
+                                alert(res.error);
+                                setParentList(previousList); // Rollback
+                              } else {
+                                router.refresh();
+                              }
+                            } catch (err: any) {
+                              setDeletingId(null);
+                              setParentList(previousList);
+                              alert(err?.message || "Failed to delete parent");
+                            }
                           }}
-                          style={{ padding: '0.5rem', textDecoration: 'none', color: 'var(--danger)', background: 'transparent', border: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '4px', cursor: 'pointer', textAlign: 'left' }}
+                          style={{
+                            padding: '0.5rem',
+                            textDecoration: 'none',
+                            color: 'var(--danger)',
+                            background: 'transparent',
+                            border: 'none',
+                            fontSize: '0.875rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            borderRadius: '4px',
+                            cursor: deletingId === parent.id ? 'not-allowed' : 'pointer',
+                            opacity: deletingId === parent.id ? 0.4 : 1,
+                            textAlign: 'left'
+                          }}
                         >
-                          <Trash2 size={16} /> Delete
+                          {deletingId === parent.id ? (
+                            <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+                          ) : (
+                            <Trash2 size={16} />
+                          )}
+                          Delete
                         </button>
                       </div>
                     )}
