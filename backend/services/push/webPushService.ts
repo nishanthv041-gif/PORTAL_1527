@@ -251,10 +251,19 @@ export async function dispatchPushToRecipients(
   });
 
   // Strict deduplication by endpoint so a device never receives duplicate notifications
-  const endpointMap = new Map<string, (typeof rawSubscriptions)[0]>();
+  const endpointMap = new Map<
+    string,
+    { id: string; userId: string | null; endpoint: string; p256dh: string; auth: string }
+  >();
   for (const s of rawSubscriptions) {
     if (s.endpoint && s.p256dh && s.auth && !endpointMap.has(s.endpoint)) {
-      endpointMap.set(s.endpoint, s);
+      endpointMap.set(s.endpoint, {
+        id: s.id,
+        userId: s.userId,
+        endpoint: s.endpoint,
+        p256dh: s.p256dh,
+        auth: s.auth,
+      });
     }
   }
 
@@ -311,7 +320,9 @@ export async function dispatchPushToRecipients(
       },
     });
     if (fallbackSubs.length > 0) {
-      subscriptions = fallbackSubs;
+      subscriptions = fallbackSubs.filter(
+        (f): f is typeof f & { p256dh: string; auth: string } => Boolean(f.p256dh && f.auth)
+      );
     }
   }
 
@@ -387,13 +398,17 @@ export async function dispatchPushToActiveDevicesLast24Hours(
     orderBy: { lastLoginAt: "desc" },
   });
 
-  if (activeSubscriptions.length === 0) {
+  const validSubscriptions = activeSubscriptions.filter(
+    (sub): sub is typeof sub & { p256dh: string; auth: string } => Boolean(sub.p256dh && sub.auth)
+  );
+
+  if (validSubscriptions.length === 0) {
     return { totalEligible: 0, sent: 0, failed: 0, prunedExpired: 0, details: [] };
   }
 
   // 2. Dispatch concurrently using Promise.allSettled
   const results = await Promise.allSettled(
-    activeSubscriptions.map(async (sub) => {
+    validSubscriptions.map(async (sub) => {
       const res = await sendPushToSubscription(sub, payload, options?.notificationId);
       if (!res.success) {
         throw { statusCode: res.statusCode, error: res.error, subId: sub.id };

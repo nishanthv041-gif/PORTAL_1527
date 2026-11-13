@@ -2,8 +2,7 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
-import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
-import { sendUnifiedNotification } from "@/backend/services/notifications/unifiedNotificationEngine";
+import { sendUniversalNotification } from "@/lib/notify";
 
 export async function sendMessage(senderId: string, receiverId: string, content: string) {
   try {
@@ -12,10 +11,23 @@ export async function sendMessage(senderId: string, receiverId: string, content:
       return { success: false, error: "Message cannot be empty." };
     }
 
-    const [sender, receiver] = await Promise.all([
+    let targetReceiverId = receiverId;
+    let [sender, receiver] = await Promise.all([
       prisma.user.findUnique({ where: { id: senderId } }),
-      prisma.user.findUnique({ where: { id: receiverId } })
+      prisma.user.findUnique({ where: { id: targetReceiverId } })
     ]);
+
+    if (!receiver) {
+      // Check if receiverId is actually a Parent model ID
+      const parentRecord = await prisma.parent.findUnique({
+        where: { id: receiverId },
+        select: { userId: true, user: true }
+      });
+      if (parentRecord?.user) {
+        receiver = parentRecord.user;
+        targetReceiverId = parentRecord.userId;
+      }
+    }
 
     if (!receiver) {
       return { success: false, error: "Recipient not found." };
@@ -25,7 +37,7 @@ export async function sendMessage(senderId: string, receiverId: string, content:
       data: {
         content: cleanContent,
         senderId,
-        receiverId
+        receiverId: targetReceiverId
       }
     });
 
@@ -37,19 +49,20 @@ export async function sendMessage(senderId: string, receiverId: string, content:
       recipientLink = `/dashboard/admin/messages/${senderId}`;
     }
 
-    // Create unified notification & dispatch system push
+    // Deliver cross-platform notification (In-app + Web/iOS Safari + Android native)
     try {
       const senderRoleLabel = sender?.role === "ADMIN" ? "School Administration" : sender?.role === "TEACHER" ? "Faculty Teacher" : "Parent";
-      await sendUnifiedNotification({
-        userId: receiverId,
+      await sendUniversalNotification({
+        userId: targetReceiverId,
         title: `💬 New Message from ${sender?.name || "Portal User"} (${senderRoleLabel})`,
-        content: `${sender?.name || "User"}: "${cleanContent.length > 120 ? cleanContent.slice(0, 117) + "..." : cleanContent}"`,
-        type: "MESSAGE",
-        category: "admin",
-        link: recipientLink,
+        body: `${sender?.name || "User"}: "${cleanContent.length > 120 ? cleanContent.slice(0, 117) + "..." : cleanContent}"`,
+        category: "MESSAGE",
+        url: recipientLink,
+        tag: `chat-${senderId}`,
+        priority: "HIGH",
       });
     } catch (notifErr) {
-      console.error("Message notification creation error:", notifErr);
+      console.error("[Messages] Notification delivery warning:", notifErr);
     }
 
     revalidatePath(`/dashboard/teacher/messages/${receiverId}`);

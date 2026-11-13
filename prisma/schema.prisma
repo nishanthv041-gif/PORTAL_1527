@@ -1153,11 +1153,12 @@ model PushSubscription {
   user              User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   deviceFingerprint String?
   endpoint          String    @unique
-  p256dh            String
-  auth              String
+  token             String?   @unique // FCM token for Android or unique push token
+  p256dh            String?
+  auth              String?
   userAgent         String?
   deviceName        String?
-  platform          String?
+  platform          String?   @default("WEB") // WEB | ANDROID | IOS
   isActive          Boolean   @default(true)
   lastLoginAt       DateTime  @default(now())
   lastUsedAt        DateTime?
@@ -1166,6 +1167,8 @@ model PushSubscription {
 
   @@index([userId])
   @@index([endpoint])
+  @@index([token])
+  @@index([platform])
   @@index([deviceFingerprint])
   @@index([lastLoginAt])
   @@index([userId, lastLoginAt])

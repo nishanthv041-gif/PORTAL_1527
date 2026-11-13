@@ -9,6 +9,7 @@ import {
   CheckCircle2, Clock, Filter, AlertCircle, ShieldAlert,
   Bus, Users, AlertTriangle
 } from "lucide-react";
+import { getNotificationDisplayText } from "@/frontend/components/birthdays/birthdayCardUtils";
 
 export interface PortalNotificationItem {
   id: string;
@@ -547,7 +548,7 @@ export default function NotificationsCenterClient({
                       wordBreak: "break-word",
                     }}
                   >
-                    {notif.content}
+                    {getNotificationDisplayText(notif.content)}
                   </p>
 
                   {notif.link && (

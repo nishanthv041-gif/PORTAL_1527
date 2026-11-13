@@ -158,13 +158,15 @@ export async function sendNativeChatPushNotification(params: NativeChatMessagePu
     });
 
     for (const sub of legacySubs) {
-      candidateEndpoints.push({
-        id: sub.id,
-        endpoint: sub.endpoint,
-        p256dh: sub.p256dh,
-        auth: sub.auth,
-        deviceId: sub.deviceFingerprint || "unknown",
-      });
+      if (sub.p256dh && sub.auth) {
+        candidateEndpoints.push({
+          id: sub.id,
+          endpoint: sub.endpoint,
+          p256dh: sub.p256dh,
+          auth: sub.auth,
+          deviceId: sub.deviceFingerprint || "unknown",
+        });
+      }
     }
   }
 
@@ -321,7 +323,7 @@ export async function sendNotificationToActiveDevices(
   }
 
   for (const sub of pushSubs) {
-    if (!targetMap.has(sub.endpoint)) {
+    if (sub.p256dh && sub.auth && !targetMap.has(sub.endpoint)) {
       targetMap.set(sub.endpoint, {
         endpoint: sub.endpoint,
         p256dh: sub.p256dh,

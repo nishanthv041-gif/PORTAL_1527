@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
-import { dispatchPortalNotification } from "@/lib/notifications";
+import { sendUniversalNotification } from "@/lib/notify";
 
 export async function POST(request: Request) {
   try {
@@ -35,11 +35,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Message content or attachment is required" }, { status: 400 });
     }
 
-    // Verify recipient exists
-    const receiver = await prisma.user.findUnique({
-      where: { id: receiverId },
+    // Resolve recipient user ID (handling both direct User.id, Parent.id, or Teacher.id)
+    let targetReceiverId = receiverId;
+    let receiver = await prisma.user.findUnique({
+      where: { id: targetReceiverId },
       select: { id: true, role: true, name: true }
     });
+
+    if (!receiver) {
+      // Check if receiverId is actually a Parent model ID
+      const parentRecord = await prisma.parent.findUnique({
+        where: { id: receiverId },
+        select: { userId: true, user: { select: { id: true, role: true, name: true } } }
+      });
+      if (parentRecord?.user) {
+        receiver = parentRecord.user;
+        targetReceiverId = parentRecord.userId;
+      }
+    }
+
+    if (!receiver) {
+      // Check if receiverId is actually a Teacher model ID
+      const teacherRecord = await prisma.teacher.findUnique({
+        where: { id: receiverId },
+        select: { userId: true, user: { select: { id: true, role: true, name: true } } }
+      });
+      if (teacherRecord?.user) {
+        receiver = teacherRecord.user;
+        targetReceiverId = teacherRecord.userId;
+      }
+    }
 
     if (!receiver) {
       return NextResponse.json({ error: "Recipient not found" }, { status: 404 });
@@ -55,7 +80,7 @@ export async function POST(request: Request) {
     const message = await prisma.message.create({
       data: {
         senderId: session.user.id,
-        receiverId,
+        receiverId: targetReceiverId,
         content: finalContent,
         messageType,
         fileUrl,
@@ -83,43 +108,42 @@ export async function POST(request: Request) {
       }
     });
 
-    // Fire notification asynchronously in background (non-blocking)
-    (async () => {
-      try {
-        let recipientLink = `/dashboard/parent/messages/${session.user.id}`;
-        if (receiver.role === "TEACHER") {
-          recipientLink = `/dashboard/teacher/messages/${session.user.id}`;
-        } else if (receiver.role === "ADMIN") {
-          recipientLink = `/dashboard/admin/messages/${session.user.id}`;
-        }
-
-        const senderRoleLabel = session.user.role === "ADMIN" 
-          ? "School Administration" 
-          : session.user.role === "TEACHER" 
-            ? "Faculty Teacher" 
-            : "Parent";
-
-        const previewSnippet = messageType === "AUDIO" 
-          ? "Sent a voice message" 
-          : fileUrl 
-            ? `Sent an attachment: ${fileName || "file"}` 
-            : cleanContent.length > 100 
-              ? cleanContent.slice(0, 97) + "..." 
-              : cleanContent;
-
-        await dispatchPortalNotification({
-          userIds: [receiverId],
-          title: `💬 New Message from ${session.user.name || "Portal User"} (${senderRoleLabel})`,
-          message: `${session.user.name || "User"}: "${previewSnippet}"`,
-          type: "MESSAGE",
-          link: recipientLink,
-          tag: `chat-${session.user.id}`,
-          priority: "URGENT",
-        });
-      } catch (err) {
-        console.error("Background notification error on message send:", err);
+    // Deliver cross-platform notification (In-app + PC Web / iPhone Safari PWA + Android Capacitor)
+    // Strictly awaited so serverless functions (Vercel / Amplify) do not freeze or terminate early
+    try {
+      let recipientLink = `/dashboard/parent/messages/${session.user.id}`;
+      if (receiver.role === "TEACHER") {
+        recipientLink = `/dashboard/teacher/messages/${session.user.id}`;
+      } else if (receiver.role === "ADMIN") {
+        recipientLink = `/dashboard/admin/messages/${session.user.id}`;
       }
-    })();
+
+      const senderRoleLabel = session.user.role === "ADMIN" 
+        ? "School Administration" 
+        : session.user.role === "TEACHER" 
+          ? "Faculty Teacher" 
+          : "Parent";
+
+      const previewSnippet = messageType === "AUDIO" 
+        ? "Sent a voice message" 
+        : fileUrl 
+          ? `Sent an attachment: ${fileName || "file"}` 
+          : cleanContent.length > 100 
+            ? cleanContent.slice(0, 97) + "..." 
+            : cleanContent;
+
+      await sendUniversalNotification({
+        userId: targetReceiverId,
+        title: `💬 New Message from ${session.user.name || "Portal User"} (${senderRoleLabel})`,
+        body: `${session.user.name || "User"}: "${previewSnippet}"`,
+        category: "MESSAGE",
+        url: recipientLink,
+        tag: `chat-${session.user.id}`,
+        priority: "HIGH",
+      });
+    } catch (notifErr) {
+      console.error("[Messages] Notification delivery warning:", notifErr);
+    }
 
     return NextResponse.json({
       success: true,

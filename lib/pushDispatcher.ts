@@ -213,7 +213,13 @@ export async function sendInstantPortalNotification(
 
     for (const sub of primarySubs) {
       if (sub.endpoint && sub.p256dh && sub.auth && !endpointMap.has(sub.endpoint)) {
-        endpointMap.set(sub.endpoint, sub);
+        endpointMap.set(sub.endpoint, {
+          id: sub.id,
+          userId: sub.userId,
+          endpoint: sub.endpoint,
+          p256dh: sub.p256dh,
+          auth: sub.auth,
+        });
       }
     }
 

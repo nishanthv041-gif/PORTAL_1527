@@ -116,31 +116,16 @@ export async function sendUserNotification(
   priority: "NORMAL" | "URGENT" = "NORMAL"
 ) {
   try {
-    await prisma.notification.create({
-      data: {
-        userId,
-        title,
-        content,
-        type: priority === "URGENT" ? "ALERT" : "MESSAGE",
-        category: category.toUpperCase(),
-        priority,
-        link,
-        isRead: false,
-      },
+    const { sendUniversalNotification } = await import("@/lib/notify");
+    await sendUniversalNotification({
+      userId,
+      title,
+      body: content,
+      content,
+      category: category.toUpperCase(),
+      url: link,
+      priority: priority === "URGENT" ? "HIGH" : "NORMAL",
     });
-
-    await dispatchPushToRecipients(
-      [userId],
-      {
-        title,
-        body: content,
-        url: link,
-        priority,
-        category,
-      },
-      undefined,
-      category
-    );
   } catch (err) {
     console.error("[Notification Dispatcher] User notification error:", err);
   }

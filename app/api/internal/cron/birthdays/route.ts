@@ -3,6 +3,7 @@ import { prisma } from "@/backend/db/prisma";
 import { getSchoolNow } from "@/lib/time";
 import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { sendUserNotification } from "@/backend/services/push/notificationDispatcher";
+import { sendUniversalNotification } from "@/lib/notify";
 import { Prisma } from "@prisma/client";
 import { formatClassName } from "@/lib/teacher/formatClassName";
 import crypto from "crypto";
@@ -471,29 +472,17 @@ export async function processUniversalBirthdayWishes(
 
           const notificationContent = serializeBirthdayCardPayload(cardPayload);
 
-          // Create in-app notification with rich birthday card
-          const notif = await prisma.notification.create({
-            data: {
-              userId: recipient.userId,
-              title: "Happy Birthday 🎉",
-              content: notificationContent,
-              type: "BIRTHDAY",
-              category: "BIRTHDAY",
-              priority: "NORMAL",
-              link: dashboardLink,
-              isRead: false,
-            },
+          // Deliver rich birthday card via universal cross-platform notification pipeline
+          const notifResult = await sendUniversalNotification({
+            userId: recipient.userId,
+            title: "Happy Birthday 🎉",
+            body: cardPayload.summaryText,
+            content: notificationContent,
+            category: "BIRTHDAY",
+            url: dashboardLink,
+            tag: `birthday-${recipient.userId}-${year}`,
+            priority: "NORMAL",
           });
-
-          // Dispatch web push / native notification asynchronously
-          sendUserNotification(
-            recipient.userId,
-            "Happy Birthday 🎉",
-            cardPayload.summaryText,
-            "academic",
-            dashboardLink,
-            "NORMAL"
-          ).catch(() => {});
 
           // Record in BirthdayWish table
           await prisma.birthdayWish.create({
@@ -504,7 +493,7 @@ export async function processUniversalBirthdayWishes(
               studentId: celebrant.personType === "student" ? celebrant.personId : null,
               recipientUserId: recipient.userId,
               year,
-              notificationId: notif.id,
+              notificationId: notifResult.notificationId || null,
               status: "SENT",
             },
           });
@@ -808,20 +797,16 @@ export async function dispatchImmediateBirthdayWishForPerson(params: {
           if (!existing || params.forceSend) {
             const title = `Happy Birthday, ${studentName}! 🎂`;
 
-            const notif = await prisma.notification.create({
-              data: {
-                userId: parentUser.id,
-                title,
-                content: serializedContent,
-                type: "BIRTHDAY",
-                category: "BIRTHDAY",
-                priority: "NORMAL",
-                link: "/dashboard/parent",
-                isRead: false,
-              },
+            const notifResult = await sendUniversalNotification({
+              userId: parentUser.id,
+              title,
+              body: cardPayload.summaryText,
+              content: serializedContent,
+              category: "BIRTHDAY",
+              url: "/dashboard/parent",
+              tag: `birthday-${parentUser.id}-${student.id}-${year}`,
+              priority: "NORMAL",
             });
-
-            sendUserNotification(parentUser.id, title, cardPayload.summaryText, "academic", "/dashboard/parent", "NORMAL").catch(() => {});
 
             if (!existing) {
               await prisma.birthdayWish.create({
@@ -832,7 +817,7 @@ export async function dispatchImmediateBirthdayWishForPerson(params: {
                   studentId: student.id,
                   recipientUserId: parentUser.id,
                   year,
-                  notificationId: notif.id,
+                  notificationId: notifResult.notificationId || null,
                   status: "SENT",
                 },
               });

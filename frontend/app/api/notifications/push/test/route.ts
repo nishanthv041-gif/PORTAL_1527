@@ -26,7 +26,7 @@ export async function POST(req: Request) {
           orderBy: { lastUsedAt: "desc" },
         });
 
-    if (!sub) {
+    if (!sub || !sub.p256dh || !sub.auth) {
       return NextResponse.json(
         { error: "No registered push subscription found for this device/user. Please enable notifications first." },
         { status: 404 }
@@ -34,7 +34,13 @@ export async function POST(req: Request) {
     }
 
     const result = await sendPushToSubscription(
-      sub,
+      {
+        id: sub.id,
+        userId: sub.userId,
+        endpoint: sub.endpoint,
+        p256dh: sub.p256dh,
+        auth: sub.auth,
+      },
       {
         title: "Nipo Portal Test Notification",
         body: `Success! Real-time Web Push is connected to ${sub.deviceName || "your device"}.`,
