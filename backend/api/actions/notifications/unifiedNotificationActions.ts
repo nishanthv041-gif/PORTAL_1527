@@ -144,9 +144,19 @@ export async function getUnifiedNotificationsAction(options?: { unreadOnly?: boo
         badgeColors = { bg: "rgba(245, 158, 11, 0.16)", text: "#b45309", border: "rgba(245, 158, 11, 0.35)" };
       }
 
-      let defaultLink = userRole === "PARENT" ? "/dashboard/parent/notifications" : userRole === "TEACHER" ? "/dashboard/teacher/notifications" : "/dashboard/admin/notifications";
+      let defaultLink = userRole === "PARENT" ? "/dashboard/parent" : userRole === "TEACHER" ? "/dashboard/teacher" : "/dashboard/admin";
       if (category === "BIRTHDAY") {
         defaultLink = userRole === "PARENT" ? "/dashboard/parent" : userRole === "TEACHER" ? "/dashboard/teacher/birthdays" : "/dashboard/admin/birthdays";
+      } else if (category === "MESSAGE" || typeStr.includes("MESSAGE")) {
+        defaultLink = userRole === "PARENT" ? "/dashboard/parent/messages" : userRole === "TEACHER" ? "/dashboard/teacher/messages" : "/dashboard/admin/messages";
+      } else if (category === "MEETING" || typeStr.includes("MEETING")) {
+        defaultLink = userRole === "PARENT" ? "/dashboard/parent/meetings" : userRole === "TEACHER" ? "/dashboard/teacher/meetings" : "/dashboard/admin/meetings";
+      } else if (category === "REPORT_CARD" || typeStr.includes("REPORT")) {
+        defaultLink = userRole === "PARENT" ? "/dashboard/parent/report-cards" : "/dashboard/teacher/report-cards";
+      } else if (category === "ASSIGNMENT" || typeStr.includes("ASSIGN") || typeStr.includes("HOMEWORK")) {
+        defaultLink = userRole === "PARENT" ? "/dashboard/parent/homework" : "/dashboard/teacher/homework";
+      } else if (category === "ANNOUNCEMENT" || category === "INSTRUCTION" || typeStr.includes("ANNOUNCE")) {
+        defaultLink = userRole === "PARENT" ? "/dashboard/parent/announcements" : "/dashboard/teacher/announcements";
       } else if (typeStr.includes("PROGRAM")) {
         defaultLink = userRole === "PARENT" ? "/dashboard/parent/programs" : userRole === "ADMIN" ? "/dashboard/admin/programs" : "/dashboard/teacher/calendar";
       } else if (typeStr.includes("COMPLAINT") || titleLower.includes("complaint")) {

@@ -5,7 +5,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
-import { sendUnifiedNotification } from "@/backend/services/notifications/unifiedNotificationEngine";
+import { sendUniversalNotification } from "@/lib/notify";
 
 export async function adminSendMessage(receiverId: string, content: string) {
   const session = await getServerSession(getAuthOptions());
@@ -37,17 +37,20 @@ export async function adminSendMessage(receiverId: string, content: string) {
       }
     });
 
-    // Send unified real-time notification to device OS and portal
+    // Send cross-platform notification to device OS and portal
     try {
-      await sendUnifiedNotification({
+      const recipientLink = receiver.role === 'PARENT' 
+        ? `/dashboard/parent/messages/${session.user.id}` 
+        : `/dashboard/teacher/messages/${session.user.id}`;
+
+      await sendUniversalNotification({
         userId: receiverId,
         title: `💬 New Message from School Administration`,
-        content: `${session.user.name || "School Administration"}: "${cleanContent.length > 120 ? cleanContent.slice(0, 117) + "..." : cleanContent}"`,
-        type: "MESSAGE",
-        category: "admin",
-        link: receiver.role === 'PARENT' 
-          ? `/dashboard/parent/messages/${session.user.id}` 
-          : `/dashboard/teacher/messages/${session.user.id}`,
+        body: `${session.user.name || "School Administration"}: "${cleanContent.length > 120 ? cleanContent.slice(0, 117) + "..." : cleanContent}"`,
+        category: "MESSAGE",
+        url: recipientLink,
+        tag: `chat-${session.user.id}`,
+        priority: "HIGH",
       });
     } catch (notifErr) {
       console.error("Message notification creation error:", notifErr);

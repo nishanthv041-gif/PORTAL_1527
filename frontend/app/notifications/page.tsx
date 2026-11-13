@@ -1,8 +1,8 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { redirect } from "next/navigation";
-import { prisma } from "@/backend/db/prisma";
 import NotificationsCenterClient, { PortalNotificationItem } from "./NotificationsCenterClient";
+import { getUnifiedNotificationsAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
 
 export const dynamic = "force-dynamic";
 
@@ -18,35 +18,18 @@ export default async function NotificationsPage() {
     redirect("/login");
   }
 
-  const rawNotifications = await prisma.notification.findMany({
-    where: {
-      userId: session.user.id,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-    take: 100,
-    select: {
-      id: true,
-      title: true,
-      content: true,
-      type: true,
-      category: true,
-      link: true,
-      isRead: true,
-      createdAt: true,
-    },
-  });
+  // Fetch unified cross-module notifications (messages, report cards, meetings, announcements, bus alerts, birthdays)
+  const unifiedItems = await getUnifiedNotificationsAction({ unreadOnly: false }).catch(() => []);
 
-  const formattedNotifications: PortalNotificationItem[] = rawNotifications.map((n) => ({
+  const formattedNotifications: PortalNotificationItem[] = unifiedItems.map((n) => ({
     id: n.id,
     title: n.title,
-    content: n.content,
-    type: n.type,
+    content: n.description,
+    type: n.category,
     category: n.category,
     link: n.link,
     isRead: n.isRead,
-    createdAt: n.createdAt.toISOString(),
+    createdAt: n.timestamp,
   }));
 
   return (

@@ -102,13 +102,12 @@ export default function NotificationPopupModal({
   };
 
   // Sync if initialNotifications prop updates (fast initial SSR paint)
-  // Automatically shows popup when user opens/logs into portal with unread notifications
+  // Automatically shows popup when user opens/logs into portal with unread notifications (including messages)
   useEffect(() => {
     if (initialNotifications && initialNotifications.length > 0) {
       const activeUnread = filterActiveUnread(initialNotifications);
-      const autoPopupItems = activeUnread.filter(n => n.category !== "MESSAGE");
-      if (autoPopupItems.length > 0) {
-        setNotifications(autoPopupItems);
+      if (activeUnread.length > 0) {
+        setNotifications(activeUnread);
         setCurrentIndex(0);
         // Fast popup: Open automatically within 100ms on login / page load
         const timer = setTimeout(() => {
@@ -119,7 +118,7 @@ export default function NotificationPopupModal({
     }
   }, [initialNotifications]);
 
-  // Periodic active polling: checks every 5 seconds for newly created notifications (e.g. teacher assigns homework)
+  // Fast active polling: checks every 5 seconds for newly sent messages and alerts
   useEffect(() => {
     if (!notificationsEnabled) return;
 
@@ -130,12 +129,9 @@ export default function NotificationPopupModal({
         .then((fresh) => {
           if (!isMounted || !fresh || fresh.length === 0) return;
           const activeFresh = filterActiveUnread(fresh);
-          const newUnseenItems = activeFresh.filter(
-            n => n.category !== "MESSAGE"
-          );
 
-          if (newUnseenItems.length > 0) {
-            setNotifications(newUnseenItems);
+          if (activeFresh.length > 0) {
+            setNotifications(activeFresh);
             setCurrentIndex(0);
             setIsOpen(true);
           }
@@ -152,12 +148,12 @@ export default function NotificationPopupModal({
       };
     }
 
-    // Relaxed 60s background poll, paused when document is hidden
+    // Fast 5s background poll when tab is active for instant notification arrival
     const interval = setInterval(() => {
       if (!document.hidden) {
         checkFreshNotifications();
       }
-    }, 60000);
+    }, 5000);
 
     const handleVisibility = () => {
       if (!document.hidden) {

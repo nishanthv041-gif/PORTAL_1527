@@ -2,7 +2,8 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
-import { Bell, CheckCircle, Clock, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Bell, CheckCircle, Clock, Trash2, ExternalLink } from "lucide-react";
 import MarkReadButton from "./MarkReadButton";
 import ToggleNotifications from "@/frontend/components/ToggleNotifications";
 import { toggleNotificationsEnabled, deleteNotificationAction } from "@/backend/api/actions/dashboard/teacher/notifications/actions";
@@ -27,6 +28,7 @@ export default async function TeacherNotificationsPage() {
       content: true,
       type: true,
       category: true,
+      link: true,
       isRead: true,
       createdAt: true,
     },
@@ -72,6 +74,25 @@ export default async function TeacherNotificationsPage() {
                 <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                   {getNotificationDisplayText(notification.content)}
                 </p>
+                {notification.link && (
+                  <div style={{ marginBottom: "0.5rem" }}>
+                    <Link
+                      href={notification.link}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.3rem",
+                        fontSize: "0.82rem",
+                        fontWeight: 600,
+                        color: "var(--primary, #2563eb)",
+                        textDecoration: "none",
+                      }}
+                    >
+                      <span>View details</span>
+                      <ExternalLink size={13} />
+                    </Link>
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', opacity: 0.7 }}>
                   <Clock size={12} /> {new Date(notification.createdAt).toLocaleString()}
                 </div>

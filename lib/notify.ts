@@ -170,7 +170,7 @@ export async function sendUniversalNotification(
   }
 
   // 2. Query Multi-Device Subscriptions (PC, iPhone Safari PWA, Android Capacitor)
-  // Deduplicate endpoints and device fingerprints so users never receive duplicate pushes on the same phone
+  // Targets devices where the user has logged in or been active within the last 48 hours
   let subscriptions: Array<{
     id: string;
     endpoint: string;
@@ -181,10 +181,17 @@ export async function sendUniversalNotification(
   }> = [];
 
   try {
-    const rawSubs = await prisma.pushSubscription.findMany({
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
+    // 2a. Query active push subscriptions (filtering by 48-hour activity window with fallback)
+    let rawSubs = await prisma.pushSubscription.findMany({
       where: {
         userId,
         isActive: true,
+        OR: [
+          { lastLoginAt: { gte: fortyEightHoursAgo } },
+          { updatedAt: { gte: fortyEightHoursAgo } },
+        ],
       },
       select: {
         id: true,
@@ -199,6 +206,28 @@ export async function sendUniversalNotification(
       orderBy: { updatedAt: "desc" },
     });
 
+    // Fallback: If no device logged in within 48 hours, target any active registered device
+    if (rawSubs.length === 0) {
+      rawSubs = await prisma.pushSubscription.findMany({
+        where: {
+          userId,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          endpoint: true,
+          token: true,
+          platform: true,
+          p256dh: true,
+          auth: true,
+          deviceFingerprint: true,
+          updatedAt: true,
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 5,
+      });
+    }
+
     const seenEndpoints = new Set<string>();
     const seenFingerprints = new Set<string>();
     const staleIdsToDeactivate: string[] = [];
@@ -211,8 +240,6 @@ export async function sendUniversalNotification(
       }
       seenEndpoints.add(endpointKey);
 
-      // If a device fingerprint is associated with this subscription,
-      // ensure only the most recently updated subscription for that device is targeted.
       if (sub.deviceFingerprint) {
         if (seenFingerprints.has(sub.deviceFingerprint)) {
           staleIdsToDeactivate.push(sub.id);
@@ -223,6 +250,68 @@ export async function sendUniversalNotification(
 
       subscriptions.push(sub);
     }
+
+    // 2b. Also include active devices from pwa_subscriptions active in last 48 hours
+    try {
+      const pwaSubs = await prisma.pwaSubscription.findMany({
+        where: {
+          userId,
+          lastActiveAt: { gte: fortyEightHoursAgo },
+        },
+        select: {
+          id: true,
+          endpoint: true,
+          p256dhKey: true,
+          authKey: true,
+          deviceType: true,
+        },
+      });
+
+      for (const p of pwaSubs) {
+        if (p.endpoint && p.p256dhKey && p.authKey && !seenEndpoints.has(p.endpoint)) {
+          seenEndpoints.add(p.endpoint);
+          subscriptions.push({
+            id: p.id,
+            endpoint: p.endpoint,
+            token: p.endpoint,
+            platform: p.deviceType?.toUpperCase() === "IOS" ? "IOS" : "WEB",
+            p256dh: p.p256dhKey,
+            auth: p.authKey,
+          });
+        }
+      }
+    } catch {}
+
+    // 2c. Also include active devices from device_notifications_registry in last 48 hours
+    try {
+      const registryDevices = await prisma.deviceNotificationsRegistry.findMany({
+        where: {
+          userId,
+          lastLoginAt: { gte: fortyEightHoursAgo },
+        },
+        select: {
+          id: true,
+          endpoint: true,
+          p256dh: true,
+          auth: true,
+          deviceId: true,
+        },
+      });
+
+      for (const d of registryDevices) {
+        if (d.endpoint && d.p256dh && d.auth && !seenEndpoints.has(d.endpoint)) {
+          seenEndpoints.add(d.endpoint);
+          subscriptions.push({
+            id: d.id,
+            endpoint: d.endpoint,
+            token: d.endpoint,
+            platform: "WEB",
+            p256dh: d.p256dh,
+            auth: d.auth,
+          });
+        }
+      }
+    } catch {}
 
     if (staleIdsToDeactivate.length > 0) {
       prisma.pushSubscription.updateMany({
