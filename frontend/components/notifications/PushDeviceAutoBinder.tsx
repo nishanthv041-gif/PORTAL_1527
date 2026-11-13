@@ -159,7 +159,7 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
                   .replace(/\//g, "_")
                   .replace(/=+$/, "");
               }
-            } catch {}
+            } catch { }
           }
 
           if (p256dh && auth) {
@@ -180,8 +180,8 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
                 deviceName: navigator.userAgent.includes("iPhone")
                   ? "iPhone Safari PWA"
                   : navigator.userAgent.includes("Android")
-                  ? "Android Chrome PWA"
-                  : "Desktop PWA",
+                    ? "Android Chrome PWA"
+                    : "Desktop PWA",
               }),
             }).catch(() => null);
           }

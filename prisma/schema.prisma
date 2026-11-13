@@ -48,6 +48,7 @@ model User {
   notificationRecipients NotificationRecipient[]
   loginActivities        UserLoginActivity[]
   homeworkComments HomeworkComment[]
+  birthdayWishLogs       BirthdayWishLog[]
   complaintMessages ComplaintMessage[]
   sessions         UserSession[]
   reportCardExtractions ReportCardExtraction[]
@@ -164,6 +165,22 @@ model BirthdayWish {
   @@index([recipientUserId])
   @@index([year])
   @@index([personType, personId])
+}
+
+model BirthdayWishLog {
+  id        String   @id @default(cuid())
+  userId    String
+  year      Int
+  sentAt    DateTime @default(now())
+  status    String   @default("SENT") // SENT, SENT_LATE, FAILED
+  isLate    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, year])
+  @@index([userId])
+  @@index([year])
 }
 
 model BirthdaySettings {

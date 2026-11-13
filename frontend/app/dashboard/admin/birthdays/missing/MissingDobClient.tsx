@@ -51,6 +51,7 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
   const [editingDates, setEditingDates] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [successIds, setSuccessIds] = useState<Set<string>>(new Set());
+  const [wishedIds, setWishedIds] = useState<Set<string>>(new Set());
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
 
   // Bulk Upload Modal state
@@ -111,6 +112,10 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
     } else {
       // Mark as success and remove from missing list
       setSuccessIds((prev) => new Set(prev).add(person.id));
+      if (res.immediateSent || res.isBirthdayToday) {
+        setWishedIds((prev) => new Set(prev).add(person.id));
+      }
+      const delay = (res.immediateSent || res.isBirthdayToday) ? 2200 : 1200;
       setTimeout(() => {
         setData((prev) => {
           const nextPeople = prev.people.filter((p) => p.id !== person.id);
@@ -129,7 +134,12 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
           s.delete(person.id);
           return s;
         });
-      }, 1200);
+        setWishedIds((prev) => {
+          const s = new Set(prev);
+          s.delete(person.id);
+          return s;
+        });
+      }, delay);
     }
   };
 
@@ -458,9 +468,18 @@ export default function MissingDobClient({ initialData, classes }: MissingDobCli
                       </td>
                       <td className={styles.td} style={{ textAlign: "right" }}>
                         {isSuccess ? (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8rem", fontWeight: 700, color: "#10b981" }}>
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              fontSize: "0.8rem",
+                              fontWeight: 700,
+                              color: wishedIds.has(person.id) ? "#d97706" : "#10b981",
+                            }}
+                          >
                             <Check size={16} />
-                            <span>Saved</span>
+                            <span>{wishedIds.has(person.id) ? "Saved & Wished 🎉" : "Saved"}</span>
                           </span>
                         ) : (
                           <button

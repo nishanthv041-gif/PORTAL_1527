@@ -243,12 +243,24 @@ export async function updateSinglePersonDobAction(params: {
       },
     }).catch(() => {});
 
+    // Trigger immediate send if birthday is today in Asia/Kolkata
+    const dispatchResult = await dispatchImmediateBirthdayWishForPerson({
+      personType,
+      personId,
+    });
+
     revalidatePath("/dashboard/admin/birthdays/missing");
     revalidatePath("/dashboard/admin/students");
     revalidatePath("/dashboard/admin/teachers");
     revalidatePath("/dashboard/admin/users");
 
-    return { success: true, dateStr: validation.dateStr };
+    return {
+      success: true,
+      dateStr: validation.dateStr,
+      isBirthdayToday: dispatchResult.isBirthdayToday,
+      immediateSent: dispatchResult.sentCount > 0,
+      message: dispatchResult.isBirthdayToday ? dispatchResult.message : "Date of Birth updated successfully.",
+    };
   } catch (err: any) {
     console.error("Error updating single person DOB:", err?.message);
     return { error: "Failed to update Date of Birth." };
@@ -426,6 +438,13 @@ export async function commitBulkDobUpdatesAction(items: Array<{ personId: string
           await prisma.parent.updateMany({ where: { userId: item.personId }, data: { dateOfBirth: parsed } });
         }
       }
+
+      // Check if birthday is today and dispatch if needed
+      await dispatchImmediateBirthdayWishForPerson({
+        personType: item.role,
+        personId: item.personId,
+      }).catch(() => {});
+
       updatedCount++;
     } catch (e) {
       console.error(`Failed to update DOB for ${item.personId}:`, e);

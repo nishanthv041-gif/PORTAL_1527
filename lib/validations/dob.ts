@@ -50,9 +50,11 @@ export function parseAndValidateDob(
   let str = "";
   if (input instanceof Date) {
     if (isNaN(input.getTime())) return { isValid: false, error: "Invalid calendar date." };
-    const y = input.getFullYear();
-    const m = String(input.getMonth() + 1).padStart(2, "0");
-    const d = String(input.getDate()).padStart(2, "0");
+    // Use UTC date parts so that Prisma @db.Date (stored as YYYY-MM-DDT00:00:00.000Z)
+    // never shifts by -1 day in servers or environments with timezones behind UTC
+    const y = input.getUTCFullYear();
+    const m = String(input.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(input.getUTCDate()).padStart(2, "0");
     str = `${y}-${m}-${d}`;
   } else {
     str = String(input).trim();
