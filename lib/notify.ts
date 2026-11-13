@@ -126,28 +126,45 @@ export async function sendUniversalNotification(
   let prunedCount = 0;
 
   // 1. In-App Notification (PostgreSQL Record)
+  // Deduplicate: If an identical notification was created for this user in the last 15 seconds, reuse it
   try {
-    const notif = await prisma.notification.create({
-      data: {
+    const recentCutoff = new Date(Date.now() - 15000);
+    const existingNotif = await prisma.notification.findFirst({
+      where: {
         userId,
         title,
         content: content || body,
-        body,
-        type: category.toUpperCase(),
-        category: category.toUpperCase(),
-        priority: priority.toUpperCase(),
-        link: url,
-        isRead: false,
-        sentAt: new Date(),
-        createdAt: new Date(),
+        createdAt: { gte: recentCutoff },
       },
       select: { id: true },
     });
-    notificationId = notif.id;
-    inAppCreated = true;
 
-    // Invalidate user cache for instant in-app badge update
-    await invalidateUserNotifCache(userId).catch(() => {});
+    if (existingNotif) {
+      notificationId = existingNotif.id;
+      inAppCreated = true;
+    } else {
+      const notif = await prisma.notification.create({
+        data: {
+          userId,
+          title,
+          content: content || body,
+          body,
+          type: category.toUpperCase(),
+          category: category.toUpperCase(),
+          priority: priority.toUpperCase(),
+          link: url,
+          isRead: false,
+          sentAt: new Date(),
+          createdAt: new Date(),
+        },
+        select: { id: true },
+      });
+      notificationId = notif.id;
+      inAppCreated = true;
+
+      // Invalidate user cache for instant in-app badge update
+      await invalidateUserNotifCache(userId).catch(() => {});
+    }
   } catch (err) {
     console.error("[Notify] Error creating in-app notification:", err);
   }
@@ -281,7 +298,9 @@ export async function sendUniversalNotification(
               },
               android: {
                 priority: "high",
+                collapseKey: deterministicTag,
                 notification: {
+                  tag: deterministicTag,
                   channelId: "srt_school_alerts",
                   sound: "default",
                   priority: "high",

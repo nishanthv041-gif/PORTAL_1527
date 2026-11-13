@@ -7,9 +7,11 @@ import {
   Bell, CheckCheck, Trash2, ArrowLeft, ExternalLink,
   BookOpen, FileText, MessageSquare, Megaphone, Calendar,
   CheckCircle2, Clock, Filter, AlertCircle, ShieldAlert,
-  Bus, Users, AlertTriangle
+  Bus, Users, AlertTriangle, X
 } from "lucide-react";
-import { getNotificationDisplayText } from "@/frontend/components/birthdays/birthdayCardUtils";
+import { CakeIcon as Cake } from "@/frontend/components/birthdays/BirthdayIcons";
+import BirthdayWishCard from "@/frontend/components/birthdays/BirthdayWishCard";
+import { parseBirthdayCardPayload, getNotificationDisplayText } from "@/frontend/components/birthdays/birthdayCardUtils";
 
 export interface PortalNotificationItem {
   id: string;
@@ -39,8 +41,23 @@ function formatRelativeTime(dateInput: Date | string): string {
   });
 }
 
-function getTypeBadge(type: string, category?: string | null) {
+function getTypeBadge(type: string, category?: string | null, title?: string, content?: string) {
   const normalized = (type || category || "").toUpperCase();
+  const isBirthday =
+    normalized.includes("BIRTHDAY") ||
+    (title && title.toLowerCase().includes("birthday")) ||
+    (content && content.startsWith("CARD_PAYLOAD:::"));
+
+  if (isBirthday) {
+    return {
+      label: "Birthday Wish 🎂",
+      icon: <Cake size={15} />,
+      bg: "rgba(245, 158, 11, 0.16)",
+      color: "#b45309",
+      border: "rgba(245, 158, 11, 0.35)",
+    };
+  }
+
   switch (normalized) {
     case "REPORT_CARD":
     case "EXAM":
@@ -136,52 +153,69 @@ export default function NotificationsCenterClient({
   const [notifications, setNotifications] = useState<PortalNotificationItem[]>(initialNotifications);
   const [activeFilter, setActiveFilter] = useState<string>("ALL");
   const [isMarkingAll, setIsMarkingAll] = useState(false);
+  const [selectedBirthdayNotification, setSelectedBirthdayNotification] = useState<PortalNotificationItem | null>(null);
 
-  const unreadCount = useMemo(() => {
-    return notifications.filter((n) => !n.isRead).length;
+  // Deduplicate identical notifications (e.g. repeated messages created in the same minute)
+  const deduplicatedNotifications = useMemo(() => {
+    const seen = new Set<string>();
+    return notifications.filter((n) => {
+      const typeClean = (n.type || n.category || "").toUpperCase();
+      const titleClean = (n.title || "").trim().toLowerCase();
+      const contentClean = (n.content || "").trim().toLowerCase();
+      const minute = Math.floor(new Date(n.createdAt).getTime() / (60 * 1000));
+      const sig = `${typeClean}:::${titleClean}:::${contentClean}:::${minute}`;
+      if (seen.has(sig)) return false;
+      seen.add(sig);
+      return true;
+    });
   }, [notifications]);
 
+  const unreadCount = useMemo(() => {
+    return deduplicatedNotifications.filter((n) => !n.isRead).length;
+  }, [deduplicatedNotifications]);
+
   const filteredNotifications = useMemo(() => {
-    if (activeFilter === "ALL") return notifications;
-    if (activeFilter === "UNREAD") return notifications.filter((n) => !n.isRead);
+    const base = deduplicatedNotifications;
+    if (activeFilter === "ALL") return base;
+    if (activeFilter === "UNREAD") return base.filter((n) => !n.isRead);
     if (activeFilter === "ANNOUNCEMENT") {
-      return notifications.filter((n) => {
+      return base.filter((n) => {
         const t = (n.type || n.category || "").toUpperCase();
         return t === "ANNOUNCEMENT" || t === "INSTRUCTION" || t === "NOTICE";
       });
     }
     if (activeFilter === "MEETING") {
-      return notifications.filter((n) => {
+      return base.filter((n) => {
         const t = (n.type || n.category || "").toUpperCase();
         return t === "MEETING";
       });
     }
     if (activeFilter === "MESSAGE") {
-      return notifications.filter((n) => {
+      return base.filter((n) => {
         const t = (n.type || n.category || "").toUpperCase();
         return t === "MESSAGE" || t === "CHAT";
       });
     }
     if (activeFilter === "REPORT_CARD") {
-      return notifications.filter((n) => {
+      return base.filter((n) => {
         const t = (n.type || n.category || "").toUpperCase();
         return t === "REPORT_CARD" || t === "EXAM";
       });
     }
     if (activeFilter === "BUS") {
-      return notifications.filter((n) => {
+      return base.filter((n) => {
         const t = (n.type || n.category || "").toUpperCase();
         return t === "BUS" || t === "BUS_MESSAGE" || t === "TRANSPORT";
       });
     }
     if (activeFilter === "HOMEWORK") {
-      return notifications.filter((n) => {
+      return base.filter((n) => {
         const t = (n.type || n.category || "").toUpperCase();
         return t === "HOMEWORK" || t === "ASSIGNMENT";
       });
     }
     if (activeFilter === "ATTENDANCE") {
-      return notifications.filter((n) => {
+      return base.filter((n) => {
         const t = (n.type || n.category || "").toUpperCase();
         return t === "ATTENDANCE";
       });
@@ -194,15 +228,15 @@ export default function NotificationsCenterClient({
         "BUS", "BUS_MESSAGE", "TRANSPORT",
         "HOMEWORK", "ASSIGNMENT", "ATTENDANCE"
       ]);
-      return notifications.filter((n) => {
+      return base.filter((n) => {
         const t = (n.type || n.category || "").toUpperCase();
         return !known.has(t);
       });
     }
-    return notifications;
-  }, [notifications, activeFilter]);
+    return base;
+  }, [deduplicatedNotifications, activeFilter]);
 
-  // Instant 0ms Optimistic Click & Navigate
+  // Instant 0ms Optimistic Click & Navigate / Open Birthday Card
   const handleNotificationClick = async (notif: PortalNotificationItem) => {
     if (!notif.isRead) {
       // 0ms optimistic UI update
@@ -215,6 +249,16 @@ export default function NotificationsCenterClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notificationId: notif.id }),
       }).catch(() => {});
+    }
+
+    const isBirthday =
+      (notif.type || notif.category || "").toUpperCase().includes("BIRTHDAY") ||
+      (notif.title && notif.title.toLowerCase().includes("birthday")) ||
+      (notif.content && notif.content.startsWith("CARD_PAYLOAD:::"));
+
+    if (isBirthday) {
+      setSelectedBirthdayNotification(notif);
+      return;
     }
 
     if (notif.link) {
@@ -429,7 +473,7 @@ export default function NotificationsCenterClient({
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           {filteredNotifications.map((notif) => {
-            const badge = getTypeBadge(notif.type, notif.category);
+            const badge = getTypeBadge(notif.type, notif.category, notif.title, notif.content);
             const isUnread = !notif.isRead;
 
             return (
@@ -573,6 +617,167 @@ export default function NotificationsCenterClient({
           })}
         </div>
       )}
+
+      {/* Birthday Card Pop-up Modal when clicking a Birthday Notification in Notification Center */}
+      {selectedBirthdayNotification && (() => {
+        const payload = parseBirthdayCardPayload(selectedBirthdayNotification.content);
+        return (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.75)",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              zIndex: 99999,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "max(3.5rem, calc(env(safe-area-inset-top) + 2.5rem)) 1rem max(1.5rem, env(safe-area-inset-bottom)) 1rem",
+              overflowY: "auto",
+              boxSizing: "border-box",
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setSelectedBirthdayNotification(null);
+            }}
+          >
+            <div
+              style={{
+                position: "relative",
+                background: "var(--card-bg, #ffffff)",
+                border: "1px solid var(--border-color, rgba(226, 232, 240, 0.85))",
+                borderRadius: "28px",
+                width: "92vw",
+                maxWidth: "780px",
+                maxHeight: "calc(100dvh - 5.5rem)",
+                overflowY: "auto",
+                padding: "2.75rem 1.25rem 1.5rem 1.25rem",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.3)",
+                textAlign: "center",
+                boxSizing: "border-box",
+                margin: "auto",
+              }}
+              role="dialog"
+              aria-modal="true"
+            >
+              <button
+                type="button"
+                onClick={() => setSelectedBirthdayNotification(null)}
+                style={{
+                  position: "absolute",
+                  top: "0.75rem",
+                  right: "0.75rem",
+                  width: "44px",
+                  height: "44px",
+                  borderRadius: "50%",
+                  background: "rgba(0, 0, 0, 0.05)",
+                  border: "1px solid rgba(226, 232, 240, 0.8)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  zIndex: 30,
+                  color: "#64748b",
+                }}
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.4rem",
+                  padding: "0.3rem 0.8rem",
+                  borderRadius: "999px",
+                  background: "rgba(245, 158, 11, 0.16)",
+                  color: "#b45309",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  marginBottom: "0.75rem",
+                }}
+              >
+                <Cake size={16} />
+                <span>BIRTHDAY WISH 🎂</span>
+              </div>
+
+              <h2 style={{ margin: "0 0 0.5rem", fontSize: "1.35rem", fontWeight: 800, color: "#0f172a" }}>
+                Happy Birthday Celebration
+              </h2>
+              <p style={{ margin: "0 0 1.25rem", fontSize: "0.95rem", color: "#64748b" }}>
+                {selectedBirthdayNotification.title}
+              </p>
+
+              {payload ? (
+                <div style={{ margin: "0 auto 1.5rem" }}>
+                  <BirthdayWishCard
+                    recipientName={payload.recipientName}
+                    classNameLabel={payload.classNameLabel}
+                    deityName={payload.deityName || "Amman"}
+                    cardLine1={payload.cardLine1}
+                    cardLine2={payload.cardLine2}
+                    senderName={payload.senderName || "PRANAV.J"}
+                    senderDesignation={payload.senderDesignation || "Correspondent"}
+                    schoolName={payload.schoolName || "SRT SCHOOL"}
+                    schoolLogo={payload.schoolLogo || "/logo/srt-logo.svg"}
+                    schoolTagline={payload.schoolTagline || "UNIVERSAL SCHOOL"}
+                    ammanPhotoUrl={payload.ammanPhotoUrl || "/assets/birthday/amman.jpg"}
+                    signatureUrl={payload.signatureUrl || null}
+                  />
+                </div>
+              ) : (
+                <div style={{ padding: "1.5rem", background: "rgba(245, 158, 11, 0.08)", borderRadius: "14px", margin: "0 auto 1.5rem" }}>
+                  {getNotificationDisplayText(selectedBirthdayNotification.content)}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" }}>
+                {selectedBirthdayNotification.link && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const link = selectedBirthdayNotification.link;
+                      setSelectedBirthdayNotification(null);
+                      if (link) router.push(link);
+                    }}
+                    style={{
+                      padding: "0.75rem 1.5rem",
+                      borderRadius: "12px",
+                      background: "var(--primary, #2563eb)",
+                      color: "#ffffff",
+                      border: "none",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                    }}
+                  >
+                    <span>Open</span>
+                    <ExternalLink size={16} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedBirthdayNotification(null)}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    borderRadius: "12px",
+                    background: "rgba(239, 68, 68, 0.9)",
+                    color: "#ffffff",
+                    border: "none",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

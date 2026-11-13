@@ -124,14 +124,14 @@ export default function LoginPwaPrompt() {
           type="button"
           onClick={handleManualOpen}
           className={styles.discreetInstallPill}
-          title="Install Nipo Portal App"
+          title="Install SRT Portal App"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
           </svg>
-          Install Nipo App
+          Install SRT App
         </button>
       )}
 
@@ -144,14 +144,14 @@ export default function LoginPwaPrompt() {
                 <div className={styles.logoWrapper}>
                   <Image
                     src="/icons/icon-192x192.png"
-                    alt="Nipo Portal"
+                    alt="SRT Portal"
                     width={36}
                     height={36}
                     priority
                   />
                 </div>
                 <div className={styles.titleGroup}>
-                  <span id="pwa-dialog-title" className={styles.appName}>Nipo Portal</span>
+                  <span id="pwa-dialog-title" className={styles.appName}>SRT Portal</span>
                   <span className={styles.appSub}>Progressive Web App</span>
                 </div>
               </div>
@@ -169,7 +169,7 @@ export default function LoginPwaPrompt() {
             </div>
 
             <div className={styles.messageBody}>
-              Install Nipo Portal on your device for faster access and a better application experience.
+              Install SRT Universal School Portal on your device for instant access and lock-screen alerts.
             </div>
 
             {isIosSafari ? (

@@ -7,14 +7,15 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(15, 23, 42, 0.72);
+  background-color: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 99999;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: max(0.5rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-right)) max(0.5rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
+  /* Top padding ensures floating bell badge (top: -34px) is NEVER cut off by the top edge */
+  padding: max(3.5rem, calc(env(safe-area-inset-top) + 2.75rem)) max(0.75rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
   overflow-y: auto;
   overflow-x: hidden;
   box-sizing: border-box;
@@ -38,8 +39,8 @@
   border-radius: 28px;
   width: 92vw;
   max-width: 420px;
-  max-height: 90vh;
-  max-height: 90dvh;
+  max-height: calc(100dvh - 5.5rem);
+  max-height: calc(100vh - 5.5rem);
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -56,25 +57,27 @@
 .modalCardWide {
   width: 100%;
   max-width: 800px;
-  padding: 3.25rem 1.5rem 1.75rem 1.5rem;
+  max-height: calc(100dvh - 5.5rem);
+  max-height: calc(100vh - 5.5rem);
+  padding: 3rem 1.5rem 1.75rem 1.5rem;
 }
 
-/* Tablets (768px - 1024px): 85vw, max-width 640px */
+/* Tablets (768px - 1024px): 88vw, max-width 640px */
 @media (max-width: 1024px) {
   .modalCardWide {
-    width: 85vw;
+    width: 88vw;
     max-width: 640px;
-    padding: 3rem 1.25rem 1.5rem 1.25rem;
+    padding: 2.75rem 1.25rem 1.5rem 1.25rem;
   }
 }
 
-/* Mobile Phones (< 768px): 92vw, max-width 420px */
+/* Mobile Phones (< 768px): 94vw, max-width 420px */
 @media (max-width: 767px) {
   .modalCard,
   .modalCardWide {
-    width: 92vw;
+    width: 94vw;
     max-width: 420px;
-    padding: 2.75rem 0.85rem 1.25rem 0.85rem;
+    padding: 2.5rem 0.85rem 1.25rem 0.85rem;
     border-radius: 22px;
   }
 }
@@ -85,7 +88,7 @@
   .modalCardWide {
     width: 96vw;
     max-width: 320px;
-    padding: 2.5rem 0.55rem 1rem 0.55rem;
+    padding: 2.25rem 0.55rem 1rem 0.55rem;
     border-radius: 18px;
   }
 }
@@ -118,7 +121,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 20;
+  z-index: 30;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   box-sizing: border-box;
 }
@@ -141,14 +144,14 @@
   }
 }
 
-/* Floating overlapping circular bell badge matching user mockup */
+/* Floating overlapping circular bell badge - fully visible on all screen sizes */
 .bellBadgeCircle {
   position: absolute;
-  top: -38px;
+  top: -34px;
   left: 50%;
   transform: translateX(-50%);
-  width: 76px;
-  height: 76px;
+  width: 68px;
+  height: 68px;
   border-radius: 50%;
   background: #ffffff;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
@@ -156,22 +159,23 @@
   align-items: center;
   justify-content: center;
   border: 4px solid var(--card-bg, #ffffff);
-  z-index: 10;
+  z-index: 20;
+  pointer-events: none;
 }
 
 @media (max-width: 767px) {
   .bellBadgeCircle {
-    width: 64px;
-    height: 64px;
-    top: -32px;
+    width: 58px;
+    height: 58px;
+    top: -29px;
   }
 }
 
 @media (max-width: 359px) {
   .bellBadgeCircle {
-    width: 58px;
-    height: 58px;
-    top: -29px;
+    width: 52px;
+    height: 52px;
+    top: -26px;
   }
 }
 

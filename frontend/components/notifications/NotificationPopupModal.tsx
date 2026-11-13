@@ -56,75 +56,45 @@ export default function NotificationPopupModal({
     }
   }, []);
 
-  // Helper to filter out already-read, already-cleared, or already-seen-in-popup notifications
+  // Helper to filter out already-read notifications
   const filterActiveUnread = (items: UnifiedNotification[]) => {
     if (!items || items.length === 0) return [];
     const clearedTimeStr = typeof window !== "undefined" ? localStorage.getItem(CLEARED_TIMESTAMP_KEY) : null;
     const clearedTime = clearedTimeStr ? new Date(clearedTimeStr).getTime() : 0;
 
-    let localSeen = new Set<string>(seenIdRef.current);
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem(SEEN_POPUP_IDS_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            parsed.forEach((id: string) => {
-              localSeen.add(id);
-              seenIdRef.current.add(id);
-            });
-          }
-        }
-        const sessionStored = sessionStorage.getItem("srt_portal_session_seen_ids");
-        if (sessionStored) {
-          const parsed = JSON.parse(sessionStored);
-          if (Array.isArray(parsed)) {
-            parsed.forEach((id: string) => {
-              localSeen.add(id);
-              seenIdRef.current.add(id);
-            });
-          }
-        }
-      } catch {}
+    // Check if user explicitly dismissed the popup in this active browser session
+    const isSessionDismissed = typeof window !== "undefined" && sessionStorage.getItem("srt_portal_popup_dismissed_session") === "true";
+    if (isSessionDismissed) {
+      return [];
     }
 
-    return items.filter(
-      n => {
-        if (n.isRead) return false;
-        if (localSeen.has(n.id)) return false;
-        // Deduplicate by signature to guard against identical duplicate rows
-        const sig = `${n.category}-${(n.title || "").trim().toLowerCase()}`;
-        if (localSeen.has(sig)) return false;
-        return new Date(n.timestamp).getTime() > clearedTime;
-      }
-    );
+    // Sort to prioritize BIRTHDAY wishes and URGENT alerts at the front
+    const unreadItems = items
+      .filter(n => !n.isRead && new Date(n.timestamp).getTime() > clearedTime)
+      .sort((a, b) => {
+        if (a.category === "BIRTHDAY" && b.category !== "BIRTHDAY") return -1;
+        if (b.category === "BIRTHDAY" && a.category !== "BIRTHDAY") return 1;
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+
+    // Deduplicate by id and title
+    const seen = new Set<string>();
+    return unreadItems.filter(n => {
+      const sig = `${n.id}-${(n.title || "").trim().toLowerCase()}`;
+      if (seen.has(sig)) return false;
+      seen.add(sig);
+      return true;
+    });
   };
 
-  // Helper to mark a list of notifications as seen:
-  // 1. Locally via localStorage & sessionStorage so it never shows in popup again
-  // 2. In database so it remains safely stored and accessible on the user's notification page
+  // Helper to mark a list of notifications as dismissed/read when user actually closes or interacts
   const markShownNotificationsAsSeen = (items: UnifiedNotification[]) => {
     if (!items || items.length === 0) return;
     const ids = items.map(n => n.id);
 
-    ids.forEach(id => seenIdRef.current.add(id));
-    items.forEach(n => {
-      const sig = `${n.category}-${(n.title || "").trim().toLowerCase()}`;
-      seenIdRef.current.add(sig);
-    });
-
     if (typeof window !== "undefined") {
       try {
-        const stored = localStorage.getItem(SEEN_POPUP_IDS_KEY);
-        const existingArr: string[] = stored ? JSON.parse(stored) : [];
-        const sigs = items.map(n => `${n.category}-${(n.title || "").trim().toLowerCase()}`);
-        const updated = new Set([...existingArr, ...ids, ...sigs]);
-        localStorage.setItem(SEEN_POPUP_IDS_KEY, JSON.stringify(Array.from(updated)));
-
-        const sessionStored = sessionStorage.getItem("srt_portal_session_seen_ids");
-        const existingSessionArr: string[] = sessionStored ? JSON.parse(sessionStored) : [];
-        const sessionUpdated = new Set([...existingSessionArr, ...ids, ...sigs]);
-        sessionStorage.setItem("srt_portal_session_seen_ids", JSON.stringify(Array.from(sessionUpdated)));
+        sessionStorage.setItem("srt_portal_popup_dismissed_session", "true");
       } catch {}
     }
 
@@ -132,17 +102,18 @@ export default function NotificationPopupModal({
   };
 
   // Sync if initialNotifications prop updates (fast initial SSR paint)
+  // Automatically shows popup when user opens/logs into portal with unread notifications
   useEffect(() => {
     if (initialNotifications && initialNotifications.length > 0) {
       const activeUnread = filterActiveUnread(initialNotifications);
       const autoPopupItems = activeUnread.filter(n => n.category !== "MESSAGE");
       if (autoPopupItems.length > 0) {
         setNotifications(autoPopupItems);
-        // Fast popup: Open immediately within 80ms on page load
+        setCurrentIndex(0);
+        // Fast popup: Open automatically within 100ms on login / page load
         const timer = setTimeout(() => {
           setIsOpen(true);
-          markShownNotificationsAsSeen(autoPopupItems);
-        }, 80);
+        }, 100);
         return () => clearTimeout(timer);
       }
     }
@@ -159,17 +130,14 @@ export default function NotificationPopupModal({
         .then((fresh) => {
           if (!isMounted || !fresh || fresh.length === 0) return;
           const activeFresh = filterActiveUnread(fresh);
-          // Only show notifications that have NEVER been seen or popped up before
           const newUnseenItems = activeFresh.filter(
-            n => !seenIdRef.current.has(n.id) && n.category !== "MESSAGE"
+            n => n.category !== "MESSAGE"
           );
 
           if (newUnseenItems.length > 0) {
-            newUnseenItems.forEach(n => seenIdRef.current.add(n.id));
             setNotifications(newUnseenItems);
             setCurrentIndex(0);
             setIsOpen(true);
-            markShownNotificationsAsSeen(newUnseenItems);
           }
         })
         .catch(() => {});
