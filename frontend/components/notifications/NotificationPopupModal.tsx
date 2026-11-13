@@ -207,13 +207,22 @@ export default function NotificationPopupModal({
             setCurrentIndex(0);
             setIsOpen(true);
           } else {
-            const path = typeof window !== "undefined" ? window.location.pathname : "";
-            const target = path.includes("/parent")
-              ? "/dashboard/parent/notifications"
-              : path.includes("/teacher")
-              ? "/dashboard/teacher/notifications"
-              : "/dashboard/admin/notifications";
-            router.push(target);
+            // Keep user on the current dashboard; display empty state dialog without navigating
+            setNotifications([
+              {
+                id: "empty-notif",
+                category: "GENERAL",
+                title: "All caught up!",
+                description: "You have no new notifications right now.",
+                timestamp: new Date().toISOString(),
+                link: "",
+                isRead: true,
+                badgeLabel: "Notification",
+                badgeColors: { bg: "rgba(99, 102, 241, 0.12)", text: "#6366f1", border: "rgba(99, 102, 241, 0.25)" },
+              },
+            ]);
+            setCurrentIndex(0);
+            setIsOpen(true);
           }
         })
         .catch(() => {});
@@ -365,7 +374,7 @@ export default function NotificationPopupModal({
           <X size={20} />
         </button>
 
-        {/* Floating circular bell icon badge overlapping the card top */}
+        {/* Floating circular bell icon badge overlapping the card top - fully visible without clipping */}
         <div className={styles.bellBadgeCircle}>
           <Bell size={34} className={styles.bellIcon} />
           {notifications.length > 0 && (
@@ -375,144 +384,124 @@ export default function NotificationPopupModal({
           )}
         </div>
 
-        {/* Category Pill with designated coloration */}
-        <div>
-          <span 
-            className={styles.categoryPill}
-            style={{
-              backgroundColor: current.badgeColors.bg,
-              color: current.badgeColors.text,
-              border: `1px solid ${current.badgeColors.border}`
-            }}
-          >
-            {getCategoryIcon(current.category)}
-            <span>{current.badgeLabel}</span>
-          </span>
-        </div>
-
-        {/* Main Title */}
-        <h2 id="notif-title" className={styles.mainTitle}>
-          {current.category === "BIRTHDAY" ? "Happy Birthday Celebration" : "Notification"}
-        </h2>
-
-        {/* Specific Notification Title */}
-        <h3 className={styles.subTitle}>
-          {current.title}
-        </h3>
-
-        {/* Detailed Description or Designed Birthday Card */}
-        {birthdayCard ? (
-          <div className={styles.birthdayCardWrapper}>
-            <BirthdayWishCard
-              recipientName={birthdayCard.recipientName}
-              classNameLabel={birthdayCard.classNameLabel}
-              deityName={birthdayCard.deityName || "Amman"}
-              cardLine1={birthdayCard.cardLine1}
-              cardLine2={birthdayCard.cardLine2}
-              senderName={birthdayCard.senderName || "PRANAV.J"}
-              senderDesignation={birthdayCard.senderDesignation || "Correspondent"}
-              schoolName={birthdayCard.schoolName || "SRT SCHOOL"}
-              schoolLogo={birthdayCard.schoolLogo || "/logo/srt-logo.svg"}
-              schoolTagline={birthdayCard.schoolTagline || "UNIVERSAL SCHOOL"}
-              ammanPhotoUrl={birthdayCard.ammanPhotoUrl || "/assets/birthday/amman.jpg"}
-              signatureUrl={birthdayCard.signatureUrl || null}
-            />
-          </div>
-        ) : (
-          <div className={styles.descriptionBox}>
-            {getNotificationDisplayText(current.description)}
-          </div>
-        )}
-
-        {/* Metadata: Timestamp & Sender / Target */}
-        <div className={styles.metaInfoRow}>
-          <span>{new Date(current.timestamp).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", month: "short", day: "numeric", year: "numeric" })}</span>
-          {current.senderOrAuthor && (
-            <>
-              <span>•</span>
-              <span>From: <strong>{current.senderOrAuthor}</strong></span>
-            </>
-          )}
-          {current.priority === "HIGH" && (
-            <>
-              <span>•</span>
-              <span style={{ color: "#ef4444", fontWeight: 700 }}>Priority Alert</span>
-            </>
-          )}
-        </div>
-
-        {/* Multi-Notification Pagination Controls */}
-        {notifications.length > 1 && (
-          <div className={styles.paginationRow}>
-            <button
-              type="button"
-              onClick={handlePrev}
-              disabled={currentIndex === 0}
-              className={styles.navArrowBtn}
-              title="Previous notification"
+        {/* Inner scroll container: prevents modal from overflowing screen while keeping top bell badge unclipped */}
+        <div className={styles.modalScrollArea}>
+          {/* Category Pill with designated coloration */}
+          <div>
+            <span 
+              className={styles.categoryPill}
+              style={{
+                backgroundColor: current.badgeColors.bg,
+                color: current.badgeColors.text,
+                border: `1px solid ${current.badgeColors.border}`
+              }}
             >
-              <ChevronLeft size={16} /> Prev
-            </button>
-            <span>
-              {currentIndex + 1} of {notifications.length}
+              {getCategoryIcon(current.category)}
+              <span>{current.badgeLabel}</span>
             </span>
+          </div>
+
+          {/* Main Title */}
+          <h2 id="notif-title" className={styles.mainTitle}>
+            {current.category === "BIRTHDAY" ? "Happy Birthday Celebration" : "Notification"}
+          </h2>
+
+          {/* Specific Notification Title */}
+          <h3 className={styles.subTitle}>
+            {current.title}
+          </h3>
+
+          {/* Detailed Description or Designed Birthday Card */}
+          {birthdayCard ? (
+            <div className={styles.birthdayCardWrapper}>
+              <BirthdayWishCard
+                recipientName={birthdayCard.recipientName}
+                classNameLabel={birthdayCard.classNameLabel}
+                deityName={birthdayCard.deityName || "Amman"}
+                cardLine1={birthdayCard.cardLine1}
+                cardLine2={birthdayCard.cardLine2}
+                senderName={birthdayCard.senderName || "PRANAV.J"}
+                senderDesignation={birthdayCard.senderDesignation || "Correspondent"}
+                schoolName={birthdayCard.schoolName || "SRT SCHOOL"}
+                schoolLogo={birthdayCard.schoolLogo || "/logo/srt-logo.svg"}
+                schoolTagline={birthdayCard.schoolTagline || "UNIVERSAL SCHOOL"}
+                ammanPhotoUrl={birthdayCard.ammanPhotoUrl || "/assets/birthday/amman.jpg"}
+                signatureUrl={birthdayCard.signatureUrl || null}
+              />
+            </div>
+          ) : (
+            <div className={styles.descriptionBox}>
+              {getNotificationDisplayText(current.description)}
+            </div>
+          )}
+
+          {/* Metadata: Timestamp & Sender / Target */}
+          <div className={styles.metaInfoRow}>
+            <span>{new Date(current.timestamp).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", month: "short", day: "numeric", year: "numeric" })}</span>
+            {current.senderOrAuthor && (
+              <>
+                <span>•</span>
+                <span>From: <strong>{current.senderOrAuthor}</strong></span>
+              </>
+            )}
+            {current.priority === "HIGH" && (
+              <>
+                <span>•</span>
+                <span style={{ color: "#ef4444", fontWeight: 700 }}>Priority Alert</span>
+              </>
+            )}
+          </div>
+
+          {/* Multi-Notification Pagination Controls */}
+          {notifications.length > 1 && (
+            <div className={styles.paginationRow}>
+              <button
+                type="button"
+                onClick={handlePrev}
+                disabled={currentIndex === 0}
+                className={styles.navArrowBtn}
+                title="Previous notification"
+              >
+                <ChevronLeft size={16} /> Prev
+              </button>
+              <span>
+                {currentIndex + 1} of {notifications.length}
+              </span>
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={currentIndex === notifications.length - 1}
+                className={styles.navArrowBtn}
+                title="Next notification"
+              >
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* Action Buttons: Open (Blue), Close */}
+          <div className={styles.actionButtonGroup}>
+            {current.link && (
+              <button
+                type="button"
+                onClick={handleOpen}
+                className={styles.openBtn}
+                title="Open and view full details"
+              >
+                <span>Open</span>
+                <ExternalLink size={15} />
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={handleNext}
-              disabled={currentIndex === notifications.length - 1}
-              className={styles.navArrowBtn}
-              title="Next notification"
+              onClick={handleClose}
+              className={styles.closeBtn}
+              title="Close this notification"
             >
-              Next <ChevronRight size={16} />
+              <span>Close</span>
             </button>
           </div>
-        )}
-
-        {/* Action Buttons: Open (Blue), Close */}
-        <div className={styles.actionButtonGroup}>
-          <button
-            type="button"
-            onClick={handleOpen}
-            className={styles.openBtn}
-            title="Open and view full details"
-          >
-            <span>Open</span>
-            <ExternalLink size={15} />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              handleClose();
-              router.push("/notifications");
-            }}
-            style={{
-              padding: "0.6rem 0.9rem",
-              borderRadius: "8px",
-              border: "1px solid var(--border-color)",
-              background: "transparent",
-              color: "var(--text-secondary)",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.35rem",
-            }}
-            title="View all in Notification Center"
-          >
-            <Bell size={14} />
-            <span>All Alerts</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleClose}
-            className={styles.closeBtn}
-            title="Close this notification and save in notifications page"
-          >
-            <span>Close</span>
-          </button>
         </div>
       </div>
     </div>

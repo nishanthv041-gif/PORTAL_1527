@@ -232,22 +232,47 @@ export async function sendUniversalNotification(
     const seenFingerprints = new Set<string>();
     const staleIdsToDeactivate: string[] = [];
 
+    // Helper to extract bare token from any FCM or standard endpoint
+    const extractEndpointKey = (val?: string | null): string => {
+      if (!val) return "";
+      const trimmed = val.trim();
+      if (trimmed.startsWith("fcm:")) return trimmed.replace(/^fcm:/, "");
+      if (trimmed.includes("fcm.googleapis.com/fcm/send/")) {
+        const parts = trimmed.split("/");
+        return parts[parts.length - 1] || trimmed;
+      }
+      return trimmed;
+    };
+
+    const isDuplicateDevice = (endpoint?: string | null, token?: string | null, fingerprint?: string | null): boolean => {
+      const epKey = extractEndpointKey(endpoint);
+      const tkKey = extractEndpointKey(token);
+      
+      if (epKey && seenEndpoints.has(epKey)) return true;
+      if (tkKey && seenEndpoints.has(tkKey)) return true;
+      if (endpoint && seenEndpoints.has(endpoint.trim())) return true;
+      if (token && seenEndpoints.has(token.trim())) return true;
+      if (fingerprint && seenFingerprints.has(fingerprint.trim())) return true;
+      
+      return false;
+    };
+
+    const markDeviceSeen = (endpoint?: string | null, token?: string | null, fingerprint?: string | null) => {
+      const epKey = extractEndpointKey(endpoint);
+      const tkKey = extractEndpointKey(token);
+      if (epKey) seenEndpoints.add(epKey);
+      if (tkKey) seenEndpoints.add(tkKey);
+      if (endpoint) seenEndpoints.add(endpoint.trim());
+      if (token) seenEndpoints.add(token.trim());
+      if (fingerprint) seenFingerprints.add(fingerprint.trim());
+    };
+
     for (const sub of rawSubs) {
-      const endpointKey = (sub.token || sub.endpoint).trim();
-      if (!endpointKey || seenEndpoints.has(endpointKey)) {
+      if (isDuplicateDevice(sub.endpoint, sub.token, sub.deviceFingerprint)) {
         staleIdsToDeactivate.push(sub.id);
         continue;
       }
-      seenEndpoints.add(endpointKey);
-
-      if (sub.deviceFingerprint) {
-        if (seenFingerprints.has(sub.deviceFingerprint)) {
-          staleIdsToDeactivate.push(sub.id);
-          continue;
-        }
-        seenFingerprints.add(sub.deviceFingerprint);
-      }
-
+      markDeviceSeen(sub.endpoint, sub.token, sub.deviceFingerprint);
       subscriptions.push(sub);
     }
 
@@ -268,8 +293,8 @@ export async function sendUniversalNotification(
       });
 
       for (const p of pwaSubs) {
-        if (p.endpoint && p.p256dhKey && p.authKey && !seenEndpoints.has(p.endpoint)) {
-          seenEndpoints.add(p.endpoint);
+        if (p.endpoint && p.p256dhKey && p.authKey && !isDuplicateDevice(p.endpoint, null, null)) {
+          markDeviceSeen(p.endpoint, null, null);
           subscriptions.push({
             id: p.id,
             endpoint: p.endpoint,
@@ -299,8 +324,8 @@ export async function sendUniversalNotification(
       });
 
       for (const d of registryDevices) {
-        if (d.endpoint && d.p256dh && d.auth && !seenEndpoints.has(d.endpoint)) {
-          seenEndpoints.add(d.endpoint);
+        if (d.endpoint && d.p256dh && d.auth && !isDuplicateDevice(d.endpoint, null, d.deviceId)) {
+          markDeviceSeen(d.endpoint, null, d.deviceId);
           subscriptions.push({
             id: d.id,
             endpoint: d.endpoint,

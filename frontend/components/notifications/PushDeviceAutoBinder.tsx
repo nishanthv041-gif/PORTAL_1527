@@ -79,7 +79,8 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
             await PushNotifications.addListener(
               "pushNotificationActionPerformed",
               (action) => {
-                const targetUrl = action.notification.data?.url || "/notifications";
+                // Direct to the specific module URL or keep user on their dashboard (never open /notifications page)
+                const targetUrl = action.notification.data?.url || "/dashboard";
                 if (targetUrl) {
                   router.push(targetUrl);
                 }

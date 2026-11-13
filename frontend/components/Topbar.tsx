@@ -126,7 +126,6 @@ export default function Topbar({
           type="button"
           onClick={() => {
             window.dispatchEvent(new CustomEvent("open-notification-popup"));
-            router.push("/notifications");
           }}
           title={hasBusAlert ? "Urgent Bus Transit Alert! View Notifications" : "View Notifications"}
           aria-label="View Notifications"
