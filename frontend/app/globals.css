@@ -179,10 +179,12 @@ select {
 }
 
 @media screen and (max-width: 640px) {
+
   input,
   textarea,
   select {
-    font-size: 16px !important; /* Prevents auto-zoom on iOS mobile */
+    font-size: 16px !important;
+    /* Prevents auto-zoom on iOS mobile */
   }
 }
 
@@ -324,6 +326,7 @@ select option:hover {
     }
   }
 }
+
 /* ============================================================
    RESPONSIVE UTILITIES (AUTO SCREEN-FIT)
    ============================================================ */
