@@ -2,12 +2,12 @@ import type { NextConfig } from "next";
 
 const cspHeader = `
     default-src 'self';
-    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://va.vercel-scripts.com;
-    style-src 'self' 'unsafe-inline';
+    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://va.vercel-scripts.com https://cdn.onesignal.com https://onesignal.com;
+    style-src 'self' 'unsafe-inline' https://cdn.onesignal.com;
     img-src 'self' blob: data: https:;
-    font-src 'self' data:;
-    connect-src 'self' blob: data: https: http:;
-    worker-src 'self' blob:;
+    font-src 'self' data: https://cdn.onesignal.com;
+    connect-src 'self' blob: data: https: http: https://onesignal.com https://*.onesignal.com;
+    worker-src 'self' blob: https://cdn.onesignal.com;
     object-src 'none';
     base-uri 'self';
     form-action 'self';
@@ -58,6 +58,23 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/sw.js',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/javascript; charset=utf-8',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate',
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/',
+          },
+        ],
+      },
+      {
+        source: '/OneSignalSDKWorker.js',
         headers: [
           {
             key: 'Content-Type',
