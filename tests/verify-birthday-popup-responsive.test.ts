@@ -79,13 +79,15 @@ function generateHtml(options: {
         </svg>
       </button>
 
-      <!-- Bell badge circle -->
-      <div class="bellBadgeCircle">
-        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="bellIcon">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-        </svg>
-        <span class="counterBadge">1</span>
+      <!-- Bell badge circle container -->
+      <div class="bellBadgeContainer">
+        <div class="bellBadgeCircle">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="bellIcon">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <span class="counterBadge">1</span>
+        </div>
       </div>
 
       <!-- Category Pill -->

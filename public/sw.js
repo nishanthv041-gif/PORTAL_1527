@@ -44,13 +44,146 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Immediate Activation and Cache Management Message Listener
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
+// ============================================================================
+// INDEXEDDB UNREAD BADGE COUNTER & BADGING API ENGINE
+// Maintains persistent unread count for OS app icon badges even when app is closed
+// ============================================================================
+const BADGE_DB_NAME = "srt-portal-pwa-badging";
+const BADGE_STORE_NAME = "badge_meta";
+const BADGE_KEY = "unread_count";
+
+function openBadgeDb() {
+  return new Promise((resolve, reject) => {
+    if (!("indexedDB" in self)) {
+      return reject(new Error("IndexedDB not supported in SW"));
+    }
+    const req = indexedDB.open(BADGE_DB_NAME, 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(BADGE_STORE_NAME)) {
+        db.createObjectStore(BADGE_STORE_NAME);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getStoredBadgeCount() {
+  try {
+    const db = await openBadgeDb();
+    return new Promise((resolve) => {
+      const tx = db.transaction(BADGE_STORE_NAME, "readonly");
+      const store = tx.objectStore(BADGE_STORE_NAME);
+      const req = store.get(BADGE_KEY);
+      req.onsuccess = () => resolve(typeof req.result === "number" ? req.result : 0);
+      req.onerror = () => resolve(0);
+    });
+  } catch {
+    return 0;
   }
-  if (event.data && event.data.type === "CLEAR_CACHES") {
-    caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))));
+}
+
+async function setStoredBadgeCount(count) {
+  try {
+    const safeCount = Math.max(0, parseInt(count, 10) || 0);
+    const db = await openBadgeDb();
+    return new Promise((resolve) => {
+      const tx = db.transaction(BADGE_STORE_NAME, "readwrite");
+      const store = tx.objectStore(BADGE_STORE_NAME);
+      store.put(safeCount, BADGE_KEY);
+      tx.oncomplete = () => resolve(safeCount);
+      tx.onerror = () => resolve(safeCount);
+    });
+  } catch {
+    return 0;
+  }
+}
+
+async function incrementStoredBadgeCount(delta = 1) {
+  const current = await getStoredBadgeCount();
+  const next = Math.max(0, current + delta);
+  await setStoredBadgeCount(next);
+  return next;
+}
+
+async function applyAppBadge(count) {
+  const num = Math.max(0, parseInt(count, 10) || 0);
+  try {
+    if (num > 0) {
+      if ("setAppBadge" in navigator) {
+        await navigator.setAppBadge(num);
+      } else if (self.registration && "setAppBadge" in self.registration) {
+        await self.registration.setAppBadge(num);
+      }
+    } else {
+      if ("clearAppBadge" in navigator) {
+        await navigator.clearAppBadge();
+      } else if (self.registration && "clearAppBadge" in self.registration) {
+        await self.registration.clearAppBadge();
+      }
+    }
+  } catch (err) {
+    console.debug("[SW Badge] Badging API invocation skipped:", err);
+  }
+}
+
+async function removeAppBadge() {
+  await setStoredBadgeCount(0);
+  await applyAppBadge(0);
+}
+
+async function broadcastBadgeToClients(count) {
+  try {
+    const windowClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const client of windowClients) {
+      client.postMessage({ type: "APP_BADGE_CHANGED", count });
+    }
+  } catch {}
+}
+
+// Immediate Activation, Cache Management, and Badging Message Listener
+self.addEventListener("message", (event) => {
+  if (event.data) {
+    if (event.data.type === "SKIP_WAITING") {
+      self.skipWaiting();
+    }
+    if (event.data.type === "CLEAR_CACHES") {
+      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))));
+    }
+    if (event.data.type === "SET_BADGE") {
+      const c = event.data.count || 0;
+      setStoredBadgeCount(c).then((newCount) => {
+        applyAppBadge(newCount);
+      });
+    }
+    if (event.data.type === "CLEAR_BADGE") {
+      removeAppBadge();
+    }
+    if (event.data.type === "GET_BADGE") {
+      getStoredBadgeCount().then((count) => {
+        if (event.source && event.source.postMessage) {
+          event.source.postMessage({ type: "BADGE_COUNT_RESPONSE", count });
+        }
+      });
+    }
+  }
+});
+
+// Background Sync & Periodic Sync for Midnight Master State Refresh
+self.addEventListener("sync", (event) => {
+  if (event.tag === "midnight-master-sync" || event.tag === "sync-notifications") {
+    event.waitUntil(
+      broadcastBadgeToClients(-1)
+    );
+  }
+});
+
+self.addEventListener("periodicsync", (event) => {
+  if (event.tag === "daily-midnight-sync") {
+    event.waitUntil(
+      broadcastBadgeToClients(-1)
+    );
   }
 });
 
@@ -148,6 +281,7 @@ self.addEventListener("push", (event) => {
     let tag = "srt-portal";
     let notificationId = null;
 
+    let explicitBadgeCount = null;
     if (event.data) {
       try {
         const payload = event.data.json();
@@ -165,12 +299,32 @@ self.addEventListener("push", (event) => {
         else if (payload.data && payload.data.tag) tag = payload.data.tag;
         else if (payload.data && payload.data.notificationId) tag = "notif-" + payload.data.notificationId;
         if (payload.data && payload.data.notificationId) notificationId = payload.data.notificationId;
+        if (payload.badgeCount !== undefined) {
+          explicitBadgeCount = parseInt(payload.badgeCount, 10);
+        } else if (payload.data && payload.data.badgeCount !== undefined) {
+          explicitBadgeCount = parseInt(payload.data.badgeCount, 10);
+        }
       } catch {
         try {
           const txt = event.data.text();
           if (txt) body = txt;
         } catch {}
       }
+    }
+
+    // WhatsApp-Style App Icon Badge Update:
+    // Update persistent IndexedDB unread count and set OS-level app badge
+    let activeUnreadCount = 1;
+    try {
+      if (typeof explicitBadgeCount === "number" && !isNaN(explicitBadgeCount)) {
+        activeUnreadCount = await setStoredBadgeCount(explicitBadgeCount);
+      } else {
+        activeUnreadCount = await incrementStoredBadgeCount(1);
+      }
+      await applyAppBadge(activeUnreadCount);
+      await broadcastBadgeToClients(activeUnreadCount);
+    } catch (badgeErr) {
+      console.warn("[ServiceWorker] App badge update note:", badgeErr);
     }
 
     const options = {
@@ -183,6 +337,7 @@ self.addEventListener("push", (event) => {
         url: targetUrl,
         tag: tag,
         notificationId: notificationId,
+        unreadCount: activeUnreadCount,
       },
       tag: tag,
       renotify: true,
@@ -204,6 +359,7 @@ self.addEventListener("push", (event) => {
             url: targetUrl,
             tag: tag,
             notificationId: notificationId,
+            unreadCount: activeUnreadCount,
           },
         });
       } catch (fallbackErr) {
@@ -215,7 +371,7 @@ self.addEventListener("push", (event) => {
   event.waitUntil(showPushNotification());
 });
 
-// 5. Notification Click Event: Navigate to relevant portal page
+// 5. Notification Click Event: Navigate to relevant portal page and clear badge
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
@@ -229,7 +385,7 @@ self.addEventListener("notificationclick", (event) => {
   const rawUrl = notifData.url || "/dashboard";
   const fullTargetUrl = new URL(rawUrl, self.location.origin).href;
 
-  // Background mark-as-read
+  // Background mark-as-read and clear/decrement badge
   if (notifId) {
     fetch("/api/notifications/mark-read", {
       method: "POST",
@@ -237,6 +393,10 @@ self.addEventListener("notificationclick", (event) => {
       body: JSON.stringify({ notificationId: notifId }),
     }).catch(() => {});
   }
+
+  // Clear or decrement badge upon interaction
+  removeAppBadge().catch(() => {});
+  broadcastBadgeToClients(0).catch(() => {});
 
   event.waitUntil(
     clients

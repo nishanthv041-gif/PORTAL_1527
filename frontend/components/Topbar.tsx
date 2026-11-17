@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
 import { Bell } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
+import { setAppBadgeCount, clearAppBadgeCount } from "@/frontend/lib/pwa/badgeManager";
 
 // Matches the key used in NotificationPopupModal
 const CLEARED_KEY = "srt_portal_notif_cleared_v1";
@@ -71,6 +72,8 @@ export default function Topbar({
       setUnreadCount(data.unreadCount);
       setHasBusAlert(data.hasBusAlert);
       setShowRedDot(data.unreadCount > 0 || data.hasBusAlert);
+      // Synchronize WhatsApp-style app icon notification badge count
+      setAppBadgeCount(data.unreadCount).catch(() => {});
     }
   }, []);
 
@@ -106,7 +109,26 @@ export default function Topbar({
       setShowRedDot(false);
       setUnreadCount(0);
       setHasBusAlert(false);
+      clearAppBadgeCount().catch(() => {});
     };
+
+    // Listen for ServiceWorker badge changes (when push arrives in background)
+    const handleSwMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === "APP_BADGE_CHANGED") {
+        const count = typeof e.data.count === "number" ? e.data.count : 0;
+        if (count >= 0) {
+          setUnreadCount(count);
+          setShowRedDot(count > 0);
+        } else if (count === -1) {
+          // Midnight refresh signal: recheck notifications
+          checkNotifications();
+        }
+      }
+    };
+
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("message", handleSwMessage);
+    }
 
     window.addEventListener("notifications-cleared", handleCleared);
     return () => {
@@ -115,6 +137,9 @@ export default function Topbar({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleWindowFocus);
       window.removeEventListener("notifications-cleared", handleCleared);
+      if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+        navigator.serviceWorker.removeEventListener("message", handleSwMessage);
+      }
     };
   }, [checkNotifications]);
 

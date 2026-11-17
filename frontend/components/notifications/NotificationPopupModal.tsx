@@ -275,7 +275,14 @@ export default function NotificationPopupModal({
     // Dismiss modal and navigate directly to target action
     setIsOpen(false);
 
-    if (current.link) {
+    // Only navigate if the notification points to a specific content screen
+    // Strictly prevent auto-redirecting to /notifications or generic dashboard
+    if (
+      current.link && 
+      current.link !== "/notifications" && 
+      !current.link.endsWith("/notifications") &&
+      current.link !== "/dashboard"
+    ) {
       router.push(current.link);
     }
   };
@@ -374,14 +381,16 @@ export default function NotificationPopupModal({
           <X size={20} />
         </button>
 
-        {/* Floating circular bell icon badge overlapping the card top - fully visible without clipping */}
-        <div className={styles.bellBadgeCircle}>
-          <Bell size={34} className={styles.bellIcon} />
-          {notifications.length > 0 && (
-            <span className={styles.counterBadge}>
-              {notifications.length > 9 ? "9+" : notifications.length}
-            </span>
-          )}
+        {/* Centered circular bell icon badge header - fully visible without clipping on all screen sizes */}
+        <div className={styles.bellBadgeContainer}>
+          <div className={styles.bellBadgeCircle}>
+            <Bell size={32} className={styles.bellIcon} />
+            {notifications.length > 0 && (
+              <span className={styles.counterBadge}>
+                {notifications.length > 9 ? "9+" : notifications.length}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Inner scroll container: prevents modal from overflowing screen while keeping top bell badge unclipped */}

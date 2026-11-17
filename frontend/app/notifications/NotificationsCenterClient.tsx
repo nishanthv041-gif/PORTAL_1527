@@ -401,14 +401,25 @@ export default function NotificationsCenterClient({
       </div>
 
       {/* Filter Tabs */}
+      <style jsx>{`
+        .notif-filter-tabs::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
+        }
+      `}</style>
       <div
+        className="notif-filter-tabs"
         style={{
           display: "flex",
           gap: "0.5rem",
           overflowX: "auto",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
           paddingBottom: "0.5rem",
           marginBottom: "1rem",
           borderBottom: "1px solid var(--border-color, #e2e8f0)",
+          WebkitOverflowScrolling: "touch",
         }}
       >
         {[

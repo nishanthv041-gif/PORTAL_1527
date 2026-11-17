@@ -7,7 +7,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { parseAndValidateDob, RoleType } from "@/lib/validations/dob";
 import { getSchoolNow } from "@/lib/time";
 import { requireClassAccess, requireClassTeacherAccess } from "@/lib/teacher/classAccess";
-import { dispatchImmediateBirthdayWishForPerson, processUniversalBirthdayWishes } from "@/app/api/internal/cron/birthdays/route";
+import { dispatchImmediateBirthdayWishForPerson, processUniversalBirthdayWishes } from "@/backend/services/birthdays/birthdayService";
 import { serializeBirthdayCardPayload, BirthdayCardPayload, buildBirthdaySummaryText } from "@/frontend/components/birthdays/birthdayCardUtils";
 import { sendUserNotification } from "@/backend/services/push/notificationDispatcher";
 import { formatClassName } from "@/lib/teacher/formatClassName";

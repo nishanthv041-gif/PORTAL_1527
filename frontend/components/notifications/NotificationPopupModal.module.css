@@ -36,7 +36,7 @@
   position: relative;
   background: var(--card-bg, #ffffff);
   border: 1px solid var(--border-color, rgba(226, 232, 240, 0.85));
-  border-radius: 28px;
+  border-radius: 24px;
   width: 92vw;
   max-width: 440px;
   max-height: calc(100dvh - 5.5rem);
@@ -45,9 +45,8 @@
   animation: modalPopUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
   box-sizing: border-box;
   margin: auto;
-  /* CRITICAL: overflow visible ensures top floating bell badge is NEVER cut off */
   overflow: visible !important;
-  padding: 2.75rem 1.25rem 1.5rem 1.25rem;
+  padding: 1.25rem 1.25rem 1.5rem 1.25rem;
 }
 
 /* Wide Modal for Birthday Cards & Rich Content */
@@ -56,18 +55,33 @@
   width: 100%;
   max-width: 800px;
   max-height: calc(100dvh - 5.5rem);
-  padding: 3rem 1.5rem 1.75rem 1.5rem;
+  padding: 1.5rem 1.5rem 1.75rem 1.5rem;
   overflow: visible !important;
 }
 
-/* Inner scroll container so modal content scrolls without clipping outer bell badge */
+/* Inner scroll container so modal content scrolls smoothly without clipping */
 .modalScrollArea {
   max-height: calc(100dvh - 7.5rem);
   max-height: calc(100vh - 7.5rem);
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: 0 0.25rem 0.5rem 0.25rem;
+  padding: 0 0.35rem 0.5rem 0.35rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+}
+
+.modalScrollArea::-webkit-scrollbar {
+  width: 5px;
+}
+
+.modalScrollArea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modalScrollArea::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.4);
+  border-radius: 999px;
 }
 
 /* Tablets (768px - 1024px): 88vw, max-width 640px */
@@ -75,7 +89,7 @@
   .modalCardWide {
     width: 88vw;
     max-width: 640px;
-    padding: 2.75rem 1.25rem 1.5rem 1.25rem;
+    padding: 1.25rem 1.25rem 1.5rem 1.25rem;
   }
 }
 
@@ -85,8 +99,8 @@
   .modalCardWide {
     width: 94vw;
     max-width: 420px;
-    padding: 2.5rem 0.85rem 1.25rem 0.85rem;
-    border-radius: 22px;
+    padding: 1.15rem 0.85rem 1.25rem 0.85rem;
+    border-radius: 20px;
   }
 }
 
@@ -96,7 +110,7 @@
   .modalCardWide {
     width: 96vw;
     max-width: 320px;
-    padding: 2.25rem 0.55rem 1rem 0.55rem;
+    padding: 1rem 0.55rem 1rem 0.55rem;
     border-radius: 18px;
   }
 }
@@ -152,30 +166,35 @@
   }
 }
 
-/* Floating overlapping circular bell badge - fully visible on all screen sizes */
+/* Centered circular bell icon badge header - fully visible, unclipped on every device & viewport */
+.bellBadgeContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  margin: 0.25rem auto 0.75rem auto;
+}
+
 .bellBadgeCircle {
-  position: absolute;
-  top: -34px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 68px;
-  height: 68px;
+  position: relative;
+  width: 66px;
+  height: 66px;
   border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
+  background: var(--card-bg, #ffffff);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 4px solid var(--card-bg, #ffffff);
+  border: 3.5px solid rgba(245, 158, 11, 0.35);
   z-index: 20;
   pointer-events: none;
+  box-sizing: border-box;
 }
 
 @media (max-width: 767px) {
   .bellBadgeCircle {
     width: 58px;
     height: 58px;
-    top: -29px;
   }
 }
 
@@ -183,7 +202,6 @@
   .bellBadgeCircle {
     width: 52px;
     height: 52px;
-    top: -26px;
   }
 }
 

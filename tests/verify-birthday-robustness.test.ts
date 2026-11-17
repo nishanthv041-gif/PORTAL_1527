@@ -8,7 +8,7 @@ import {
   isLeapYear,
 } from "../lib/birthday";
 import { parseAndValidateDob } from "../lib/validations/dob";
-import { processUniversalBirthdayWishes, dispatchImmediateBirthdayWishForPerson } from "../app/api/cron/birthdays/route";
+import { processUniversalBirthdayWishes, dispatchImmediateBirthdayWishForPerson } from "../backend/services/birthdays/birthdayService";
 import { parseBirthdayCardPayload, getNotificationDisplayText } from "../frontend/components/birthdays/birthdayCardUtils";
 
 async function runTestSuite() {

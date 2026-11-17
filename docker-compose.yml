@@ -14,11 +14,15 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
     deploy:
       resources:
         limits:
-          cpus: '1.5'
-          memory: 1536M
+          cpus: '2.0'
+          memory: 2048M
         reservations:
           memory: 512M
     healthcheck:
@@ -27,4 +31,22 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    container_name: srt_portal_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  redis_data:
 

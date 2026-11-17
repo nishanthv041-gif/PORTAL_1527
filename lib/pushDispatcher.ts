@@ -73,7 +73,7 @@ export async function sendInstantPortalNotification(
     category,
     title,
     body,
-    link = "/notifications",
+    link = "/dashboard",
     priority = "HIGH",
     bypass48h = false,
     icon = "/icons/icon-192x192.png",

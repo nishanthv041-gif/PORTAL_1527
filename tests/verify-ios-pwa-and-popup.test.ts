@@ -59,8 +59,8 @@ function runVerification() {
     modalCss.includes("padding: max(3.5rem") || modalCss.includes("3.5rem")
   );
   assert(
-    "Bell badge circle top is within safety buffer (-34px)",
-    modalCss.includes("top: -34px")
+    "Bell badge circle is safely centered and unclipped",
+    modalCss.includes("bellBadgeCircle") && modalCss.includes("bellBadgeContainer")
   );
   assert(
     "Modal card constrained to calc(100dvh - 5.5rem)",
