@@ -163,7 +163,7 @@ export async function sendUniversalNotification(
       inAppCreated = true;
 
       // Invalidate user cache for instant in-app badge update
-      await invalidateUserNotifCache(userId).catch(() => {});
+      await invalidateUserNotifCache(userId).catch(() => { });
     }
   } catch (err) {
     console.error("[Notify] Error creating in-app notification:", err);
@@ -247,13 +247,13 @@ export async function sendUniversalNotification(
     const isDuplicateDevice = (endpoint?: string | null, token?: string | null, fingerprint?: string | null): boolean => {
       const epKey = extractEndpointKey(endpoint);
       const tkKey = extractEndpointKey(token);
-      
+
       if (epKey && seenEndpoints.has(epKey)) return true;
       if (tkKey && seenEndpoints.has(tkKey)) return true;
       if (endpoint && seenEndpoints.has(endpoint.trim())) return true;
       if (token && seenEndpoints.has(token.trim())) return true;
       if (fingerprint && seenFingerprints.has(fingerprint.trim())) return true;
-      
+
       return false;
     };
 
@@ -305,7 +305,7 @@ export async function sendUniversalNotification(
           });
         }
       }
-    } catch {}
+    } catch { }
 
     // 2c. Also include active devices from device_notifications_registry in last 48 hours
     try {
@@ -336,13 +336,13 @@ export async function sendUniversalNotification(
           });
         }
       }
-    } catch {}
+    } catch { }
 
     if (staleIdsToDeactivate.length > 0) {
       prisma.pushSubscription.updateMany({
         where: { id: { in: staleIdsToDeactivate } },
         data: { isActive: false },
-      }).catch(() => {});
+      }).catch(() => { });
     }
   } catch (dbErr) {
     console.error("[Notify] Error querying push subscriptions:", dbErr);
@@ -353,31 +353,42 @@ export async function sendUniversalNotification(
     const deterministicTag =
       tag || `notif-${category.toLowerCase()}-${notificationId || Date.now().toString().slice(-6)}`;
 
+    // Query exact recipient unread count from PostgreSQL
+    let unreadCount = 1;
+    try {
+      unreadCount = await prisma.notification.count({
+        where: { userId, isRead: false },
+      });
+    } catch {
+      unreadCount = 1;
+    }
+
     // Prepare Web Push Payload with WhatsApp-Style App Icon Badge Counter
     const webPayload = JSON.stringify({
       title,
       body,
       url,
-      icon,
-      badge,
+      unreadCount,
+      badgeCount: unreadCount,
+      icon: icon || "/icon-192x192.png",
+      badge: badge || "/badge-72x72.png",
       tag: deterministicTag,
       renotify: true,
       vibrate: [200, 100, 200],
       requireInteraction: true,
       priority: "high",
-      badgeCount: 1, // Increments app icon badge on device
       data: {
         url,
         tag: deterministicTag,
         notificationId,
         category,
+        unreadCount,
         timestamp: Date.now(),
-        badgeCount: 1,
       },
     });
 
     const webOptions = {
-      TTL: 86400,
+      TTL: 60,
       urgency: "high" as const,
       headers: {
         Urgency: "high",
@@ -392,90 +403,94 @@ export async function sendUniversalNotification(
       const chunk = subscriptions.slice(i, i + BATCH_CHUNK_SIZE);
       await Promise.allSettled(
         chunk.map(async (sub) => {
-        const isAndroidFCM =
-          sub.platform === "ANDROID" ||
-          (sub.token && !sub.p256dh) ||
-          sub.endpoint.startsWith("fcm:");
+          const isAndroidFCM =
+            sub.platform === "ANDROID" ||
+            (sub.token && !sub.p256dh) ||
+            sub.endpoint.startsWith("fcm:");
 
-        if (isAndroidFCM) {
-          // Native Android Push via FCM (Capacitor)
-          const fcmToken = sub.token || sub.endpoint.replace(/^fcm:/, "");
-          if (!fcmToken || !fb) return;
+          if (isAndroidFCM) {
+            // Native Android Push via FCM (Capacitor)
+            const fcmToken = sub.token || sub.endpoint.replace(/^fcm:/, "");
+            if (!fcmToken || !fb) return;
 
-          try {
-            const messaging = getMessaging(fb);
-            await messaging.send({
-              token: fcmToken,
-              notification: {
-                title,
-                body,
-              },
-              data: {
-                url,
-                notificationId,
-                tag: deterministicTag,
-                category,
-                badgeCount: "1",
-              },
-              android: {
-                priority: "high",
-                collapseKey: deterministicTag,
+            try {
+              const messaging = getMessaging(fb);
+              await messaging.send({
+                token: fcmToken,
                 notification: {
+                  title,
+                  body,
+                },
+                data: {
+                  url,
+                  notificationId,
                   tag: deterministicTag,
-                  channelId: "srt_school_alerts",
-                  sound: "default",
+                  category,
+                  badgeCount: "1",
+                },
+                android: {
                   priority: "high",
-                  visibility: "public",
-                  notificationCount: 1,
+                  collapseKey: deterministicTag,
+                  notification: {
+                    tag: deterministicTag,
+                    channelId: "srt_school_alerts",
+                    sound: "default",
+                    priority: "high",
+                    visibility: "public",
+                    notificationCount: 1,
+                  },
                 },
-              },
-            });
-            androidPushCount++;
-          } catch (fcmErr: any) {
-            failedCount++;
-            const code = fcmErr?.code;
-            if (
-              code === "messaging/registration-token-not-registered" ||
-              code === "messaging/invalid-registration-token"
-            ) {
-              // Stale Android token: delete from database
-              await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
-              prunedCount++;
-            } else {
-              console.warn(`[Notify] FCM send note for device ${sub.id}:`, fcmErr?.message);
+              });
+              androidPushCount++;
+            } catch (fcmErr: any) {
+              failedCount++;
+              const code = fcmErr?.code;
+              if (
+                code === "messaging/registration-token-not-registered" ||
+                code === "messaging/invalid-registration-token"
+              ) {
+                // Stale Android token: delete from database
+                await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => { });
+                prunedCount++;
+              } else {
+                console.warn(`[Notify] FCM send note for device ${sub.id}:`, fcmErr?.message);
+              }
+            }
+          } else if (vapidConfigured && sub.endpoint && sub.p256dh && sub.auth) {
+            // Web & iOS Safari PWA Push via web-push
+            try {
+              await webpush.sendNotification(
+                {
+                  endpoint: sub.endpoint,
+                  keys: {
+                    p256dh: sub.p256dh,
+                    auth: sub.auth,
+                  },
+                },
+                webPayload,
+                webOptions
+              );
+              webPushCount++;
+            } catch (pushErr: any) {
+              failedCount++;
+              const statusCode = pushErr?.statusCode;
+              if (statusCode === 404 || statusCode === 410) {
+                // Stale Web Push endpoint: delete from all tables
+                await Promise.allSettled([
+                  prisma.pushSubscription.deleteMany({ where: { endpoint: sub.endpoint } }),
+                  prisma.pwaSubscription.deleteMany({ where: { endpoint: sub.endpoint } }),
+                  prisma.deviceNotificationsRegistry.deleteMany({ where: { endpoint: sub.endpoint } }),
+                ]);
+                prunedCount++;
+              } else {
+                console.warn(`[Notify] WebPush send note for device ${sub.id}:`, pushErr?.message);
+              }
             }
           }
-        } else if (vapidConfigured && sub.endpoint && sub.p256dh && sub.auth) {
-          // Web & iOS Safari PWA Push via web-push
-          try {
-            await webpush.sendNotification(
-              {
-                endpoint: sub.endpoint,
-                keys: {
-                  p256dh: sub.p256dh,
-                  auth: sub.auth,
-                },
-              },
-              webPayload,
-              webOptions
-            );
-            webPushCount++;
-          } catch (pushErr: any) {
-            failedCount++;
-            const statusCode = pushErr?.statusCode;
-            if (statusCode === 404 || statusCode === 410) {
-              // Stale Web Push endpoint: delete from database
-              await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
-              prunedCount++;
-            } else {
-              console.warn(`[Notify] WebPush send note for device ${sub.id}:`, pushErr?.message);
-            }
-          }
-        }
-      })
-    );
+        })
+      );
+    }
   }
-}
 
   return {
     success: inAppCreated || webPushCount > 0 || androidPushCount > 0,

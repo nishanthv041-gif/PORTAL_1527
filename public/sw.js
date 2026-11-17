@@ -139,7 +139,7 @@ async function broadcastBadgeToClients(count) {
     for (const client of windowClients) {
       client.postMessage({ type: "APP_BADGE_CHANGED", count });
     }
-  } catch {}
+  } catch { }
 }
 
 // Immediate Activation, Cache Management, and Badging Message Listener
@@ -220,7 +220,7 @@ self.addEventListener("fetch", (event) => {
             if (retryResponse && retryResponse.ok) {
               return retryResponse;
             }
-          } catch {}
+          } catch { }
 
           const cache = await caches.open(CACHE_NAME);
           const cachedOffline = await cache.match("/offline.html");
@@ -273,15 +273,15 @@ self.addEventListener("fetch", (event) => {
 // 4. Push Event: Show OS-level notifications from Web Push API
 self.addEventListener("push", (event) => {
   const showPushNotification = async () => {
-    let title = "SRT School Portal";
-    let body = "You have a new school message.";
-    let targetUrl = "/dashboard";
-    let iconUrl = self.location.origin + "/icons/icon-192x192.png";
-    let badgeUrl = self.location.origin + "/icons/icon-192x192.png";
-    let tag = "srt-portal";
+    let title = "SRT Portal";
+    let body = "You have a new school notification.";
+    let targetUrl = "/";
+    let iconUrl = "/icon-192x192.png";
+    let badgeUrl = "/badge-72x72.png";
+    let tag = "srt-portal-" + Date.now();
     let notificationId = null;
+    let unreadCount = 1;
 
-    let explicitBadgeCount = null;
     if (event.data) {
       try {
         const payload = event.data.json();
@@ -289,59 +289,56 @@ self.addEventListener("push", (event) => {
         if (payload.body) body = payload.body;
         if (payload.url) targetUrl = payload.url;
         else if (payload.data && payload.data.url) targetUrl = payload.data.url;
-        if (payload.icon) {
-          iconUrl = payload.icon.startsWith("http") ? payload.icon : self.location.origin + payload.icon;
-        }
-        if (payload.badge) {
-          badgeUrl = payload.badge.startsWith("http") ? payload.badge : self.location.origin + payload.badge;
-        }
+        if (payload.icon) iconUrl = payload.icon;
+        if (payload.badge) badgeUrl = payload.badge;
         if (payload.tag) tag = payload.tag;
         else if (payload.data && payload.data.tag) tag = payload.data.tag;
-        else if (payload.data && payload.data.notificationId) tag = "notif-" + payload.data.notificationId;
         if (payload.data && payload.data.notificationId) notificationId = payload.data.notificationId;
-        if (payload.badgeCount !== undefined) {
-          explicitBadgeCount = parseInt(payload.badgeCount, 10);
-        } else if (payload.data && payload.data.badgeCount !== undefined) {
-          explicitBadgeCount = parseInt(payload.data.badgeCount, 10);
+
+        if (payload.unreadCount !== undefined) {
+          unreadCount = parseInt(payload.unreadCount, 10) || 0;
+        } else if (payload.badgeCount !== undefined) {
+          unreadCount = parseInt(payload.badgeCount, 10) || 0;
+        } else if (payload.data && payload.data.unreadCount !== undefined) {
+          unreadCount = parseInt(payload.data.unreadCount, 10) || 0;
         }
       } catch {
         try {
           const txt = event.data.text();
           if (txt) body = txt;
-        } catch {}
+        } catch { }
       }
     }
 
     // WhatsApp-Style App Icon Badge Update:
-    // Update persistent IndexedDB unread count and set OS-level app badge
-    let activeUnreadCount = 1;
+    // Call navigator.setAppBadge or self.registration.setAppBadge and persist to IndexedDB
     try {
-      if (typeof explicitBadgeCount === "number" && !isNaN(explicitBadgeCount)) {
-        activeUnreadCount = await setStoredBadgeCount(explicitBadgeCount);
-      } else {
-        activeUnreadCount = await incrementStoredBadgeCount(1);
+      if ("setAppBadge" in self.navigator) {
+        await (self.navigator as any).setAppBadge(unreadCount);
+      } else if (self.registration && "setAppBadge" in self.registration) {
+        await (self.registration as any).setAppBadge(unreadCount);
       }
-      await applyAppBadge(activeUnreadCount);
-      await broadcastBadgeToClients(activeUnreadCount);
+      await setStoredBadgeCount(unreadCount);
+      await broadcastBadgeToClients(unreadCount);
     } catch (badgeErr) {
-      console.warn("[ServiceWorker] App badge update note:", badgeErr);
+      console.debug("[ServiceWorker] App badge update note:", badgeErr);
     }
 
     const options = {
       body: body,
-      icon: iconUrl,
-      badge: badgeUrl,
+      icon: iconUrl || "/icon-192x192.png",
+      badge: badgeUrl || "/badge-72x72.png",
       vibrate: [200, 100, 200],
       timestamp: Date.now(),
+      requireInteraction: true,
+      renotify: true,
+      tag: tag,
       data: {
-        url: targetUrl,
+        url: targetUrl || "/",
         tag: tag,
         notificationId: notificationId,
-        unreadCount: activeUnreadCount,
+        unreadCount: unreadCount,
       },
-      tag: tag,
-      renotify: true,
-      requireInteraction: true,
     };
 
     try {
@@ -351,15 +348,16 @@ self.addEventListener("push", (event) => {
       try {
         await self.registration.showNotification(title, {
           body: body,
-          icon: iconUrl,
+          icon: "/icon-192x192.png",
+          badge: "/badge-72x72.png",
           tag: tag,
           renotify: true,
           requireInteraction: true,
           data: {
-            url: targetUrl,
+            url: targetUrl || "/",
             tag: tag,
             notificationId: notificationId,
-            unreadCount: activeUnreadCount,
+            unreadCount: unreadCount,
           },
         });
       } catch (fallbackErr) {
@@ -367,6 +365,9 @@ self.addEventListener("push", (event) => {
       }
     }
   };
+
+  event.waitUntil(showPushNotification());
+});
 
   event.waitUntil(showPushNotification());
 });
@@ -391,12 +392,12 @@ self.addEventListener("notificationclick", (event) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notificationId: notifId }),
-    }).catch(() => {});
+    }).catch(() => { });
   }
 
   // Clear or decrement badge upon interaction
-  removeAppBadge().catch(() => {});
-  broadcastBadgeToClients(0).catch(() => {});
+  removeAppBadge().catch(() => { });
+  broadcastBadgeToClients(0).catch(() => { });
 
   event.waitUntil(
     clients

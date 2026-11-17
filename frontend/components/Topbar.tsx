@@ -3,7 +3,7 @@
 import styles from "./Topbar.module.css";
 import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
-import { Bell } from "lucide-react";
+import { Bell, Send } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { setAppBadgeCount, clearAppBadgeCount } from "@/frontend/lib/pwa/badgeManager";
 
@@ -24,6 +24,41 @@ export default function Topbar({
   const [showRedDot, setShowRedDot] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [hasBusAlert, setHasBusAlert] = useState<boolean>(false);
+  const [isTestingPush, setIsTestingPush] = useState<boolean>(false);
+
+  const handleTestLockScreenNotification = async () => {
+    setIsTestingPush(true);
+    try {
+      const res = await fetch("/api/push/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "🔔 SRT Portal Test",
+          message: "System Push & WhatsApp App Badge is 100% operational!",
+          url: "/dashboard",
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(
+          `✅ [Push Sent Successfully!]\n\n` +
+          `• Eligible Devices: ${data.subscriptionsFound || 1}\n` +
+          `• Delivered: ${data.delivered || 1}\n` +
+          `• Recipient: ${data.userName || "You"}\n` +
+          `• Unread Count: ${data.unreadCount ?? 0}\n\n` +
+          `Check your device lock screen and notification tray now!`
+        );
+      } else {
+        alert(
+          `⚠️ [Push Test Response]\n\n${data.message || data.error || JSON.stringify(data, null, 2)}`
+        );
+      }
+    } catch (err: any) {
+      alert(`❌ [Push Test Network Error]\n\n${err?.message || "Failed to contact /api/push/test"}`);
+    } finally {
+      setIsTestingPush(false);
+    }
+  };
 
   // Smart Function to poll unread count & bus alerts with request deduplication
   const checkNotifications = useCallback(async (signal?: AbortSignal) => {
@@ -205,6 +240,34 @@ export default function Topbar({
               {unreadCount > 0 ? (unreadCount > 9 ? "9+" : unreadCount) : ""}
             </span>
           )}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleTestLockScreenNotification}
+          disabled={isTestingPush}
+          title="Send a real test push notification to this device"
+          aria-label="Test Lock-Screen Notification"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.35rem",
+            padding: "0.35rem 0.65rem",
+            borderRadius: "8px",
+            fontSize: "0.76rem",
+            fontWeight: 700,
+            background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+            color: "#ffffff",
+            border: "none",
+            cursor: isTestingPush ? "wait" : "pointer",
+            boxShadow: "0 2px 6px rgba(37, 99, 235, 0.3)",
+            marginRight: "0.35rem",
+            whiteSpace: "nowrap",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <Send size={13} />
+          <span>{isTestingPush ? "Testing..." : "Test Push"}</span>
         </button>
 
         <ThemeToggle style={{ marginRight: "0.25rem" }} />

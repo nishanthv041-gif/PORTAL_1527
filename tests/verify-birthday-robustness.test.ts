@@ -141,8 +141,8 @@ async function runTestSuite() {
   assert(caughtDuplicate, "Prisma rejects duplicate BirthdayWishLog for (userId, year) via unique constraint");
 
   // Clean up test user
-  await prisma.birthdayWishLog.deleteMany({ where: { userId: testUser.id } }).catch(() => {});
-  await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
+  await prisma.birthdayWishLog.deleteMany({ where: { userId: testUser.id } }).catch(() => { });
+  await prisma.user.delete({ where: { id: testUser.id } }).catch(() => { });
 
   // ---------------------------------------------------------------------------
   // TEST 6: Live End-to-End Test: Celebrant Wishes Dispatched, Pop-up & Log Verified
@@ -209,11 +209,11 @@ async function runTestSuite() {
   assert(immediateRes.isBirthdayToday === true, "dispatchImmediateBirthdayWishForPerson accurately identifies today as birthday");
 
   // Cleanup live test records
-  await prisma.notification.deleteMany({ where: { userId: liveUser.id } }).catch(() => {});
-  await prisma.birthdayWish.deleteMany({ where: { recipientUserId: liveUser.id } }).catch(() => {});
-  await prisma.birthdayWishLog.deleteMany({ where: { userId: liveUser.id } }).catch(() => {});
-  await prisma.teacher.delete({ where: { id: teacherRecord.id } }).catch(() => {});
-  await prisma.user.delete({ where: { id: liveUser.id } }).catch(() => {});
+  await prisma.notification.deleteMany({ where: { userId: liveUser.id } }).catch(() => { });
+  await prisma.birthdayWish.deleteMany({ where: { recipientUserId: liveUser.id } }).catch(() => { });
+  await prisma.birthdayWishLog.deleteMany({ where: { userId: liveUser.id } }).catch(() => { });
+  await prisma.teacher.delete({ where: { id: teacherRecord.id } }).catch(() => { });
+  await prisma.user.delete({ where: { id: liveUser.id } }).catch(() => { });
 
   console.log("\n==================================================================");
   console.log(`TEST SUMMARY: ${passed} PASSED | ${failed} FAILED`);
