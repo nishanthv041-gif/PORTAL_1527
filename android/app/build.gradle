@@ -4,7 +4,7 @@ android {
     namespace = "com.srtuniversalschool.portal"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.srtuniversalschool.portal"
+        applicationId "com.srtportal.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

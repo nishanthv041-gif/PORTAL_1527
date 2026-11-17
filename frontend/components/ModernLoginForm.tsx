@@ -16,6 +16,7 @@ import styles from "@/frontend/app/login/modern-login.module.css";
 import ThemeToggle from "@/frontend/components/ThemeToggle";
 import SrtLogo from "@/frontend/components/ui/SrtLogo";
 import LoginPwaPrompt from "@/frontend/components/pwa/LoginPwaPrompt";
+import { persistNativeSession } from "@/frontend/lib/authPersistence";
 
 interface ModernLoginFormProps {
   schoolName?: string;
@@ -147,6 +148,15 @@ export default function ModernLoginForm({
             const sessRes = await fetch("/api/auth/session");
             if (sessRes.ok) {
               const sess = await sessRes.json();
+              if (sess?.user) {
+                persistNativeSession({
+                  userId: sess.user.id,
+                  role: sess.user.role || "USER",
+                  name: sess.user.name,
+                  email: sess.user.email,
+                  loginTimestamp: Date.now(),
+                }).catch(() => {});
+              }
               if (sess?.user?.role) {
                 const r = sess.user.role.toUpperCase();
                 if (r === "STAFF" || r === "NON_TEACHING_STAFF") {

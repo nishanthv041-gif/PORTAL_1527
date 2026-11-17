@@ -3,13 +3,14 @@
 import { useEffect, useRef } from "react";
 import { useMidnightMasterRefresh } from "@/frontend/hooks/useMidnightMasterRefresh";
 import { syncAppBadgeWithServer } from "@/frontend/lib/pwa/badgeManager";
+import { persistNativeSession } from "@/frontend/lib/authPersistence";
 
 /**
  * SilentSessionRefresher
  * 
  * Ensures:
  * 1. Permanent Login (Never Auto-Logout): Silently refreshes JWT access token
- *    in the background so sessions remain active indefinitely.
+ *    in the background and persists session to @capacitor/preferences on native mobile.
  * 2. 12:00 AM Silent Master Refresh: Mounts the jittered midnight state sync.
  * 3. App Icon Badging: Synchronizes app badge on launch.
  */
@@ -25,7 +26,7 @@ export default function SilentSessionRefresher() {
     // Initial badge sync on portal launch
     syncAppBadgeWithServer().catch(() => {});
 
-    // Silent background token refresh function
+    // Silent background token refresh function with native session persistence
     const silentlyRefreshToken = async () => {
       try {
         const res = await fetch("/api/auth/session", {
@@ -34,11 +35,24 @@ export default function SilentSessionRefresher() {
         });
         if (res.ok) {
           lastRefreshRef.current = Date.now();
+          const data = await res.json();
+          if (data?.user?.id) {
+            persistNativeSession({
+              userId: data.user.id,
+              role: data.user.role || "USER",
+              name: data.user.name,
+              email: data.user.email,
+              loginTimestamp: Date.now(),
+            }).catch(() => {});
+          }
         }
       } catch (err) {
         console.debug("[SessionKeeper] Background token touch note:", err);
       }
     };
+
+    // Run initial refresh check
+    silentlyRefreshToken();
 
     // Silent refresh every 3 hours while portal is open
     const interval = setInterval(() => {

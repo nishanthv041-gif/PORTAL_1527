@@ -1,13 +1,20 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Bell, ShieldCheck, CheckCircle2, ArrowRight } from "lucide-react";
+import { Bell, CheckCircle2 } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 import OneSignal, {
   initOneSignal,
   loginToOneSignal,
   requestOneSignalPermission,
   hasOneSignalPermission,
 } from "@/frontend/lib/onesignal";
+import {
+  initPushNotifications,
+  loginToPushService,
+  requestPushPermission,
+  checkPushPermission,
+} from "@/frontend/lib/pushNotifications";
 
 function urlBase64ToUint8Array(base64String: string): any {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -31,7 +38,7 @@ export default function NotificationPermissionGate({
   userRole?: string;
   children: React.ReactNode;
 }) {
-  // Check permission state: if already granted or previously dismissed, unlock immediately
+  // 0ms Instant check: If already granted, dismissed, or unsupported, unlock immediately without any spinner
   const [isPermitted, setIsPermitted] = useState<boolean>(() => {
     try {
       if (typeof window !== "undefined") {
@@ -51,7 +58,7 @@ export default function NotificationPermissionGate({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSyncingRef = useRef(false);
 
-  // Background Push Subscription Sync (Auxiliary fallback & OneSignal User Login)
+  // Background Push Subscription Sync (Auxiliary fallback & User Login)
   const syncPushSubscriptionInBackground = useCallback(async () => {
     if (isSyncingRef.current) return;
     isSyncingRef.current = true;
@@ -59,16 +66,24 @@ export default function NotificationPermissionGate({
     try {
       // 1. Map logged-in user to OneSignal external_id
       if (userId) {
-        await loginToOneSignal(userId);
+        await loginToPushService(userId);
+        if (!Capacitor.isNativePlatform()) {
+          await loginToOneSignal(userId);
+        }
       }
 
-      // 2. Auxiliary Native Web Push fallback sync
+      // If running inside native Capacitor app, native SDK handles APNs/FCM directly
+      if (Capacitor.isNativePlatform()) {
+        return;
+      }
+
+      // 2. Auxiliary Native Web Push fallback sync (Browser only)
       if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
         return;
       }
 
       const readyPromise = navigator.serviceWorker.ready;
-      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000));
       const reg = await Promise.race([readyPromise, timeoutPromise]);
 
       if (!reg || !reg.pushManager) {
@@ -122,16 +137,14 @@ export default function NotificationPermissionGate({
     }
   }, [userId]);
 
-  // Initial Check & OneSignal initialization on mount
+  // Initial check & Push SDK initialization on mount
   useEffect(() => {
     try {
       if (typeof window === "undefined") return;
 
-      initOneSignal().then(() => {
-        if (userId) {
-          loginToOneSignal(userId);
-        }
-        if (hasOneSignalPermission()) {
+      initPushNotifications(userId).then(async () => {
+        const hasPerm = await checkPushPermission();
+        if (hasPerm) {
           setIsPermitted(true);
         }
       });
@@ -145,26 +158,31 @@ export default function NotificationPermissionGate({
     }
   }, [userId, syncPushSubscriptionInBackground]);
 
-  // Request Notification Permission via OneSignal Web SDK v16
+  // Request Notification Permission
   const handleRequestPermission = async () => {
     setIsSubmitting(true);
     try {
-      // Call OneSignal.Notifications.requestPermission()
-      const granted = await requestOneSignalPermission();
+      let granted = await requestPushPermission();
+      if (!granted && !Capacitor.isNativePlatform()) {
+        granted = await requestOneSignalPermission();
+      }
       const isNowGranted =
         granted ||
         (typeof Notification !== "undefined" && Notification.permission === "granted") ||
-        hasOneSignalPermission();
+        (await checkPushPermission());
 
       if (isNowGranted) {
         setIsPermitted(true);
         if (userId) {
-          await loginToOneSignal(userId);
+          await loginToPushService(userId);
+          if (!Capacitor.isNativePlatform()) {
+            await loginToOneSignal(userId);
+          }
         }
         syncPushSubscriptionInBackground();
       }
     } catch (err) {
-      console.warn("[PermissionGate] OneSignal permission request error:", err);
+      console.warn("[PermissionGate] Permission request note:", err);
     } finally {
       setIsSubmitting(false);
     }

@@ -1,15 +1,48 @@
 /**
  * App Icon Badging API Manager (WhatsApp-Style)
  * 
- * Synchronizes the unread notification badge on the installed PWA app icon:
- * 1. Client-side via navigator.setAppBadge() / navigator.clearAppBadge()
- * 2. ServiceWorker-side via message channel for IndexedDB persistence
+ * Synchronizes the unread notification badge on the installed PWA / Native app icon:
+ * 1. Native Capacitor (iOS APNs / Android launcher): @capawesome/capacitor-badge
+ * 2. Web Browsers (Chrome / Edge / Safari PWA): navigator.setAppBadge() / navigator.clearAppBadge()
+ * 3. ServiceWorker-side via message channel for background sync
  */
+
+import { Capacitor } from "@capacitor/core";
+
+async function getNativeBadgePlugin(): Promise<any | null> {
+  if (typeof window === "undefined" || !Capacitor.isNativePlatform()) {
+    return null;
+  }
+  try {
+    const mod = await import("@capawesome/capacitor-badge");
+    return mod.Badge || mod;
+  } catch (err) {
+    console.debug("[BadgeManager] Native Badge plugin load note:", err);
+    return null;
+  }
+}
 
 export async function setAppBadgeCount(count: number): Promise<void> {
   const safeCount = Math.max(0, Math.floor(count));
 
-  // 1. Direct browser / OS Badging API
+  // 1. Native Mobile App (Capacitor iOS & Android)
+  if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
+    try {
+      const Badge = await getNativeBadgePlugin();
+      if (Badge) {
+        if (safeCount > 0) {
+          await Badge.set({ count: safeCount });
+        } else {
+          await Badge.clear();
+        }
+        return;
+      }
+    } catch (err) {
+      console.debug("[BadgeManager] Native Badge.set note:", err);
+    }
+  }
+
+  // 2. Direct browser / OS Web Badging API
   if (typeof window !== "undefined" && "setAppBadge" in navigator) {
     try {
       if (safeCount > 0) {
@@ -22,8 +55,8 @@ export async function setAppBadgeCount(count: number): Promise<void> {
     }
   }
 
-  // 2. Synchronize with Service Worker & IndexedDB
-  if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  // 3. Synchronize with Service Worker & IndexedDB (Web only)
+  if (typeof window !== "undefined" && !Capacitor.isNativePlatform() && "serviceWorker" in navigator) {
     try {
       const reg = await navigator.serviceWorker.ready;
       if (reg.active) {
@@ -37,6 +70,20 @@ export async function setAppBadgeCount(count: number): Promise<void> {
 }
 
 export async function clearAppBadgeCount(): Promise<void> {
+  // 1. Native Mobile App (Capacitor iOS & Android)
+  if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
+    try {
+      const Badge = await getNativeBadgePlugin();
+      if (Badge) {
+        await Badge.clear();
+        return;
+      }
+    } catch (err) {
+      console.debug("[BadgeManager] Native Badge.clear note:", err);
+    }
+  }
+
+  // 2. Browser Web Badging API
   if (typeof window !== "undefined" && "clearAppBadge" in navigator) {
     try {
       await (navigator as any).clearAppBadge();
@@ -45,7 +92,8 @@ export async function clearAppBadgeCount(): Promise<void> {
     }
   }
 
-  if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  // 3. Service Worker
+  if (typeof window !== "undefined" && !Capacitor.isNativePlatform() && "serviceWorker" in navigator) {
     try {
       const reg = await navigator.serviceWorker.ready;
       if (reg.active) {

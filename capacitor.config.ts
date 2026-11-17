@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.srtuniversalschool.portal",
-  appName: "SRT Universal School",
+  appId: "com.srtportal.app",
+  appName: "SRT Portal",
   webDir: "www",
   server: {
     url: "https://main.d3bt7u4517jg0f.amplifyapp.com",
@@ -14,13 +14,19 @@ const config: CapacitorConfig = {
       "*.vercel.app",
       "accounts.google.com",
       "*.google.com",
-      "*.googleusercontent.com"
+      "*.googleusercontent.com",
+      "*.onesignal.com",
+      "cdn.onesignal.com"
     ]
   },
   android: {
     allowMixedContent: false,
     captureInput: true,
-    webContentsDebuggingEnabled: false
+    webContentsDebuggingEnabled: process.env.NODE_ENV !== "production"
+  },
+  ios: {
+    contentInset: "always",
+    preferredContentMode: "mobile"
   },
   plugins: {
     SplashScreen: {
@@ -39,4 +45,3 @@ const config: CapacitorConfig = {
 };
 
 export default config;
-
