@@ -50,8 +50,16 @@ export default function Topbar({
           `Check your lock screen and notification tray now!`
         );
       } else {
+        const osError = data.oneSignal?.result?.error || data.message || "Failed";
+        const subsCount = data.webPush?.subscriptionsFound ?? 0;
         alert(
-          `⚠️ [Push Test Response]\n\n${data.message || data.error || JSON.stringify(data, null, 2)}`
+          `⚠️ [Push Dispatch Notice]\n\n` +
+          `• OneSignal: ${osError}\n` +
+          `• Recipient User ID: ${data.userId || "Current User"}\n` +
+          `• Registered Devices: ${subsCount}\n\n` +
+          (String(osError).includes("ONESIGNAL_REST_API_KEY")
+            ? `👉 To fix this on AWS:\n1. Open AWS Amplify Console\n2. Go to App settings -> Environment variables\n3. Add ONESIGNAL_REST_API_KEY with your OneSignal REST API Key\n4. Redeploy!`
+            : `Please make sure notifications are allowed in your browser/device settings.`)
         );
       }
     } catch (err: any) {

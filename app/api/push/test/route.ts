@@ -218,7 +218,9 @@ export async function POST(req: Request) {
       },
       message: overallSuccess
         ? "Push notification dispatched successfully."
-        : "Push dispatch failed. Ensure ONESIGNAL_REST_API_KEY is configured in .env and the device has notifications enabled.",
+        : oneSignalResult.error
+          ? `OneSignal Push Error: ${oneSignalResult.error}`
+          : "Push dispatch failed. Ensure ONESIGNAL_REST_API_KEY is configured in AWS Amplify environment variables and the device has notifications enabled.",
     });
   } catch (error: unknown) {
     const errMessage = error instanceof Error ? error.message : "Internal server error";
