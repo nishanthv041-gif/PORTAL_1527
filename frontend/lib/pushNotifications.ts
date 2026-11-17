@@ -9,10 +9,12 @@ import {
   hasOneSignalPermission as hasOneSignalPermissionWeb,
   ONESIGNAL_APP_ID,
 } from "./onesignal";
+import { setAppBadgeCount } from "./pwa/badgeManager";
 
 export const APP_ID = ONESIGNAL_APP_ID;
 
 let isNativeInitialized = false;
+let isCapacitorPushListenersRegistered = false;
 
 /**
  * Check if the app is currently running inside Capacitor (native iOS/Android)
@@ -39,14 +41,101 @@ async function getNativeOneSignal(): Promise<any | null> {
     const pluginModule = await import("onesignal-cordova-plugin");
     return pluginModule.default || pluginModule;
   } catch (err) {
-    console.debug("[PushNotifications] Native plugin load note:", err);
+    console.debug("[PushNotifications] Native OneSignal plugin load note:", err);
     return (window as any)?.OneSignal || null;
   }
 }
 
 /**
+ * Get @capacitor/push-notifications plugin safely
+ */
+async function getCapacitorPushPlugin(): Promise<any | null> {
+  if (typeof window === "undefined" || !Capacitor.isNativePlatform()) {
+    return null;
+  }
+  try {
+    const { PushNotifications } = await import("@capacitor/push-notifications");
+    return PushNotifications;
+  } catch (err) {
+    console.debug("[PushNotifications] @capacitor/push-notifications plugin load note:", err);
+    return null;
+  }
+}
+
+/**
+ * Register native device token to backend PostgreSQL (/api/push/register)
+ */
+async function sendTokenToBackend(token: string, userId?: string) {
+  try {
+    const platform = Capacitor.getPlatform().toUpperCase(); // "ANDROID" | "IOS"
+    await fetch("/api/push/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token,
+        platform,
+        deviceName: `${platform === "ANDROID" ? "Android" : "iOS"} Native App`,
+        userAgent: navigator.userAgent,
+        userId: userId || undefined,
+      }),
+    });
+    console.log(`[PushNotifications] Registered native ${platform} push token with backend.`);
+  } catch (err) {
+    console.debug("[PushNotifications] Token register note:", err);
+  }
+}
+
+/**
+ * Setup Capacitor Native Push Listeners (FCM / APNs)
+ */
+async function setupCapacitorPushListeners(userId?: string) {
+  if (isCapacitorPushListenersRegistered) return;
+  const PushNotifications = await getCapacitorPushPlugin();
+  if (!PushNotifications) return;
+
+  try {
+    // 1. On Token Registration -> Send to backend
+    await PushNotifications.addListener("registration", (token: { value: string }) => {
+      console.log("[PushNotifications] Native device token received:", token.value?.slice(0, 20) + "...");
+      sendTokenToBackend(token.value, userId);
+    });
+
+    // 2. On Registration Error
+    await PushNotifications.addListener("registrationError", (error: any) => {
+      console.warn("[PushNotifications] Native device token registration failed:", error);
+    });
+
+    // 3. Foreground Notification Received -> Update App Icon Badge
+    await PushNotifications.addListener("pushNotificationReceived", (notification: any) => {
+      console.log("[PushNotifications] Notification received in foreground:", notification.title);
+      const rawCount =
+        notification.data?.unreadCount ||
+        notification.badge ||
+        notification.data?.badgeCount;
+      if (rawCount !== undefined) {
+        setAppBadgeCount(Number(rawCount) || 1).catch(() => {});
+      }
+    });
+
+    // 4. Notification Action Performed (Tapped) -> Navigate to URL
+    await PushNotifications.addListener("pushNotificationActionPerformed", (action: any) => {
+      const data = action.notification?.data;
+      const targetUrl = data?.url || "/dashboard";
+      console.log("[PushNotifications] Notification tapped. Navigating to:", targetUrl);
+      if (typeof window !== "undefined") {
+        window.location.href = targetUrl;
+      }
+    });
+
+    isCapacitorPushListenersRegistered = true;
+  } catch (err) {
+    console.debug("[PushNotifications] Setup listeners note:", err);
+  }
+}
+
+/**
  * Platform-Aware Push Initializer
- * - Native iOS/Android: Initializes OneSignal via onesignal-cordova-plugin
+ * - Native iOS/Android: Initializes OneSignal via onesignal-cordova-plugin AND @capacitor/push-notifications
  * - Web Browsers: Initializes OneSignal Web SDK v16 with ServiceWorker
  */
 export async function initPushNotifications(userId?: string): Promise<void> {
@@ -54,16 +143,25 @@ export async function initPushNotifications(userId?: string): Promise<void> {
 
   if (Capacitor.isNativePlatform()) {
     try {
+      // 1. Initialize Capacitor Push Listeners & Request Registration
+      await setupCapacitorPushListeners(userId);
+      const PushNotifications = await getCapacitorPushPlugin();
+      if (PushNotifications) {
+        const permStatus = await PushNotifications.checkPermissions();
+        if (permStatus.receive === "granted") {
+          await PushNotifications.register();
+        }
+      }
+
+      // 2. Initialize Native OneSignal SDK
       const nativeOS = await getNativeOneSignal();
       if (nativeOS && !isNativeInitialized) {
-        // OneSignal Cordova SDK v5+ initialization
         if (typeof nativeOS.initialize === "function") {
           nativeOS.initialize(APP_ID);
         } else if (typeof nativeOS.setAppId === "function") {
           nativeOS.setAppId(APP_ID);
         }
 
-        // Request native push notification permission
         if (nativeOS.Notifications?.requestPermission) {
           await nativeOS.Notifications.requestPermission(true);
         }
@@ -72,11 +170,9 @@ export async function initPushNotifications(userId?: string): Promise<void> {
         console.log("[PushNotifications] Native OneSignal initialized successfully for app:", APP_ID);
       }
 
-      if (userId && nativeOS) {
-        if (typeof nativeOS.login === "function") {
-          await nativeOS.login(String(userId).trim());
-          console.log("[PushNotifications] Native OneSignal linked to user ID:", userId);
-        }
+      if (userId && nativeOS && typeof nativeOS.login === "function") {
+        await nativeOS.login(String(userId).trim());
+        console.log("[PushNotifications] Native OneSignal linked to user ID:", userId);
       }
     } catch (err) {
       console.warn("[PushNotifications] Native initialization error:", err);
@@ -95,7 +191,7 @@ export async function initPushNotifications(userId?: string): Promise<void> {
 }
 
 /**
- * Link user to OneSignal push service on login (external_id = userId)
+ * Link user to push services on login (external_id = userId)
  */
 export async function loginToPushService(userId: string): Promise<boolean> {
   if (typeof window === "undefined" || !userId) return false;
@@ -106,8 +202,13 @@ export async function loginToPushService(userId: string): Promise<boolean> {
       if (nativeOS && typeof nativeOS.login === "function") {
         await nativeOS.login(String(userId).trim());
         console.log("[PushNotifications] Native push linked to user:", userId);
-        return true;
       }
+
+      const PushNotifications = await getCapacitorPushPlugin();
+      if (PushNotifications) {
+        await PushNotifications.register();
+      }
+      return true;
     } catch (err) {
       console.warn("[PushNotifications] Native login link error:", err);
     }
@@ -146,12 +247,26 @@ export async function requestPushPermission(): Promise<boolean> {
 
   if (Capacitor.isNativePlatform()) {
     try {
+      let isGranted = false;
+
+      // 1. Try Capacitor PushNotifications request
+      const PushNotifications = await getCapacitorPushPlugin();
+      if (PushNotifications) {
+        const result = await PushNotifications.requestPermissions();
+        if (result.receive === "granted") {
+          await PushNotifications.register();
+          isGranted = true;
+        }
+      }
+
+      // 2. Try Native OneSignal request
       const nativeOS = await getNativeOneSignal();
       if (nativeOS?.Notifications?.requestPermission) {
         const granted = await nativeOS.Notifications.requestPermission(true);
-        return Boolean(granted);
+        if (granted) isGranted = true;
       }
-      return true;
+
+      return isGranted;
     } catch (err) {
       console.warn("[PushNotifications] Native permission request error:", err);
       return false;
@@ -169,6 +284,12 @@ export async function checkPushPermission(): Promise<boolean> {
 
   if (Capacitor.isNativePlatform()) {
     try {
+      const PushNotifications = await getCapacitorPushPlugin();
+      if (PushNotifications) {
+        const permStatus = await PushNotifications.checkPermissions();
+        if (permStatus.receive === "granted") return true;
+      }
+
       const nativeOS = await getNativeOneSignal();
       if (nativeOS?.Notifications?.hasPermission) {
         const hasPerm = await nativeOS.Notifications.hasPermission();

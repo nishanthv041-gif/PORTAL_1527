@@ -14,6 +14,10 @@ public class MainActivity extends BridgeActivity {
         // Ensure third-party cookies and session persistence for NextAuth
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
+        WebView currentWebView = getBridge().getWebView();
+        if (currentWebView != null) {
+            cookieManager.setAcceptThirdPartyCookies(currentWebView, true);
+        }
 
         // Handle Android hardware back navigation
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
