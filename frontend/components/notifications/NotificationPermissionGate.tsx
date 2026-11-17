@@ -25,16 +25,20 @@ export default function NotificationPermissionGate({
   userRole?: string;
   children: React.ReactNode;
 }) {
-  // 0ms instant check: If permission already granted or non-supporting environment, unlock immediately!
+  // 0ms instant check: If permission already granted or non-supporting environment (e.g. iOS Safari outside PWA), unlock immediately!
   const [status, setStatus] = useState<"granted" | "prompt" | "denied">(() => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      if (Notification.permission === "granted") return "granted";
-      if (Notification.permission === "denied") {
-        const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
-        return dismissed === "true" ? "granted" : "denied";
+    try {
+      if (typeof window !== "undefined" && typeof Notification !== "undefined" && "Notification" in window) {
+        if (Notification.permission === "granted") return "granted";
+        if (Notification.permission === "denied") {
+          const dismissed = sessionStorage?.getItem("srt_notif_gate_dismissed");
+          return dismissed === "true" ? "granted" : "denied";
+        }
+        const dismissed = sessionStorage?.getItem("srt_notif_gate_dismissed");
+        return dismissed === "true" ? "granted" : "prompt";
       }
-      const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
-      return dismissed === "true" ? "granted" : "prompt";
+    } catch {
+      return "granted";
     }
     return "granted";
   });
@@ -113,32 +117,34 @@ export default function NotificationPermissionGate({
 
   // Initial Permission Check on mount
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    if (!("Notification" in window)) {
-      setStatus("granted");
-      return;
-    }
-
-    const currentPerm = Notification.permission;
-    if (currentPerm === "granted") {
-      setStatus("granted");
-      // Fire-and-forget in background without any blocking spinner
-      syncPushSubscriptionInBackground();
-    } else if (currentPerm === "denied") {
-      const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
-      if (dismissed === "true") {
+    try {
+      if (typeof window === "undefined" || typeof Notification === "undefined" || !("Notification" in window)) {
         setStatus("granted");
-      } else {
-        setStatus("denied");
+        return;
       }
-    } else {
-      const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
-      if (dismissed === "true") {
+
+      const currentPerm = Notification.permission;
+      if (currentPerm === "granted") {
         setStatus("granted");
+        // Fire-and-forget in background without any blocking spinner
+        syncPushSubscriptionInBackground();
+      } else if (currentPerm === "denied") {
+        const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
+        if (dismissed === "true") {
+          setStatus("granted");
+        } else {
+          setStatus("denied");
+        }
       } else {
-        setStatus("prompt");
+        const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
+        if (dismissed === "true") {
+          setStatus("granted");
+        } else {
+          setStatus("prompt");
+        }
       }
+    } catch {
+      setStatus("granted");
     }
   }, [syncPushSubscriptionInBackground]);
 
@@ -146,7 +152,7 @@ export default function NotificationPermissionGate({
   const handleRequestPermission = async () => {
     setErrorMessage(null);
     try {
-      if (!("Notification" in window)) {
+      if (typeof window === "undefined" || typeof Notification === "undefined" || !("Notification" in window)) {
         setStatus("granted");
         return;
       }
@@ -169,25 +175,31 @@ export default function NotificationPermissionGate({
   };
 
   const handleContinueAnyway = () => {
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("srt_notif_gate_dismissed", "true");
-    }
+    try {
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("srt_notif_gate_dismissed", "true");
+      }
+    } catch {}
     setStatus("granted");
   };
 
   const handleCheckAgain = () => {
-    if (typeof window === "undefined" || !("Notification" in window)) {
-      setStatus("granted");
-      return;
-    }
+    try {
+      if (typeof window === "undefined" || typeof Notification === "undefined" || !("Notification" in window)) {
+        setStatus("granted");
+        return;
+      }
 
-    if (Notification.permission === "granted") {
+      if (Notification.permission === "granted") {
+        setStatus("granted");
+        syncPushSubscriptionInBackground();
+      } else if (Notification.permission === "denied") {
+        window.location.reload();
+      } else {
+        setStatus("prompt");
+      }
+    } catch {
       setStatus("granted");
-      syncPushSubscriptionInBackground();
-    } else if (Notification.permission === "denied") {
-      window.location.reload();
-    } else {
-      setStatus("prompt");
     }
   };
 

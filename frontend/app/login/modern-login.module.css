@@ -5,16 +5,18 @@
 
 .pageWrapper {
   min-height: 100vh;
+  min-height: 100dvh;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   background-color: #f1f5f9;
-  padding: 1.25rem;
+  padding: max(1.25rem, calc(env(safe-area-inset-top) + 0.75rem)) max(1rem, env(safe-area-inset-right)) max(1.5rem, calc(env(safe-area-inset-bottom) + 0.75rem)) max(1rem, env(safe-area-inset-left));
   box-sizing: border-box;
   font-family: inherit;
   position: relative;
+  -webkit-overflow-scrolling: touch;
 }
 
 [data-theme="dark"] .pageWrapper {
@@ -212,6 +214,7 @@
 .inputFieldWrapper {
   position: relative;
   width: 100%;
+  z-index: 5;
 }
 
 .inputField {
@@ -220,12 +223,20 @@
   padding: 0 1.15rem;
   border: 1.5px solid #e2e8f0;
   border-radius: 12px;
-  font-size: 16px; /* 16px prevents iOS browser auto-zoom */
+  font-size: 16px !important; /* 16px prevents iOS Safari auto-zoom freeze on focus */
   color: #0f172a;
   background-color: #ffffff;
   outline: none;
   transition: all 0.2s ease;
   box-sizing: border-box;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  touch-action: manipulation;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 2;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 [data-theme="dark"] .inputField {

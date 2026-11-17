@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { X, CheckCircle2, Bell, Zap, Copy, Check } from "lucide-react";
 import styles from "./IosInstallPrompt.module.css";
@@ -9,6 +10,7 @@ const DISMISSED_KEY = "srt_ios_install_dismissed_v1";
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export default function IosInstallPrompt() {
+  const pathname = usePathname();
   const [isIos, setIsIos] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isInAppBrowser, setIsInAppBrowser] = useState(false);
@@ -48,8 +50,11 @@ export default function IosInstallPrompt() {
     const dismissedUntil = localStorage.getItem(DISMISSED_KEY);
     const isDismissed = dismissedUntil && Date.now() < Number(dismissedUntil);
 
-    if (!isDismissed) {
-      // Prompt appears gently after 1.8 seconds on iOS Safari
+    // CRITICAL iOS FIX: Never auto-open full-screen overlay over login page (blocks typing)
+    const isAuthPage = pathname === "/" || pathname?.startsWith("/login");
+
+    if (!isDismissed && !isAuthPage) {
+      // Prompt appears gently after 1.8 seconds on inner dashboard pages
       const timer = setTimeout(() => {
         setIsOpen(true);
       }, 1800);
@@ -57,7 +62,7 @@ export default function IosInstallPrompt() {
     } else {
       setShowFloatingPill(true);
     }
-  }, []);
+  }, [pathname]);
 
   // Listen for manual trigger from Topbar, Sidebar, or Profile menus
   useEffect(() => {

@@ -107,6 +107,7 @@ export default function SplashScreen({
       role="dialog"
       aria-modal="true"
       aria-label="Welcome to SRT Universal School"
+      onClick={handleFinish}
       className={`${styles.splashContainer} ${isExiting ? styles.splashExit : ""} ${className}`}
     >
       {/* Background Soft Radial Glow */}

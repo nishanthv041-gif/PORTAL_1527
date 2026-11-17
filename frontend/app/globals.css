@@ -174,18 +174,19 @@ textarea,
 select {
   color: var(--foreground);
   background-color: var(--input-bg);
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  touch-action: manipulation;
+  font-size: 16px !important; /* Prevents iOS Safari auto-zoom freeze on focus */
   scroll-margin-top: 80px;
   scroll-margin-bottom: 120px;
 }
 
-@media screen and (max-width: 640px) {
-
-  input,
-  textarea,
-  select {
-    font-size: 16px !important;
-    /* Prevents auto-zoom on iOS mobile */
-  }
+/* iOS WebKit smooth touch scrolling and overscroll isolation */
+html,
+body {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: auto;
 }
 
 

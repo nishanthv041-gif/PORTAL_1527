@@ -42,7 +42,9 @@ export default function HomeClient({
   const isSplashDone = useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot);
   const [dismissed, setDismissed] = useState(false);
 
-  const shouldShowSplash = !isSplashDone && !dismissed;
+  // Splash screen is strictly for the introductory root route "/" — never blocks or covers "/login"
+  const isRootRoute = pathname === "/";
+  const shouldShowSplash = isRootRoute && !isSplashDone && !dismissed;
 
   // If splash was already seen in this session and user is on '/', smoothly redirect to '/login'
   useEffect(() => {
@@ -57,9 +59,7 @@ export default function HomeClient({
         <SplashScreen
           onComplete={() => {
             setDismissed(true);
-            if (pathname !== "/login") {
-              router.replace("/login", { scroll: false });
-            }
+            router.replace("/login", { scroll: false });
           }}
           redirectTo="/login"
         />

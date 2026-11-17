@@ -252,13 +252,17 @@ export default function ModernLoginForm({
                 <div className={styles.inputFieldWrapper}>
                   <input
                     id="email"
-                    type="email"
+                    type="text"
+                    inputMode="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Email address"
+                    placeholder="User ID, Email or Phone"
                     className={styles.inputField}
                     required
-                    autoComplete="email"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                   />
                 </div>
 
@@ -272,12 +276,16 @@ export default function ModernLoginForm({
                     className={styles.inputField}
                     required
                     autoComplete="current-password"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className={styles.passwordToggle}
                     title={showPassword ? "Hide password" : "Show password"}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
