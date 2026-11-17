@@ -52,9 +52,9 @@ function getTypeBadge(type: string, category?: string | null, title?: string, co
     return {
       label: "Birthday Wish 🎂",
       icon: <Cake size={15} />,
-      bg: "rgba(245, 158, 11, 0.16)",
-      color: "#b45309",
-      border: "rgba(245, 158, 11, 0.35)",
+      bg: "rgba(245, 158, 11, 0.18)",
+      color: "#f59e0b",
+      border: "rgba(245, 158, 11, 0.4)",
     };
   }
 
@@ -64,27 +64,27 @@ function getTypeBadge(type: string, category?: string | null, title?: string, co
       return {
         label: "Report Card",
         icon: <FileText size={15} />,
-        bg: "rgba(59, 130, 246, 0.12)",
-        color: "#2563eb",
-        border: "rgba(59, 130, 246, 0.25)",
+        bg: "rgba(59, 130, 246, 0.18)",
+        color: "#60a5fa",
+        border: "rgba(59, 130, 246, 0.35)",
       };
     case "HOMEWORK":
     case "ASSIGNMENT":
       return {
         label: "Homework",
         icon: <BookOpen size={15} />,
-        bg: "rgba(168, 85, 247, 0.12)",
-        color: "#9333ea",
-        border: "rgba(168, 85, 247, 0.25)",
+        bg: "rgba(168, 85, 247, 0.18)",
+        color: "#c084fc",
+        border: "rgba(168, 85, 247, 0.35)",
       };
     case "MESSAGE":
     case "CHAT":
       return {
         label: "Message",
         icon: <MessageSquare size={15} />,
-        bg: "rgba(16, 185, 129, 0.12)",
-        color: "#059669",
-        border: "rgba(16, 185, 129, 0.25)",
+        bg: "rgba(16, 185, 129, 0.18)",
+        color: "#34d399",
+        border: "rgba(16, 185, 129, 0.35)",
       };
     case "ANNOUNCEMENT":
     case "INSTRUCTION":
@@ -92,17 +92,17 @@ function getTypeBadge(type: string, category?: string | null, title?: string, co
       return {
         label: "Notice",
         icon: <Megaphone size={15} />,
-        bg: "rgba(245, 158, 11, 0.12)",
-        color: "#d97706",
-        border: "rgba(245, 158, 11, 0.25)",
+        bg: "rgba(245, 158, 11, 0.18)",
+        color: "#fbbf24",
+        border: "rgba(245, 158, 11, 0.35)",
       };
     case "MEETING":
       return {
         label: "Meeting",
         icon: <Users size={15} />,
-        bg: "rgba(99, 102, 241, 0.12)",
-        color: "#4f46e5",
-        border: "rgba(99, 102, 241, 0.25)",
+        bg: "rgba(99, 102, 241, 0.18)",
+        color: "#818cf8",
+        border: "rgba(99, 102, 241, 0.35)",
       };
     case "BUS":
     case "BUS_MESSAGE":
@@ -110,33 +110,33 @@ function getTypeBadge(type: string, category?: string | null, title?: string, co
       return {
         label: "Bus Alert",
         icon: <Bus size={15} />,
-        bg: "rgba(234, 179, 8, 0.14)",
-        color: "#b45309",
-        border: "rgba(234, 179, 8, 0.3)",
+        bg: "rgba(234, 179, 8, 0.18)",
+        color: "#fde047",
+        border: "rgba(234, 179, 8, 0.35)",
       };
     case "ATTENDANCE":
       return {
         label: "Attendance",
         icon: <Calendar size={15} />,
-        bg: "rgba(239, 68, 68, 0.12)",
-        color: "#dc2626",
-        border: "rgba(239, 68, 68, 0.25)",
+        bg: "rgba(239, 68, 68, 0.18)",
+        color: "#f87171",
+        border: "rgba(239, 68, 68, 0.35)",
       };
     case "COMPLAINT":
       return {
         label: "Notice",
         icon: <AlertTriangle size={15} />,
-        bg: "rgba(244, 63, 94, 0.12)",
-        color: "#e11d48",
-        border: "rgba(244, 63, 94, 0.25)",
+        bg: "rgba(244, 63, 94, 0.18)",
+        color: "#fb7185",
+        border: "rgba(244, 63, 94, 0.35)",
       };
     default:
       return {
         label: "General",
         icon: <Bell size={15} />,
-        bg: "rgba(100, 116, 139, 0.12)",
-        color: "#475569",
-        border: "rgba(100, 116, 139, 0.25)",
+        bg: "rgba(148, 163, 184, 0.16)",
+        color: "#cbd5e1",
+        border: "rgba(148, 163, 184, 0.3)",
       };
   }
 }
@@ -330,7 +330,7 @@ export default function NotificationsCenterClient({
               borderRadius: "10px",
               background: "var(--card-bg, #ffffff)",
               border: "1px solid var(--border-color, #e2e8f0)",
-              color: "var(--text-primary, #0f172a)",
+              color: "var(--notif-title-color, var(--foreground, #f8fafc))",
               textDecoration: "none",
               boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
             }}
@@ -339,10 +339,10 @@ export default function NotificationsCenterClient({
             <ArrowLeft size={18} />
           </Link>
           <div>
-            <h1 style={{ fontSize: "1.35rem", fontWeight: 800, margin: 0, color: "var(--text-primary, #0f172a)" }}>
+            <h1 style={{ fontSize: "1.35rem", fontWeight: 800, margin: 0, color: "var(--notif-title-color, var(--foreground, #f8fafc))" }}>
               Notifications
             </h1>
-            <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-secondary, #64748b)" }}>
+            <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--notif-desc-color, var(--text-secondary, #94a3b8))" }}>
               All school alerts, report cards, homework, and messages
             </p>
           </div>
@@ -400,16 +400,9 @@ export default function NotificationsCenterClient({
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <style jsx>{`
-        .notif-filter-tabs::-webkit-scrollbar {
-          display: none !important;
-          width: 0 !important;
-          height: 0 !important;
-        }
-      `}</style>
+      {/* Filter Tabs with permanent scrollbar suppression on Chrome, Edge, Safari, Firefox */}
       <div
-        className="notif-filter-tabs"
+        className="notif-filter-tabs no-scrollbar scrollbar-none"
         style={{
           display: "flex",
           gap: "0.5rem",
@@ -472,7 +465,7 @@ export default function NotificationsCenterClient({
           }}
         >
           <Bell size={44} style={{ opacity: 0.25, margin: "0 auto 0.75rem" }} />
-          <h3 style={{ margin: "0 0 0.35rem", fontSize: "1.05rem", fontWeight: 700, color: "var(--text-primary, #0f172a)" }}>
+          <h3 style={{ margin: "0 0 0.35rem", fontSize: "1.05rem", fontWeight: 700, color: "var(--notif-title-color, var(--foreground, #f8fafc))" }}>
             No notifications
           </h3>
           <p style={{ margin: 0, fontSize: "0.85rem" }}>
@@ -560,7 +553,7 @@ export default function NotificationsCenterClient({
                           margin: 0,
                           fontSize: "0.95rem",
                           fontWeight: isUnread ? 700 : 600,
-                          color: "var(--text-primary, #0f172a)",
+                          color: "var(--notif-title-color, var(--foreground, #f8fafc))",
                         }}
                       >
                         {notif.title}
@@ -571,7 +564,7 @@ export default function NotificationsCenterClient({
                       <span
                         style={{
                           fontSize: "0.75rem",
-                          color: "var(--text-secondary, #94a3b8)",
+                          color: "var(--notif-desc-color, var(--text-secondary, #94a3b8))",
                           display: "flex",
                           alignItems: "center",
                           gap: "0.2rem",
@@ -599,7 +592,7 @@ export default function NotificationsCenterClient({
                       margin: 0,
                       fontSize: "0.875rem",
                       lineHeight: 1.45,
-                      color: "var(--text-secondary, #475569)",
+                      color: "var(--notif-desc-color, var(--text-secondary, #94a3b8))",
                       wordBreak: "break-word",
                     }}
                   >
@@ -713,10 +706,10 @@ export default function NotificationsCenterClient({
                 <span>BIRTHDAY WISH 🎂</span>
               </div>
 
-              <h2 style={{ margin: "0 0 0.5rem", fontSize: "1.35rem", fontWeight: 800, color: "#0f172a" }}>
+              <h2 style={{ margin: "0 0 0.5rem", fontSize: "1.35rem", fontWeight: 800, color: "var(--notif-title-color, var(--foreground, #f8fafc))" }}>
                 Happy Birthday Celebration
               </h2>
-              <p style={{ margin: "0 0 1.25rem", fontSize: "0.95rem", color: "#64748b" }}>
+              <p style={{ margin: "0 0 1.25rem", fontSize: "0.95rem", color: "var(--notif-desc-color, var(--text-secondary, #94a3b8))" }}>
                 {selectedBirthdayNotification.title}
               </p>
 

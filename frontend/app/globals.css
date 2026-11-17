@@ -20,8 +20,11 @@
   --primary-fg: #ffffff;
 
   /* Text variants */
+  --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #64748b;
+  --notif-title-color: #0f172a;
+  --notif-desc-color: #475569;
 
   /* Status colours */
   --success: #10b981;
@@ -80,8 +83,11 @@
   --primary-fg: #0f172a;
 
   /* Text variants */
+  --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-muted: #cbd5e1;
+  --notif-title-color: #f8fafc;
+  --notif-desc-color: #cbd5e1;
 
   /* Status colours */
   --success: #34d399;
@@ -342,13 +348,29 @@ select option:hover {
 
 .modal-dialog,
 .modalContainer,
-.modalCard,
 .modalContent {
   max-width: min(95vw, 700px);
   max-height: 90dvh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   box-sizing: border-box;
+}
+
+/* Universal scrollbar hiding utilities across Chrome, Edge, Safari, Firefox, Windows & iOS */
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar,
+.notif-filter-tabs::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+.no-scrollbar,
+.scrollbar-none,
+.notif-filter-tabs {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }
 
 .recharts-responsive-container {
