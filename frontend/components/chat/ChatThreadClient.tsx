@@ -15,6 +15,7 @@ import {
 import ChatMessageItem, { ChatMessage } from "./ChatMessageItem";
 import ChatComposer from "./ChatComposer";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { syncAppBadgeWithServer } from "@/frontend/lib/pwa/badgeManager";
 
 interface ChatThreadClientProps {
   initialMessages: ChatMessage[];
@@ -74,9 +75,10 @@ export default function ChatThreadClient({
     }
   }, []);
 
-  // Scroll to bottom on initial mount
+  // Scroll to bottom on initial mount & sync app icon badge
   useEffect(() => {
     scrollToBottom(false);
+    syncAppBadgeWithServer().catch(() => {});
   }, [scrollToBottom]);
 
   // Track scroll position to show/hide "Scroll to bottom" button

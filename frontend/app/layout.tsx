@@ -235,6 +235,24 @@ export default async function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
+        {/* OneSignal Web Push SDK v16 */}
+        <Script
+          src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
+          strategy="afterInteractive"
+        />
+        <Script id="onesignal-init-script" strategy="afterInteractive">
+          {`
+            window.OneSignalDeferred = window.OneSignalDeferred || [];
+            OneSignalDeferred.push(async function(OneSignal) {
+              await OneSignal.init({
+                appId: "721f0fa5-683c-4edc-93ce-35a8786d655b",
+                allowLocalhostAsSecureOrigin: true,
+                serviceWorkerParam: { scope: "/" },
+                serviceWorkerPath: "/OneSignalSDKWorker.js",
+              });
+            });
+          `}
+        </Script>
       </head>
       <body suppressHydrationWarning>
         <NavigationProgressBar />

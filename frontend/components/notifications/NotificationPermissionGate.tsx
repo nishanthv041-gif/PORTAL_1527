@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Bell, X, CheckCircle2 } from "lucide-react";
-import {
+import { Bell, ShieldCheck, CheckCircle2, ArrowRight } from "lucide-react";
+import OneSignal, {
   initOneSignal,
   loginToOneSignal,
   requestOneSignalPermission,
-  promptOneSignalSlidedown,
   hasOneSignalPermission,
 } from "@/frontend/lib/onesignal";
 
@@ -32,17 +31,33 @@ export default function NotificationPermissionGate({
   userRole?: string;
   children: React.ReactNode;
 }) {
-  // Always render children immediately - 0ms portal loading without any blocking overlays
-  const [showBanner, setShowBanner] = useState(false);
+  // Check permission state: if already granted or previously dismissed, unlock immediately
+  const [isPermitted, setIsPermitted] = useState<boolean>(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
+        if (dismissed === "true") return true;
+
+        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+          return true;
+        }
+      }
+    } catch {
+      return true;
+    }
+    return false;
+  });
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const isSyncingRef = useRef(false);
 
-  // Background Push Subscription Sync (Completely non-blocking fire-and-forget)
+  // Background Push Subscription Sync (Auxiliary fallback & OneSignal User Login)
   const syncPushSubscriptionInBackground = useCallback(async () => {
     if (isSyncingRef.current) return;
     isSyncingRef.current = true;
 
     try {
-      // 1. OneSignal User Identification (links device to PostgreSQL user.id)
+      // 1. Map logged-in user to OneSignal external_id
       if (userId) {
         await loginToOneSignal(userId);
       }
@@ -101,190 +116,221 @@ export default function NotificationPermissionGate({
         }
       }
     } catch {
-      // Non-blocking silent catch
+      // Non-blocking
     } finally {
       isSyncingRef.current = false;
     }
   }, [userId]);
 
-  // Initial Permission Check and OneSignal linking on mount
+  // Initial Check & OneSignal initialization on mount
   useEffect(() => {
     try {
       if (typeof window === "undefined") return;
 
-      // Initialize OneSignal Web SDK v16
       initOneSignal().then(() => {
         if (userId) {
           loginToOneSignal(userId);
         }
+        if (hasOneSignalPermission()) {
+          setIsPermitted(true);
+        }
       });
 
-      if (typeof Notification === "undefined" || !("Notification" in window)) {
-        return;
-      }
-
-      const isGranted = Notification.permission === "granted" || hasOneSignalPermission();
-      if (isGranted) {
-        setShowBanner(false);
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        setIsPermitted(true);
         syncPushSubscriptionInBackground();
-      } else if (Notification.permission === "default") {
-        const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
-        if (dismissed !== "true") {
-          setShowBanner(true);
-          // Also optionally trigger OneSignal slidedown prompt after slight delay
-          setTimeout(() => {
-            promptOneSignalSlidedown().catch(() => {});
-          }, 1500);
-        }
       }
     } catch {
       // Non-blocking
     }
   }, [userId, syncPushSubscriptionInBackground]);
 
-  // 1-click Enable Notifications via OneSignal Web Push
+  // Request Notification Permission via OneSignal Web SDK v16
   const handleRequestPermission = async () => {
+    setIsSubmitting(true);
     try {
-      // Trigger OneSignal Web Push permission request
+      // Call OneSignal.Notifications.requestPermission()
       const granted = await requestOneSignalPermission();
-      if (granted || Notification.permission === "granted") {
-        setShowBanner(false);
+      const isNowGranted =
+        granted ||
+        (typeof Notification !== "undefined" && Notification.permission === "granted") ||
+        hasOneSignalPermission();
+
+      if (isNowGranted) {
+        setIsPermitted(true);
         if (userId) {
           await loginToOneSignal(userId);
         }
         syncPushSubscriptionInBackground();
-      } else {
-        handleDismiss();
       }
-    } catch {
-      handleDismiss();
+    } catch (err) {
+      console.warn("[PermissionGate] OneSignal permission request error:", err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleDismiss = () => {
+  const handleContinueAnyway = () => {
     try {
       if (typeof window !== "undefined") {
         sessionStorage.setItem("srt_notif_gate_dismissed", "true");
       }
     } catch {}
-    setShowBanner(false);
+    setIsPermitted(true);
   };
 
-  return (
-    <>
-      {/* 0ms Instant Children Rendering: Dashboard and all content is always accessible immediately */}
-      {children}
+  // If permission is granted or user continued, unlock full dashboard access
+  if (isPermitted) {
+    return <>{children}</>;
+  }
 
-      {/* Sleek, Non-Blocking Floating Notification Banner for OneSignal Push */}
-      {showBanner && (
-        <aside
-          role="region"
-          aria-label="OneSignal Notification Permission"
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 999999,
+        backgroundColor: "rgba(15, 23, 42, 0.88)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "1.25rem",
+        boxSizing: "border-box",
+        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "460px",
+          background: "#1e293b",
+          border: "1px solid rgba(59, 130, 246, 0.35)",
+          borderRadius: "24px",
+          padding: "2rem 1.75rem",
+          boxShadow: "0 25px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(37, 99, 235, 0.2)",
+          textAlign: "center",
+          color: "#f8fafc",
+          boxSizing: "border-box",
+        }}
+      >
+        {/* School Crest / Bell Icon */}
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.25rem" }}>
+          <div
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: "50%",
+              background: "rgba(37, 99, 235, 0.15)",
+              border: "3px solid rgba(245, 158, 11, 0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#f59e0b",
+              boxShadow: "0 0 20px rgba(245, 158, 11, 0.25)",
+            }}
+          >
+            <Bell size={34} />
+          </div>
+        </div>
+
+        <div
           style={{
-            position: "fixed",
-            bottom: "1.25rem",
-            right: "1.25rem",
-            zIndex: 99999,
-            maxWidth: "390px",
-            background: "rgba(15, 23, 42, 0.96)",
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-            border: "1px solid rgba(59, 130, 246, 0.4)",
-            borderRadius: "16px",
-            padding: "1.1rem 1.25rem",
-            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(37, 99, 235, 0.2)",
-            color: "#f8fafc",
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.75rem",
-            fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-            animation: "fadeInUp 0.3s ease-out",
+            display: "inline-block",
+            padding: "0.25rem 0.75rem",
+            background: "rgba(59, 130, 246, 0.2)",
+            borderRadius: "20px",
+            fontSize: "0.75rem",
+            fontWeight: 700,
+            color: "#60a5fa",
+            letterSpacing: "0.05em",
+            marginBottom: "0.85rem",
           }}
         >
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
-            <div
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: "10px",
-                background: "rgba(245, 158, 11, 0.15)",
-                border: "1px solid rgba(245, 158, 11, 0.4)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#f59e0b",
-                flexShrink: 0,
-              }}
-            >
-              <Bell size={20} />
-            </div>
+          SRT UNIVERSAL SCHOOL PORTAL
+        </div>
 
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "#ffffff" }}>
-                  Enable Push Notifications
-                </span>
-                <button
-                  type="button"
-                  onClick={handleDismiss}
-                  aria-label="Dismiss notification banner"
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#94a3b8",
-                    cursor: "pointer",
-                    padding: "2px",
-                    display: "flex",
-                    alignItems: "center",
-                  }}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-              <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.78rem", color: "#cbd5e1", lineHeight: 1.4 }}>
-                Get instant lock-screen alerts for new messages, attendance updates, bus tracking, and exam results.
-              </p>
-            </div>
-          </div>
+        <h2 style={{ fontSize: "1.35rem", fontWeight: 800, margin: "0 0 0.5rem 0", color: "#ffffff" }}>
+          Enable Push Notifications
+        </h2>
 
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
-            <button
-              type="button"
-              onClick={handleRequestPermission}
-              style={{
-                flex: 1,
-                padding: "0.6rem 0.95rem",
-                borderRadius: "8px",
-                background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
-                color: "#ffffff",
-                border: "none",
-                fontSize: "0.82rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                boxShadow: "0 2px 8px rgba(37, 99, 235, 0.35)",
-              }}
-            >
-              Enable Notifications
-            </button>
-            <button
-              type="button"
-              onClick={handleDismiss}
-              style={{
-                padding: "0.6rem 0.95rem",
-                borderRadius: "8px",
-                background: "rgba(255, 255, 255, 0.08)",
-                color: "#cbd5e1",
-                border: "1px solid rgba(255, 255, 255, 0.15)",
-                fontSize: "0.82rem",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              Later
-            </button>
+        <p style={{ color: "#94a3b8", fontSize: "0.88rem", lineHeight: 1.55, margin: "0 0 1.25rem 0" }}>
+          Hello <strong>{userName}</strong>. SRT Portal delivers instant WhatsApp-style lock-screen alerts for attendance,
+          direct teacher messages, emergency announcements, and live bus transit updates.
+        </p>
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.55rem",
+            textAlign: "left",
+            background: "rgba(15, 23, 42, 0.5)",
+            border: "1px solid rgba(59, 130, 246, 0.2)",
+            borderRadius: "12px",
+            padding: "0.85rem 1rem",
+            marginBottom: "1.5rem",
+            fontSize: "0.82rem",
+            color: "#cbd5e1",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <CheckCircle2 size={16} color="#10b981" />
+            <span>Instant lock-screen message alerts from teachers & admin</span>
           </div>
-        </aside>
-      )}
-    </>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <CheckCircle2 size={16} color="#10b981" />
+            <span>WhatsApp-style app icon unread badge counter</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <CheckCircle2 size={16} color="#10b981" />
+            <span>Urgent bus transit & student attendance notifications</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleRequestPermission}
+          disabled={isSubmitting}
+          style={{
+            width: "100%",
+            padding: "0.95rem 1.25rem",
+            borderRadius: "14px",
+            background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+            color: "#ffffff",
+            border: "none",
+            fontWeight: 800,
+            fontSize: "1rem",
+            cursor: isSubmitting ? "wait" : "pointer",
+            boxShadow: "0 4px 18px rgba(37, 99, 235, 0.45)",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.5rem",
+            marginBottom: "0.75rem",
+          }}
+        >
+          <Bell size={20} />
+          <span>{isSubmitting ? "Prompting Permission..." : "Enable Notifications"}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleContinueAnyway}
+          style={{
+            background: "none",
+            border: "none",
+            color: "#94a3b8",
+            fontSize: "0.82rem",
+            cursor: "pointer",
+            padding: "0.4rem",
+            textDecoration: "underline",
+          }}
+        >
+          Continue to Dashboard &rarr;
+        </button>
+      </div>
+    </div>
   );
 }

@@ -40,7 +40,7 @@ export async function sendOneSignalPush(
     userId,
     title,
     body,
-    url = "/dashboard",
+    url = "https://main.d3bt7u4517jg0f.amplifyapp.com",
     unreadCount = 1,
     category = "MESSAGE",
     additionalData = {},
@@ -69,6 +69,7 @@ export async function sendOneSignalPush(
   }
 
   const safeBadgeCount = Math.max(0, Number(unreadCount) || 1);
+  const resolvedUrl = url || "https://main.d3bt7u4517jg0f.amplifyapp.com";
 
   const payload = {
     app_id: ONESIGNAL_APP_ID,
@@ -78,31 +79,35 @@ export async function sendOneSignalPush(
     },
     headings: { en: title },
     contents: { en: body },
-    url: url,
+    url: resolvedUrl,
+    ios_badgeType: "SetTo",
+    ios_badgeCount: safeBadgeCount,
     data: {
-      url,
       unreadCount: safeBadgeCount,
+      url: resolvedUrl,
       category,
       ...additionalData,
     },
-    // WhatsApp-style OS App Badge for iOS & Android
-    ios_badgeType: "SetTo",
-    ios_badgeCount: safeBadgeCount,
     web_buttons: [
       {
         id: "open-portal",
         text: "Open Portal",
-        url: url,
+        url: resolvedUrl,
       },
     ],
   };
+
+  const authHeader =
+    apiKey.trim().startsWith("Key ") || apiKey.trim().startsWith("Basic ")
+      ? apiKey.trim()
+      : `Key ${apiKey.trim()}`;
 
   try {
     const res = await fetch("https://onesignal.com/api/v1/notifications", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Basic ${apiKey.trim()}`,
+        Authorization: authHeader,
       },
       body: JSON.stringify(payload),
     });
