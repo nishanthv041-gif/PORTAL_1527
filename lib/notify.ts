@@ -353,15 +353,19 @@ export async function sendUniversalNotification(
     const deterministicTag =
       tag || `notif-${category.toLowerCase()}-${notificationId || Date.now().toString().slice(-6)}`;
 
-    // Query exact recipient unread count from PostgreSQL
+    // Query exact recipient unread count from PostgreSQL (combines unread notifications and unread messages)
     let unreadCount = 1;
     try {
-      unreadCount = await prisma.notification.count({
-        where: { userId, isRead: false },
-      });
+      const [unreadNotifs, unreadMsgs] = await Promise.all([
+        prisma.notification.count({ where: { userId, isRead: false } }),
+        prisma.message.count({ where: { receiverId: userId, isRead: false } }),
+      ]);
+      unreadCount = Math.max(1, unreadNotifs + unreadMsgs);
     } catch {
       unreadCount = 1;
     }
+
+    console.log(`[PUSH] Dispatching push to userId=${userId}, activeSubscriptions=${subscriptions.length}, totalUnreadCount=${unreadCount}`);
 
     // Prepare Web Push Payload with WhatsApp-Style App Icon Badge Counter
     const webPayload = JSON.stringify({
@@ -403,15 +407,44 @@ export async function sendUniversalNotification(
       const chunk = subscriptions.slice(i, i + BATCH_CHUNK_SIZE);
       await Promise.allSettled(
         chunk.map(async (sub) => {
-          const isAndroidFCM =
-            sub.platform === "ANDROID" ||
-            (sub.token && !sub.p256dh) ||
-            sub.endpoint.startsWith("fcm:");
+          // If the subscription has standard Web Push keys (p256dh and auth), it is ALWAYS a Web Push subscription!
+          // This applies to ALL browsers and PWAs on Android, iOS, Windows, macOS, and Linux!
+          const isWebPush = Boolean(sub.endpoint && sub.p256dh && sub.auth);
 
-          if (isAndroidFCM) {
+          if (isWebPush && vapidConfigured) {
+            // Web, Android PWA/Chrome, and iOS Safari PWA Push via web-push
+            try {
+              await webpush.sendNotification(
+                {
+                  endpoint: sub.endpoint,
+                  keys: {
+                    p256dh: sub.p256dh!,
+                    auth: sub.auth!,
+                  },
+                },
+                webPayload,
+                webOptions
+              );
+              webPushCount++;
+              console.log(`[PUSH] WebPush delivered to userId=${userId}, platform=${sub.platform || "WEB"}, endpoint=${sub.endpoint.slice(0, 45)}...`);
+            } catch (pushErr: any) {
+              failedCount++;
+              const statusCode = pushErr?.statusCode;
+              console.warn(`[PUSH] WebPush delivery note for device ${sub.id}: status=${statusCode}, error=${pushErr?.message}`);
+              if (statusCode === 404 || statusCode === 410) {
+                // Stale Web Push endpoint: delete from all tables
+                await Promise.allSettled([
+                  prisma.pushSubscription.deleteMany({ where: { endpoint: sub.endpoint } }),
+                  prisma.pwaSubscription.deleteMany({ where: { endpoint: sub.endpoint } }),
+                  prisma.deviceNotificationsRegistry.deleteMany({ where: { endpoint: sub.endpoint } }),
+                ]);
+                prunedCount++;
+              }
+            }
+          } else if (fb && (sub.platform === "ANDROID" || sub.endpoint.startsWith("fcm:") || (sub.token && !sub.p256dh))) {
             // Native Android Push via FCM (Capacitor)
             const fcmToken = sub.token || sub.endpoint.replace(/^fcm:/, "");
-            if (!fcmToken || !fb) return;
+            if (!fcmToken) return;
 
             try {
               const messaging = getMessaging(fb);
@@ -426,7 +459,7 @@ export async function sendUniversalNotification(
                   notificationId,
                   tag: deterministicTag,
                   category,
-                  badgeCount: "1",
+                  badgeCount: String(unreadCount),
                 },
                 android: {
                   priority: "high",
@@ -437,11 +470,12 @@ export async function sendUniversalNotification(
                     sound: "default",
                     priority: "high",
                     visibility: "public",
-                    notificationCount: 1,
+                    notificationCount: unreadCount,
                   },
                 },
               });
               androidPushCount++;
+              console.log(`[PUSH] FCM delivered to native Android token=${fcmToken.slice(0, 20)}...`);
             } catch (fcmErr: any) {
               failedCount++;
               const code = fcmErr?.code;
@@ -454,36 +488,6 @@ export async function sendUniversalNotification(
                 prunedCount++;
               } else {
                 console.warn(`[Notify] FCM send note for device ${sub.id}:`, fcmErr?.message);
-              }
-            }
-          } else if (vapidConfigured && sub.endpoint && sub.p256dh && sub.auth) {
-            // Web & iOS Safari PWA Push via web-push
-            try {
-              await webpush.sendNotification(
-                {
-                  endpoint: sub.endpoint,
-                  keys: {
-                    p256dh: sub.p256dh,
-                    auth: sub.auth,
-                  },
-                },
-                webPayload,
-                webOptions
-              );
-              webPushCount++;
-            } catch (pushErr: any) {
-              failedCount++;
-              const statusCode = pushErr?.statusCode;
-              if (statusCode === 404 || statusCode === 410) {
-                // Stale Web Push endpoint: delete from all tables
-                await Promise.allSettled([
-                  prisma.pushSubscription.deleteMany({ where: { endpoint: sub.endpoint } }),
-                  prisma.pwaSubscription.deleteMany({ where: { endpoint: sub.endpoint } }),
-                  prisma.deviceNotificationsRegistry.deleteMany({ where: { endpoint: sub.endpoint } }),
-                ]);
-                prunedCount++;
-              } else {
-                console.warn(`[Notify] WebPush send note for device ${sub.id}:`, pushErr?.message);
               }
             }
           }

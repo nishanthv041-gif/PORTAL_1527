@@ -37,6 +37,7 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const isSendingRef = useRef(false);
 
   // Clean up preview URLs on unmount
   useEffect(() => {
@@ -82,75 +83,84 @@ export default function ChatComposer({ onSendMessage, disabled = false }: ChatCo
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // Main Submit (Text or Attachment)
+  // Main Submit (Text or Attachment) with Strict Double-Submission Guard
   const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (isUploading || disabled) return;
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (isSendingRef.current || isUploading || disabled) return;
 
     const trimmed = text.trim();
     if (!trimmed && !attachment) return;
 
-    // If attachment exists, upload first
-    if (attachment) {
-      setIsUploading(true);
-      setUploadError(null);
+    isSendingRef.current = true;
+    try {
+      // If attachment exists, upload first
+      if (attachment) {
+        setIsUploading(true);
+        setUploadError(null);
 
-      try {
-        const formData = new FormData();
-        formData.append("file", attachment.file);
-        formData.append("messageType", attachment.isImage ? "IMAGE" : "FILE");
+        try {
+          const formData = new FormData();
+          formData.append("file", attachment.file);
+          formData.append("messageType", attachment.isImage ? "IMAGE" : "FILE");
 
-        const res = await fetch("/api/messages/upload", {
-          method: "POST",
-          body: formData,
-        });
+          const res = await fetch("/api/messages/upload", {
+            method: "POST",
+            body: formData,
+          });
 
-        const data = await res.json();
-        if (!res.ok || data.error) {
-          throw new Error(data.error || "Failed to upload file");
+          const data = await res.json();
+          if (!res.ok || data.error) {
+            throw new Error(data.error || "Failed to upload file");
+          }
+
+          const success = await onSendMessage({
+            content: trimmed || (attachment.isImage ? "Sent an image" : attachment.file.name),
+            messageType: attachment.isImage ? "IMAGE" : "FILE",
+            fileUrl: data.url,
+            fileName: data.fileName,
+            fileSize: data.fileSize,
+            fileType: data.fileType,
+          });
+
+          if (success) {
+            setText("");
+            removeAttachment();
+            if (textareaRef.current) textareaRef.current.style.height = "auto";
+          }
+        } catch (err: unknown) {
+          console.error("File upload error:", err);
+          setUploadError(err instanceof Error ? err.message : "Failed to upload file");
+        } finally {
+          setIsUploading(false);
         }
-
-        const success = await onSendMessage({
-          content: trimmed || (attachment.isImage ? "Sent an image" : attachment.file.name),
-          messageType: attachment.isImage ? "IMAGE" : "FILE",
-          fileUrl: data.url,
-          fileName: data.fileName,
-          fileSize: data.fileSize,
-          fileType: data.fileType,
-        });
-
-        if (success) {
-          setText("");
-          removeAttachment();
-          if (textareaRef.current) textareaRef.current.style.height = "auto";
-        }
-      } catch (err: unknown) {
-        console.error("File upload error:", err);
-        setUploadError(err instanceof Error ? err.message : "Failed to upload file");
-      } finally {
-        setIsUploading(false);
+        return;
       }
-      return;
-    }
 
-    // Text Message
-    const textToSend = trimmed;
-    setText("");
-    if (textareaRef.current) textareaRef.current.style.height = "auto";
+      // Text Message
+      const textToSend = trimmed;
+      setText("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
 
-    const success = await onSendMessage({
-      content: textToSend,
-      messageType: "TEXT",
-    });
+      const success = await onSendMessage({
+        content: textToSend,
+        messageType: "TEXT",
+      });
 
-    if (!success) {
-      setText(textToSend);
+      if (!success) {
+        setText(textToSend);
+      }
+    } finally {
+      isSendingRef.current = false;
     }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      e.stopPropagation();
       handleSubmit();
     }
   };

@@ -5,7 +5,7 @@
  * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
 
-const CACHE_NAME = "srt-pwa-v9";
+const CACHE_NAME = "srt-pwa-v10";
 const PRECACHE_ASSETS = [
   "/offline.html",
   "/manifest.webmanifest",
@@ -314,9 +314,9 @@ self.addEventListener("push", (event) => {
     // Call navigator.setAppBadge or self.registration.setAppBadge and persist to IndexedDB
     try {
       if ("setAppBadge" in self.navigator) {
-        await (self.navigator as any).setAppBadge(unreadCount);
+        await self.navigator.setAppBadge(unreadCount);
       } else if (self.registration && "setAppBadge" in self.registration) {
-        await (self.registration as any).setAppBadge(unreadCount);
+        await self.registration.setAppBadge(unreadCount);
       }
       await setStoredBadgeCount(unreadCount);
       await broadcastBadgeToClients(unreadCount);
@@ -365,9 +365,6 @@ self.addEventListener("push", (event) => {
       }
     }
   };
-
-  event.waitUntil(showPushNotification());
-});
 
   event.waitUntil(showPushNotification());
 });

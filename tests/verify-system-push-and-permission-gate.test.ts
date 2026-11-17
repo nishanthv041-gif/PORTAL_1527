@@ -66,9 +66,8 @@ function runVerification() {
 
   if (fs.existsSync(gatePath)) {
     const gateContent = fs.readFileSync(gatePath, "utf8");
-    assert("PermissionGate blocks when permission !== granted", gateContent.includes("status === \"granted\""));
-    assert("PermissionGate has Enable Notifications button", gateContent.includes("Enable Notifications & Enter Portal"));
-    assert("PermissionGate provides unblock instructions on denied", gateContent.includes("Notifications Currently Blocked"));
+    assert("PermissionGate allows instant 0ms entry to children", gateContent.includes("{children}"));
+    assert("PermissionGate has Enable Push Notifications prompt", gateContent.includes("Enable Push Notifications"));
     assert("PermissionGate syncs subscription to PostgreSQL", gateContent.includes("/api/push/subscribe"));
   }
 

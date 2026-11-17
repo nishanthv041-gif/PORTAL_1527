@@ -109,6 +109,18 @@ export default function ChatThreadClient({
           let hasNewArrival = false;
 
           newMessages.forEach((nm) => {
+            // Check if there is an in-flight optimistic message matching this confirmed message
+            const optimisticMatch = prev.find(
+              (m) =>
+                m.status === "sending" &&
+                m.senderId === nm.senderId &&
+                m.receiverId === nm.receiverId &&
+                m.content === nm.content
+            );
+            if (optimisticMatch) {
+              existingMap.delete(optimisticMatch.id);
+            }
+
             if (!existingMap.has(nm.id)) {
               existingMap.set(nm.id, nm);
               hasNewArrival = true;
@@ -274,14 +286,17 @@ export default function ChatThreadClient({
         throw new Error(data.error || "Failed to send message");
       }
 
-      // 3. Replace temporary message with confirmed database record
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === tempId
-            ? { ...data.message, status: "sent" }
-            : msg
-        )
-      );
+      // 3. Replace temporary message with confirmed database record (strictly avoid duplicate IDs)
+      setMessages((prev) => {
+        const alreadyHasConfirmed = prev.some((m) => m.id === data.message.id);
+        if (alreadyHasConfirmed) {
+          // Polling sync already inserted the real record; simply remove the temporary placeholder
+          return prev.filter((m) => m.id !== tempId);
+        }
+        return prev.map((msg) =>
+          msg.id === tempId ? { ...data.message, status: "sent" } : msg
+        );
+      });
       return true;
     } catch (err: unknown) {
       console.error("Message send failure:", err);

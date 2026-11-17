@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Bell, AlertTriangle, CheckCircle2, ArrowRight } from "lucide-react";
+import { Bell, X, CheckCircle2 } from "lucide-react";
 
 function urlBase64ToUint8Array(base64String: string): any {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -25,25 +25,8 @@ export default function NotificationPermissionGate({
   userRole?: string;
   children: React.ReactNode;
 }) {
-  // 0ms instant check: If permission already granted or non-supporting environment (e.g. iOS Safari outside PWA), unlock immediately!
-  const [status, setStatus] = useState<"granted" | "prompt" | "denied">(() => {
-    try {
-      if (typeof window !== "undefined" && typeof Notification !== "undefined" && "Notification" in window) {
-        if (Notification.permission === "granted") return "granted";
-        if (Notification.permission === "denied") {
-          const dismissed = sessionStorage?.getItem("srt_notif_gate_dismissed");
-          return dismissed === "true" ? "granted" : "denied";
-        }
-        const dismissed = sessionStorage?.getItem("srt_notif_gate_dismissed");
-        return dismissed === "true" ? "granted" : "prompt";
-      }
-    } catch {
-      return "granted";
-    }
-    return "granted";
-  });
-
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Always render children immediately - 0ms portal loading without any blocking overlays
+  const [showBanner, setShowBanner] = useState(false);
   const isSyncingRef = useRef(false);
 
   // Background Push Subscription Sync (Completely non-blocking fire-and-forget)
@@ -79,7 +62,7 @@ export default function NotificationPermissionGate({
         applicationServerKey = "BBIHzbc-DVhlpPB_plCE0gUMpCSsHiqA1Y5FVyP-ax6p0HWnFZILFISth4FYfyAp0gywswCBxz4GfDnXm_c-Agk";
       }
 
-      // 2. Subscribe with PushManager
+      // 2. Subscribe or get existing PushManager subscription
       let sub = await reg.pushManager.getSubscription().catch(() => null);
       if (!sub) {
         sub = await reg.pushManager.subscribe({
@@ -119,345 +102,169 @@ export default function NotificationPermissionGate({
   useEffect(() => {
     try {
       if (typeof window === "undefined" || typeof Notification === "undefined" || !("Notification" in window)) {
-        setStatus("granted");
         return;
       }
 
       const currentPerm = Notification.permission;
       if (currentPerm === "granted") {
-        setStatus("granted");
-        // Fire-and-forget in background without any blocking spinner
+        setShowBanner(false);
+        // Automatically sync subscription in background without blocking UI
         syncPushSubscriptionInBackground();
-      } else if (currentPerm === "denied") {
+      } else if (currentPerm === "default") {
         const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
-        if (dismissed === "true") {
-          setStatus("granted");
-        } else {
-          setStatus("denied");
-        }
-      } else {
-        const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
-        if (dismissed === "true") {
-          setStatus("granted");
-        } else {
-          setStatus("prompt");
+        if (dismissed !== "true") {
+          setShowBanner(true);
         }
       }
     } catch {
-      setStatus("granted");
+      // Non-blocking
     }
   }, [syncPushSubscriptionInBackground]);
 
-  // Instant 1-second Enable Notifications
+  // Instant 1-click Enable Notifications
   const handleRequestPermission = async () => {
-    setErrorMessage(null);
     try {
       if (typeof window === "undefined" || typeof Notification === "undefined" || !("Notification" in window)) {
-        setStatus("granted");
+        setShowBanner(false);
         return;
       }
 
       const result = await Notification.requestPermission();
       if (result === "granted") {
-        // Unlock IMMEDIATELY in 0ms!
-        setStatus("granted");
-        // Sync in background without blocking
+        setShowBanner(false);
         syncPushSubscriptionInBackground();
-      } else if (result === "denied") {
-        setStatus("denied");
       } else {
-        // User closed or dismissed browser dialog - allow entry
-        handleContinueAnyway();
+        handleDismiss();
       }
-    } catch (err: any) {
-      handleContinueAnyway();
+    } catch {
+      handleDismiss();
     }
   };
 
-  const handleContinueAnyway = () => {
+  const handleDismiss = () => {
     try {
       if (typeof window !== "undefined") {
         sessionStorage.setItem("srt_notif_gate_dismissed", "true");
       }
     } catch {}
-    setStatus("granted");
+    setShowBanner(false);
   };
-
-  const handleCheckAgain = () => {
-    try {
-      if (typeof window === "undefined" || typeof Notification === "undefined" || !("Notification" in window)) {
-        setStatus("granted");
-        return;
-      }
-
-      if (Notification.permission === "granted") {
-        setStatus("granted");
-        syncPushSubscriptionInBackground();
-      } else if (Notification.permission === "denied") {
-        window.location.reload();
-      } else {
-        setStatus("prompt");
-      }
-    } catch {
-      setStatus("granted");
-    }
-  };
-
-  // If granted or dismissed, immediately render the full school portal dashboard
-  if (status === "granted") {
-    return <>{children}</>;
-  }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 999999,
-        backgroundColor: "rgba(15, 23, 42, 0.85)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "1.25rem",
-        boxSizing: "border-box",
-        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "460px",
-          background: "#1e293b",
-          border: "1px solid rgba(59, 130, 246, 0.35)",
-          borderRadius: "24px",
-          padding: "2rem 1.5rem",
-          boxShadow: "0 25px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(37, 99, 235, 0.2)",
-          textAlign: "center",
-          color: "#f8fafc",
-          boxSizing: "border-box",
-        }}
-      >
-        {/* School Crest / Portal Logo */}
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: "1rem" }}>
-          <div
-            style={{
-              width: 72,
-              height: 72,
-              borderRadius: "50%",
-              background: "rgba(37, 99, 235, 0.15)",
-              border: "3px solid rgba(245, 158, 11, 0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 0 20px rgba(245, 158, 11, 0.25)",
-            }}
-          >
-            <Bell size={36} color="#f59e0b" />
-          </div>
-        </div>
+    <>
+      {/* 0ms Instant Children Rendering: Dashboard and all content is always accessible immediately */}
+      {children}
 
-        {/* Portal Name & Role Badge */}
-        <div style={{ marginBottom: "0.75rem" }}>
-          <span
-            style={{
-              display: "inline-block",
-              padding: "0.25rem 0.75rem",
-              borderRadius: "999px",
-              fontSize: "0.75rem",
-              fontWeight: 800,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              background: "rgba(37, 99, 235, 0.2)",
-              color: "#60a5fa",
-              border: "1px solid rgba(37, 99, 235, 0.4)",
-            }}
-          >
-            SRT UNIVERSAL SCHOOL PORTAL
-          </span>
-        </div>
-
-        {status === "denied" ? (
-          <div>
+      {/* Sleek, Non-Blocking Floating Notification Banner (Never blocks user interactions) */}
+      {showBanner && (
+        <aside
+          role="region"
+          aria-label="Notification Permission"
+          style={{
+            position: "fixed",
+            bottom: "1.25rem",
+            right: "1.25rem",
+            zIndex: 99999,
+            maxWidth: "380px",
+            background: "rgba(15, 23, 42, 0.96)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            border: "1px solid rgba(59, 130, 246, 0.4)",
+            borderRadius: "16px",
+            padding: "1rem 1.15rem",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(37, 99, 235, 0.2)",
+            color: "#f8fafc",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.75rem",
+            fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            animation: "fadeInUp 0.3s ease-out",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
             <div
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.4rem",
-                color: "#ef4444",
-                fontWeight: 700,
-                fontSize: "0.85rem",
-                marginBottom: "0.5rem",
-              }}
-            >
-              <AlertTriangle size={18} /> Notifications Currently Blocked
-            </div>
-            <h2 style={{ fontSize: "1.2rem", fontWeight: 800, margin: "0 0 0.75rem 0" }}>
-              Action Required: Unblock in Browser
-            </h2>
-            <div
-              style={{
-                textAlign: "left",
-                background: "rgba(15, 23, 42, 0.6)",
-                border: "1px solid rgba(239, 68, 68, 0.25)",
-                borderRadius: "12px",
-                padding: "1rem",
-                fontSize: "0.82rem",
-                color: "#cbd5e1",
-                lineHeight: 1.55,
-                marginBottom: "1.25rem",
-              }}
-            >
-              <p style={{ margin: "0 0 0.5rem 0", fontWeight: 700, color: "#f87171" }}>
-                How to enable notifications:
-              </p>
-              <ol style={{ paddingLeft: "1.25rem", margin: 0 }}>
-                <li style={{ marginBottom: "0.4rem" }}>
-                  Tap or click the <strong>🔒 Padlock / Tune</strong> icon in your browser URL bar.
-                </li>
-                <li style={{ marginBottom: "0.4rem" }}>
-                  Find <strong>Notifications</strong> and switch it to <strong>Allow</strong>.
-                </li>
-                <li>
-                  Click the <strong>Reload & Continue</strong> button below.
-                </li>
-              </ol>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              <button
-                type="button"
-                onClick={handleCheckAgain}
-                style={{
-                  width: "100%",
-                  padding: "0.85rem 1.25rem",
-                  borderRadius: "12px",
-                  background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
-                  color: "#ffffff",
-                  border: "none",
-                  fontWeight: 700,
-                  fontSize: "0.95rem",
-                  cursor: "pointer",
-                  boxShadow: "0 4px 14px rgba(37, 99, 235, 0.4)",
-                }}
-              >
-                🔄 I Have Allowed It (Reload & Enter)
-              </button>
-
-              <button
-                type="button"
-                onClick={handleContinueAnyway}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#94a3b8",
-                  fontSize: "0.85rem",
-                  cursor: "pointer",
-                  padding: "0.4rem",
-                  textDecoration: "underline",
-                }}
-              >
-                Continue to Portal Without Notifications &rarr;
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <h2 style={{ fontSize: "1.3rem", fontWeight: 800, margin: "0 0 0.5rem 0", color: "#ffffff" }}>
-              Enable System Notifications
-            </h2>
-            <p style={{ color: "#94a3b8", fontSize: "0.88rem", lineHeight: 1.5, margin: "0 0 1.25rem 0" }}>
-              Hello <strong>{userName}</strong>. SRT Universal School sends real-time push alerts so you never miss 
-              urgent messages, attendance updates, or bus transit notifications on your device.
-            </p>
-
-            <div
-              style={{
+                width: 36,
+                height: 36,
+                borderRadius: "10px",
+                background: "rgba(245, 158, 11, 0.15)",
+                border: "1px solid rgba(245, 158, 11, 0.4)",
                 display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-                textAlign: "left",
-                background: "rgba(15, 23, 42, 0.5)",
-                border: "1px solid rgba(59, 130, 246, 0.2)",
-                borderRadius: "12px",
-                padding: "0.85rem 1rem",
-                marginBottom: "1.5rem",
-                fontSize: "0.8rem",
-                color: "#cbd5e1",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#f59e0b",
+                flexShrink: 0,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <CheckCircle2 size={16} color="#10b981" />
-                <span>Instant lock-screen message alerts from teachers & admin</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <CheckCircle2 size={16} color="#10b981" />
-                <span>WhatsApp-style app icon unread badge counter</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <CheckCircle2 size={16} color="#10b981" />
-                <span>Urgent bus transit & student attendance notifications</span>
-              </div>
+              <Bell size={20} />
             </div>
 
-            {errorMessage && (
-              <p style={{ color: "#ef4444", fontSize: "0.8rem", marginBottom: "1rem" }}>
-                {errorMessage}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "#ffffff" }}>
+                  Enable Push Notifications
+                </span>
+                <button
+                  type="button"
+                  onClick={handleDismiss}
+                  aria-label="Dismiss notification banner"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#94a3b8",
+                    cursor: "pointer",
+                    padding: "2px",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.78rem", color: "#cbd5e1", lineHeight: 1.4 }}>
+                Receive instant student alerts, bus transit updates, and chat messages on your lock screen.
               </p>
-            )}
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              <button
-                type="button"
-                onClick={handleRequestPermission}
-                style={{
-                  width: "100%",
-                  padding: "0.95rem 1.25rem",
-                  borderRadius: "14px",
-                  background: "linear-gradient(135deg, #f59e0b, #d97706)",
-                  color: "#ffffff",
-                  border: "none",
-                  fontWeight: 800,
-                  fontSize: "1rem",
-                  cursor: "pointer",
-                  boxShadow: "0 4px 18px rgba(245, 158, 11, 0.45)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "0.5rem",
-                }}
-              >
-                <Bell size={20} />
-                <span>Enable Notifications & Enter Portal</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleContinueAnyway}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#94a3b8",
-                  fontSize: "0.85rem",
-                  cursor: "pointer",
-                  padding: "0.4rem",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "0.3rem",
-                  transition: "color 0.15s ease",
-                }}
-                onMouseOver={(e) => (e.currentTarget.style.color = "#cbd5e1")}
-                onMouseOut={(e) => (e.currentTarget.style.color = "#94a3b8")}
-              >
-                <span>Continue to Dashboard</span>
-                <ArrowRight size={14} />
-              </button>
             </div>
           </div>
-        )}
-      </div>
-    </div>
+
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
+            <button
+              type="button"
+              onClick={handleRequestPermission}
+              style={{
+                flex: 1,
+                padding: "0.55rem 0.85rem",
+                borderRadius: "8px",
+                background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+                color: "#ffffff",
+                border: "none",
+                fontSize: "0.8rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                boxShadow: "0 2px 8px rgba(37, 99, 235, 0.35)",
+              }}
+            >
+              Enable Now
+            </button>
+            <button
+              type="button"
+              onClick={handleDismiss}
+              style={{
+                padding: "0.55rem 0.85rem",
+                borderRadius: "8px",
+                background: "rgba(255, 255, 255, 0.08)",
+                color: "#cbd5e1",
+                border: "1px solid rgba(255, 255, 255, 0.15)",
+                fontSize: "0.8rem",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Later
+            </button>
+          </div>
+        </aside>
+      )}
+    </>
   );
 }
