@@ -49,6 +49,7 @@
     "prisma": "^5.22.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-onesignal": "^3.5.6",
     "recharts": "^3.10.1",
     "sharp": "^0.35.5",
     "tesseract.js": "^7.0.0",

@@ -2,6 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Bell, X, CheckCircle2 } from "lucide-react";
+import {
+  initOneSignal,
+  loginToOneSignal,
+  requestOneSignalPermission,
+  promptOneSignalSlidedown,
+  hasOneSignalPermission,
+} from "@/frontend/lib/onesignal";
 
 function urlBase64ToUint8Array(base64String: string): any {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -35,11 +42,16 @@ export default function NotificationPermissionGate({
     isSyncingRef.current = true;
 
     try {
+      // 1. OneSignal User Identification (links device to PostgreSQL user.id)
+      if (userId) {
+        await loginToOneSignal(userId);
+      }
+
+      // 2. Auxiliary Native Web Push fallback sync
       if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
         return;
       }
 
-      // Race service worker ready with a 2.5-second timeout so it never hangs
       const readyPromise = navigator.serviceWorker.ready;
       const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
       const reg = await Promise.race([readyPromise, timeoutPromise]);
@@ -48,7 +60,6 @@ export default function NotificationPermissionGate({
         return;
       }
 
-      // 1. Fetch or use VAPID Public Key
       let applicationServerKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!applicationServerKey) {
         const keyRes = await fetch("/api/notifications/push/public-key").catch(() => null);
@@ -62,7 +73,6 @@ export default function NotificationPermissionGate({
         applicationServerKey = "BBIHzbc-DVhlpPB_plCE0gUMpCSsHiqA1Y5FVyP-ax6p0HWnFZILFISth4FYfyAp0gywswCBxz4GfDnXm_c-Agk";
       }
 
-      // 2. Subscribe or get existing PushManager subscription
       let sub = await reg.pushManager.getSubscription().catch(() => null);
       if (!sub) {
         sub = await reg.pushManager.subscribe({
@@ -71,7 +81,6 @@ export default function NotificationPermissionGate({
         }).catch(() => null);
       }
 
-      // 3. POST subscription to PostgreSQL (/api/push/subscribe)
       if (sub) {
         const subJson = sub.toJSON();
         if (subJson.endpoint && subJson.keys?.p256dh && subJson.keys?.auth) {
@@ -98,40 +107,51 @@ export default function NotificationPermissionGate({
     }
   }, [userId]);
 
-  // Initial Permission Check on mount
+  // Initial Permission Check and OneSignal linking on mount
   useEffect(() => {
     try {
-      if (typeof window === "undefined" || typeof Notification === "undefined" || !("Notification" in window)) {
+      if (typeof window === "undefined") return;
+
+      // Initialize OneSignal Web SDK v16
+      initOneSignal().then(() => {
+        if (userId) {
+          loginToOneSignal(userId);
+        }
+      });
+
+      if (typeof Notification === "undefined" || !("Notification" in window)) {
         return;
       }
 
-      const currentPerm = Notification.permission;
-      if (currentPerm === "granted") {
+      const isGranted = Notification.permission === "granted" || hasOneSignalPermission();
+      if (isGranted) {
         setShowBanner(false);
-        // Automatically sync subscription in background without blocking UI
         syncPushSubscriptionInBackground();
-      } else if (currentPerm === "default") {
+      } else if (Notification.permission === "default") {
         const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
         if (dismissed !== "true") {
           setShowBanner(true);
+          // Also optionally trigger OneSignal slidedown prompt after slight delay
+          setTimeout(() => {
+            promptOneSignalSlidedown().catch(() => {});
+          }, 1500);
         }
       }
     } catch {
       // Non-blocking
     }
-  }, [syncPushSubscriptionInBackground]);
+  }, [userId, syncPushSubscriptionInBackground]);
 
-  // Instant 1-click Enable Notifications
+  // 1-click Enable Notifications via OneSignal Web Push
   const handleRequestPermission = async () => {
     try {
-      if (typeof window === "undefined" || typeof Notification === "undefined" || !("Notification" in window)) {
+      // Trigger OneSignal Web Push permission request
+      const granted = await requestOneSignalPermission();
+      if (granted || Notification.permission === "granted") {
         setShowBanner(false);
-        return;
-      }
-
-      const result = await Notification.requestPermission();
-      if (result === "granted") {
-        setShowBanner(false);
+        if (userId) {
+          await loginToOneSignal(userId);
+        }
         syncPushSubscriptionInBackground();
       } else {
         handleDismiss();
@@ -155,23 +175,23 @@ export default function NotificationPermissionGate({
       {/* 0ms Instant Children Rendering: Dashboard and all content is always accessible immediately */}
       {children}
 
-      {/* Sleek, Non-Blocking Floating Notification Banner (Never blocks user interactions) */}
+      {/* Sleek, Non-Blocking Floating Notification Banner for OneSignal Push */}
       {showBanner && (
         <aside
           role="region"
-          aria-label="Notification Permission"
+          aria-label="OneSignal Notification Permission"
           style={{
             position: "fixed",
             bottom: "1.25rem",
             right: "1.25rem",
             zIndex: 99999,
-            maxWidth: "380px",
+            maxWidth: "390px",
             background: "rgba(15, 23, 42, 0.96)",
             backdropFilter: "blur(12px)",
             WebkitBackdropFilter: "blur(12px)",
             border: "1px solid rgba(59, 130, 246, 0.4)",
             borderRadius: "16px",
-            padding: "1rem 1.15rem",
+            padding: "1.1rem 1.25rem",
             boxShadow: "0 10px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(37, 99, 235, 0.2)",
             color: "#f8fafc",
             display: "flex",
@@ -184,8 +204,8 @@ export default function NotificationPermissionGate({
           <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
             <div
               style={{
-                width: 36,
-                height: 36,
+                width: 38,
+                height: 38,
                 borderRadius: "10px",
                 background: "rgba(245, 158, 11, 0.15)",
                 border: "1px solid rgba(245, 158, 11, 0.4)",
@@ -222,7 +242,7 @@ export default function NotificationPermissionGate({
                 </button>
               </div>
               <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.78rem", color: "#cbd5e1", lineHeight: 1.4 }}>
-                Receive instant student alerts, bus transit updates, and chat messages on your lock screen.
+                Get instant lock-screen alerts for new messages, attendance updates, bus tracking, and exam results.
               </p>
             </div>
           </div>
@@ -233,29 +253,29 @@ export default function NotificationPermissionGate({
               onClick={handleRequestPermission}
               style={{
                 flex: 1,
-                padding: "0.55rem 0.85rem",
+                padding: "0.6rem 0.95rem",
                 borderRadius: "8px",
                 background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
                 color: "#ffffff",
                 border: "none",
-                fontSize: "0.8rem",
+                fontSize: "0.82rem",
                 fontWeight: 700,
                 cursor: "pointer",
                 boxShadow: "0 2px 8px rgba(37, 99, 235, 0.35)",
               }}
             >
-              Enable Now
+              Enable Notifications
             </button>
             <button
               type="button"
               onClick={handleDismiss}
               style={{
-                padding: "0.55rem 0.85rem",
+                padding: "0.6rem 0.95rem",
                 borderRadius: "8px",
                 background: "rgba(255, 255, 255, 0.08)",
                 color: "#cbd5e1",
                 border: "1px solid rgba(255, 255, 255, 0.15)",
-                fontSize: "0.8rem",
+                fontSize: "0.82rem",
                 fontWeight: 600,
                 cursor: "pointer",
               }}

@@ -3,10 +3,11 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import webpush from "web-push";
+import { sendOneSignalPush, ONESIGNAL_APP_ID } from "@/backend/services/push/oneSignalService";
 
 export const dynamic = "force-dynamic";
 
-// Ensure VAPID keys are initialized
+// Ensure VAPID keys are initialized as auxiliary fallback
 const VAPID_PUBLIC_KEY =
   process.env.VAPID_PUBLIC_KEY ||
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
@@ -36,11 +37,36 @@ export async function POST(req: Request) {
     const userName = session.user.name || "User";
 
     // 1. Calculate recipient's exact unread notification count from PostgreSQL
-    const unreadCount = await prisma.notification.count({
-      where: { userId, isRead: false },
+    let unreadCount = 1;
+    try {
+      const [unreadNotifs, unreadMsgs] = await Promise.all([
+        prisma.notification.count({ where: { userId, isRead: false } }),
+        prisma.message.count({ where: { receiverId: userId, isRead: false } }),
+      ]);
+      unreadCount = Math.max(1, unreadNotifs + unreadMsgs);
+    } catch {
+      unreadCount = 1;
+    }
+
+    const bodyPayload = await req.json().catch(() => ({}));
+    const title = bodyPayload.title || "🔔 OneSignal Push Test";
+    const body =
+      bodyPayload.body ||
+      bodyPayload.message ||
+      "OneSignal Web Push & WhatsApp unread badge are operational on SRT Portal!";
+    const url = bodyPayload.url || "/dashboard";
+
+    // 2. Primary Dispatch: OneSignal REST API (targeted via external_id = userId)
+    const oneSignalResult = await sendOneSignalPush({
+      userId,
+      title,
+      body,
+      url,
+      unreadCount,
+      category: "TEST",
     });
 
-    // 2. Query all subscriptions for this user across push tables
+    // 3. Auxiliary Dispatch: Direct Web Push to existing subscriptions in PostgreSQL (fallback)
     const [pushSubs, pwaSubs, registrySubs] = await Promise.all([
       prisma.pushSubscription.findMany({
         where: { userId, isActive: true },
@@ -56,7 +82,6 @@ export async function POST(req: Request) {
       }),
     ]);
 
-    // Deduplicate unique endpoints
     const targetMap = new Map<string, { endpoint: string; p256dh: string; auth: string; source: string; platform: string }>();
 
     for (const sub of pushSubs) {
@@ -96,115 +121,104 @@ export async function POST(req: Request) {
     }
 
     const uniqueTargets = Array.from(targetMap.values());
-
-    if (uniqueTargets.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: "No push subscription registered for this user in PostgreSQL. Please enable notifications on this device first.",
-        userId,
-        userName,
-        unreadCount,
-        subscriptionsFound: 0,
-        delivered: 0,
-        failed: 0,
-      }, { status: 404 });
-    }
-
-    // 3. Prepare payload with unreadCount for app icon badge
-    const bodyPayload = await req.json().catch(() => ({}));
-    const title = bodyPayload.title || "🔔 SRT Portal Test";
-    const body = bodyPayload.body || bodyPayload.message || "Lock-Screen Push & WhatsApp Unread Badge is 100% operational!";
-    const url = bodyPayload.url || "/dashboard";
-
-    const payload = JSON.stringify({
-      title,
-      body,
-      url,
-      unreadCount,
-      badgeCount: unreadCount,
-      icon: "/icon-192x192.png",
-      badge: "/badge-72x72.png",
-      vibrate: [200, 100, 200],
-      requireInteraction: true,
-      renotify: true,
-      tag: `test-${Date.now()}`,
-      data: {
-        url,
-        unreadCount,
-        timestamp: Date.now(),
-      },
-    });
-
-    const webOptions = {
-      TTL: 60,
-      urgency: "high" as const,
-      headers: {
-        Urgency: "high",
-      },
-    };
-
-    let delivered = 0;
-    let failed = 0;
+    let webPushDelivered = 0;
+    let webPushFailed = 0;
     const deviceResults: Array<{ endpoint: string; status: "DELIVERED" | "FAILED"; statusCode?: number; error?: string }> = [];
 
-    // 4. Send via webpush to all targets and collect errors
-    await Promise.allSettled(
-      uniqueTargets.map(async (target) => {
-        try {
-          const res = await webpush.sendNotification(
-            {
-              endpoint: target.endpoint,
-              keys: {
-                p256dh: target.p256dh,
-                auth: target.auth,
+    if (uniqueTargets.length > 0) {
+      const payload = JSON.stringify({
+        title,
+        body,
+        url,
+        unreadCount,
+        badgeCount: unreadCount,
+        icon: "/icon-192x192.png",
+        badge: "/badge-72x72.png",
+        vibrate: [200, 100, 200],
+        requireInteraction: true,
+        renotify: true,
+        tag: `test-${Date.now()}`,
+        data: {
+          url,
+          unreadCount,
+          timestamp: Date.now(),
+        },
+      });
+
+      const webOptions = {
+        TTL: 60,
+        urgency: "high" as const,
+        headers: {
+          Urgency: "high",
+        },
+      };
+
+      await Promise.allSettled(
+        uniqueTargets.map(async (target) => {
+          try {
+            const res = await webpush.sendNotification(
+              {
+                endpoint: target.endpoint,
+                keys: {
+                  p256dh: target.p256dh,
+                  auth: target.auth,
+                },
               },
-            },
-            payload,
-            webOptions
-          );
+              payload,
+              webOptions
+            );
 
-          delivered++;
-          deviceResults.push({
-            endpoint: target.endpoint.slice(0, 45) + "...",
-            status: "DELIVERED",
-            statusCode: res.statusCode || 201,
-          });
-        } catch (pushErr: any) {
-          failed++;
-          const statusCode = pushErr?.statusCode || 500;
-          const errorMsg = pushErr?.message || pushErr?.body || "Failed to deliver push";
+            webPushDelivered++;
+            deviceResults.push({
+              endpoint: target.endpoint.slice(0, 45) + "...",
+              status: "DELIVERED",
+              statusCode: res.statusCode || 201,
+            });
+          } catch (pushErr: any) {
+            webPushFailed++;
+            const statusCode = pushErr?.statusCode || 500;
+            const errorMsg = pushErr?.message || pushErr?.body || "Failed to deliver push";
 
-          deviceResults.push({
-            endpoint: target.endpoint.slice(0, 45) + "...",
-            status: "FAILED",
-            statusCode,
-            error: errorMsg,
-          });
+            deviceResults.push({
+              endpoint: target.endpoint.slice(0, 45) + "...",
+              status: "FAILED",
+              statusCode,
+              error: errorMsg,
+            });
 
-          // Auto-delete dead subscriptions on 404/410
-          if (statusCode === 404 || statusCode === 410) {
-            await Promise.allSettled([
-              prisma.pushSubscription.deleteMany({ where: { endpoint: target.endpoint } }),
-              prisma.pwaSubscription.deleteMany({ where: { endpoint: target.endpoint } }),
-              prisma.deviceNotificationsRegistry.deleteMany({ where: { endpoint: target.endpoint } }),
-            ]);
+            if (statusCode === 404 || statusCode === 410) {
+              await Promise.allSettled([
+                prisma.pushSubscription.deleteMany({ where: { endpoint: target.endpoint } }),
+                prisma.pwaSubscription.deleteMany({ where: { endpoint: target.endpoint } }),
+                prisma.deviceNotificationsRegistry.deleteMany({ where: { endpoint: target.endpoint } }),
+              ]);
+            }
           }
-        }
-      })
-    );
+        })
+      );
+    }
+
+    const overallSuccess = oneSignalResult.success || webPushDelivered > 0;
 
     return NextResponse.json({
-      success: delivered > 0,
+      success: overallSuccess,
       userId,
       userName,
       unreadCount,
-      subscriptionsFound: uniqueTargets.length,
-      delivered,
-      failed,
-      message: delivered > 0
-        ? `Delivered push notification to ${delivered} device(s) successfully.`
-        : `Push notification failed across all ${uniqueTargets.length} devices.`,
-      deviceResults,
+      oneSignal: {
+        appId: ONESIGNAL_APP_ID,
+        externalId: userId,
+        result: oneSignalResult,
+      },
+      webPush: {
+        subscriptionsFound: uniqueTargets.length,
+        delivered: webPushDelivered,
+        failed: webPushFailed,
+        deviceResults,
+      },
+      message: overallSuccess
+        ? "Push notification dispatched successfully."
+        : "Push dispatch failed. Ensure ONESIGNAL_REST_API_KEY is configured in .env and the device has notifications enabled.",
     });
   } catch (error: unknown) {
     const errMessage = error instanceof Error ? error.message : "Internal server error";

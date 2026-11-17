@@ -3,6 +3,9 @@ import webpush from "web-push";
 import { initializeApp, getApps, cert, type App } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { sendOneSignalPush, OneSignalPushResult } from "@/backend/services/push/oneSignalService";
+
+export { sendOneSignalPush } from "@/backend/services/push/oneSignalService";
 
 // ============================================================================
 // 1. VAPID Configuration for Web & iOS Safari PWA Push
@@ -85,6 +88,7 @@ export interface UniversalNotificationResult {
   success: boolean;
   notificationId: string;
   inAppCreated: boolean;
+  oneSignalCount: number;
   webPushCount: number;
   androidPushCount: number;
   failedCount: number;
@@ -120,6 +124,7 @@ export async function sendUniversalNotification(
 
   let notificationId = "";
   let inAppCreated = false;
+  let oneSignalCount = 0;
   let webPushCount = 0;
   let androidPushCount = 0;
   let failedCount = 0;
@@ -167,6 +172,37 @@ export async function sendUniversalNotification(
     }
   } catch (err) {
     console.error("[Notify] Error creating in-app notification:", err);
+  }
+
+  // Calculate exact total unread count for recipient (notifications + chat messages)
+  let unreadCount = 1;
+  try {
+    const [unreadNotifs, unreadMsgs] = await Promise.all([
+      prisma.notification.count({ where: { userId, isRead: false } }),
+      prisma.message.count({ where: { receiverId: userId, isRead: false } }),
+    ]);
+    unreadCount = Math.max(1, unreadNotifs + unreadMsgs);
+  } catch {
+    unreadCount = 1;
+  }
+
+  // 2. Primary Web & Mobile Push: OneSignal REST API (targeted via external_id = userId)
+  try {
+    const osResult = await sendOneSignalPush({
+      userId,
+      title,
+      body,
+      url,
+      unreadCount,
+      category,
+      additionalData: { notificationId },
+    });
+    if (osResult.success) {
+      oneSignalCount = osResult.recipients || 1;
+      console.log(`[Notify] OneSignal push delivered for user ${userId} (${oneSignalCount} device/channel)`);
+    }
+  } catch (osErr) {
+    console.warn("[Notify] OneSignal delivery warning:", osErr);
   }
 
   // 2. Query Multi-Device Subscriptions (PC, iPhone Safari PWA, Android Capacitor)
@@ -497,9 +533,10 @@ export async function sendUniversalNotification(
   }
 
   return {
-    success: inAppCreated || webPushCount > 0 || androidPushCount > 0,
+    success: inAppCreated || oneSignalCount > 0 || webPushCount > 0 || androidPushCount > 0,
     notificationId,
     inAppCreated,
+    oneSignalCount,
     webPushCount,
     androidPushCount,
     failedCount,

@@ -40,13 +40,14 @@ export default function Topbar({
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        const osDelivered = data.oneSignal?.result?.success ? `✅ Delivered (ID: ${data.oneSignal.result.notificationId || "OK"})` : "⚠️ Pending (Set ONESIGNAL_REST_API_KEY in .env)";
         alert(
-          `✅ [Push Sent Successfully!]\n\n` +
-          `• Eligible Devices: ${data.subscriptionsFound || 1}\n` +
-          `• Delivered: ${data.delivered || 1}\n` +
-          `• Recipient: ${data.userName || "You"}\n` +
-          `• Unread Count: ${data.unreadCount ?? 0}\n\n` +
-          `Check your device lock screen and notification tray now!`
+          `✅ [Push Notification Dispatched!]\n\n` +
+          `• OneSignal Delivery: ${osDelivered}\n` +
+          `• Fallback WebPush: ${data.webPush?.delivered ?? 0} delivered\n` +
+          `• Target Recipient: ${data.userName || "You"} (${data.userId})\n` +
+          `• Unread Counter: ${data.unreadCount ?? 0}\n\n` +
+          `Check your lock screen and notification tray now!`
         );
       } else {
         alert(
