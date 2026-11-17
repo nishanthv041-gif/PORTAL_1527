@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import Image from "next/image";
-import { Bell, ShieldCheck, AlertTriangle, RefreshCw, Smartphone, CheckCircle2 } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Bell, AlertTriangle, CheckCircle2, ArrowRight } from "lucide-react";
 
 function urlBase64ToUint8Array(base64String: string): any {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -26,23 +25,43 @@ export default function NotificationPermissionGate({
   userRole?: string;
   children: React.ReactNode;
 }) {
-  const [status, setStatus] = useState<"checking" | "granted" | "prompt" | "subscribing" | "denied">("checking");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // 0ms instant check: If permission already granted or non-supporting environment, unlock immediately!
+  const [status, setStatus] = useState<"granted" | "prompt" | "denied">(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission === "granted") return "granted";
+      if (Notification.permission === "denied") {
+        const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
+        return dismissed === "true" ? "granted" : "denied";
+      }
+      const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
+      return dismissed === "true" ? "granted" : "prompt";
+    }
+    return "granted";
+  });
 
-  // Sync Push Subscription with backend PostgreSQL
-  const syncPushSubscription = useCallback(async (permissionGranted: boolean) => {
-    if (!permissionGranted) return;
-    setStatus("subscribing");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isSyncingRef = useRef(false);
+
+  // Background Push Subscription Sync (Completely non-blocking fire-and-forget)
+  const syncPushSubscriptionInBackground = useCallback(async () => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
 
     try {
       if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-        setStatus("granted");
         return;
       }
 
-      const reg = await navigator.serviceWorker.ready;
+      // Race service worker ready with a 2.5-second timeout so it never hangs
+      const readyPromise = navigator.serviceWorker.ready;
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+      const reg = await Promise.race([readyPromise, timeoutPromise]);
 
-      // 1. Fetch VAPID Public Key
+      if (!reg || !reg.pushManager) {
+        return;
+      }
+
+      // 1. Fetch or use VAPID Public Key
       let applicationServerKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!applicationServerKey) {
         const keyRes = await fetch("/api/notifications/push/public-key").catch(() => null);
@@ -57,46 +76,45 @@ export default function NotificationPermissionGate({
       }
 
       // 2. Subscribe with PushManager
-      let sub = await reg.pushManager.getSubscription();
+      let sub = await reg.pushManager.getSubscription().catch(() => null);
       if (!sub) {
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(applicationServerKey),
-        });
+        }).catch(() => null);
       }
 
-      // 3. POST subscription to PostgreSQL (/api/push/subscribe & /api/push/register)
-      const subJson = sub.toJSON();
-      if (subJson.endpoint && subJson.keys?.p256dh && subJson.keys?.auth) {
-        await fetch("/api/push/subscribe", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId,
-            endpoint: subJson.endpoint,
-            keys: {
-              p256dh: subJson.keys.p256dh,
-              auth: subJson.keys.auth,
-            },
-            platform: /android/i.test(navigator.userAgent) ? "ANDROID" : /iphone|ipad/i.test(navigator.userAgent) ? "IOS" : "WEB",
-            userAgent: navigator.userAgent,
-          }),
-        }).catch((err) => console.warn("[PermissionGate] Push subscribe sync warning:", err));
+      // 3. POST subscription to PostgreSQL (/api/push/subscribe)
+      if (sub) {
+        const subJson = sub.toJSON();
+        if (subJson.endpoint && subJson.keys?.p256dh && subJson.keys?.auth) {
+          await fetch("/api/push/subscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId,
+              endpoint: subJson.endpoint,
+              keys: {
+                p256dh: subJson.keys.p256dh,
+                auth: subJson.keys.auth,
+              },
+              platform: /android/i.test(navigator.userAgent) ? "ANDROID" : /iphone|ipad/i.test(navigator.userAgent) ? "IOS" : "WEB",
+              userAgent: navigator.userAgent,
+            }),
+          }).catch(() => {});
+        }
       }
-
-      setStatus("granted");
-    } catch (err: any) {
-      console.warn("[PermissionGate] Subscription error:", err);
-      // Unlock if permission was granted even if network subscription sync had a hiccup
-      setStatus("granted");
+    } catch {
+      // Non-blocking silent catch
+    } finally {
+      isSyncingRef.current = false;
     }
   }, [userId]);
 
-  // Initial Permission Check
+  // Initial Permission Check on mount
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Non-supporting environments (e.g. headless browsers without notification API) bypass cleanly
     if (!("Notification" in window)) {
       setStatus("granted");
       return;
@@ -104,15 +122,27 @@ export default function NotificationPermissionGate({
 
     const currentPerm = Notification.permission;
     if (currentPerm === "granted") {
-      syncPushSubscription(true);
+      setStatus("granted");
+      // Fire-and-forget in background without any blocking spinner
+      syncPushSubscriptionInBackground();
     } else if (currentPerm === "denied") {
-      setStatus("denied");
+      const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
+      if (dismissed === "true") {
+        setStatus("granted");
+      } else {
+        setStatus("denied");
+      }
     } else {
-      setStatus("prompt");
+      const dismissed = sessionStorage.getItem("srt_notif_gate_dismissed");
+      if (dismissed === "true") {
+        setStatus("granted");
+      } else {
+        setStatus("prompt");
+      }
     }
-  }, [syncPushSubscription]);
+  }, [syncPushSubscriptionInBackground]);
 
-  // Handle User Clicking "Enable Notifications"
+  // Instant 1-second Enable Notifications
   const handleRequestPermission = async () => {
     setErrorMessage(null);
     try {
@@ -123,19 +153,28 @@ export default function NotificationPermissionGate({
 
       const result = await Notification.requestPermission();
       if (result === "granted") {
-        await syncPushSubscription(true);
+        // Unlock IMMEDIATELY in 0ms!
+        setStatus("granted");
+        // Sync in background without blocking
+        syncPushSubscriptionInBackground();
       } else if (result === "denied") {
         setStatus("denied");
       } else {
-        setStatus("prompt");
+        // User closed or dismissed browser dialog - allow entry
+        handleContinueAnyway();
       }
     } catch (err: any) {
-      setErrorMessage(err?.message || "Could not request notification permissions.");
-      setStatus("prompt");
+      handleContinueAnyway();
     }
   };
 
-  // Re-check after user toggles permissions in browser settings
+  const handleContinueAnyway = () => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("srt_notif_gate_dismissed", "true");
+    }
+    setStatus("granted");
+  };
+
   const handleCheckAgain = () => {
     if (typeof window === "undefined" || !("Notification" in window)) {
       setStatus("granted");
@@ -143,7 +182,8 @@ export default function NotificationPermissionGate({
     }
 
     if (Notification.permission === "granted") {
-      syncPushSubscription(true);
+      setStatus("granted");
+      syncPushSubscriptionInBackground();
     } else if (Notification.permission === "denied") {
       window.location.reload();
     } else {
@@ -151,7 +191,7 @@ export default function NotificationPermissionGate({
     }
   };
 
-  // If granted or not client, unlock and render dashboard content directly
+  // If granted or dismissed, immediately render the full school portal dashboard
   if (status === "granted") {
     return <>{children}</>;
   }
@@ -162,7 +202,9 @@ export default function NotificationPermissionGate({
         position: "fixed",
         inset: 0,
         zIndex: 999999,
-        backgroundColor: "#0f172a",
+        backgroundColor: "rgba(15, 23, 42, 0.85)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -224,34 +266,7 @@ export default function NotificationPermissionGate({
           </span>
         </div>
 
-        {status === "checking" ? (
-          <div>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 700, margin: "0 0 0.5rem 0" }}>
-              Verifying Portal Security...
-            </h2>
-            <p style={{ color: "#94a3b8", fontSize: "0.85rem", margin: 0 }}>
-              Checking active lock-screen push notification device credentials.
-            </p>
-          </div>
-        ) : status === "subscribing" ? (
-          <div>
-            <div style={{ margin: "1.5rem 0" }}>
-              <RefreshCw size={32} color="#3b82f6" style={{ animation: "spin 1s linear infinite" }} />
-              <style jsx>{`
-                @keyframes spin {
-                  from { transform: rotate(0deg); }
-                  to { transform: rotate(360deg); }
-                }
-              `}</style>
-            </div>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 700, margin: "0 0 0.5rem 0" }}>
-              Activating System Push Delivery...
-            </h2>
-            <p style={{ color: "#94a3b8", fontSize: "0.85rem", margin: 0 }}>
-              Binding your device to SRT Universal School high-priority notification service.
-            </p>
-          </div>
-        ) : status === "denied" ? (
+        {status === "denied" ? (
           <div>
             <div
               style={{
@@ -298,24 +313,42 @@ export default function NotificationPermissionGate({
               </ol>
             </div>
 
-            <button
-              type="button"
-              onClick={handleCheckAgain}
-              style={{
-                width: "100%",
-                padding: "0.85rem 1.25rem",
-                borderRadius: "12px",
-                background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
-                color: "#ffffff",
-                border: "none",
-                fontWeight: 700,
-                fontSize: "0.95rem",
-                cursor: "pointer",
-                boxShadow: "0 4px 14px rgba(37, 99, 235, 0.4)",
-              }}
-            >
-              🔄 I Have Allowed It (Reload & Enter)
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <button
+                type="button"
+                onClick={handleCheckAgain}
+                style={{
+                  width: "100%",
+                  padding: "0.85rem 1.25rem",
+                  borderRadius: "12px",
+                  background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+                  color: "#ffffff",
+                  border: "none",
+                  fontWeight: 700,
+                  fontSize: "0.95rem",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 14px rgba(37, 99, 235, 0.4)",
+                }}
+              >
+                🔄 I Have Allowed It (Reload & Enter)
+              </button>
+
+              <button
+                type="button"
+                onClick={handleContinueAnyway}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#94a3b8",
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  padding: "0.4rem",
+                  textDecoration: "underline",
+                }}
+              >
+                Continue to Portal Without Notifications &rarr;
+              </button>
+            </div>
           </div>
         ) : (
           <div>
@@ -323,8 +356,8 @@ export default function NotificationPermissionGate({
               Enable System Notifications
             </h2>
             <p style={{ color: "#94a3b8", fontSize: "0.88rem", lineHeight: 1.5, margin: "0 0 1.25rem 0" }}>
-              Hello <strong>{userName}</strong>. SRT Universal School requires real-time push alerts so you never miss 
-              urgent messages, attendance alerts, exam report cards, or bus transit updates directly on your device lock screen.
+              Hello <strong>{userName}</strong>. SRT Universal School sends real-time push alerts so you never miss 
+              urgent messages, attendance updates, or bus transit notifications on your device.
             </p>
 
             <div
@@ -362,29 +395,54 @@ export default function NotificationPermissionGate({
               </p>
             )}
 
-            <button
-              type="button"
-              onClick={handleRequestPermission}
-              style={{
-                width: "100%",
-                padding: "0.95rem 1.25rem",
-                borderRadius: "14px",
-                background: "linear-gradient(135deg, #f59e0b, #d97706)",
-                color: "#ffffff",
-                border: "none",
-                fontWeight: 800,
-                fontSize: "1rem",
-                cursor: "pointer",
-                boxShadow: "0 4px 18px rgba(245, 158, 11, 0.45)",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "0.5rem",
-              }}
-            >
-              <Bell size={20} />
-              <span>Enable Notifications & Enter Portal</span>
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <button
+                type="button"
+                onClick={handleRequestPermission}
+                style={{
+                  width: "100%",
+                  padding: "0.95rem 1.25rem",
+                  borderRadius: "14px",
+                  background: "linear-gradient(135deg, #f59e0b, #d97706)",
+                  color: "#ffffff",
+                  border: "none",
+                  fontWeight: 800,
+                  fontSize: "1rem",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 18px rgba(245, 158, 11, 0.45)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.5rem",
+                }}
+              >
+                <Bell size={20} />
+                <span>Enable Notifications & Enter Portal</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleContinueAnyway}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#94a3b8",
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  padding: "0.4rem",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.3rem",
+                  transition: "color 0.15s ease",
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.color = "#cbd5e1")}
+                onMouseOut={(e) => (e.currentTarget.style.color = "#94a3b8")}
+              >
+                <span>Continue to Dashboard</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
           </div>
         )}
       </div>

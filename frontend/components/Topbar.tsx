@@ -242,33 +242,36 @@ export default function Topbar({
           )}
         </button>
 
-        <button
-          type="button"
-          onClick={handleTestLockScreenNotification}
-          disabled={isTestingPush}
-          title="Send a real test push notification to this device"
-          aria-label="Test Lock-Screen Notification"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.35rem",
-            padding: "0.35rem 0.65rem",
-            borderRadius: "8px",
-            fontSize: "0.76rem",
-            fontWeight: 700,
-            background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
-            color: "#ffffff",
-            border: "none",
-            cursor: isTestingPush ? "wait" : "pointer",
-            boxShadow: "0 2px 6px rgba(37, 99, 235, 0.3)",
-            marginRight: "0.35rem",
-            whiteSpace: "nowrap",
-            transition: "all 0.15s ease",
-          }}
-        >
-          <Send size={13} />
-          <span>{isTestingPush ? "Testing..." : "Test Push"}</span>
-        </button>
+        {/* Test Push button strictly restricted to ADMIN only - hidden from Parents, Teachers, and all other users */}
+        {user?.role === "ADMIN" && (
+          <button
+            type="button"
+            onClick={handleTestLockScreenNotification}
+            disabled={isTestingPush}
+            title="Send a real test push notification to this device"
+            aria-label="Test Lock-Screen Notification"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.35rem",
+              padding: "0.35rem 0.65rem",
+              borderRadius: "8px",
+              fontSize: "0.76rem",
+              fontWeight: 700,
+              background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+              color: "#ffffff",
+              border: "none",
+              cursor: isTestingPush ? "wait" : "pointer",
+              boxShadow: "0 2px 6px rgba(37, 99, 235, 0.3)",
+              marginRight: "0.35rem",
+              whiteSpace: "nowrap",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <Send size={13} />
+            <span>{isTestingPush ? "Testing..." : "Test Push"}</span>
+          </button>
+        )}
 
         <ThemeToggle style={{ marginRight: "0.25rem" }} />
         <div className={styles.userDetails}>
