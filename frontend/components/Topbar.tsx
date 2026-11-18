@@ -29,6 +29,31 @@ export default function Topbar({
   const handleTestLockScreenNotification = async () => {
     setIsTestingPush(true);
     try {
+      // Proactively ensure current device subscription is synced before test dispatch
+      if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          if (reg.pushManager) {
+            const sub = await reg.pushManager.getSubscription();
+            if (sub) {
+              const subJson = sub.toJSON();
+              if (subJson.endpoint && subJson.keys?.p256dh && subJson.keys?.auth) {
+                await fetch("/api/push/subscribe", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    endpoint: subJson.endpoint,
+                    keys: subJson.keys,
+                    platform: /android/i.test(navigator.userAgent) ? "ANDROID" : /iphone|ipad/i.test(navigator.userAgent) ? "IOS" : "WEB",
+                    userAgent: navigator.userAgent,
+                  }),
+                }).catch(() => {});
+              }
+            }
+          }
+        } catch {}
+      }
+
       const res = await fetch("/api/push/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

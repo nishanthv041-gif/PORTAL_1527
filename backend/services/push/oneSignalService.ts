@@ -47,6 +47,7 @@ export async function sendOneSignalPush(
   } = options;
 
   const apiKey = process.env.ONESIGNAL_REST_API_KEY;
+
   if (!apiKey || apiKey.trim() === "" || apiKey.includes("your_onesignal_rest_api_key")) {
     console.warn(
       "[OneSignal] ONESIGNAL_REST_API_KEY is not configured in .env. Skipping OneSignal push dispatch."
@@ -97,52 +98,67 @@ export async function sendOneSignalPush(
     ],
   };
 
-  const authHeader =
+  const authHeaders = [
     apiKey.trim().startsWith("Key ") || apiKey.trim().startsWith("Basic ")
       ? apiKey.trim()
-      : `Key ${apiKey.trim()}`;
+      : `Key ${apiKey.trim()}`,
+    apiKey.trim().startsWith("Key ") || apiKey.trim().startsWith("Basic ")
+      ? apiKey.trim()
+      : `Basic ${apiKey.trim()}`,
+  ];
 
-  try {
-    const res = await fetch("https://onesignal.com/api/v1/notifications", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authHeader,
-      },
-      body: JSON.stringify(payload),
-    });
+  const endpoints = [
+    "https://api.onesignal.com/notifications",
+    "https://onesignal.com/api/v1/notifications",
+  ];
 
-    const data = await res.json().catch(() => ({}));
+  let lastError: any = null;
+  let lastData: any = null;
 
-    if (!res.ok || (data.errors && !data.id)) {
-      console.error("[OneSignal] REST API push failure:", {
-        status: res.status,
-        errors: data.errors,
-      });
-      return {
-        success: false,
-        error: Array.isArray(data.errors)
-          ? data.errors.join(", ")
-          : JSON.stringify(data.errors || `HTTP ${res.status}`),
-        details: data,
-      };
+  for (const endpoint of endpoints) {
+    for (const authHeader of authHeaders) {
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: authHeader,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (res.ok && data.id) {
+          console.log(
+            `[OneSignal] Push dispatched successfully via ${endpoint}: notificationId=${data.id}, recipients=${data.recipients ?? "all-devices"}`
+          );
+          return {
+            success: true,
+            notificationId: data.id,
+            recipients: data.recipients,
+            details: data,
+          };
+        }
+
+        lastError = data.errors || `HTTP ${res.status}`;
+        lastData = data;
+      } catch (err: any) {
+        lastError = err?.message || "Fetch failure";
+      }
     }
-
-    console.log(
-      `[OneSignal] Push dispatched successfully: notificationId=${data.id}, recipients=${data.recipients ?? "all-devices"}`
-    );
-
-    return {
-      success: true,
-      notificationId: data.id,
-      recipients: data.recipients,
-      details: data,
-    };
-  } catch (error: any) {
-    console.error("[OneSignal] Network or execution error:", error);
-    return {
-      success: false,
-      error: error?.message || "Unknown error during OneSignal push dispatch.",
-    };
   }
+
+  console.error("[OneSignal] REST API push failure across endpoints:", {
+    errors: lastError,
+    details: lastData,
+  });
+
+  return {
+    success: false,
+    error: Array.isArray(lastError)
+      ? lastError.join(", ")
+      : JSON.stringify(lastError || "OneSignal REST API error"),
+    details: lastData,
+  };
 }
