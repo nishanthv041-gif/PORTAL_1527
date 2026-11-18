@@ -1,9 +1,15 @@
 /**
  * Nipo Portal (SRT Universal School) - Progressive Web App Service Worker
- * Version: 3.0.0
+ * Version: 3.1.0
  * Features: Offline fallback shell, fast static caching, Web Push notifications, OS click navigation.
  * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
+
+try {
+  importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
+} catch (e) {
+  // Graceful fallback
+}
 
 const CACHE_NAME = "srt-pwa-v10";
 const PRECACHE_ASSETS = [
