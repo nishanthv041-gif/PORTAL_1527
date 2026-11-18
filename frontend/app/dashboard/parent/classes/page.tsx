@@ -28,7 +28,14 @@ export default async function ParentClassesPage({
   }
 
   if (!selectedChild) {
-    return null;
+    return (
+      <div className={styles.dashboard}>
+        <h1 className={styles.title}>Child Classes &amp; Subjects</h1>
+        <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '2rem', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-secondary)' }}>Awaiting student class assignment from administration.</p>
+        </div>
+      </div>
+    );
   }
 
   // Fetch classmates count for this child's class

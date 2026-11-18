@@ -13,6 +13,8 @@ import { isForenoonRecord, calculateAttendancePercentage } from "@/backend/lib/s
 import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
 import { getSchoolNow, startOfSchoolDay } from "@/lib/time";
 import ParentDashboardTimetableCard from "./ParentDashboardTimetableCard";
+import UniversalDashboard from "@/frontend/components/dashboard/UniversalDashboard";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 
 export const dynamic = "force-dynamic";
 
@@ -33,20 +35,23 @@ export default async function ParentDashboard({
   searchParams: Promise<{ childId?: string }>
 }) {
   const resolvedSearchParams = await searchParams;
-  const { parent, children, selectedChild } = await getParentAndSelectedChild(resolvedSearchParams?.childId);
+  const { session, parent, children, selectedChild } = await getParentAndSelectedChild(resolvedSearchParams?.childId);
 
-  if (!parent || children.length === 0) {
+  // If no parent record or no linked child, render the rich Universal Default Dashboard instead of an empty screen
+  if (!parent || children.length === 0 || !selectedChild) {
+    const parentSession = session || (await getCachedServerSession());
     return (
-      <div className={styles.container}>
-        <h1 className={styles.pageTitle}>Parent Dashboard</h1>
-        <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '2rem', textAlign: 'center' }}>
-          <p style={{ color: 'var(--text-secondary)' }}>No children linked to your parent account.</p>
-        </div>
-      </div>
+      <UniversalDashboard
+        user={{
+          id: parent?.userId || parentSession?.user?.id || "parent",
+          name: parentSession?.user?.name || "Parent",
+          email: parentSession?.user?.email,
+          role: "PARENT",
+        }}
+        noticeMessage="Welcome to SRT Parent Portal! Your parent account is active. If your student record has not yet been linked by the school administration, you have full access to school circulars, academic calendar, bus transit tracking, and communication below. The school office will link your student profile shortly."
+      />
     );
   }
-
-  if (!selectedChild) return null;
 
   // Helper to fetch latest exam with marks
   const fetchLatestExam = async (classId: string) => {

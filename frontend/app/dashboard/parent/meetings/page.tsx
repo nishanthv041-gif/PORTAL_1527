@@ -32,7 +32,16 @@ export default async function ParentMeetingsPage() {
     }
   });
 
-  if (!parent) return null;
+  if (!parent) {
+    return (
+      <div className={styles.dashboard}>
+        <h1 className={styles.title}>Parent-Teacher Meetings</h1>
+        <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '2rem', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-secondary)' }}>No parent profile linked yet. Please contact administration.</p>
+        </div>
+      </div>
+    );
+  }
 
   // Extract unique teachers for their children
   const teacherMap = new Map();

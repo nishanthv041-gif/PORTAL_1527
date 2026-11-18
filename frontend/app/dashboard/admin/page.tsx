@@ -6,6 +6,7 @@ import styles from "../dashboard.module.css";
 import { Users, GraduationCap, BookOpen, Briefcase, Mail, Phone, CheckCircle2, XCircle, UserCheck, Sparkles } from "lucide-react";
 import ClassSelector from "./ClassSelector";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { startOfSchoolDay, endOfSchoolDay, getSchoolNow } from "@/lib/time";
 
 export const revalidate = 0;
@@ -48,7 +49,8 @@ export default async function AdminDashboardPage({
   searchParams: Promise<{ classId?: string; page?: string }>;
 }) {
   const session = await getCachedServerSession();
-  if (!session || session.user.role !== "ADMIN") return null;
+  if (!session) redirect("/login");
+  if (session.user.role !== "ADMIN") redirect("/dashboard");
 
   const resolvedSearchParams = await searchParams;
 

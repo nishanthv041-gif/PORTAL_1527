@@ -158,31 +158,69 @@ export default function NotificationPermissionGate({
     }
   }, [userId, syncPushSubscriptionInBackground]);
 
-  // Request Notification Permission
+  // Request Notification Permission - Resilient & non-blocking across Android, iOS & Web
   const handleRequestPermission = async () => {
     setIsSubmitting(true);
     try {
-      let granted = await requestPushPermission();
-      if (!granted && !Capacitor.isNativePlatform()) {
-        granted = await requestOneSignalPermission();
-      }
-      const isNowGranted =
-        granted ||
-        (typeof Notification !== "undefined" && Notification.permission === "granted") ||
-        (await checkPushPermission());
+      let isGranted = false;
 
-      if (isNowGranted) {
-        setIsPermitted(true);
+      // 1. Direct native browser notification prompt (zero-delay user gesture response)
+      if (typeof Notification !== "undefined" && typeof Notification.requestPermission === "function") {
+        try {
+          const nativePromise = Notification.requestPermission();
+          const timeoutPromise = new Promise<string>((resolve) => setTimeout(() => resolve("timeout"), 2500));
+          const permResult = await Promise.race([nativePromise, timeoutPromise]);
+          if (permResult === "granted") {
+            isGranted = true;
+          }
+        } catch (e) {
+          console.warn("[PermissionGate] Native browser permission note:", e);
+        }
+      }
+
+      // 2. Request through Push SDKs (Capacitor or OneSignal) with a 2-second timeout
+      try {
+        const pushPromise = Capacitor.isNativePlatform()
+          ? requestPushPermission()
+          : requestOneSignalPermission();
+        const sdkTimeout = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 2000));
+        const sdkGranted = await Promise.race([pushPromise, sdkTimeout]);
+        if (sdkGranted) {
+          isGranted = true;
+        }
+      } catch (e) {
+        console.warn("[PermissionGate] Push SDK permission note:", e);
+      }
+
+      // 3. Mark gate as dismissed so user is NEVER trapped on this screen again
+      try {
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("srt_notif_gate_dismissed", "true");
+        }
+      } catch {}
+
+      // 4. Immediately unlock portal entry so users on Android, iOS & PC enter instantly
+      setIsPermitted(true);
+
+      // 5. In background, sync subscription if permission was granted
+      const checkGranted =
+        isGranted ||
+        (typeof Notification !== "undefined" && Notification.permission === "granted") ||
+        (await checkPushPermission().catch(() => false));
+
+      if (checkGranted) {
         if (userId) {
-          await loginToPushService(userId);
+          loginToPushService(userId).catch(() => {});
           if (!Capacitor.isNativePlatform()) {
-            await loginToOneSignal(userId);
+            loginToOneSignal(userId).catch(() => {});
           }
         }
-        syncPushSubscriptionInBackground();
+        syncPushSubscriptionInBackground().catch(() => {});
       }
     } catch (err) {
-      console.warn("[PermissionGate] Permission request note:", err);
+      console.warn("[PermissionGate] Permission request completed with fallback:", err);
+      // Guarantee portal unlocks even on unexpected platform errors
+      setIsPermitted(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -274,7 +312,7 @@ export default function NotificationPermissionGate({
         </h2>
 
         <p style={{ color: "#94a3b8", fontSize: "0.88rem", lineHeight: 1.55, margin: "0 0 1.25rem 0" }}>
-          Hello <strong>{userName}</strong>. SRT Portal delivers instant WhatsApp-style lock-screen alerts for attendance,
+          Hello <strong>{userName}</strong>. SRT Portal delivers instant lock-screen alert notifications for attendance,
           direct teacher messages, emergency announcements, and live bus transit updates.
         </p>
 
@@ -295,11 +333,11 @@ export default function NotificationPermissionGate({
         >
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <CheckCircle2 size={16} color="#10b981" />
-            <span>Instant lock-screen message alerts from teachers & admin</span>
+            <span>Instant lock-screen alert notifications from teachers & admin</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <CheckCircle2 size={16} color="#10b981" />
-            <span>WhatsApp-style app icon unread badge counter</span>
+            <span>App icon unread badge counter for all important updates</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <CheckCircle2 size={16} color="#10b981" />
@@ -330,7 +368,7 @@ export default function NotificationPermissionGate({
           }}
         >
           <Bell size={20} />
-          <span>{isSubmitting ? "Prompting Permission..." : "Enable Notifications"}</span>
+          <span>{isSubmitting ? "Opening Portal..." : "Enable Notifications"}</span>
         </button>
 
         <button

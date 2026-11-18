@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 const DAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 
 import { getTeacherByUserId } from "./teacherHelper";
+import UniversalDashboard from "@/frontend/components/dashboard/UniversalDashboard";
 
 export default async function TeacherDashboard() {
   const session = await getCachedServerSession();
@@ -22,10 +23,15 @@ export default async function TeacherDashboard() {
 
   if (!teacher) {
     return (
-      <div className={styles.dashboard}>
-        <h1 className={styles.title}>Teacher Dashboard</h1>
-        <p>No teacher record found for this user.</p>
-      </div>
+      <UniversalDashboard
+        user={{
+          id: session.user.id,
+          name: session.user.name,
+          email: session.user.email,
+          role: "TEACHER",
+        }}
+        noticeMessage="Teacher account is active! If your teacher profile and classes have not yet been linked by the school administration, you can still access school circulars, calendar, messages, and student records below."
+      />
     );
   }
 

@@ -31,7 +31,16 @@ export default async function ParentTimetablePage({
     );
   }
 
-  if (!selectedChild) return null;
+  if (!selectedChild) {
+    return (
+      <div className={styles.dashboard}>
+        <h1 className={styles.title}>Class Timetable</h1>
+        <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '2rem', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-secondary)' }}>Awaiting student class assignment from the school administration.</p>
+        </div>
+      </div>
+    );
+  }
 
   const childClass = selectedChild.class;
   const isHostel = selectedChild.residenceType?.toUpperCase().includes("HOSTEL");

@@ -41,19 +41,18 @@ export default async function ParentMessagesPage() {
     })
   ]);
 
-  if (!parent) return null;
-
-  // Extract unique teachers for their children
   const teacherMap = new Map();
-  parent.children.forEach(s => {
-    if (s.student.class?.teacher) {
-      teacherMap.set(s.student.class.teacher.userId, {
-        ...s.student.class.teacher.user,
-        className: `${s.student.class.name}-${s.student.class.section}`,
-        childName: `${s.student.firstName} ${s.student.lastName}`
-      });
-    }
-  });
+  if (parent) {
+    parent.children.forEach(s => {
+      if (s.student.class?.teacher) {
+        teacherMap.set(s.student.class.teacher.userId, {
+          ...s.student.class.teacher.user,
+          className: `${s.student.class.name}-${s.student.class.section}`,
+          childName: `${s.student.firstName} ${s.student.lastName}`
+        });
+      }
+    });
+  }
 
   const teachers = Array.from(teacherMap.values());
 
