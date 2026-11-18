@@ -87,16 +87,8 @@ export async function sendOneSignalPush(
     const safeBadgeCount = Math.max(0, Number(unreadCount) || 1);
     const resolvedUrl = url || "https://main.d3bt7u4517jg0f.amplifyapp.com";
 
-    const payload: any = {
+    const basePayload: any = {
       app_id: ONESIGNAL_APP_ID,
-      target_channel: "push",
-      ...(broadcast
-        ? { included_segments: ["Total Subscriptions", "Subscribed Users"] }
-        : {
-            include_aliases: {
-              external_id: userIds,
-            },
-          }),
       headings: { en: title },
       contents: { en: body },
       url: resolvedUrl,
@@ -117,56 +109,79 @@ export async function sendOneSignalPush(
       ],
     };
 
-  const authHeaders = [
-    apiKey.trim().startsWith("Key ") || apiKey.trim().startsWith("Basic ")
-      ? apiKey.trim()
-      : `Key ${apiKey.trim()}`,
-    apiKey.trim().startsWith("Key ") || apiKey.trim().startsWith("Basic ")
-      ? apiKey.trim()
-      : `Basic ${apiKey.trim()}`,
-  ];
+    const trimmedKey = apiKey.trim();
+    const authHeaders = [
+      trimmedKey.startsWith("Key ") || trimmedKey.startsWith("Basic ")
+        ? trimmedKey
+        : `Key ${trimmedKey}`,
+      trimmedKey.startsWith("Key ") || trimmedKey.startsWith("Basic ")
+        ? trimmedKey
+        : `Basic ${trimmedKey}`,
+    ];
 
-  const endpoints = [
-    "https://api.onesignal.com/notifications",
-    "https://onesignal.com/api/v1/notifications",
-  ];
+    // Try canonical v2 endpoint first, then fallback to v1 endpoint
+    const attempts = [
+      {
+        url: "https://api.onesignal.com/notifications?c=push",
+        payload: {
+          ...basePayload,
+          target_channel: "push",
+          ...(broadcast
+            ? { included_segments: ["Total Subscriptions", "Subscribed Users"] }
+            : { include_aliases: { external_id: userIds } }),
+        },
+      },
+      {
+        url: "https://onesignal.com/api/v1/notifications",
+        payload: {
+          ...basePayload,
+          ...(broadcast
+            ? { included_segments: ["Total Subscriptions", "Subscribed Users"] }
+            : {
+                include_external_user_ids: userIds,
+                channel_for_external_user_ids: "push",
+              }),
+        },
+      },
+    ];
 
-  let lastError: any = null;
-  let lastData: any = null;
+    let lastError: any = null;
+    let lastData: any = null;
 
-  for (const endpoint of endpoints) {
-    for (const authHeader of authHeaders) {
-      try {
-        const res = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: authHeader,
-          },
-          body: JSON.stringify(payload),
-        });
+    for (const attempt of attempts) {
+      for (const authHeader of authHeaders) {
+        try {
+          const res = await fetch(attempt.url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: authHeader,
+            },
+            body: JSON.stringify(attempt.payload),
+            signal: AbortSignal.timeout(3500),
+          });
 
-        const data = await res.json().catch(() => ({}));
+          const data = await res.json().catch(() => ({}));
 
-        if (res.ok && data.id) {
-          console.log(
-            `[OneSignal] Push dispatched successfully via ${endpoint}: notificationId=${data.id}, recipients=${data.recipients ?? "all-devices"}`
-          );
-          return {
-            success: true,
-            notificationId: data.id,
-            recipients: data.recipients,
-            details: data,
-          };
+          if (res.ok && data.id) {
+            console.log(
+              `[OneSignal] Push dispatched successfully via ${attempt.url}: notificationId=${data.id}, recipients=${data.recipients ?? "all-devices"}`
+            );
+            return {
+              success: true,
+              notificationId: data.id,
+              recipients: data.recipients,
+              details: data,
+            };
+          }
+
+          lastError = data.errors || `HTTP ${res.status}`;
+          lastData = data;
+        } catch (err: any) {
+          lastError = err?.message || "Fetch failure";
         }
-
-        lastError = data.errors || `HTTP ${res.status}`;
-        lastData = data;
-      } catch (err: any) {
-        lastError = err?.message || "Fetch failure";
       }
     }
-  }
 
   console.error("[OneSignal] REST API push failure across endpoints:", {
     errors: lastError,

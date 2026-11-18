@@ -131,6 +131,17 @@ export async function createProgramAction(formData: FormData) {
               isRead: false
             }))
           });
+
+          await sendInstantPortalNotification({
+            targetUserIds: activeUsers.map(u => u.id),
+            category: "PROGRAM",
+            title: notifTitle,
+            body: notifContent,
+            link: "/dashboard/parent/programs",
+            tag: `program-${prog.id}`,
+            priority: "HIGH",
+            bypass48h: true,
+          }).catch((err) => console.warn("Program push dispatch note:", err));
         }
       } catch (notifErr) {
         console.error("Failed to dispatch notifications for new program:", notifErr);
@@ -184,6 +195,17 @@ export async function updateProgramStatusAction(id: string, isPublished: boolean
               isRead: false
             }))
           });
+
+          await sendInstantPortalNotification({
+            targetUserIds: activeUsers.map(u => u.id),
+            category: "PROGRAM",
+            title: `📅 Program Published: ${prog.title}`,
+            body: `School Program "${prog.title}" is on ${dateFormatted} at ${prog.startTime}${prog.location ? ` | Venue: ${prog.location}` : ""}.`,
+            link: "/dashboard/parent/programs",
+            tag: `program-pub-${prog.id}`,
+            priority: "HIGH",
+            bypass48h: true,
+          }).catch((err) => console.warn("Program publish push note:", err));
         }
       } catch (err) {
         console.error("Failed to notify users on program publish:", err);

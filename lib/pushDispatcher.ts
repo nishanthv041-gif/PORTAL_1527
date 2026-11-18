@@ -1,6 +1,7 @@
 import { prisma } from "@/backend/db/prisma";
 import webpush from "web-push";
 import { invalidateUserNotifCache } from "@/backend/api/actions/notifications/unifiedNotificationActions";
+import { sendOneSignalPush } from "@/backend/services/push/oneSignalService";
 
 // Initialize VAPID Credentials with production-verified keys
 const VAPID_PUBLIC_KEY =
@@ -155,35 +156,19 @@ export async function sendInstantPortalNotification(
     console.error("[PushDispatcher] Failed to create in-app notification rows:", err);
   }
 
-  // 3. Multi-Device Push Subscription Targeting & Strict Deduplication
-  // High-priority and emergency broadcasts (e.g. Bus, Announcements) bypass the 48-hour activity cutoff
-  const isUrgent =
-    bypass48h ||
-    normalizedPriority === "HIGH" ||
-    normalizedPriority === "URGENT" ||
-    normalizedCategory === "BUS_MESSAGE" ||
-    normalizedCategory === "BUS" ||
-    normalizedCategory === "ANNOUNCEMENT";
-
-  const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
-
+  // 3. Multi-Device Push Subscription Targeting & Strict Deduplication across all tables
   let pushEligible = 0;
   let pushSent = 0;
   let pushFailed = 0;
   let prunedEndpoints = 0;
 
   try {
-    const subscriptionWhere: any = {
-      userId: { in: targetUserIds },
-      isActive: true,
-    };
-    if (!isUrgent) {
-      subscriptionWhere.lastLoginAt = { gte: fortyEightHoursAgo };
-    }
-
-    const [primarySubs, registrySubs] = await Promise.all([
+    const [primarySubs, pwaSubs, registrySubs] = await Promise.all([
       prisma.pushSubscription.findMany({
-        where: subscriptionWhere,
+        where: {
+          userId: { in: targetUserIds },
+          isActive: true,
+        },
         select: {
           id: true,
           userId: true,
@@ -192,11 +177,23 @@ export async function sendInstantPortalNotification(
           auth: true,
         },
       }),
+      prisma.pwaSubscription.findMany({
+        where: {
+          userId: { in: targetUserIds },
+        },
+        select: {
+          id: true,
+          userId: true,
+          endpoint: true,
+          p256dhKey: true,
+          authKey: true,
+        },
+      }).catch(() => []),
       prisma.deviceNotificationsRegistry
         .findMany({
-          where: isUrgent
-            ? { userId: { in: targetUserIds } }
-            : { userId: { in: targetUserIds }, lastLoginAt: { gte: fortyEightHoursAgo } },
+          where: {
+            userId: { in: targetUserIds },
+          },
           select: {
             id: true,
             userId: true,
@@ -223,6 +220,18 @@ export async function sendInstantPortalNotification(
       }
     }
 
+    for (const pwa of pwaSubs) {
+      if (pwa.endpoint && pwa.p256dhKey && pwa.authKey && !endpointMap.has(pwa.endpoint)) {
+        endpointMap.set(pwa.endpoint, {
+          id: pwa.id,
+          userId: pwa.userId,
+          endpoint: pwa.endpoint,
+          p256dh: pwa.p256dhKey,
+          auth: pwa.authKey,
+        });
+      }
+    }
+
     for (const reg of registrySubs) {
       if (reg.endpoint && reg.p256dh && reg.auth && !endpointMap.has(reg.endpoint)) {
         endpointMap.set(reg.endpoint, reg);
@@ -232,8 +241,38 @@ export async function sendInstantPortalNotification(
     const uniqueDevices = Array.from(endpointMap.values());
     pushEligible = uniqueDevices.length;
 
+    // Dispatch OneSignal and High-Priority WebPush concurrently so neither blocks the other
+    const dispatchPromises: Promise<any>[] = [];
+
+    // Branch A: OneSignal Push Dispatch (non-blocking)
+    dispatchPromises.push(
+      (async () => {
+        try {
+          if (params.targetAllUsers) {
+            await sendOneSignalPush({
+              broadcast: true,
+              title,
+              body,
+              url: link,
+              category: normalizedCategory,
+            });
+          } else if (targetUserIds.length > 0) {
+            await sendOneSignalPush({
+              userId: targetUserIds,
+              title,
+              body,
+              url: link,
+              category: normalizedCategory,
+            });
+          }
+        } catch (osErr) {
+          console.warn("[PushDispatcher] OneSignal push delivery note:", osErr);
+        }
+      })()
+    );
+
+    // Branch B: WebPush Dispatch to all registered mobile & desktop devices
     if (uniqueDevices.length > 0) {
-      // Deterministic tag: prevents duplicates on Android lock screen & notification shade
       const deterministicTag =
         params.tag ||
         `${normalizedCategory.toLowerCase()}-${link.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 35)}`;
@@ -242,6 +281,8 @@ export async function sendInstantPortalNotification(
         title,
         body,
         url: link,
+        unreadCount: 1,
+        badgeCount: 1,
         icon,
         badge,
         tag: deterministicTag,
@@ -257,7 +298,6 @@ export async function sendInstantPortalNotification(
         },
       });
 
-      // High-priority Web Push Options with explicit lock-screen wakeup urgency
       const pushOptions = {
         TTL: 86400,
         urgency: "high" as const,
@@ -266,49 +306,56 @@ export async function sendInstantPortalNotification(
         },
       };
 
-      const pushResults = await Promise.allSettled(
-        uniqueDevices.map(async (device) => {
-          try {
-            await webpush.sendNotification(
-              {
-                endpoint: device.endpoint,
-                keys: {
-                  p256dh: device.p256dh,
-                  auth: device.auth,
-                },
-              },
-              pushPayload,
-              pushOptions
-            );
-            return { success: true, endpoint: device.endpoint };
-          } catch (pushErr: any) {
-            const statusCode = pushErr?.statusCode;
-            if (statusCode === 404 || statusCode === 410) {
-              // Endpoint is dead or uninstalled: auto-prune
-              await Promise.allSettled([
-                prisma.pushSubscription.deleteMany({ where: { endpoint: device.endpoint } }),
-                prisma.deviceNotificationsRegistry.deleteMany({ where: { endpoint: device.endpoint } }),
-              ]);
-              return { success: false, endpoint: device.endpoint, pruned: true };
-            }
-            return { success: false, endpoint: device.endpoint, error: pushErr?.message };
-          }
-        })
-      );
+      dispatchPromises.push(
+        (async () => {
+          const pushResults = await Promise.allSettled(
+            uniqueDevices.map(async (device) => {
+              try {
+                await webpush.sendNotification(
+                  {
+                    endpoint: device.endpoint,
+                    keys: {
+                      p256dh: device.p256dh,
+                      auth: device.auth,
+                    },
+                  },
+                  pushPayload,
+                  pushOptions
+                );
+                return { success: true, endpoint: device.endpoint };
+              } catch (pushErr: any) {
+                const statusCode = pushErr?.statusCode;
+                if (statusCode === 404 || statusCode === 410) {
+                  // Endpoint is dead or uninstalled: auto-prune
+                  await Promise.allSettled([
+                    prisma.pushSubscription.deleteMany({ where: { endpoint: device.endpoint } }),
+                    prisma.pwaSubscription.deleteMany({ where: { endpoint: device.endpoint } }),
+                    prisma.deviceNotificationsRegistry.deleteMany({ where: { endpoint: device.endpoint } }),
+                  ]);
+                  return { success: false, endpoint: device.endpoint, pruned: true };
+                }
+                return { success: false, endpoint: device.endpoint, error: pushErr?.message };
+              }
+            })
+          );
 
-      for (const res of pushResults) {
-        if (res.status === "fulfilled") {
-          if (res.value.success) {
-            pushSent++;
-          } else {
-            pushFailed++;
-            if (res.value.pruned) prunedEndpoints++;
+          for (const res of pushResults) {
+            if (res.status === "fulfilled") {
+              if (res.value.success) {
+                pushSent++;
+              } else {
+                pushFailed++;
+                if (res.value.pruned) prunedEndpoints++;
+              }
+            } else {
+              pushFailed++;
+            }
           }
-        } else {
-          pushFailed++;
-        }
-      }
+        })()
+      );
     }
+
+    await Promise.allSettled(dispatchPromises);
   } catch (err) {
     console.error("[PushDispatcher] Error during push delivery:", err);
   }

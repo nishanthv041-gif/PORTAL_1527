@@ -186,27 +186,7 @@ export async function sendUniversalNotification(
     unreadCount = 1;
   }
 
-  // 2. Primary Web & Mobile Push: OneSignal REST API (targeted via external_id = userId)
-  try {
-    const osResult = await sendOneSignalPush({
-      userId,
-      title,
-      body,
-      url,
-      unreadCount,
-      category,
-      additionalData: { notificationId },
-    });
-    if (osResult.success) {
-      oneSignalCount = osResult.recipients || 1;
-      console.log(`[Notify] OneSignal push delivered for user ${userId} (${oneSignalCount} device/channel)`);
-    }
-  } catch (osErr) {
-    console.warn("[Notify] OneSignal delivery warning:", osErr);
-  }
-
-  // 2. Query Multi-Device Subscriptions (PC, iPhone Safari PWA, Android Capacitor)
-  // Targets devices where the user has logged in or been active within the last 48 hours
+  // 2. Query Multi-Device Subscriptions (PC, iPhone Safari PWA, Android Capacitor) across all tables
   let subscriptions: Array<{
     id: string;
     endpoint: string;
@@ -217,17 +197,11 @@ export async function sendUniversalNotification(
   }> = [];
 
   try {
-    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
-
-    // 2a. Query active push subscriptions (filtering by 48-hour activity window with fallback)
+    // 2a. Query all active push subscriptions for recipient
     let rawSubs = await prisma.pushSubscription.findMany({
       where: {
         userId,
         isActive: true,
-        OR: [
-          { lastLoginAt: { gte: fortyEightHoursAgo } },
-          { updatedAt: { gte: fortyEightHoursAgo } },
-        ],
       },
       select: {
         id: true,
@@ -241,28 +215,6 @@ export async function sendUniversalNotification(
       },
       orderBy: { updatedAt: "desc" },
     });
-
-    // Fallback: If no device logged in within 48 hours, target any active registered device
-    if (rawSubs.length === 0) {
-      rawSubs = await prisma.pushSubscription.findMany({
-        where: {
-          userId,
-          isActive: true,
-        },
-        select: {
-          id: true,
-          endpoint: true,
-          token: true,
-          platform: true,
-          p256dh: true,
-          auth: true,
-          deviceFingerprint: true,
-          updatedAt: true,
-        },
-        orderBy: { updatedAt: "desc" },
-        take: 5,
-      });
-    }
 
     const seenEndpoints = new Set<string>();
     const seenFingerprints = new Set<string>();
@@ -312,12 +264,11 @@ export async function sendUniversalNotification(
       subscriptions.push(sub);
     }
 
-    // 2b. Also include active devices from pwa_subscriptions active in last 48 hours
+    // 2b. Also include active devices from pwa_subscriptions
     try {
       const pwaSubs = await prisma.pwaSubscription.findMany({
         where: {
           userId,
-          lastActiveAt: { gte: fortyEightHoursAgo },
         },
         select: {
           id: true,
@@ -343,12 +294,11 @@ export async function sendUniversalNotification(
       }
     } catch { }
 
-    // 2c. Also include active devices from device_notifications_registry in last 48 hours
+    // 2c. Also include active devices from device_notifications_registry
     try {
       const registryDevices = await prisma.deviceNotificationsRegistry.findMany({
         where: {
           userId,
-          lastLoginAt: { gte: fortyEightHoursAgo },
         },
         select: {
           id: true,
@@ -384,153 +334,157 @@ export async function sendUniversalNotification(
     console.error("[Notify] Error querying push subscriptions:", dbErr);
   }
 
-  // 3. Dispatch Push Notifications with High-Concurrency Chunking (1,500+ users safe)
-  if (subscriptions.length > 0) {
-    const deterministicTag =
-      tag || `notif-${category.toLowerCase()}-${notificationId || Date.now().toString().slice(-6)}`;
+  // 3. Dispatch OneSignal & Multi-Platform Push Concurrently (so WebPush is never blocked or delayed)
+  const deterministicTag =
+    tag || `notif-${category.toLowerCase()}-${notificationId || Date.now().toString().slice(-6)}`;
 
-    // Query exact recipient unread count from PostgreSQL (combines unread notifications and unread messages)
-    let unreadCount = 1;
-    try {
-      const [unreadNotifs, unreadMsgs] = await Promise.all([
-        prisma.notification.count({ where: { userId, isRead: false } }),
-        prisma.message.count({ where: { receiverId: userId, isRead: false } }),
-      ]);
-      unreadCount = Math.max(1, unreadNotifs + unreadMsgs);
-    } catch {
-      unreadCount = 1;
-    }
+  console.log(`[PUSH] Dispatching push to userId=${userId}, activeSubscriptions=${subscriptions.length}, totalUnreadCount=${unreadCount}`);
 
-    console.log(`[PUSH] Dispatching push to userId=${userId}, activeSubscriptions=${subscriptions.length}, totalUnreadCount=${unreadCount}`);
+  await Promise.allSettled([
+    // Branch A: OneSignal REST API (targeted via external_id = userId)
+    (async () => {
+      try {
+        const osResult = await sendOneSignalPush({
+          userId,
+          title,
+          body,
+          url,
+          unreadCount,
+          category,
+          additionalData: { notificationId },
+        });
+        if (osResult.success) {
+          oneSignalCount = osResult.recipients || 1;
+          console.log(`[Notify] OneSignal push delivered for user ${userId} (${oneSignalCount} device/channel)`);
+        }
+      } catch (osErr) {
+        console.warn("[Notify] OneSignal delivery warning:", osErr);
+      }
+    })(),
 
-    // Prepare Web Push Payload with WhatsApp-Style App Icon Badge Counter
-    const webPayload = JSON.stringify({
-      title,
-      body,
-      url,
-      unreadCount,
-      badgeCount: unreadCount,
-      icon: icon || "/icon-192x192.png",
-      badge: badge || "/badge-72x72.png",
-      tag: deterministicTag,
-      renotify: true,
-      vibrate: [200, 100, 200],
-      requireInteraction: true,
-      priority: "high",
-      data: {
+    // Branch B: WebPush and FCM to all user subscriptions
+    (async () => {
+      if (subscriptions.length === 0) return;
+
+      const webPayload = JSON.stringify({
+        title,
+        body,
         url,
-        tag: deterministicTag,
-        notificationId,
-        category,
         unreadCount,
-        timestamp: Date.now(),
-      },
-    });
+        badgeCount: unreadCount,
+        icon: icon || "/icon-192x192.png",
+        badge: badge || "/badge-72x72.png",
+        tag: deterministicTag,
+        renotify: true,
+        vibrate: [200, 100, 200],
+        requireInteraction: true,
+        priority: "high",
+        data: {
+          url,
+          tag: deterministicTag,
+          notificationId,
+          category,
+          unreadCount,
+          timestamp: Date.now(),
+        },
+      });
 
-    const webOptions = {
-      TTL: 60,
-      urgency: "high" as const,
-      headers: {
-        Urgency: "high",
-      },
-    };
+      const webOptions = {
+        TTL: 60,
+        urgency: "high" as const,
+        headers: {
+          Urgency: "high",
+        },
+      };
 
-    const fb = getFirebaseAdmin();
+      const fb = getFirebaseAdmin();
+      const BATCH_CHUNK_SIZE = 50;
 
-    // High-concurrency batch chunker: Prevents socket exhaustion when broadcasting to 1,500+ users
-    const BATCH_CHUNK_SIZE = 50;
-    for (let i = 0; i < subscriptions.length; i += BATCH_CHUNK_SIZE) {
-      const chunk = subscriptions.slice(i, i + BATCH_CHUNK_SIZE);
-      await Promise.allSettled(
-        chunk.map(async (sub) => {
-          // If the subscription has standard Web Push keys (p256dh and auth), it is ALWAYS a Web Push subscription!
-          // This applies to ALL browsers and PWAs on Android, iOS, Windows, macOS, and Linux!
-          const isWebPush = Boolean(sub.endpoint && sub.p256dh && sub.auth);
+      for (let i = 0; i < subscriptions.length; i += BATCH_CHUNK_SIZE) {
+        const chunk = subscriptions.slice(i, i + BATCH_CHUNK_SIZE);
+        await Promise.allSettled(
+          chunk.map(async (sub) => {
+            const isWebPush = Boolean(sub.endpoint && sub.p256dh && sub.auth);
 
-          if (isWebPush && vapidConfigured) {
-            // Web, Android PWA/Chrome, and iOS Safari PWA Push via web-push
-            try {
-              await webpush.sendNotification(
-                {
-                  endpoint: sub.endpoint,
-                  keys: {
-                    p256dh: sub.p256dh!,
-                    auth: sub.auth!,
+            if (isWebPush && vapidConfigured) {
+              try {
+                await webpush.sendNotification(
+                  {
+                    endpoint: sub.endpoint,
+                    keys: {
+                      p256dh: sub.p256dh!,
+                      auth: sub.auth!,
+                    },
                   },
-                },
-                webPayload,
-                webOptions
-              );
-              webPushCount++;
-              console.log(`[PUSH] WebPush delivered to userId=${userId}, platform=${sub.platform || "WEB"}, endpoint=${sub.endpoint.slice(0, 45)}...`);
-            } catch (pushErr: any) {
-              failedCount++;
-              const statusCode = pushErr?.statusCode;
-              console.warn(`[PUSH] WebPush delivery note for device ${sub.id}: status=${statusCode}, error=${pushErr?.message}`);
-              if (statusCode === 404 || statusCode === 410) {
-                // Stale Web Push endpoint: delete from all tables
-                await Promise.allSettled([
-                  prisma.pushSubscription.deleteMany({ where: { endpoint: sub.endpoint } }),
-                  prisma.pwaSubscription.deleteMany({ where: { endpoint: sub.endpoint } }),
-                  prisma.deviceNotificationsRegistry.deleteMany({ where: { endpoint: sub.endpoint } }),
-                ]);
-                prunedCount++;
+                  webPayload,
+                  webOptions
+                );
+                webPushCount++;
+                console.log(`[PUSH] WebPush delivered to userId=${userId}, platform=${sub.platform || "WEB"}, endpoint=${sub.endpoint.slice(0, 45)}...`);
+              } catch (pushErr: any) {
+                failedCount++;
+                const statusCode = pushErr?.statusCode;
+                console.warn(`[PUSH] WebPush delivery note for device ${sub.id}: status=${statusCode}, error=${pushErr?.message}`);
+                if (statusCode === 404 || statusCode === 410) {
+                  await Promise.allSettled([
+                    prisma.pushSubscription.deleteMany({ where: { endpoint: sub.endpoint } }),
+                    prisma.pwaSubscription.deleteMany({ where: { endpoint: sub.endpoint } }),
+                    prisma.deviceNotificationsRegistry.deleteMany({ where: { endpoint: sub.endpoint } }),
+                  ]);
+                  prunedCount++;
+                }
               }
-            }
-          } else if (fb && (sub.platform === "ANDROID" || sub.endpoint.startsWith("fcm:") || (sub.token && !sub.p256dh))) {
-            // Native Android Push via FCM (Capacitor)
-            const fcmToken = sub.token || sub.endpoint.replace(/^fcm:/, "");
-            if (!fcmToken) return;
+            } else if (fb && (sub.platform === "ANDROID" || sub.endpoint.startsWith("fcm:") || (sub.token && !sub.p256dh))) {
+              const fcmToken = sub.token || sub.endpoint.replace(/^fcm:/, "");
+              if (!fcmToken) return;
 
-            try {
-              const messaging = getMessaging(fb);
-              await messaging.send({
-                token: fcmToken,
-                notification: {
-                  title,
-                  body,
-                },
-                data: {
-                  url,
-                  notificationId,
-                  tag: deterministicTag,
-                  category,
-                  badgeCount: String(unreadCount),
-                },
-                android: {
-                  priority: "high",
-                  collapseKey: deterministicTag,
+              try {
+                const messaging = getMessaging(fb);
+                await messaging.send({
+                  token: fcmToken,
                   notification: {
-                    tag: deterministicTag,
-                    channelId: "srt_school_alerts",
-                    sound: "default",
-                    priority: "high",
-                    visibility: "public",
-                    notificationCount: unreadCount,
+                    title,
+                    body,
                   },
-                },
-              });
-              androidPushCount++;
-              console.log(`[PUSH] FCM delivered to native Android token=${fcmToken.slice(0, 20)}...`);
-            } catch (fcmErr: any) {
-              failedCount++;
-              const code = fcmErr?.code;
-              if (
-                code === "messaging/registration-token-not-registered" ||
-                code === "messaging/invalid-registration-token"
-              ) {
-                // Stale Android token: delete from database
-                await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => { });
-                prunedCount++;
-              } else {
-                console.warn(`[Notify] FCM send note for device ${sub.id}:`, fcmErr?.message);
+                  data: {
+                    url,
+                    notificationId,
+                    tag: deterministicTag,
+                    category,
+                    badgeCount: String(unreadCount),
+                  },
+                  android: {
+                    priority: "high",
+                    notification: {
+                      icon: "ic_stat_notification",
+                      sound: "default",
+                      channelId: "high_importance_channel",
+                    },
+                  },
+                });
+                androidPushCount++;
+                console.log(`[PUSH] FCM Android Native Push delivered to userId=${userId}, token=${fcmToken.slice(0, 20)}...`);
+              } catch (fcmErr: any) {
+                failedCount++;
+                const errCode = fcmErr?.code;
+                console.warn(`[PUSH] FCM delivery note for device ${sub.id}: code=${errCode}, error=${fcmErr?.message}`);
+                if (
+                  errCode === "messaging/registration-token-not-registered" ||
+                  errCode === "messaging/invalid-registration-token"
+                ) {
+                  await Promise.allSettled([
+                    prisma.pushSubscription.deleteMany({ where: { endpoint: sub.endpoint } }),
+                    prisma.deviceNotificationsRegistry.deleteMany({ where: { endpoint: sub.endpoint } }),
+                  ]);
+                  prunedCount++;
+                }
               }
             }
-          }
-        })
-      );
-    }
-  }
+          })
+        );
+      }
+    })(),
+  ]);
 
   return {
     success: inAppCreated || oneSignalCount > 0 || webPushCount > 0 || androidPushCount > 0,

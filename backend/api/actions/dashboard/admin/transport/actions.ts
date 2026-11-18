@@ -975,7 +975,7 @@ export async function updateBusStatusAction(busId: string, rawPayload: any) {
         }
 
         // Dispatch instant lock-screen push notification
-        sendInstantPortalNotification({
+        await sendInstantPortalNotification({
           targetUserIds: parentUserIds,
           category: "BUS_MESSAGE",
           title: notifTitle,
@@ -984,7 +984,7 @@ export async function updateBusStatusAction(busId: string, rawPayload: any) {
           tag: `admin-bus-status-${bus.id}`,
           priority: "URGENT",
           bypass48h: true,
-        }).catch(() => {});
+        }).catch((err) => console.warn("Transport bus status push note:", err));
 
         parentAlertCount = parentUserIds.length;
       }
@@ -1189,7 +1189,7 @@ export async function sendBusMessageAction(busId: string, rawPayload: any) {
 
     if (targetParentUserIds.length > 0) {
       const notifIcon = priority === "URGENT" ? "🚨 " : "🚌 ";
-      sendInstantPortalNotification({
+      await sendInstantPortalNotification({
         targetUserIds: targetParentUserIds,
         category: "BUS_MESSAGE",
         title: `${notifIcon}Bus ${bus.busNumber}: ${title.trim()}`,
@@ -1198,7 +1198,7 @@ export async function sendBusMessageAction(busId: string, rawPayload: any) {
         tag: `admin-bus-msg-${bus.id}-${result.id}`,
         priority: priority === "URGENT" ? "URGENT" : "HIGH",
         bypass48h: true,
-      }).catch(() => {});
+      }).catch((err) => console.warn("Transport bus msg push note:", err));
     }
 
     revalidatePath("/admin/buses");

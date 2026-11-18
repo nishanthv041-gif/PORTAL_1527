@@ -2,6 +2,7 @@
 
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
+import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
 
 export async function logDisciplineAction(formData: FormData) {
   try {
@@ -15,7 +16,7 @@ export async function logDisciplineAction(formData: FormData) {
       return { error: "Missing required fields" };
     }
 
-    await prisma.disciplineRecord.create({
+    const record = await prisma.disciplineRecord.create({
       data: {
         studentId,
         incident,
@@ -23,8 +24,42 @@ export async function logDisciplineAction(formData: FormData) {
         description,
         actionTaken,
         status: "PENDING", // Wait for admin review or just log it
+      },
+      include: {
+        student: {
+          include: {
+            parents: {
+              include: {
+                parent: {
+                  select: { userId: true }
+                }
+              }
+            }
+          }
+        }
       }
     });
+
+    // Notify parents immediately
+    try {
+      const parentUserIds = record.student.parents
+        .map(p => p.parent.userId)
+        .filter(Boolean) as string[];
+
+      if (parentUserIds.length > 0) {
+        await sendInstantPortalNotification({
+          targetUserIds: parentUserIds,
+          category: "DISCIPLINE",
+          title: `⚠️ Discipline Notice: ${record.student.firstName} ${record.student.lastName || ""}`.trim(),
+          body: `${incident}: ${description}`,
+          link: "/dashboard/parent/discipline",
+          priority: "HIGH",
+          bypass48h: true,
+        });
+      }
+    } catch (notifErr) {
+      console.warn("[TeacherDiscipline] Notification dispatch note:", notifErr);
+    }
 
     revalidatePath("/dashboard/teacher/discipline");
     return { success: true };

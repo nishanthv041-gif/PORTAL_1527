@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getOrCreateDeviceFingerprint } from "@/frontend/hooks/usePushNotification";
 import { Bell, X } from "lucide-react";
+import { initPushNotifications, loginToPushService } from "@/frontend/lib/pushNotifications";
+import { initOneSignal, loginToOneSignal } from "@/frontend/lib/onesignal";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -33,6 +35,11 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
 
   useEffect(() => {
     if (typeof window === "undefined" || !userId) return;
+
+    // Immediately bind user to OneSignal and Push Notifications on any device visit
+    initPushNotifications(userId).catch(() => {});
+    loginToPushService(userId).catch(() => {});
+    loginToOneSignal(userId).catch(() => {});
 
     // Check if running inside Capacitor native platform
     const isCapacitor = Boolean(

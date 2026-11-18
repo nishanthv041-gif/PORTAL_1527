@@ -288,7 +288,7 @@ export async function createMeetingAction(formData: FormData) {
         const teacherUserIds = meeting.teachers.map(t => t.userId).filter(Boolean) as string[];
 
         if (parentUserIds.length > 0) {
-          sendInstantPortalNotification({
+          await sendInstantPortalNotification({
             targetUserIds: parentUserIds,
             category: "MEETING",
             title: `📅 Meeting Scheduled: ${topic}`,
@@ -296,11 +296,12 @@ export async function createMeetingAction(formData: FormData) {
             link: "/dashboard/parent/meetings",
             tag: `meeting-${meeting.id}-parent`,
             priority: "HIGH",
-          }).catch(() => {});
+            bypass48h: true,
+          }).catch((err) => console.warn("Meeting parent push note:", err));
         }
 
         if (teacherUserIds.length > 0) {
-          sendInstantPortalNotification({
+          await sendInstantPortalNotification({
             targetUserIds: teacherUserIds,
             category: "MEETING",
             title: `📅 Staff Meeting: ${topic}`,
@@ -308,7 +309,8 @@ export async function createMeetingAction(formData: FormData) {
             link: "/dashboard/teacher/meetings",
             tag: `meeting-${meeting.id}-teacher`,
             priority: "HIGH",
-          }).catch(() => {});
+            bypass48h: true,
+          }).catch((err) => console.warn("Meeting teacher push note:", err));
         }
       }
     }
@@ -449,7 +451,7 @@ export async function sendMeetingNotificationAction(meetingId: string) {
     await prisma.notification.createMany({ data: notifs });
     await invalidateUserNotifCache();
 
-    sendInstantPortalNotification({
+    await sendInstantPortalNotification({
       targetUserIds: notifs.map(n => n.userId),
       category: "MEETING",
       title: `🔔 Reminder: ${meeting.agenda}`,
@@ -457,7 +459,8 @@ export async function sendMeetingNotificationAction(meetingId: string) {
       link: meetingType === "PARENTS" ? "/dashboard/parent/meetings" : "/dashboard/teacher/meetings",
       tag: `reminder-meeting-${meeting.id}`,
       priority: "HIGH",
-    }).catch(() => {});
+      bypass48h: true,
+    }).catch((err) => console.warn("Meeting reminder push note:", err));
 
     revalidatePath("/dashboard/admin/meetings");
     revalidatePath("/dashboard/teacher/meetings");
