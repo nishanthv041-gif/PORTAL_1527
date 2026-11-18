@@ -58,7 +58,7 @@ export async function sendMessage(senderId: string, receiverId: string, content:
         body: `${sender?.name || "User"}: "${cleanContent.length > 120 ? cleanContent.slice(0, 117) + "..." : cleanContent}"`,
         category: "MESSAGE",
         url: recipientLink,
-        tag: `chat-${senderId}`,
+        tag: `chat-${senderId}-${Date.now()}`,
         priority: "HIGH",
       });
     } catch (notifErr) {

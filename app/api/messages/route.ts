@@ -138,7 +138,7 @@ export async function POST(request: Request) {
         body: `${session.user.name || "User"}: "${previewSnippet}"`,
         category: "MESSAGE",
         url: recipientLink,
-        tag: `chat-${session.user.id}`,
+        tag: `chat-${session.user.id}-${Date.now()}`,
         priority: "HIGH",
       });
     } catch (notifErr) {

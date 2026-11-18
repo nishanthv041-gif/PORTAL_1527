@@ -49,7 +49,7 @@ export async function adminSendMessage(receiverId: string, content: string) {
         body: `${session.user.name || "School Administration"}: "${cleanContent.length > 120 ? cleanContent.slice(0, 117) + "..." : cleanContent}"`,
         category: "MESSAGE",
         url: recipientLink,
-        tag: `chat-${session.user.id}`,
+        tag: `chat-${session.user.id}-${Date.now()}`,
         priority: "HIGH",
       });
     } catch (notifErr) {

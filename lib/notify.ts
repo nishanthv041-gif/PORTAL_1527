@@ -197,6 +197,9 @@ export async function sendUniversalNotification(
   }> = [];
 
   try {
+    // 48-hour activity window with fallback to all active registered devices
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
     // 2a. Query all active push subscriptions for recipient
     let rawSubs = await prisma.pushSubscription.findMany({
       where: {
@@ -335,8 +338,9 @@ export async function sendUniversalNotification(
   }
 
   // 3. Dispatch OneSignal & Multi-Platform Push Concurrently (so WebPush is never blocked or delayed)
-  const deterministicTag =
-    tag || `notif-${category.toLowerCase()}-${notificationId || Date.now().toString().slice(-6)}`;
+  const deterministicTag = tag
+    ? (tag.includes(String(Date.now()).slice(0, 5)) ? tag : `${tag}-${Date.now()}`)
+    : `notif-${category.toLowerCase()}-${notificationId || Date.now()}`;
 
   console.log(`[PUSH] Dispatching push to userId=${userId}, activeSubscriptions=${subscriptions.length}, totalUnreadCount=${unreadCount}`);
 

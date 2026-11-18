@@ -273,9 +273,9 @@ export async function sendInstantPortalNotification(
 
     // Branch B: WebPush Dispatch to all registered mobile & desktop devices
     if (uniqueDevices.length > 0) {
-      const deterministicTag =
-        params.tag ||
-        `${normalizedCategory.toLowerCase()}-${link.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 35)}`;
+      const deterministicTag = params.tag
+        ? `${params.tag}-${Date.now()}`
+        : `${normalizedCategory.toLowerCase()}-${Date.now()}`;
 
       const pushPayload = JSON.stringify({
         title,

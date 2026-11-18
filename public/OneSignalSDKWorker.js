@@ -26,15 +26,8 @@ try {
   console.warn("[OneSignal Worker] Could not load OneSignal SDK script:", osErr);
 }
 
-// 3. Import PWA Offline Shell & Caching Logic (sw.js)
-try {
-  importScripts("/sw.js");
-} catch (swErr) {
-  console.warn("[OneSignal Worker] Could not import /sw.js:", swErr);
-}
-
 // ============================================================================
-// 4. Dedicated Push Listener for Direct VAPID & Portal System Notifications
+// 3. Dedicated Push Listener for Direct VAPID & Portal System Notifications
 // Guarantees lock-screen banner displays on Android & iOS even if OneSignal skips
 // ============================================================================
 self.addEventListener("push", (event) => {
