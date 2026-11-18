@@ -10,7 +10,8 @@ export const ONESIGNAL_APP_ID =
   "721f0fa5-683c-4edc-93ce-35a8786d655b";
 
 export interface OneSignalPushOptions {
-  userId: string | string[];
+  userId?: string | string[];
+  broadcast?: boolean; // When true, sends to all subscribed devices across the entire school app
   title: string;
   body: string;
   url?: string;
@@ -36,67 +37,74 @@ export interface OneSignalPushResult {
 export async function sendOneSignalPush(
   options: OneSignalPushOptions
 ): Promise<OneSignalPushResult> {
-  const {
-    userId,
-    title,
-    body,
-    url = "https://main.d3bt7u4517jg0f.amplifyapp.com",
-    unreadCount = 1,
-    category = "MESSAGE",
-    additionalData = {},
-  } = options;
+    const {
+      userId,
+      broadcast = false,
+      title,
+      body,
+      url = "https://main.d3bt7u4517jg0f.amplifyapp.com",
+      unreadCount = 1,
+      category = "MESSAGE",
+      additionalData = {},
+    } = options;
 
-  const apiKey = process.env.ONESIGNAL_REST_API_KEY;
+    const apiKey = process.env.ONESIGNAL_REST_API_KEY;
 
-  if (!apiKey || apiKey.trim() === "" || apiKey.includes("your_onesignal_rest_api_key")) {
-    console.warn(
-      "[OneSignal] ONESIGNAL_REST_API_KEY is not configured in .env. Skipping OneSignal push dispatch."
-    );
-    return {
-      success: false,
-      error: "ONESIGNAL_REST_API_KEY is missing in environment variables.",
-    };
-  }
+    if (!apiKey || apiKey.trim() === "" || apiKey.includes("your_onesignal_rest_api_key")) {
+      console.warn(
+        "[OneSignal] ONESIGNAL_REST_API_KEY is not configured in .env. Skipping OneSignal push dispatch."
+      );
+      return {
+        success: false,
+        error: "ONESIGNAL_REST_API_KEY is missing in environment variables.",
+      };
+    }
 
-  const userIds = Array.isArray(userId)
-    ? userId.map((id) => String(id).trim()).filter(Boolean)
-    : [String(userId).trim()].filter(Boolean);
+    const userIds = broadcast
+      ? []
+      : Array.isArray(userId)
+      ? userId.map((id) => String(id).trim()).filter(Boolean)
+      : [String(userId || "").trim()].filter(Boolean);
 
-  if (userIds.length === 0) {
-    return {
-      success: false,
-      error: "No valid user IDs provided for OneSignal push.",
-    };
-  }
+    if (!broadcast && userIds.length === 0) {
+      return {
+        success: false,
+        error: "No valid user IDs provided for OneSignal push.",
+      };
+    }
 
-  const safeBadgeCount = Math.max(0, Number(unreadCount) || 1);
-  const resolvedUrl = url || "https://main.d3bt7u4517jg0f.amplifyapp.com";
+    const safeBadgeCount = Math.max(0, Number(unreadCount) || 1);
+    const resolvedUrl = url || "https://main.d3bt7u4517jg0f.amplifyapp.com";
 
-  const payload = {
-    app_id: ONESIGNAL_APP_ID,
-    target_channel: "push",
-    include_aliases: {
-      external_id: userIds,
-    },
-    headings: { en: title },
-    contents: { en: body },
-    url: resolvedUrl,
-    ios_badgeType: "SetTo",
-    ios_badgeCount: safeBadgeCount,
-    data: {
-      unreadCount: safeBadgeCount,
+    const payload: any = {
+      app_id: ONESIGNAL_APP_ID,
+      target_channel: "push",
+      ...(broadcast
+        ? { included_segments: ["Total Subscriptions", "Subscribed Users"] }
+        : {
+            include_aliases: {
+              external_id: userIds,
+            },
+          }),
+      headings: { en: title },
+      contents: { en: body },
       url: resolvedUrl,
-      category,
-      ...additionalData,
-    },
-    web_buttons: [
-      {
-        id: "open-portal",
-        text: "Open Portal",
+      ios_badgeType: "SetTo",
+      ios_badgeCount: safeBadgeCount,
+      data: {
+        unreadCount: safeBadgeCount,
         url: resolvedUrl,
+        category,
+        ...additionalData,
       },
-    ],
-  };
+      web_buttons: [
+        {
+          id: "open-portal",
+          text: "Open Portal",
+          url: resolvedUrl,
+        },
+      ],
+    };
 
   const authHeaders = [
     apiKey.trim().startsWith("Key ") || apiKey.trim().startsWith("Basic ")

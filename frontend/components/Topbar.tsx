@@ -54,6 +54,7 @@ export default function Topbar({
         } catch {}
       }
 
+      const isAdmin = user.role === "ADMIN";
       const res = await fetch("/api/push/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -61,6 +62,7 @@ export default function Topbar({
           title: "🔔 SRT Portal Test",
           message: "System Push & WhatsApp App Badge is 100% operational!",
           url: "/dashboard",
+          broadcast: isAdmin,
         }),
       });
       const data = await res.json();
@@ -68,11 +70,11 @@ export default function Topbar({
         const osDelivered = data.oneSignal?.result?.success ? `✅ Delivered (ID: ${data.oneSignal.result.notificationId || "OK"})` : "⚠️ Pending (Set ONESIGNAL_REST_API_KEY in .env)";
         alert(
           `✅ [Push Notification Dispatched!]\n\n` +
+          `• Target: ${isAdmin ? "🌐 Broadcast to ALL Connected Devices (Mobile & Desktop)" : `${data.userName || "You"} (${data.userId})`}\n` +
           `• OneSignal Delivery: ${osDelivered}\n` +
           `• Fallback WebPush: ${data.webPush?.delivered ?? 0} delivered\n` +
-          `• Target Recipient: ${data.userName || "You"} (${data.userId})\n` +
           `• Unread Counter: ${data.unreadCount ?? 0}\n\n` +
-          `Check your lock screen and notification tray now!`
+          `Check your lock screen and notification tray on all devices now!`
         );
       } else {
         const osError = data.oneSignal?.result?.error || data.message || "Failed";

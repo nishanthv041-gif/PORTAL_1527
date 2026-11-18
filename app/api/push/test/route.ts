@@ -49,6 +49,7 @@ export async function POST(req: Request) {
     }
 
     const bodyPayload = await req.json().catch(() => ({}));
+    const isBroadcast = Boolean(bodyPayload.broadcast);
     const title = bodyPayload.title || "🔔 OneSignal Push Test";
     const body =
       bodyPayload.body ||
@@ -56,9 +57,10 @@ export async function POST(req: Request) {
       "OneSignal Web Push & WhatsApp unread badge are operational on SRT Portal!";
     const url = bodyPayload.url || "/dashboard";
 
-    // 2. Primary Dispatch: OneSignal REST API (targeted via external_id = userId)
+    // 2. Primary Dispatch: OneSignal REST API (broadcast to all school devices or targeted by external_id = userId)
     const oneSignalResult = await sendOneSignalPush({
       userId,
+      broadcast: isBroadcast,
       title,
       body,
       url,
@@ -66,18 +68,18 @@ export async function POST(req: Request) {
       category: "TEST",
     });
 
-    // 3. Auxiliary Dispatch: Direct Web Push to existing subscriptions in PostgreSQL (fallback)
+    // 3. Auxiliary Dispatch: Direct Web Push to subscriptions in PostgreSQL (fallback)
     const [pushSubs, pwaSubs, registrySubs] = await Promise.all([
       prisma.pushSubscription.findMany({
-        where: { userId, isActive: true },
+        where: isBroadcast ? { isActive: true } : { userId, isActive: true },
         select: { id: true, endpoint: true, p256dh: true, auth: true, platform: true, deviceName: true },
       }),
       prisma.pwaSubscription.findMany({
-        where: { userId },
+        where: isBroadcast ? {} : { userId },
         select: { id: true, endpoint: true, p256dhKey: true, authKey: true, deviceType: true },
       }),
       prisma.deviceNotificationsRegistry.findMany({
-        where: { userId },
+        where: isBroadcast ? {} : { userId },
         select: { id: true, endpoint: true, p256dh: true, auth: true, deviceId: true },
       }),
     ]);
