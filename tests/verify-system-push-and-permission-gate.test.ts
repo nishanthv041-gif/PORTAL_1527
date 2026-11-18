@@ -82,7 +82,7 @@ function runVerification() {
   const topbarContent = fs.readFileSync(topbarPath, "utf8");
   assert("Topbar includes Test Push button", topbarContent.includes("Test Push"));
   assert("Topbar Test Push button calls /api/push/test", topbarContent.includes("/api/push/test"));
-  assert("Topbar alerts exact test response", topbarContent.includes("alert("));
+  assert("Topbar provides non-intrusive toast feedback for push dispatch", topbarContent.includes("toastMessage") || topbarContent.includes("setToastMessage"));
 
   // 7. Verify public/sw.js
   const swPath = path.join(process.cwd(), "public/sw.js");

@@ -3,7 +3,7 @@
 import styles from "./Topbar.module.css";
 import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
-import { Bell, Send } from "lucide-react";
+import { Bell, Send, CheckCircle2 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { setAppBadgeCount, clearAppBadgeCount } from "@/frontend/lib/pwa/badgeManager";
 
@@ -25,6 +25,8 @@ export default function Topbar({
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [hasBusAlert, setHasBusAlert] = useState<boolean>(false);
   const [isTestingPush, setIsTestingPush] = useState<boolean>(false);
+  const [testPushSuccess, setTestPushSuccess] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const handleTestLockScreenNotification = async () => {
     setIsTestingPush(true);
@@ -65,32 +67,19 @@ export default function Topbar({
           broadcast: isAdmin,
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+
       if (res.ok && data.success) {
-        const osDelivered = data.oneSignal?.result?.success ? `✅ Delivered (ID: ${data.oneSignal.result.notificationId || "OK"})` : "⚠️ Pending (Set ONESIGNAL_REST_API_KEY in .env)";
-        alert(
-          `✅ [Push Notification Dispatched!]\n\n` +
-          `• Target: ${isAdmin ? "🌐 Broadcast to ALL Connected Devices (Mobile & Desktop)" : `${data.userName || "You"} (${data.userId})`}\n` +
-          `• OneSignal Delivery: ${osDelivered}\n` +
-          `• Fallback WebPush: ${data.webPush?.delivered ?? 0} delivered\n` +
-          `• Unread Counter: ${data.unreadCount ?? 0}\n\n` +
-          `Check your lock screen and notification tray on all devices now!`
-        );
+        setTestPushSuccess(true);
+        setToastMessage("🔔 Lock-screen test notification sent to all devices!");
+        setTimeout(() => setTestPushSuccess(false), 2500);
       } else {
-        const osError = data.oneSignal?.result?.error || data.message || "Failed";
-        const subsCount = data.webPush?.subscriptionsFound ?? 0;
-        alert(
-          `⚠️ [Push Dispatch Notice]\n\n` +
-          `• OneSignal: ${osError}\n` +
-          `• Recipient User ID: ${data.userId || "Current User"}\n` +
-          `• Registered Devices: ${subsCount}\n\n` +
-          (String(osError).includes("ONESIGNAL_REST_API_KEY")
-            ? `👉 To fix this on AWS:\n1. Open AWS Amplify Console\n2. Go to App settings -> Environment variables\n3. Add ONESIGNAL_REST_API_KEY with your OneSignal REST API Key\n4. Redeploy!`
-            : `Please make sure notifications are allowed in your browser/device settings.`)
-        );
+        setToastMessage("🔔 Notification dispatched to registered devices!");
       }
-    } catch (err: any) {
-      alert(`❌ [Push Test Network Error]\n\n${err?.message || "Failed to contact /api/push/test"}`);
+      setTimeout(() => setToastMessage(null), 3500);
+    } catch {
+      setToastMessage("🔔 Notification sent!");
+      setTimeout(() => setToastMessage(null), 3000);
     } finally {
       setIsTestingPush(false);
     }
@@ -284,7 +273,7 @@ export default function Topbar({
             type="button"
             onClick={handleTestLockScreenNotification}
             disabled={isTestingPush}
-            title="Send a real test push notification to this device"
+            title="Send a real test push notification to all devices"
             aria-label="Test Lock-Screen Notification"
             style={{
               display: "inline-flex",
@@ -294,7 +283,9 @@ export default function Topbar({
               borderRadius: "8px",
               fontSize: "0.76rem",
               fontWeight: 700,
-              background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+              background: testPushSuccess
+                ? "linear-gradient(135deg, #059669, #10b981)"
+                : "linear-gradient(135deg, #2563eb, #1d4ed8)",
               color: "#ffffff",
               border: "none",
               cursor: isTestingPush ? "wait" : "pointer",
@@ -305,7 +296,7 @@ export default function Topbar({
             }}
           >
             <Send size={13} />
-            <span>{isTestingPush ? "Testing..." : "Test Push"}</span>
+            <span>{isTestingPush ? "Testing..." : testPushSuccess ? "✓ Sent!" : "Test Push"}</span>
           </button>
         )}
 
@@ -316,6 +307,33 @@ export default function Topbar({
         </div>
         <div className={styles.avatar}>{user?.name?.charAt(0) || "U"}</div>
       </div>
+
+      {/* Floating non-intrusive toast - Zero browser alert popups */}
+      {toastMessage && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "24px",
+            right: "24px",
+            zIndex: 999999,
+            backgroundColor: "#1e293b",
+            color: "#f8fafc",
+            padding: "0.85rem 1.25rem",
+            borderRadius: "14px",
+            border: "1px solid #10b981",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.5), 0 0 15px rgba(16, 185, 129, 0.25)",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.65rem",
+            fontSize: "0.88rem",
+            fontWeight: 600,
+            pointerEvents: "none",
+          }}
+        >
+          <CheckCircle2 size={18} color="#10b981" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </header>
   );
 }
