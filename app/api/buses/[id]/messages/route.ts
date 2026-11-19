@@ -172,13 +172,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Dispatch instant lock-screen push notifications to all parents
     if (parentUserIds.length > 0) {
       const notifIcon = priority === "URGENT" ? "🚨 " : "🚌 ";
-      sendInstantPortalNotification({
+      await sendInstantPortalNotification({
         targetUserIds: parentUserIds,
         category: "BUS_MESSAGE",
         title: `${notifIcon}Bus ${bus.busNumber}: ${title.trim()}`,
         body: message.trim(),
         link: "/parent/bus",
-        tag: `bus-msg-${busId}-${result.id}`,
+        tag: `bus-msg-${busId}-${result.id}-${Date.now()}`,
         priority: priority === "URGENT" ? "URGENT" : "HIGH",
         bypass48h: true, // Emergency bus alerts bypass 48h filter to wake all active devices
       }).catch((e) => console.error("[BusMessage] Push delivery error:", e));

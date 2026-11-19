@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import { logoutFromOneSignal } from "@/frontend/lib/onesignal";
 import {
   Home,
   Users,
@@ -56,6 +57,7 @@ export function ParentBottomNav() {
     try {
       sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
       sessionStorage.removeItem("srt_portal_fresh_login");
+      await logoutFromOneSignal().catch(() => {});
     } catch { }
     await signOut({ callbackUrl: "/" });
   };

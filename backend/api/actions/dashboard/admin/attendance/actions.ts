@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { getSessionDateTime, isForenoonRecord, isAfternoonRecord } from "@/backend/lib/services/attendanceCalculation";
+import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
 
 function formatRemarksWithSession(remarks: string | undefined | null, session: "FORENOON" | "AFTERNOON"): string {
   const cleanRemarks = (remarks || "").replace(/\s*\((FORENOON|AFTERNOON)\)/gi, "").trim();
@@ -62,6 +63,36 @@ export async function adminUpdateAttendance(
           remarks: finalRemarks
         }
       });
+    }
+
+    // Trigger instant Parent Attendance Notification on Absence
+    if (status === "ABSENT") {
+      try {
+        const studentInfo = await prisma.student.findUnique({
+          where: { id: studentId },
+          select: {
+            firstName: true,
+            lastName: true,
+            parents: { select: { parent: { select: { userId: true } } } },
+          },
+        });
+        const studentName = `${studentInfo?.firstName || ""} ${studentInfo?.lastName || ""}`.trim() || "Student";
+        const parentUserIds = studentInfo?.parents.map((p) => p.parent.userId).filter((id): id is string => Boolean(id)) || [];
+        if (parentUserIds.length > 0) {
+          await sendInstantPortalNotification({
+            targetUserIds: parentUserIds,
+            category: "ATTENDANCE",
+            title: `Attendance Alert: ${studentName} Absent`,
+            body: `${studentName} was marked absent for the ${sessionType.toLowerCase()} session on ${dateStr}.`,
+            link: "/dashboard/parent/attendance",
+            tag: `att-${studentId}-${dateStr}-${sessionType}-${Date.now()}`,
+            priority: "URGENT",
+            bypass48h: true,
+          });
+        }
+      } catch (notifErr) {
+        console.warn("[Admin Attendance] Notification dispatch note:", notifErr);
+      }
     }
 
     revalidatePath("/dashboard/admin/attendance");
@@ -127,6 +158,41 @@ export async function adminBulkAttendance(data: {
             remarks: finalRemarks
           }
         });
+      }
+    }
+
+    // Trigger instant Parent Attendance Notification for absent students
+    const absentItems = data.filter((d) => d.status === "ABSENT");
+    if (absentItems.length > 0) {
+      try {
+        for (const item of absentItems) {
+          const sessionType: "FORENOON" | "AFTERNOON" = item.session ||
+            (item.remarks?.toUpperCase().includes("AFTERNOON") ? "AFTERNOON" : "FORENOON");
+          const studentInfo = await prisma.student.findUnique({
+            where: { id: item.studentId },
+            select: {
+              firstName: true,
+              lastName: true,
+              parents: { select: { parent: { select: { userId: true } } } },
+            },
+          });
+          const studentName = `${studentInfo?.firstName || ""} ${studentInfo?.lastName || ""}`.trim() || "Student";
+          const parentUserIds = studentInfo?.parents.map((p) => p.parent.userId).filter((id): id is string => Boolean(id)) || [];
+          if (parentUserIds.length > 0) {
+            await sendInstantPortalNotification({
+              targetUserIds: parentUserIds,
+              category: "ATTENDANCE",
+              title: `Attendance Alert: ${studentName} Absent`,
+              body: `${studentName} was marked absent for the ${sessionType.toLowerCase()} session on ${item.date}.`,
+              link: "/dashboard/parent/attendance",
+              tag: `att-${item.studentId}-${item.date}-${sessionType}-${Date.now()}`,
+              priority: "URGENT",
+              bypass48h: true,
+            });
+          }
+        }
+      } catch (notifErr) {
+        console.warn("[Admin Attendance] Bulk notification dispatch note:", notifErr);
       }
     }
 

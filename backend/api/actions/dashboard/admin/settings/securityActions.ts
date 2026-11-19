@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
+import { dispatchNotification } from "@/lib/dispatcher";
 import {
   getOrCreateSettingsSecurity,
   isSettingsUnlockedServer,
@@ -288,6 +289,17 @@ export async function changeSettingsPasswordAction(rawData: {
       session.user.sessionId,
       newVersion
     );
+
+    // Dispatch instant security push alert to all administrators
+    await dispatchNotification({
+      type: "SECURITY_ALERT",
+      audience: { roles: ["ADMIN"] },
+      title: "🔐 Security Alert: Settings Password Changed",
+      body: `School settings master password was updated by ${session.user.name || "Administrator"}.`,
+      url: "/dashboard/admin/settings/security",
+      priority: "URGENT",
+      tag: `security-pw-changed-${Date.now()}`,
+    }).catch(() => {});
 
     return { success: true };
   } catch (error: any) {

@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import { dispatchNotification } from "@/lib/dispatcher";
 
 export type ExamType = "UNIT_TEST" | "QUARTERLY" | "HALF_YEARLY" | "ANNUAL" | "MODEL" | "OTHER";
 
@@ -443,6 +444,9 @@ export async function adminApproveExamRequestWorkflowAction(
       }));
     }
 
+    const teacherNotifications = new Map<string, { teacherName: string; subjectNames: string[] }>();
+    const requesterUserId = request.requestedByStaff?.user?.id || request.class.classTeacher?.user?.id;
+
     const result = await prisma.$transaction(async (tx) => {
       // 1. Mark request APPROVED
       await tx.examRequest.update({
@@ -471,7 +475,6 @@ export async function adminApproveExamRequestWorkflowAction(
 
       // 3. Create ExamSubject tasks for every subject assigned to the subject teacher
       const createdSubjects = [];
-      const teacherNotifications = new Map<string, { teacherName: string; subjectNames: string[] }>();
 
       for (const reqSub of subjectsToCreate) {
         // Find assigned teacher from request or subject master
@@ -525,7 +528,6 @@ export async function adminApproveExamRequestWorkflowAction(
       }
 
       // 5. Notify the Requester / Class Teacher
-      const requesterUserId = request.requestedByStaff?.user?.id || request.class.classTeacher?.user?.id;
       if (requesterUserId) {
         await tx.notification.create({
           data: {
@@ -543,6 +545,33 @@ export async function adminApproveExamRequestWorkflowAction(
 
       return { exam, createdSubjects };
     });
+
+    // Post-commit push dispatch to assigned subject teachers and class teacher
+    for (const [userId, info] of teacherNotifications.entries()) {
+      await dispatchNotification({
+        type: "EXAM",
+        entityId: result.exam.id,
+        recipients: [userId],
+        title: "Marks Entry Task Assigned",
+        body: `You have been assigned to enter marks for ${info.subjectNames.join(", ")} in "${examTitle}".`,
+        url: "/dashboard/teacher/exams",
+        priority: "HIGH",
+        tag: `exam-task-${result.exam.id}-${userId}-${Date.now()}`,
+      }).catch(() => {});
+    }
+
+    if (requesterUserId) {
+      await dispatchNotification({
+        type: "EXAM",
+        entityId: result.exam.id,
+        recipients: [requesterUserId],
+        title: "Exam Request Approved",
+        body: `Your exam request "${examTitle}" has been approved. Marks entry tasks are now open.`,
+        url: "/dashboard/teacher/exams",
+        priority: "HIGH",
+        tag: `exam-approved-${result.exam.id}-${Date.now()}`,
+      }).catch(() => {});
+    }
 
     revalidatePath("/dashboard/admin/exams");
     revalidatePath("/dashboard/admin/exams/requests");

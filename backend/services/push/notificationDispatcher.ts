@@ -1,9 +1,9 @@
 import { prisma } from "@/backend/db/prisma";
-import { dispatchPushToRecipients, PushPayload } from "./webPushService";
+import { dispatchNotification } from "@/lib/dispatcher";
 
 /**
- * Standardized Notification Dispatcher for Nipo Portal
- * Handles in-app records and real-time Web Push delivery across user roles.
+ * Standardized Notification Dispatcher for SRT Portal
+ * Handles in-app records and real-time Web Push + OneSignal delivery across user roles.
  */
 
 // 1. Admin Alert: Notify all administrators of critical system events
@@ -13,41 +13,14 @@ export async function sendSystemAlertToAdmins(
   priority: "NORMAL" | "URGENT" = "NORMAL"
 ) {
   try {
-    const adminUsers = await prisma.user.findMany({
-      where: { role: "ADMIN", status: "ACTIVE" },
-      select: { id: true },
+    await dispatchNotification({
+      type: priority === "URGENT" ? "ALERT" : "SYSTEM",
+      audience: { roles: ["ADMIN"] },
+      title: `🚨 ${title}`,
+      body: content,
+      url: "/dashboard/admin/system-health",
+      priority: priority === "URGENT" ? "URGENT" : "HIGH",
     });
-
-    if (adminUsers.length === 0) return;
-    const adminIds = adminUsers.map((a) => a.id);
-
-    // In-app records
-    await prisma.notification.createMany({
-      data: adminIds.map((uid) => ({
-        userId: uid,
-        title,
-        content,
-        type: priority === "URGENT" ? "ALERT" : "SYSTEM",
-        category: "SYSTEM",
-        priority,
-        link: "/dashboard/admin/system-health",
-        isRead: false,
-      })),
-    });
-
-    // Real-time Push
-    await dispatchPushToRecipients(
-      adminIds,
-      {
-        title,
-        body: content,
-        url: "/dashboard/admin/system-health",
-        priority,
-        category: "alerts",
-      },
-      undefined,
-      "alerts"
-    );
   } catch (err) {
     console.error("[Notification Dispatcher] Admin alert error:", err);
   }
@@ -61,46 +34,14 @@ export async function broadcastAnnouncementNotification(
   link: string = "/dashboard"
 ) {
   try {
-    let users = [];
-    if (!targetRole || targetRole === "ALL") {
-      users = await prisma.user.findMany({
-        where: { status: "ACTIVE" },
-        select: { id: true },
-      });
-    } else {
-      users = await prisma.user.findMany({
-        where: { role: targetRole, status: "ACTIVE" },
-        select: { id: true },
-      });
-    }
-
-    if (users.length === 0) return;
-    const userIds = users.map((u) => u.id);
-
-    await prisma.notification.createMany({
-      data: userIds.map((uid) => ({
-        userId: uid,
-        title,
-        content,
-        type: "ANNOUNCEMENT",
-        category: "GENERAL",
-        priority: "NORMAL",
-        link,
-        isRead: false,
-      })),
+    await dispatchNotification({
+      type: "ANNOUNCEMENT",
+      audience: targetRole && targetRole !== "ALL" ? { roles: [targetRole as any] } : { all: true },
+      title,
+      body: content,
+      url: link,
+      priority: "HIGH",
     });
-
-    await dispatchPushToRecipients(
-      userIds,
-      {
-        title,
-        body: content,
-        url: link,
-        category: "general",
-      },
-      undefined,
-      "general"
-    );
   } catch (err) {
     console.error("[Notification Dispatcher] Announcement broadcast error:", err);
   }
@@ -116,18 +57,15 @@ export async function sendUserNotification(
   priority: "NORMAL" | "URGENT" = "NORMAL"
 ) {
   try {
-    const { sendUniversalNotification } = await import("@/lib/notify");
-    await sendUniversalNotification({
-      userId,
+    await dispatchNotification({
+      type: category.toUpperCase(),
+      recipients: [userId],
       title,
       body: content,
-      content,
-      category: category.toUpperCase(),
       url: link,
-      priority: priority === "URGENT" ? "HIGH" : "NORMAL",
+      priority: priority === "URGENT" ? "URGENT" : "HIGH",
     });
   } catch (err) {
     console.error("[Notification Dispatcher] User notification error:", err);
   }
 }
-

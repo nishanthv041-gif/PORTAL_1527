@@ -3,6 +3,7 @@
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { parseDateString } from "@/backend/lib/services/attendanceCalculation";
+import { dispatchNotification } from "@/lib/dispatcher";
 
 function revalidateAllCalendarAndAttendancePaths() {
   revalidatePath("/dashboard/admin/calendar");
@@ -60,6 +61,23 @@ export async function setSchoolDayStatusAction(payload: {
         isCustom: true,
       },
     });
+
+    // Dispatch push notification to school community
+    const dayLabel = payload.status === "LEAVE_DAY" ? "Holiday / Leave Day" : "Working Day";
+    const notifTitle = payload.status === "LEAVE_DAY"
+      ? `🏖️ Holiday Declared: ${payload.title || "School Leave"}`
+      : `📅 School Schedule Notice: ${payload.title || "Working Day"}`;
+    const notifBody = `${payload.date} is marked as ${dayLabel} for ${targetClassNames}.${payload.reason ? ` Reason: ${payload.reason}` : ""}`;
+
+    await dispatchNotification({
+      type: "EVENT",
+      audience: { all: true },
+      title: notifTitle,
+      body: notifBody,
+      url: "/dashboard/calendar",
+      priority: payload.status === "LEAVE_DAY" ? "HIGH" : "NORMAL",
+      tag: `calendar-${payload.date}-${Date.now()}`,
+    }).catch((err) => console.warn("[CalendarAction] Push error:", err));
 
     revalidateAllCalendarAndAttendancePaths();
     return { success: true };

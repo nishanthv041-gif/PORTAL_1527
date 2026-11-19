@@ -1,6 +1,8 @@
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
+import Link from "next/link";
+import { Activity } from "lucide-react";
 import styles from "../../dashboard.module.css";
 import NotificationsClient from "./NotificationsClient";
 
@@ -37,7 +39,27 @@ export default async function AdminNotificationsPage() {
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: 0, marginBottom: '1.5rem' }}>Notifications</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <h1 className={styles.title} style={{ margin: 0 }}>Notifications</h1>
+        <Link
+          href="/dashboard/admin/notifications/diagnostics"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            padding: '0.5rem 1rem',
+            borderRadius: '0.5rem',
+            background: '#4f46e5',
+            color: '#fff',
+            textDecoration: 'none',
+            fontSize: '0.875rem',
+            fontWeight: 500,
+          }}
+        >
+          <Activity className="w-4 h-4" />
+          Push Diagnostics & Delivery Trace
+        </Link>
+      </div>
 
       <NotificationsClient 
         notifications={notifications as any} 

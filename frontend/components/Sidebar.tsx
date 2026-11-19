@@ -7,6 +7,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import SrtLogo from "@/frontend/components/ui/SrtLogo";
 import { getActiveNavItemHref } from "@/lib/navigation/sidebarActive";
+import { logoutFromOneSignal } from "@/frontend/lib/onesignal";
 import styles from "./Sidebar.module.css";
 import {
   Menu,
@@ -332,6 +333,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
             try {
               sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
               sessionStorage.removeItem("srt_portal_fresh_login");
+              await logoutFromOneSignal().catch(() => {});
             } catch { }
             signOut({ callbackUrl: '/' });
           }}

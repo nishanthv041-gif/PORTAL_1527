@@ -106,7 +106,7 @@ export async function sendReportCardToParentAction(studentId: string) {
           title: `Report Card: ${studentFullName}`,
           body: `The official report card for ${studentFullName} has been generated and is now available for viewing.`,
           link: `/dashboard/parent/report-cards/${student.id}`,
-          tag: `report-card-${student.id}`,
+          tag: `report-card-${student.id}-${Date.now()}`,
           priority: "HIGH",
         });
       } catch (notifErr) {
@@ -265,7 +265,7 @@ export async function sendClassReportCardsToAllParentsAction(classId: string) {
             title: `Report Card: ${studentFullName}`,
             body: `The official report card for ${studentFullName} has been generated and is now available for viewing.`,
             link: `/dashboard/parent/report-cards/${student.id}`,
-            tag: `report-card-${student.id}`,
+            tag: `report-card-${student.id}-${Date.now()}`,
             priority: "HIGH",
           });
         } catch (err) {
@@ -536,7 +536,7 @@ export async function createAndSendReportCardAction(payload: CreateReportCardPay
           title: `Report Card: ${studentFullName}`,
           body: `The official academic report card for ${examName.trim()} has been published. Total: ${totalScore}/${maxTotal} (${percentage}% - Grade ${grade}).`,
           link: `/dashboard/parent/report-cards`,
-          tag: `exam-report-${student.id}`,
+          tag: `exam-report-${student.id}-${Date.now()}`,
           priority: "HIGH",
         });
         await invalidateUserNotifCache(parentUser.id);

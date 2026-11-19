@@ -74,7 +74,7 @@ export async function createTeacherAnnouncementAction(formData: FormData) {
           title: `📢 ${title}`,
           body: content.slice(0, 150),
           link: "/dashboard/parent/announcements",
-          tag: `teacher-announcement-${newAnnouncement.id}`,
+          tag: `teacher-announcement-${newAnnouncement.id}-${Date.now()}`,
           priority: priority === "HIGH" ? "HIGH" : "NORMAL",
           bypass48h: true,
         });

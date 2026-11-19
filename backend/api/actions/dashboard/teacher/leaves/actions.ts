@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import { dispatchNotification } from "@/lib/dispatcher";
 
 export async function getTeacherLeaveRequests() {
   try {
@@ -125,6 +126,36 @@ export async function acceptLeaveRequest(leaveRequestId: string) {
       cur.setDate(cur.getDate() + 1);
     }
 
+    // Notify student parents of leave approval
+    const studentWithParents = await prisma.student.findUnique({
+      where: { id: leave.studentId },
+      include: {
+        parents: {
+          select: {
+            parent: { select: { userId: true } },
+          },
+        },
+      },
+    });
+
+    const parentUserIds =
+      studentWithParents?.parents
+        .map((p) => p.parent?.userId)
+        .filter((id): id is string => Boolean(id)) || [];
+
+    if (parentUserIds.length > 0) {
+      await dispatchNotification({
+        type: "LEAVE",
+        entityId: leaveRequestId,
+        recipients: parentUserIds,
+        title: `✅ Leave Request Approved: ${studentWithParents?.firstName || "Student"}`,
+        body: `Leave request for ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()} has been approved.`,
+        url: "/dashboard/parent/leaves",
+        priority: "HIGH",
+        tag: `leave-approved-${leaveRequestId}-${Date.now()}`,
+      }).catch((err) => console.warn("[LeaveAction] Push notification error:", err));
+    }
+
     revalidatePath("/dashboard/teacher/leaves");
     revalidatePath("/dashboard/teacher/attendance");
     revalidatePath("/dashboard/parent/leaves");
@@ -148,10 +179,41 @@ export async function rejectLeaveRequest(leaveRequestId: string) {
       return { success: false, error: "Unauthorized" };
     }
 
+    const leave = await prisma.leaveRequest.findUnique({
+      where: { id: leaveRequestId },
+      include: {
+        student: {
+          include: {
+            parents: {
+              select: { parent: { select: { userId: true } } },
+            },
+          },
+        },
+      },
+    });
+
     await prisma.leaveRequest.update({
       where: { id: leaveRequestId },
       data: { status: "REJECTED" }
     });
+
+    const parentUserIds =
+      leave?.student?.parents
+        .map((p) => p.parent?.userId)
+        .filter((id): id is string => Boolean(id)) || [];
+
+    if (parentUserIds.length > 0) {
+      await dispatchNotification({
+        type: "LEAVE",
+        entityId: leaveRequestId,
+        recipients: parentUserIds,
+        title: `❌ Leave Request Declined: ${leave?.student?.firstName || "Student"}`,
+        body: `Leave request for ${new Date(leave!.startDate).toLocaleDateString()} to ${new Date(leave!.endDate).toLocaleDateString()} has been declined.`,
+        url: "/dashboard/parent/leaves",
+        priority: "HIGH",
+        tag: `leave-declined-${leaveRequestId}-${Date.now()}`,
+      }).catch((err) => console.warn("[LeaveAction] Push notification error:", err));
+    }
 
     revalidatePath("/dashboard/teacher/leaves");
     revalidatePath("/dashboard/parent/leaves");

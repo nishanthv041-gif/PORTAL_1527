@@ -3,6 +3,7 @@
 import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { normalizeDateToUTC, formatSchoolDate } from "@/backend/lib/timetable/getEffectiveTimetable";
+import { dispatchNotification } from "@/lib/dispatcher";
 
 export async function toggleExamPublishAction(examId: string, isPublished: boolean) {
   try {
@@ -130,6 +131,41 @@ export async function acceptExamRequest(requestId: string) {
         }
       }
     });
+
+    // 6. Dispatch Instant Native Push notifications to Teacher & Parents post-commit
+    const subjectName = request.subject?.name || request.title || "Examination";
+    const teacherUserId = request.teacher?.user?.id;
+    const parentUserIds = Array.from(
+      new Set(
+        request.class.students.flatMap((st) => st.parents.map((ps) => ps.parent?.userId).filter((id): id is string => Boolean(id)))
+      )
+    );
+
+    if (teacherUserId) {
+      await dispatchNotification({
+        type: "EXAM",
+        entityId: requestId,
+        recipients: [teacherUserId],
+        title: "Exam Request Approved",
+        body: `Your exam request for ${subjectName} (${request.class.name}-${request.class.section}) on ${formattedDate} has been approved.`,
+        url: "/dashboard/teacher/exams",
+        priority: "HIGH",
+        tag: `exam-teacher-${requestId}-${Date.now()}`,
+      }).catch(() => {});
+    }
+
+    if (parentUserIds.length > 0) {
+      await dispatchNotification({
+        type: "EXAM",
+        entityId: requestId,
+        recipients: parentUserIds,
+        title: `📝 Exam Scheduled: ${subjectName}`,
+        body: `${subjectName} Exam for ${request.class.name}-${request.class.section} is scheduled on ${formattedDate}.`,
+        url: "/dashboard/parent/exams",
+        priority: "HIGH",
+        tag: `exam-parent-${requestId}-${Date.now()}`,
+      }).catch(() => {});
+    }
 
     revalidatePath("/dashboard/admin/exams");
     revalidatePath("/dashboard/admin/timetable");

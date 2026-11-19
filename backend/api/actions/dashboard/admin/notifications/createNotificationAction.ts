@@ -4,7 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { revalidatePath } from "next/cache";
-import { dispatchPushToRecipients } from "@/backend/services/push/webPushService";
+import { dispatchNotification } from "@/lib/dispatcher";
 
 export interface CreateNotificationInput {
   title: string;
@@ -157,27 +157,29 @@ export async function createCustomNotificationAction(formData: FormData) {
       })),
     });
 
-    // 5. If immediate, dispatch Web Push notifications to devices in parallel
-    let pushResult = { sent: 0, failed: 0, totalSubscriptions: 0 };
+    // 5. If immediate, dispatch high-priority push notifications across OneSignal & WebPush
+    let pushResult = { sent: 0, failed: 0 };
     if (isImmediate) {
-      const validCategory = (
-        ["general", "account", "alerts", "academic", "admin", "maintenance"].includes(category)
-          ? category
-          : "general"
-      ) as "general" | "account" | "alerts" | "academic" | "admin" | "maintenance";
+      const res = await dispatchNotification({
+        type: category ? category.toUpperCase() : "ANNOUNCEMENT",
+        entityId: masterNotification.id,
+        recipients: userIdsToNotify,
+        title,
+        body: content,
+        url: customLink || "/dashboard",
+        priority: priority === "URGENT" ? "URGENT" : "HIGH",
+        tag: `admin-notif-${masterNotification.id}-${Date.now()}`,
+      }).catch((err) => {
+        console.warn("[CreateNotification] Push error:", err);
+        return null;
+      });
 
-      pushResult = await dispatchPushToRecipients(
-        userIdsToNotify,
-        {
-          title,
-          body: content,
-          url: customLink,
-          priority,
-          category: validCategory,
-        },
-        masterNotification.id,
-        validCategory
-      );
+      if (res) {
+        pushResult = {
+          sent: (res.oneSignalCount || 0) + (res.webPushCount || 0),
+          failed: res.failedCount || 0,
+        };
+      }
     }
 
     revalidatePath("/dashboard/admin/notifications");
@@ -229,19 +231,19 @@ export async function retryFailedDeliveriesAction(notificationId: string) {
       return { message: "No failed deliveries to retry." };
     }
 
-    const res = await dispatchPushToRecipients(
-      userIdsToRetry,
-      {
-        title: notif.title,
-        body: notif.content,
-        url: notif.link || "/dashboard",
-        priority: (notif.priority as "NORMAL" | "URGENT") || "NORMAL",
-      },
-      notif.id
-    );
+    const res = await dispatchNotification({
+      type: "ALERT",
+      entityId: notif.id,
+      recipients: userIdsToRetry,
+      title: notif.title,
+      body: notif.content,
+      url: notif.link || "/dashboard",
+      priority: (notif.priority as "NORMAL" | "URGENT") || "NORMAL",
+      tag: `retry-${notif.id}-${Date.now()}`,
+    });
 
     revalidatePath("/dashboard/admin/notifications");
-    return { success: true, retried: userIdsToRetry.length, sent: res.sent };
+    return { success: true, retried: userIdsToRetry.length, sent: res.oneSignalCount + res.webPushCount };
   } catch (err: unknown) {
     console.error("[Retry Error]", err);
     return { error: "Failed to retry delivery." };

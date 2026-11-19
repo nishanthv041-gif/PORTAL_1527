@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
+import { dispatchNotification } from "@/lib/dispatcher";
 
 /**
  * Helper to authenticate Class Teacher or Admin
@@ -797,7 +798,7 @@ export async function publishExamToReportCardsAction(examId: string) {
           });
         }
 
-        // 3. Dispatch Notification to Parents
+        // 3. Dispatch In-App Notification to Parents
         for (const ps of student.parents) {
           const parentUserId = ps.parent?.user?.id;
           if (parentUserId) {
@@ -816,6 +817,26 @@ export async function publishExamToReportCardsAction(examId: string) {
         }
       }
     });
+
+    // 4. Dispatch Instant Native & Web Push Notification to Parents post-transaction commit
+    const allParentUserIds = Array.from(
+      new Set(
+        students.flatMap((s) => s.parents.map((p) => p.parent?.user?.id).filter((id): id is string => Boolean(id)))
+      )
+    );
+
+    if (allParentUserIds.length > 0) {
+      await dispatchNotification({
+        type: "REPORT_CARD",
+        entityId: examId,
+        recipients: allParentUserIds,
+        title: `📊 Report Card Published: ${exam.name}`,
+        body: `Official verified report cards and marks for ${exam.name} have been published. Tap to view your child's performance.`,
+        url: `/dashboard/parent/report-cards`,
+        priority: "HIGH",
+        tag: `report-card-exam-${examId}-${Date.now()}`,
+      }).catch((err) => console.warn("[PublishReportCard] Push dispatch error:", err));
+    }
 
     revalidatePath(`/dashboard/teacher/exams/${examId}/review`);
     revalidatePath(`/dashboard/teacher/report-cards`);

@@ -69,23 +69,23 @@ function runOneSignalVerification() {
     assert("PermissionGate triggers OneSignal permission prompt", gateContent.includes("requestOneSignalPermission"));
   }
 
-  // 5. Verify Universal Notification Pipeline (lib/notify.ts)
-  const notifyPath = path.join(process.cwd(), "lib/notify.ts");
-  assert("lib/notify.ts exists", fs.existsSync(notifyPath));
-  if (fs.existsSync(notifyPath)) {
-    const notifyContent = fs.readFileSync(notifyPath, "utf8");
-    assert("notify.ts imports sendOneSignalPush", notifyContent.includes("sendOneSignalPush"));
-    assert("notify.ts dispatches OneSignal push on system notifications", notifyContent.includes("sendOneSignalPush({"));
+  // 5. Verify Universal Dispatcher Pipeline (lib/dispatcher.ts)
+  const dispatcherPath = path.join(process.cwd(), "lib/dispatcher.ts");
+  assert("lib/dispatcher.ts exists", fs.existsSync(dispatcherPath));
+  if (fs.existsSync(dispatcherPath)) {
+    const dispContent = fs.readFileSync(dispatcherPath, "utf8");
+    assert("dispatcher.ts imports sendOneSignalPush", dispContent.includes("sendOneSignalPush"));
+    assert("dispatcher.ts dispatches OneSignal push on system notifications", dispContent.includes("sendOneSignalPush({"));
   }
 
-  // 6. Verify POST /api/push/test OneSignal Endpoint
+  // 6. Verify POST /api/push/test uses the REAL unified dispatcher pipeline
   const pushTestPath = path.join(process.cwd(), "app/api/push/test/route.ts");
   assert("app/api/push/test/route.ts exists", fs.existsSync(pushTestPath));
   if (fs.existsSync(pushTestPath)) {
     const testContent = fs.readFileSync(pushTestPath, "utf8");
-    assert("push/test route imports sendOneSignalPush", testContent.includes("sendOneSignalPush"));
-    assert("push/test route calls sendOneSignalPush", testContent.includes("sendOneSignalPush({"));
-    assert("push/test route returns oneSignal diagnostic result", testContent.includes("oneSignal: {"));
+    assert("push/test route imports dispatchNotification", testContent.includes("dispatchNotification"));
+    assert("push/test route calls dispatchNotification", testContent.includes("dispatchNotification({"));
+    assert("push/test route returns unified diagnostic result", testContent.includes("dispatchResult"));
   }
 
   // 7. Verify .env configuration contains OneSignal placeholders

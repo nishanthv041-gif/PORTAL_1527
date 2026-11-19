@@ -86,7 +86,7 @@ export default function PwaWelcomeNotificationPrompt() {
       // 2. Register / retrieve active Service Worker
       let registration = await navigator.serviceWorker.getRegistration();
       if (!registration) {
-        registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+        registration = await navigator.serviceWorker.register("/OneSignalSDKWorker.js", { scope: "/" });
       }
       await navigator.serviceWorker.ready;
 

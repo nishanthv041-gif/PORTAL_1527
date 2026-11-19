@@ -294,7 +294,7 @@ export async function createMeetingAction(formData: FormData) {
             title: `📅 Meeting Scheduled: ${topic}`,
             body: `${description ? description + " - " : ""}${date} at ${startTime}. Venue: ${mode === "ONLINE" ? "Online" : place || "Campus"}`,
             link: "/dashboard/parent/meetings",
-            tag: `meeting-${meeting.id}-parent`,
+            tag: `meeting-${meeting.id}-parent-${Date.now()}`,
             priority: "HIGH",
             bypass48h: true,
           }).catch((err) => console.warn("Meeting parent push note:", err));
@@ -307,7 +307,7 @@ export async function createMeetingAction(formData: FormData) {
             title: `📅 Staff Meeting: ${topic}`,
             body: `${description ? description + " - " : ""}${date} at ${startTime}. Mode: ${mode === "ONLINE" ? "Online" : place || "Campus"}`,
             link: "/dashboard/teacher/meetings",
-            tag: `meeting-${meeting.id}-teacher`,
+            tag: `meeting-${meeting.id}-teacher-${Date.now()}`,
             priority: "HIGH",
             bypass48h: true,
           }).catch((err) => console.warn("Meeting teacher push note:", err));

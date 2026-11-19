@@ -1280,6 +1280,52 @@ model NotificationDeliveryLog {
   @@index([createdAt])
 }
 
+model NotificationDelivery {
+  id                      String    @id @default(cuid())
+  notificationId          String?   @map("notification_id")
+  eventType               String    @map("event_type")      // MESSAGE, REPORT_CARD, ANNOUNCEMENT, MEETING, BUS_UPDATE, ATTENDANCE, LEAVE, EXAM, TIMETABLE
+  entityId                String?   @map("entity_id")
+  recipientUserId         String    @map("recipient_user_id")
+  channel                 String    @map("channel")         // ONESIGNAL | WEBPUSH | FCM | DUAL
+  status                  String    @map("status")          // queued | sent | delivered | failed | skipped | RECIPIENTS_ZERO | NO_DEVICES
+  onesignalNotificationId String?   @map("onesignal_notification_id")
+  httpStatus              Int?      @map("http_status")
+  recipientsCount         Int       @default(0) @map("recipients_count")
+  errorCode               String?   @map("error_code")
+  errorMessage            String?   @map("error_message")
+  attempts                Int       @default(1) @map("attempts")
+  tag                     String?   @map("tag")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  sentAt                  DateTime? @map("sent_at")
+
+  @@index([recipientUserId, createdAt])
+  @@index([eventType, status])
+  @@index([createdAt])
+  @@map("notification_deliveries")
+}
+
+model NotificationOutbox {
+  id              String    @id @default(cuid())
+  eventType       String    @map("event_type")
+  entityId        String?   @map("entity_id")
+  idempotencyKey  String    @unique @map("idempotency_key") // type-entityId-recipientId
+  recipientUserId String    @map("recipient_user_id")
+  title           String    @map("title")
+  body            String    @map("body")
+  url             String    @map("url")
+  priority        String    @default("HIGH") @map("priority")
+  tag             String?   @map("tag")
+  data            Json?     @map("data")
+  status          String    @default("PENDING") @map("status") // PENDING | PROCESSING | COMPLETED | FAILED
+  attempts        Int       @default(0) @map("attempts")
+  lastError       String?   @map("last_error")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  processedAt     DateTime? @map("processed_at")
+
+  @@index([status, createdAt])
+  @@map("notification_outbox")
+}
+
 model AuditLog {
   id          String   @id @default(cuid())
   userId      String
