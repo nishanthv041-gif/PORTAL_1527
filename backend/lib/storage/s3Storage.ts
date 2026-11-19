@@ -7,30 +7,53 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-const S3_REGION = process.env.AWS_REGION || "ap-southeast-1";
-const S3_BUCKET = process.env.AWS_S3_BUCKET;
-
-// Automatically uses IAM Instance Profile on EC2/ECS or standard AWS credentials
-let s3Client: S3Client | null = null;
-
-function getS3Client(): S3Client | null {
-  if (!S3_BUCKET) return null;
-  if (!s3Client) {
-    s3Client = new S3Client({ region: S3_REGION });
-  }
-  return s3Client;
-}
-
-export function isS3Configured(): boolean {
-  return Boolean(S3_BUCKET);
-}
-
 export function getS3BucketName(): string | undefined {
-  return S3_BUCKET;
+  return (
+    process.env.AWS_S3_BUCKET ||
+    process.env.S3_UPLOADS_BUCKET ||
+    process.env.NEXT_PUBLIC_AWS_S3_BUCKET ||
+    undefined
+  );
 }
 
 export function getS3Region(): string {
-  return S3_REGION;
+  return (
+    process.env.AWS_REGION ||
+    process.env.AWS_DEFAULT_REGION ||
+    process.env.S3_UPLOADS_REGION ||
+    "ap-southeast-1"
+  );
+}
+
+export function isS3Configured(): boolean {
+  return Boolean(getS3BucketName());
+}
+
+// Automatically uses IAM Instance Profile on EC2/ECS/Amplify or explicit AWS credentials
+let cachedS3Client: S3Client | null = null;
+let lastClientBucket: string | undefined = undefined;
+let lastClientRegion: string | undefined = undefined;
+
+function getS3Client(): S3Client | null {
+  const bucket = getS3BucketName();
+  if (!bucket) return null;
+  const region = getS3Region();
+
+  if (!cachedS3Client || lastClientBucket !== bucket || lastClientRegion !== region) {
+    const credentials = (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) ? {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      ...(process.env.AWS_SESSION_TOKEN ? { sessionToken: process.env.AWS_SESSION_TOKEN } : {}),
+    } : undefined;
+
+    cachedS3Client = new S3Client({
+      region,
+      ...(credentials ? { credentials } : {}),
+    });
+    lastClientBucket = bucket;
+    lastClientRegion = region;
+  }
+  return cachedS3Client;
 }
 
 /**
@@ -41,14 +64,16 @@ export async function uploadBufferToS3(
   key: string,
   contentType: string = "application/octet-stream"
 ): Promise<{ success: boolean; key: string; s3Url?: string; error?: string }> {
+  const bucket = getS3BucketName();
+  const region = getS3Region();
   const client = getS3Client();
-  if (!client || !S3_BUCKET) {
+  if (!client || !bucket) {
     return { success: false, key, error: "AWS S3 storage is not configured (missing AWS_S3_BUCKET)." };
   }
 
   try {
     const command = new PutObjectCommand({
-      Bucket: S3_BUCKET,
+      Bucket: bucket,
       Key: key,
       Body: buffer,
       ContentType: contentType,
@@ -60,7 +85,7 @@ export async function uploadBufferToS3(
     return {
       success: true,
       key,
-      s3Url: `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${key}`,
+      s3Url: `https://${bucket}.s3.${region}.amazonaws.com/${key}`,
     };
   } catch (err) {
     console.error("[S3Storage] Direct upload failed:", err);
@@ -80,19 +105,21 @@ export async function getPresignedUploadUrl(
   contentType: string,
   expiresInSeconds: number = 900 // 15 mins
 ): Promise<{ uploadUrl: string; key: string; publicUrl: string } | null> {
+  const bucket = getS3BucketName();
+  const region = getS3Region();
   const client = getS3Client();
-  if (!client || !S3_BUCKET) return null;
+  if (!client || !bucket) return null;
 
   try {
     const command = new PutObjectCommand({
-      Bucket: S3_BUCKET,
+      Bucket: bucket,
       Key: key,
       ContentType: contentType,
       ServerSideEncryption: "AES256",
     });
 
     const uploadUrl = await getSignedUrl(client, command, { expiresIn: expiresInSeconds });
-    const publicUrl = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${key}`;
+    const publicUrl = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
     return { uploadUrl, key, publicUrl };
   } catch (err) {
     console.error("[S3Storage] Presigned upload URL generation failed:", err);
@@ -106,12 +133,13 @@ export async function getPresignedUploadUrl(
 export async function getS3ObjectMetadata(
   key: string
 ): Promise<{ exists: boolean; size?: number; contentType?: string } | null> {
+  const bucket = getS3BucketName();
   const client = getS3Client();
-  if (!client || !S3_BUCKET) return null;
+  if (!client || !bucket) return null;
 
   try {
     const command = new HeadObjectCommand({
-      Bucket: S3_BUCKET,
+      Bucket: bucket,
       Key: key,
     });
     const head = await client.send(command);
@@ -137,12 +165,13 @@ export async function getS3ObjectHeadBytes(
   key: string,
   maxBytes: number = 4096
 ): Promise<Buffer | null> {
+  const bucket = getS3BucketName();
   const client = getS3Client();
-  if (!client || !S3_BUCKET) return null;
+  if (!client || !bucket) return null;
 
   try {
     const command = new GetObjectCommand({
-      Bucket: S3_BUCKET,
+      Bucket: bucket,
       Key: key,
       Range: `bytes=0-${maxBytes - 1}`,
     });
@@ -160,12 +189,13 @@ export async function getS3ObjectHeadBytes(
  * Delete an object from S3
  */
 export async function deleteS3Object(key: string): Promise<boolean> {
+  const bucket = getS3BucketName();
   const client = getS3Client();
-  if (!client || !S3_BUCKET) return false;
+  if (!client || !bucket) return false;
 
   try {
     const command = new DeleteObjectCommand({
-      Bucket: S3_BUCKET,
+      Bucket: bucket,
       Key: key,
     });
     await client.send(command);
@@ -183,12 +213,13 @@ export async function getPresignedDownloadUrl(
   key: string,
   expiresInSeconds: number = 3600 // 1 hour
 ): Promise<string | null> {
+  const bucket = getS3BucketName();
   const client = getS3Client();
-  if (!client || !S3_BUCKET) return null;
+  if (!client || !bucket) return null;
 
   try {
     const command = new GetObjectCommand({
-      Bucket: S3_BUCKET,
+      Bucket: bucket,
       Key: key,
     });
 

@@ -25,7 +25,7 @@ export async function uploadFileWithProgress(
   onProgress?: (percentage: number) => void,
   abortSignal?: AbortSignal
 ): Promise<UploadedAttachmentResult> {
-  // 1. Request presigned upload session from backend
+  // 1. Request presigned upload session from backend (120s timeout)
   const presignRes = await apiFetch<{
     ok: boolean;
     directToS3: boolean;
@@ -43,6 +43,7 @@ export async function uploadFileWithProgress(
       purpose: "messages",
     }),
     signal: abortSignal,
+    timeoutMs: 120000,
   });
 
   if (!presignRes?.ok || !presignRes?.uploadUrl) {
@@ -90,7 +91,7 @@ export async function uploadFileWithProgress(
       reject(new ApiError({
         status: 408,
         code: "TIMEOUT",
-        userMessage: "Upload timed out. Please check your connection speed and retry.",
+        userMessage: "Upload timed out after 3 minutes. Please check your internet connection speed and retry.",
         isNetworkError: true,
       }));
     };
@@ -115,7 +116,9 @@ export async function uploadFileWithProgress(
         } else {
           let cleanMessage = "Storage rejected the upload.";
           if (xhr.status === 403) {
-            cleanMessage = "Storage authorization expired or access was denied.";
+            cleanMessage = "Storage authorization expired or access was denied. S3 CORS or permissions may need updating.";
+          } else if (xhr.status === 413) {
+            cleanMessage = "File exceeds the storage provider's maximum upload limit.";
           }
           reject(new ApiError({
             status: xhr.status,
@@ -161,7 +164,7 @@ export async function uploadFileWithProgress(
     }
   });
 
-  // 3. Complete and verify upload on backend
+  // 3. Complete and verify upload on backend (120s timeout)
   const completeRes = await apiFetch<{
     ok: boolean;
     attachment: {
@@ -177,6 +180,7 @@ export async function uploadFileWithProgress(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ attachmentId }),
     signal: abortSignal,
+    timeoutMs: 120000,
   });
 
   if (!completeRes?.ok || !completeRes?.attachment) {
