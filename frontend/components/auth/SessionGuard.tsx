@@ -130,6 +130,7 @@ export default function SessionGuard() {
   // Periodic and Event-Driven Session Status Polling with Deduplication & Throttling
   const checkStatus = useCallback(async () => {
     if (isPublicRoute || isRevokedRef.current || isCheckingRef.current) return;
+    if (typeof document !== "undefined" && document.hidden) return; // Zero network/DB load when phone screen is locked or tab is hidden
     const now = Date.now();
     if (now - lastCheckTimeRef.current < 10000) return; // At most once per 10s
 
@@ -159,6 +160,7 @@ export default function SessionGuard() {
   // Activity Ping (Throttled to ACTIVITY_UPDATE_INTERVAL_MIN minutes)
   const sendActivityPing = useCallback(async () => {
     if (isPublicRoute || isRevokedRef.current) return;
+    if (typeof document !== "undefined" && document.hidden) return; // Zero network load when inactive or screen is locked
     const now = Date.now();
     const intervalMs = ACTIVITY_UPDATE_INTERVAL_MIN * 60 * 1000;
 
