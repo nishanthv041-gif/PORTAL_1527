@@ -101,8 +101,8 @@ async function run() {
 
   const presigned = await getPresignedUploadUrl("uploads/messages/user_1/test.png", "image/png", 900);
   assert(presigned !== null, "Presigned upload generation succeeds with valid config");
-  assert(presigned?.publicUrl.includes("test-bucket.s3.ap-southeast-1.amazonaws.com"), "Public URL points to correct S3 path");
-  assert(presigned?.uploadUrl.includes("X-Amz-Signature") || presigned?.uploadUrl.includes("test-bucket"), "Upload URL contains presigned authorization signature");
+  assert(Boolean(presigned?.publicUrl?.includes("test-bucket.s3.ap-southeast-1.amazonaws.com")), "Public URL points to correct S3 path");
+  assert(Boolean(presigned?.uploadUrl?.includes("X-Amz-Signature") || presigned?.uploadUrl?.includes("test-bucket")), "Upload URL contains presigned authorization signature");
 
   console.log("\n==================================================");
   console.log(`🏁 TEST SUITE COMPLETE: ${passed} PASSED, ${failed} FAILED`);
