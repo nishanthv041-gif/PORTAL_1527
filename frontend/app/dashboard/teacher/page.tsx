@@ -13,6 +13,7 @@ const DAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", 
 
 import { getTeacherByUserId } from "./teacherHelper";
 import UniversalDashboard from "@/frontend/components/dashboard/UniversalDashboard";
+import NotificationStatusCard from "@/frontend/components/notifications/NotificationStatusCard";
 
 export default async function TeacherDashboard() {
   const session = await getCachedServerSession();
@@ -192,6 +193,13 @@ export default async function TeacherDashboard() {
           </Link>
         </div>
       </div>
+
+      {/* Live Device Notification Status & Activation Banner */}
+      <NotificationStatusCard
+        userId={session.user.id}
+        userName={session.user.name || "Teacher"}
+        userRole="TEACHER"
+      />
 
       {/* Teacher Birthday Celebration Card */}
       {isTeacherBirthday && (

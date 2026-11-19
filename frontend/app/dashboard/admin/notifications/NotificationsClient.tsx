@@ -95,7 +95,10 @@ export default function NotificationsClient({
     if (notif.targetType === "CLASS") return `Audience: Class Specific${countStr}`;
     if (notif.targetType === "INACTIVE_24H") return `Audience: Inactive Users (>24h)${countStr}`;
     if (notif.targetType === "USER") return `To: ${notif.user?.name || "Single User"}`;
-    return `To: ${notif.user?.name || "System Admin"}`;
+    if (count && count > 0) return `Audience: Broadcast (${count} recipients)`;
+    if (notif.type === "ANNOUNCEMENT" || notif.category === "GENERAL") return `Audience: School Broadcast`;
+    if (notif.type === "TEST") return `Device Diagnostic Test`;
+    return `To: ${notif.user?.name || "All Users"}`;
   };
 
   const getTypeIcon = (t: string) => {
@@ -454,15 +457,43 @@ export default function NotificationsClient({
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.35rem" }}>
-                    Schedule (Optional)
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={scheduleDateTime}
-                    onChange={(e) => setScheduleDateTime(e.target.value)}
-                    style={{ width: "100%", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg, transparent)", color: "inherit" }}
-                  />
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
+                    <input
+                      type="checkbox"
+                      id="isImmediateToggle"
+                      checked={!scheduleDateTime}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setScheduleDateTime("");
+                        } else {
+                          const inOneHour = new Date(Date.now() + 3600000);
+                          setScheduleDateTime(inOneHour.toISOString().slice(0, 16));
+                        }
+                      }}
+                      style={{ cursor: "pointer", width: 16, height: 16 }}
+                    />
+                    <label htmlFor="isImmediateToggle" style={{ fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" }}>
+                      ⚡ Send Immediately Now
+                    </label>
+                  </div>
+
+                  {scheduleDateTime ? (
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.78rem", color: "var(--text-secondary)", marginBottom: "0.25rem" }}>
+                        Specify Future Date &amp; Time:
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={scheduleDateTime}
+                        onChange={(e) => setScheduleDateTime(e.target.value)}
+                        style={{ width: "100%", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg, transparent)", color: "inherit" }}
+                      />
+                    </div>
+                  ) : (
+                    <p style={{ margin: "0.25rem 0 0", fontSize: "0.75rem", color: "#16a34a", fontWeight: 500 }}>
+                      ✓ High-priority instant dispatch to all active recipient devices on publish.
+                    </p>
+                  )}
                 </div>
               </div>
 

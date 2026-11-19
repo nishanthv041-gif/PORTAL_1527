@@ -4,57 +4,20 @@ import { prisma } from "@/backend/db/prisma";
 import Link from "next/link";
 import styles from "../../dashboard.module.css";
 import { MessageSquare, ShieldCheck, UserCheck, ArrowRight } from "lucide-react";
+import { getTeachersForParent } from "@/frontend/lib/directoryResolver";
 
 export default async function ParentMessagesPage() {
   const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
-  const [parent, adminUsers] = await Promise.all([
-    prisma.parent.findUnique({
-      where: { userId: session.user.id },
-      include: {
-        children: {
-          include: {
-            student: {
-              include: {
-                class: {
-                  include: {
-                    teacher: {
-                      include: {
-                        user: {
-                          select: { id: true, name: true, email: true }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }),
+  const [teachers, adminUsers] = await Promise.all([
+    getTeachersForParent(session.user.id),
     prisma.user.findMany({
       where: { role: 'ADMIN', status: 'ACTIVE' },
       select: { id: true, name: true, email: true },
       take: 5
     })
   ]);
-
-  const teacherMap = new Map();
-  if (parent) {
-    parent.children.forEach(s => {
-      if (s.student.class?.teacher) {
-        teacherMap.set(s.student.class.teacher.userId, {
-          ...s.student.class.teacher.user,
-          className: `${s.student.class.name}-${s.student.class.section}`,
-          childName: `${s.student.firstName} ${s.student.lastName}`
-        });
-      }
-    });
-  }
-
-  const teachers = Array.from(teacherMap.values());
 
   return (
     <div className={styles.dashboard}>
@@ -107,7 +70,7 @@ export default async function ParentMessagesPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <h4 style={{ margin: 0, color: 'var(--foreground)', fontSize: '0.95rem', fontWeight: 700 }}>{teacherUser.name}</h4>
                   <p style={{ margin: '0.15rem 0 0', fontSize: '0.8rem', color: '#8b5cf6', fontWeight: 600 }}>
-                    Class {teacherUser.className}
+                    {teacherUser.roleDesc}
                   </p>
                   <p style={{ margin: '0.1rem 0 0', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                     Student: {teacherUser.childName}
@@ -120,7 +83,7 @@ export default async function ParentMessagesPage() {
 
           {teachers.length === 0 && (
             <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem" }}>
-              No class teachers assigned for your children yet.
+              No class teachers or faculty assigned for your children yet.
             </p>
           )}
         </div>

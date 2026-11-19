@@ -16,9 +16,16 @@ export default async function AdminNotificationsPage() {
 
   const notifications = isEnabled ? await prisma.notification.findMany({
     where: {
-      userId: adminUser?.id
+      userId: adminUser?.id,
+      NOT: {
+        AND: [
+          { targetType: null },
+          { type: "ANNOUNCEMENT" },
+          { recipients: { none: {} } }
+        ]
+      }
     },
-    take: 20,
+    take: 30,
     include: {
       user: {
         select: {

@@ -74,6 +74,8 @@ export interface DispatchNotificationOptions {
   icon?: string;
   badge?: string;
   bypass48h?: boolean;
+  targetType?: string;
+  targetRole?: string;
 }
 
 export interface DispatchNotificationResult {
@@ -156,7 +158,7 @@ export async function resolveAudienceUserIds(
       }
     }
 
-    // 5. Class-based Recipients (Parents of class students + Class Teacher)
+    // 5. Class-based Recipients (Parents of class students + Class Teacher + Subject Teachers)
     if (audience.classId) {
       try {
         const [parentsInClass, classRecord] = await Promise.all([
@@ -175,6 +177,11 @@ export async function resolveAudienceUserIds(
             select: {
               teacher: { select: { userId: true } },
               classTeacher: { select: { userId: true } },
+              subjects: {
+                select: {
+                  teacher: { select: { userId: true } },
+                },
+              },
             },
           }),
         ]);
@@ -188,6 +195,13 @@ export async function resolveAudienceUserIds(
         }
         if (classRecord?.teacher?.userId) {
           userIdsSet.add(classRecord.teacher.userId);
+        }
+        if (classRecord?.subjects) {
+          for (const s of classRecord.subjects) {
+            if (s.teacher?.userId) {
+              userIdsSet.add(s.teacher.userId);
+            }
+          }
         }
       } catch (err) {
         console.error("[Dispatcher] Error resolving class audience:", err);
@@ -298,6 +312,8 @@ export async function dispatchNotification(
         type: normalizedType,
         priority: normalizedPriority,
         link: url,
+        targetType: options.targetType || (options.audience?.all ? "ALL" : options.audience?.roles?.length ? "ROLE" : options.audience?.classId ? "CLASS" : null),
+        targetRole: options.targetRole || (options.audience?.roles?.join(",") || null),
         isRead: false,
         sentAt: new Date(),
         createdAt: new Date(),

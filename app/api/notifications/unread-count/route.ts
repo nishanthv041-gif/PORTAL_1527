@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     if (!token?.id || token.isRevoked) {
       timer.logSummary(401);
       return NextResponse.json(
-        { unreadCount: 0, hasBusAlert: false },
+        { unreadCount: 0, hasBusAlert: false, messageCount: 0, notificationCount: 0 },
         {
           status: 401,
           headers: { "Server-Timing": timer.getHeaderValue() },
@@ -29,31 +29,46 @@ export async function GET(req: NextRequest) {
 
     const userId = token.id as string;
 
-    const counts = await timer.measure("db-counts", () =>
-      prisma.notification.groupBy({
-        by: ["category"],
-        where: { userId, isRead: false },
-        _count: { _all: true },
-      })
-    );
+    const [counts, unreadMessagesCount] = await Promise.all([
+      timer.measure("db-notif-counts", () =>
+        prisma.notification.groupBy({
+          by: ["category"],
+          where: { userId, isRead: false },
+          _count: { _all: true },
+        })
+      ),
+      timer.measure("db-message-counts", () =>
+        prisma.message.count({
+          where: {
+            receiverId: userId,
+            isRead: false,
+            isDeleted: false,
+          },
+        })
+      ),
+    ]);
 
-    let unreadCount = 0;
+    let notificationUnreadCount = 0;
     let busAlertCount = 0;
 
     for (const row of counts) {
       const c = row._count._all;
-      unreadCount += c;
+      notificationUnreadCount += c;
       if (row.category === "BUS") {
         busAlertCount += c;
       }
     }
+
+    const totalUnreadCount = notificationUnreadCount + unreadMessagesCount;
 
     timer.logSummary(200, token.role as string);
 
     return NextResponse.json(
       {
         success: true,
-        unreadCount,
+        unreadCount: totalUnreadCount,
+        notificationCount: notificationUnreadCount,
+        messageCount: unreadMessagesCount,
         hasBusAlert: busAlertCount > 0,
         busAlertCount,
       },
@@ -68,7 +83,7 @@ export async function GET(req: NextRequest) {
     console.error("GET /api/notifications/unread-count error:", error);
     timer.logSummary(500);
     return NextResponse.json(
-      { unreadCount: 0, hasBusAlert: false },
+      { success: false, unreadCount: 0, hasBusAlert: false, messageCount: 0, notificationCount: 0 },
       {
         status: 500,
         headers: { "Server-Timing": timer.getHeaderValue() },
@@ -76,4 +91,3 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-

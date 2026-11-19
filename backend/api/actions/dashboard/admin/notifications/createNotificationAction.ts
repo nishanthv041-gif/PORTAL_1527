@@ -110,8 +110,18 @@ export async function createCustomNotificationAction(formData: FormData) {
       return { error: "No active recipients found for the selected audience." };
     }
 
-    const scheduledDate = scheduleDateTime ? new Date(scheduleDateTime) : null;
-    const isImmediate = !scheduledDate || scheduledDate <= new Date();
+    let scheduledDate: Date | null = null;
+    let isImmediate = true;
+    if (scheduleDateTime && scheduleDateTime.trim() !== "") {
+      const parsed = new Date(scheduleDateTime);
+      if (!isNaN(parsed.getTime())) {
+        // If scheduled for more than 10 minutes in the future, treat as scheduled; otherwise send immediately
+        if (parsed.getTime() > Date.now() + 10 * 60 * 1000) {
+          scheduledDate = parsed;
+          isImmediate = false;
+        }
+      }
+    }
 
     // 2. Create Master Notification record for tracking
     const masterNotification = await prisma.notification.create({
@@ -143,32 +153,22 @@ export async function createCustomNotificationAction(formData: FormData) {
       skipDuplicates: true,
     });
 
-    // 4. Create in-app individual Notification records for instant dashboard views
-    await prisma.notification.createMany({
-      data: userIdsToNotify.map((uid) => ({
-        userId: uid,
-        title,
-        content,
-        type: priority === "URGENT" ? "ALERT" : "ANNOUNCEMENT",
-        category: category.toUpperCase(),
-        priority,
-        link: customLink,
-        isRead: false,
-      })),
-    });
-
-    // 5. If immediate, dispatch high-priority push notifications across OneSignal & WebPush
+    // 4. Dispatch immediate notifications across in-app, WebPush & OneSignal
     let pushResult = { sent: 0, failed: 0 };
     if (isImmediate) {
+      // dispatchNotification inserts in-app notification rows and lock-screen push for all recipients
+      const nonAdminRecipients = userIdsToNotify.filter(id => id !== session.user.id);
       const res = await dispatchNotification({
         type: category ? category.toUpperCase() : "ANNOUNCEMENT",
         entityId: masterNotification.id,
-        recipients: userIdsToNotify,
+        recipients: nonAdminRecipients.length > 0 ? nonAdminRecipients : userIdsToNotify,
         title,
         body: content,
         url: customLink || "/dashboard",
         priority: priority === "URGENT" ? "URGENT" : "HIGH",
         tag: `admin-notif-${masterNotification.id}-${Date.now()}`,
+        targetType,
+        targetRole: targetRole || undefined,
       }).catch((err) => {
         console.warn("[CreateNotification] Push error:", err);
         return null;
@@ -179,6 +179,26 @@ export async function createCustomNotificationAction(formData: FormData) {
           sent: (res.oneSignalCount || 0) + (res.webPushCount || 0),
           failed: res.failedCount || 0,
         };
+      }
+    } else {
+      // If scheduled, insert in-app notification rows for non-admin recipients with targetType preserved
+      const nonAdminRecipients = userIdsToNotify.filter(id => id !== session.user.id);
+      if (nonAdminRecipients.length > 0) {
+        await prisma.notification.createMany({
+          data: nonAdminRecipients.map((uid) => ({
+            userId: uid,
+            title,
+            content,
+            type: priority === "URGENT" ? "ALERT" : "ANNOUNCEMENT",
+            category: category.toUpperCase(),
+            priority,
+            link: customLink,
+            targetType,
+            targetRole: targetRole || null,
+            targetGroup: targetClassId || null,
+            isRead: false,
+          })),
+        });
       }
     }
 

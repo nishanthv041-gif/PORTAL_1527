@@ -19,6 +19,12 @@ export async function initOneSignal(): Promise<void> {
 
   initPromise = (async () => {
     try {
+      const win = window as any;
+      if (win.OneSignal && (win.OneSignal.User || win.OneSignal._isInitialized)) {
+        isInitialized = true;
+        return;
+      }
+
       await OneSignal.init({
         appId: ONESIGNAL_APP_ID,
         allowLocalhostAsSecureOrigin: true,
@@ -27,8 +33,12 @@ export async function initOneSignal(): Promise<void> {
       });
       isInitialized = true;
       console.log("[OneSignal] Initialized with App ID:", ONESIGNAL_APP_ID);
-    } catch (err) {
-      console.warn("[OneSignal] Initialization error:", err);
+    } catch (err: any) {
+      if (err?.message?.includes("already initialized") || String(err).includes("already initialized")) {
+        isInitialized = true;
+      } else {
+        console.warn("[OneSignal] Initialization note:", err);
+      }
     }
   })();
 
@@ -42,8 +52,14 @@ export async function loginToOneSignal(userId: string): Promise<boolean> {
   if (typeof window === "undefined" || !userId) return false;
   try {
     await initOneSignal();
-    await OneSignal.login(String(userId).trim());
-    console.log("[OneSignal] User linked with external_id:", userId);
+    const cleanId = String(userId).trim();
+    const win = window as any;
+    if (win.OneSignal && typeof win.OneSignal.login === "function") {
+      await win.OneSignal.login(cleanId);
+    } else {
+      await OneSignal.login(cleanId);
+    }
+    console.log("[OneSignal] User linked with external_id:", cleanId);
     return true;
   } catch (err) {
     console.warn("[OneSignal] Login link warning:", err);
@@ -57,7 +73,10 @@ export async function loginToOneSignal(userId: string): Promise<boolean> {
 export async function logoutFromOneSignal(): Promise<void> {
   if (typeof window === "undefined") return;
   try {
-    if (isInitialized) {
+    const win = window as any;
+    if (win.OneSignal && typeof win.OneSignal.logout === "function") {
+      await win.OneSignal.logout();
+    } else if (isInitialized) {
       await OneSignal.logout();
     }
   } catch (err) {
@@ -72,6 +91,11 @@ export async function requestOneSignalPermission(): Promise<boolean> {
   if (typeof window === "undefined") return false;
   try {
     await initOneSignal();
+    const win = window as any;
+    if (win.OneSignal && win.OneSignal.Notifications && typeof win.OneSignal.Notifications.requestPermission === "function") {
+      await win.OneSignal.Notifications.requestPermission();
+      return Boolean(win.OneSignal.Notifications.permission);
+    }
     await OneSignal.Notifications.requestPermission();
     return Boolean(OneSignal.Notifications.permission);
   } catch (err) {
@@ -87,6 +111,11 @@ export async function promptOneSignalSlidedown(): Promise<void> {
   if (typeof window === "undefined") return;
   try {
     await initOneSignal();
+    const win = window as any;
+    if (win.OneSignal && win.OneSignal.Slidedown && typeof win.OneSignal.Slidedown.promptPush === "function") {
+      await win.OneSignal.Slidedown.promptPush();
+      return;
+    }
     await OneSignal.Slidedown.promptPush();
   } catch (err) {
     console.warn("[OneSignal] Slidedown prompt error:", err);
@@ -101,6 +130,10 @@ export function hasOneSignalPermission(): boolean {
   try {
     if (typeof Notification !== "undefined" && Notification.permission === "granted") {
       return true;
+    }
+    const win = window as any;
+    if (win.OneSignal && win.OneSignal.Notifications) {
+      return Boolean(win.OneSignal.Notifications.permission);
     }
     return Boolean(OneSignal.Notifications.permission);
   } catch {

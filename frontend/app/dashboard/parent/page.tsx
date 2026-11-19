@@ -15,6 +15,7 @@ import { getSchoolNow, startOfSchoolDay } from "@/lib/time";
 import ParentDashboardTimetableCard from "./ParentDashboardTimetableCard";
 import UniversalDashboard from "@/frontend/components/dashboard/UniversalDashboard";
 import { getCachedServerSession } from "@/backend/auth/sessionCache";
+import NotificationStatusCard from "@/frontend/components/notifications/NotificationStatusCard";
 
 export const dynamic = "force-dynamic";
 
@@ -322,6 +323,13 @@ export default async function ParentDashboard({
         selectedChild={selectedChild}
         studentList={children}
         activePage="dashboard"
+      />
+
+      {/* Live Device Notification Status & Activation Banner */}
+      <NotificationStatusCard
+        userId={parent.userId}
+        userName={session.user.name || "Parent"}
+        userRole="PARENT"
       />
 
       {/* Festive Student Birthday Celebration Card */}

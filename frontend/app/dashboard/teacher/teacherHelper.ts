@@ -18,20 +18,39 @@ async function queryTeacherFromDb(userId: string) {
             select: { students: true }
           }
         }
+      },
+      subjects: {
+        include: {
+          class: {
+            include: {
+              _count: {
+                select: { students: true }
+              }
+            }
+          }
+        }
       }
     }
   });
 
   if (!teacher) return null;
 
-  // Merge classTeacherOf into classes if not present
+  const classMap = new Map<string, any>();
   if (teacher.classTeacherOf) {
-    const exists = teacher.classes.some(c => c.id === teacher.classTeacherOf!.id);
-    if (!exists) {
-      teacher.classes.unshift(teacher.classTeacherOf);
+    classMap.set(teacher.classTeacherOf.id, teacher.classTeacherOf);
+  }
+  for (const c of teacher.classes) {
+    classMap.set(c.id, c);
+  }
+  if (teacher.subjects) {
+    for (const s of teacher.subjects) {
+      if (s.class && !classMap.has(s.class.id)) {
+        classMap.set(s.class.id, s.class);
+      }
     }
   }
 
+  teacher.classes = Array.from(classMap.values());
   return teacher;
 }
 
@@ -82,19 +101,39 @@ async function queryTeacherWithStudentsFromDb(userId: string) {
             orderBy: { firstName: 'asc' }
           }
         }
+      },
+      subjects: {
+        include: {
+          class: {
+            include: {
+              students: {
+                orderBy: { firstName: 'asc' }
+              }
+            }
+          }
+        }
       }
     }
   });
 
   if (!teacher) return null;
 
+  const classMap = new Map<string, any>();
   if (teacher.classTeacherOf) {
-    const exists = teacher.classes.some(c => c.id === teacher.classTeacherOf!.id);
-    if (!exists) {
-      teacher.classes.unshift(teacher.classTeacherOf);
+    classMap.set(teacher.classTeacherOf.id, teacher.classTeacherOf);
+  }
+  for (const c of teacher.classes) {
+    classMap.set(c.id, c);
+  }
+  if (teacher.subjects) {
+    for (const s of teacher.subjects) {
+      if (s.class && !classMap.has(s.class.id)) {
+        classMap.set(s.class.id, s.class);
+      }
     }
   }
 
+  teacher.classes = Array.from(classMap.values());
   return teacher;
 }
 

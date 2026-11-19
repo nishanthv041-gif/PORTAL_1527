@@ -246,7 +246,7 @@ export async function createAssignment(formData: FormData) {
         audience: { classId },
         title: `📚 New Homework: ${title}`,
         body: `${subjectName ? `[${subjectName}] ` : ""}${title} assigned for ${assignment.class.name} - ${assignment.class.section}. Due: ${deadlineDate.toLocaleDateString()}.`,
-        url: "/dashboard/parent/homework",
+        url: "/dashboard/parent/assignments",
         tag: `homework-${assignment.id}-${Date.now()}`,
         priority: "HIGH",
       });
@@ -413,7 +413,7 @@ export async function addHomeworkComment(assignmentId: string, content: string) 
             excludeUserId: session.user.id,
             title: `💬 Homework Message: ${assignment.title}`,
             body: `${session.user.name || "Teacher"}: "${commentSnippet}"`,
-            url: "/dashboard/parent/homework",
+            url: "/dashboard/parent/assignments",
             tag: `homework-comment-${assignmentId}-${Date.now()}`,
             priority: "HIGH",
           });

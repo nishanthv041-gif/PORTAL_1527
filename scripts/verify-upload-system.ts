@@ -66,17 +66,17 @@ async function runTests() {
   // 1.6 Trojan .EXE disguised as .png (The exact attack vector)
   const trojanExe = Buffer.from([0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]); // MZ header
   const trojanRes = validateMagicBytes(trojanExe, "png");
-  assert(trojanRes.valid === false && trojanRes.error?.includes("Executable"), "Trojan PE/EXE disguised as .png strictly REJECTED");
+  assert(trojanRes.valid === false && Boolean(trojanRes.error?.includes("Executable")), "Trojan PE/EXE disguised as .png strictly REJECTED");
 
   // 1.7 Trojan ELF binary disguised as .pdf
   const trojanElf = Buffer.from([0x7F, 0x45, 0x4C, 0x46, 0x02, 0x01, 0x01, 0x00]); // ELF header
   const trojanElfRes = validateMagicBytes(trojanElf, "pdf");
-  assert(trojanElfRes.valid === false && trojanElfRes.error?.includes("Executable binaries (ELF)"), "Trojan Linux ELF disguised as .pdf strictly REJECTED");
+  assert(trojanElfRes.valid === false && Boolean(trojanElfRes.error?.includes("Executable binaries (ELF)")), "Trojan Linux ELF disguised as .pdf strictly REJECTED");
 
   // 1.8 Script injection disguised as CSV
   const maliciousCsv = Buffer.from("<script>alert('pwned')</script>,name,email");
   const csvRes = validateMagicBytes(maliciousCsv, "csv");
-  assert(csvRes.valid === false && csvRes.error?.includes("Embedded scripts"), "CSV containing embedded <script> tags strictly REJECTED");
+  assert(csvRes.valid === false && Boolean(csvRes.error?.includes("Embedded scripts")), "CSV containing embedded <script> tags strictly REJECTED");
 
   // --------------------------------------------------------------------------
   // TEST SUITE 2: Size Limits and Categorization

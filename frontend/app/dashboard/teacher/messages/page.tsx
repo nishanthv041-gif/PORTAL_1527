@@ -5,36 +5,14 @@ import Link from "next/link";
 import styles from "../../dashboard.module.css";
 import { MessageSquare, ShieldCheck, Users, ArrowRight } from "lucide-react";
 import TeacherBroadcastButton from "./TeacherBroadcastButton";
+import { getParentsForTeacher } from "@/frontend/lib/directoryResolver";
 
 export default async function TeacherMessagesPage() {
   const session = await getServerSession(getAuthOptions());
   if (!session) return null;
 
-  const [teacher, adminUsers] = await Promise.all([
-    prisma.teacher.findUnique({
-      where: { userId: session.user.id },
-      include: {
-        classes: {
-          include: {
-            students: {
-              include: {
-                parents: {
-                  include: {
-                    parent: {
-                      include: {
-                        user: {
-                          select: { id: true, name: true, email: true }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }),
+  const [{ parents, classes }, adminUsers] = await Promise.all([
+    getParentsForTeacher(session.user.id),
     prisma.user.findMany({
       where: { role: 'ADMIN', status: 'ACTIVE' },
       select: { id: true, name: true, email: true },
@@ -42,32 +20,13 @@ export default async function TeacherMessagesPage() {
     })
   ]);
 
-  if (!teacher) return null;
-
-  // Extract unique parents with student and class info
-  const parentMap = new Map();
-  teacher.classes.forEach(c => {
-    c.students.forEach(s => {
-      s.parents.forEach(p => {
-        if (!parentMap.has(p.parent.userId)) {
-          parentMap.set(p.parent.userId, {
-            ...p.parent.user,
-            studentName: `${s.firstName} ${s.lastName}`,
-            className: `${c.name}-${c.section}`
-          });
-        }
-      });
-    });
-  });
-
-  const parents = Array.from(parentMap.values());
-  const teacherClasses = teacher.classes.map(c => ({ id: c.id, name: c.name, section: c.section }));
+  const teacherClasses = classes.map(c => ({ id: c.id, name: c.name, section: c.section }));
 
   return (
     <div className={styles.dashboard}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", margin: "0 0 1.5rem" }}>
         <h1 className={styles.title} style={{ margin: 0 }}>Messages &amp; Communication</h1>
-        <TeacherBroadcastButton classes={teacherClasses} />
+        {teacherClasses.length > 0 && <TeacherBroadcastButton classes={teacherClasses} />}
       </div>
 
       {/* School Administration Option */}
@@ -99,29 +58,29 @@ export default async function TeacherMessagesPage() {
         </div>
       </div>
 
-      {/* Student Parents Option */}
+      {/* Class Parents Option */}
       <div className={styles.chartCard}>
-        <h3 className={styles.chartHeader} style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "#8b5cf6" }}>
+        <h3 className={styles.chartHeader} style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "#0284c7" }}>
           <Users size={18} /> Student Parents &amp; Guardians
         </h3>
         <p style={{ opacity: 0.7, marginBottom: "1.25rem", fontSize: "0.875rem" }}>
-          Message parents regarding academic performance, attendance, and feedback.
+          Direct communication channels with the parents of students in your assigned classes.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '1rem', width: '100%', minWidth: 0 }}>
-          {parents.map((parentUser) => (
-            <Link href={`/dashboard/teacher/messages/${parentUser.id}`} key={parentUser.id} style={{ textDecoration: 'none' }}>
+          {parents.map((parent) => (
+            <Link href={`/dashboard/teacher/messages/${parent.id}`} key={parent.id} style={{ textDecoration: 'none' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', border: '1px solid var(--border)', borderRadius: '10px', backgroundColor: 'var(--background)', transition: 'all 0.2s' }}>
-                <div style={{ width: 42, height: 42, borderRadius: '50%', backgroundColor: 'rgba(139, 92, 246, 0.12)', color: '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <MessageSquare size={20} />
+                <div style={{ width: 42, height: 42, borderRadius: '50%', backgroundColor: 'rgba(2, 132, 199, 0.12)', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Users size={20} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <h4 style={{ margin: 0, color: 'var(--foreground)', fontSize: '0.95rem', fontWeight: 700 }}>{parentUser.name}</h4>
-                  <p style={{ margin: '0.15rem 0 0', fontSize: '0.8rem', color: '#8b5cf6', fontWeight: 600 }}>
-                    Parent of {parentUser.studentName}
+                  <h4 style={{ margin: 0, color: 'var(--foreground)', fontSize: '0.95rem', fontWeight: 700 }}>{parent.name}</h4>
+                  <p style={{ margin: '0.15rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    Parent of: <strong style={{ color: 'var(--foreground)' }}>{parent.studentName}</strong>
                   </p>
-                  <p style={{ margin: '0.1rem 0 0', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                    Class {parentUser.className}
+                  <p style={{ margin: '0.1rem 0 0', fontSize: '0.75rem', color: '#0284c7', fontWeight: 600 }}>
+                    Class {parent.className}
                   </p>
                 </div>
                 <ArrowRight size={16} color="var(--text-secondary)" />
@@ -131,7 +90,7 @@ export default async function TeacherMessagesPage() {
 
           {parents.length === 0 && (
             <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem" }}>
-              No parents found for students in your assigned classes.
+              No parents found in your assigned classes yet.
             </p>
           )}
         </div>
