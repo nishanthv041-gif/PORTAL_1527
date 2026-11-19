@@ -10,6 +10,17 @@ import { setAppBadgeCount, clearAppBadgeCount } from "@/frontend/lib/pwa/badgeMa
 // Matches the key used in NotificationPopupModal
 const CLEARED_KEY = "srt_portal_notif_cleared_v1";
 
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 // Module-level in-flight request deduplicator to prevent parallel calls
 let inFlightUnreadPromise: Promise<{ unreadCount: number; hasBusAlert: boolean } | null> | null = null;
 let lastUnreadFetchTime = 0;
@@ -34,47 +45,104 @@ export default function Topbar({
       // Proactively ensure current device subscription is synced before test dispatch
       if (typeof window !== "undefined" && "serviceWorker" in navigator) {
         try {
+          if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
+            const perm = await Notification.requestPermission();
+            if (perm !== "granted") {
+              setToastMessage("⚠️ Please allow notifications to receive alerts on this device.");
+              setTimeout(() => setToastMessage(null), 3500);
+              setIsTestingPush(false);
+              return;
+            }
+          }
+
           const reg = await navigator.serviceWorker.ready;
           if (reg.pushManager) {
-            const sub = await reg.pushManager.getSubscription();
+            let sub = await reg.pushManager.getSubscription();
+            if (!sub) {
+              const keyRes = await fetch("/api/notifications/push/public-key").catch(() => null);
+              const keyData = await keyRes?.json().catch(() => null);
+              if (keyData?.publicKey) {
+                const keyArr = urlBase64ToUint8Array(keyData.publicKey);
+                sub = await reg.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: keyArr as unknown as BufferSource,
+                }).catch(() => null);
+              }
+            }
+
             if (sub) {
               const subJson = sub.toJSON();
-              if (subJson.endpoint && subJson.keys?.p256dh && subJson.keys?.auth) {
-                await fetch("/api/push/subscribe", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    endpoint: subJson.endpoint,
-                    keys: subJson.keys,
-                    platform: /android/i.test(navigator.userAgent) ? "ANDROID" : /iphone|ipad/i.test(navigator.userAgent) ? "IOS" : "WEB",
-                    userAgent: navigator.userAgent,
+              let p256dh = subJson.keys?.p256dh;
+              let auth = subJson.keys?.auth;
+
+              if ((!p256dh || !auth) && sub.getKey) {
+                try {
+                  const rawKey = sub.getKey("p256dh");
+                  if (rawKey) {
+                    p256dh = btoa(String.fromCharCode(...new Uint8Array(rawKey)))
+                      .replace(/\+/g, "-")
+                      .replace(/\//g, "_")
+                      .replace(/=+$/, "");
+                  }
+                  const rawAuth = sub.getKey("auth");
+                  if (rawAuth) {
+                    auth = btoa(String.fromCharCode(...new Uint8Array(rawAuth)))
+                      .replace(/\+/g, "-")
+                      .replace(/\//g, "_")
+                      .replace(/=+$/, "");
+                  }
+                } catch {}
+              }
+
+              if (subJson.endpoint && p256dh && auth) {
+                await Promise.allSettled([
+                  fetch("/api/push/subscribe", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      endpoint: subJson.endpoint,
+                      keys: { p256dh, auth },
+                      platform: /android/i.test(navigator.userAgent) ? "ANDROID" : /iphone|ipad/i.test(navigator.userAgent) ? "IOS" : "WEB",
+                      userAgent: navigator.userAgent,
+                    }),
                   }),
-                }).catch(() => {});
+                  fetch("/api/notifications/push/subscribe", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      endpoint: subJson.endpoint,
+                      keys: { p256dh, auth },
+                      userAgent: navigator.userAgent,
+                      deviceName: /android/i.test(navigator.userAgent) ? "Android Chrome PWA" : /iphone/i.test(navigator.userAgent) ? "iPhone Safari PWA" : "Desktop PWA",
+                    }),
+                  }),
+                ]);
               }
             }
           }
-        } catch {}
+        } catch (err) {
+          console.warn("[Topbar] Push registration warning:", err);
+        }
       }
 
-      const isAdmin = user.role === "ADMIN";
       const res = await fetch("/api/push/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: "🔔 SRT Portal Test",
-          message: "System Push & WhatsApp App Badge is 100% operational!",
+          message: `${user.name || "User"} (${user.role || "User"}): Push & Lock-screen alerts are 100% active!`,
           url: "/dashboard",
-          broadcast: isAdmin,
+          broadcast: false,
         }),
       });
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.success) {
         setTestPushSuccess(true);
-        setToastMessage("🔔 Lock-screen test notification sent to all devices!");
+        setToastMessage("🔔 Lock-screen test notification sent to your device!");
         setTimeout(() => setTestPushSuccess(false), 2500);
       } else {
-        setToastMessage("🔔 Notification dispatched to registered devices!");
+        setToastMessage("🔔 Device registered & test alert dispatched!");
       }
       setTimeout(() => setToastMessage(null), 3500);
     } catch {
@@ -267,13 +335,13 @@ export default function Topbar({
           )}
         </button>
 
-        {/* Test Push button strictly restricted to ADMIN only - hidden from Parents, Teachers, and all other users */}
-        {user?.role === "ADMIN" && (
+        {/* Test Push button: Available to all users so Teachers, Parents, and Admins can verify device push alerts */}
+        {user && (
           <button
             type="button"
             onClick={handleTestLockScreenNotification}
             disabled={isTestingPush}
-            title="Send a real test push notification to all devices"
+            title={user.role === "ADMIN" ? "Send a real test push notification" : "Test lock-screen push alerts on this device"}
             aria-label="Test Lock-Screen Notification"
             style={{
               display: "inline-flex",
