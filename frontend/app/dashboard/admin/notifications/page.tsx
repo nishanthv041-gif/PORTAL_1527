@@ -28,6 +28,11 @@ export default async function AdminNotificationsPage() {
           role: true,
         },
       },
+      _count: {
+        select: {
+          recipients: true,
+        },
+      },
     },
     orderBy: { createdAt: 'desc' }
   }) : [];

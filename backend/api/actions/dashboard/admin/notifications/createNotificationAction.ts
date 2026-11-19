@@ -220,19 +220,41 @@ export async function retryFailedDeliveriesAction(notificationId: string) {
 
     if (!notif) return { error: "Notification not found" };
 
-    // Find recipients whose push delivery failed or is pending
-    const failedLogs = await prisma.notificationDeliveryLog.findMany({
-      where: { notificationId, status: "FAILED" },
+    // 1. First check recipients recorded in notificationRecipient
+    const recipientRows = await prisma.notificationRecipient.findMany({
+      where: { notificationId },
       select: { userId: true },
     });
 
-    const userIdsToRetry = Array.from(new Set(failedLogs.map((l) => l.userId)));
+    let userIdsToRetry: string[] = recipientRows.map((r) => r.userId);
+
+    // 2. If no recipients recorded, re-resolve based on targetType
     if (userIdsToRetry.length === 0) {
-      return { message: "No failed deliveries to retry." };
+      if (notif.targetType === "ALL") {
+        const users = await prisma.user.findMany({
+          where: { status: "ACTIVE" },
+          select: { id: true },
+        });
+        userIdsToRetry = users.map((u) => u.id);
+      } else if (notif.targetType === "TEACHERS") {
+        const teachers = await prisma.teacher.findMany({
+          where: { isActive: true },
+          select: { userId: true },
+        });
+        userIdsToRetry = teachers.map((t) => t.userId);
+      } else if (notif.targetType === "PARENTS") {
+        const parents = await prisma.parent.findMany({
+          where: { isActive: true },
+          select: { userId: true },
+        });
+        userIdsToRetry = parents.map((p) => p.userId);
+      } else {
+        userIdsToRetry = [notif.userId];
+      }
     }
 
     const res = await dispatchNotification({
-      type: "ALERT",
+      type: (notif.category || notif.type || "ANNOUNCEMENT").toUpperCase(),
       entityId: notif.id,
       recipients: userIdsToRetry,
       title: notif.title,
@@ -243,7 +265,15 @@ export async function retryFailedDeliveriesAction(notificationId: string) {
     });
 
     revalidatePath("/dashboard/admin/notifications");
-    return { success: true, retried: userIdsToRetry.length, sent: res.oneSignalCount + res.webPushCount };
+    const totalSent = (res.oneSignalCount || 0) + (res.webPushCount || 0);
+    return {
+      success: true,
+      retried: userIdsToRetry.length,
+      sent: totalSent,
+      message: totalSent > 0 
+        ? `Successfully pushed to ${totalSent} device(s).` 
+        : `Targeted ${userIdsToRetry.length} user(s), but no active devices are registered yet.`,
+    };
   } catch (err: unknown) {
     console.error("[Retry Error]", err);
     return { error: "Failed to retry delivery." };

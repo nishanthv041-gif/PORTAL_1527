@@ -18,7 +18,10 @@ import { useRouter } from "next/navigation";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { getNotificationDisplayText } from "@/frontend/components/birthdays/birthdayCardUtils";
 
-type NotificationWithUser = Notification & { user: User };
+type NotificationWithUser = Notification & { 
+  user: User;
+  _count?: { recipients: number };
+};
 
 interface PendingNotification {
   title: string;
@@ -81,6 +84,19 @@ export default function NotificationsClient({
     if (filterStatus === "READ") return n.isRead;
     return true;
   });
+
+  const getAudienceLabel = (notif: NotificationWithUser) => {
+    const count = notif._count?.recipients;
+    const countStr = count && count > 0 ? ` (${count} recipients)` : "";
+    if (notif.targetType === "ALL") return `Audience: All Users${countStr}`;
+    if (notif.targetType === "TEACHERS") return `Audience: All Teachers${countStr}`;
+    if (notif.targetType === "PARENTS") return `Audience: All Parents${countStr}`;
+    if (notif.targetType === "ROLE" && notif.targetRole) return `Audience: Role (${notif.targetRole})${countStr}`;
+    if (notif.targetType === "CLASS") return `Audience: Class Specific${countStr}`;
+    if (notif.targetType === "INACTIVE_24H") return `Audience: Inactive Users (>24h)${countStr}`;
+    if (notif.targetType === "USER") return `To: ${notif.user?.name || "Single User"}`;
+    return `To: ${notif.user?.name || "System Admin"}`;
+  };
 
   const getTypeIcon = (t: string) => {
     switch (t) {
@@ -683,7 +699,7 @@ export default function NotificationsClient({
 
             <div style={{ marginTop: "auto", paddingTop: "0.85rem", borderTop: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                <span style={{ fontWeight: 600, color: "var(--foreground)" }}>To: {notif.user.name}</span>
+                <span style={{ fontWeight: 600, color: "var(--foreground)" }}>{getAudienceLabel(notif)}</span>
               </div>
               
               <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
