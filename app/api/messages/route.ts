@@ -23,15 +23,43 @@ export async function POST(request: Request) {
       fileSize = null, 
       fileType = null, 
       duration = null,
-      clientTempId = null
+      clientTempId = null,
+      attachmentId = null,
+      attachmentIds = []
     } = body;
 
     if (!receiverId) {
       return NextResponse.json({ error: "Receiver ID is required" }, { status: 400 });
     }
 
+    let effectiveFileUrl = fileUrl;
+    let effectiveFileName = fileName;
+    let effectiveFileSize = fileSize;
+    let effectiveFileType = fileType;
+    let effectiveMessageType = messageType;
+
+    const allAttachmentIds: string[] = [
+      ...(attachmentId ? [attachmentId] : []),
+      ...(Array.isArray(attachmentIds) ? attachmentIds : [])
+    ];
+
+    if (allAttachmentIds.length > 0) {
+      const firstAtt = await prisma.attachment.findUnique({
+        where: { id: allAttachmentIds[0] }
+      });
+      if (firstAtt) {
+        effectiveFileUrl = firstAtt.url;
+        effectiveFileName = firstAtt.fileName;
+        effectiveFileSize = firstAtt.fileSize;
+        effectiveFileType = firstAtt.fileType;
+        if (effectiveMessageType === "TEXT") {
+          effectiveMessageType = firstAtt.fileType.startsWith("image/") ? "IMAGE" : "FILE";
+        }
+      }
+    }
+
     const cleanContent = (content || "").trim();
-    if (!cleanContent && !fileUrl && messageType === "TEXT") {
+    if (!cleanContent && !effectiveFileUrl && effectiveMessageType === "TEXT") {
       return NextResponse.json({ error: "Message content or attachment is required" }, { status: 400 });
     }
 
@@ -75,18 +103,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Admins can only message teachers and parents." }, { status: 403 });
     }
 
-    const finalContent = cleanContent || (messageType === "AUDIO" ? "🎤 Voice message" : fileName ? `📎 ${fileName}` : "Attachment");
+    const finalContent = cleanContent || (effectiveMessageType === "AUDIO" ? "🎤 Voice message" : effectiveFileName ? `📎 ${effectiveFileName}` : "Attachment");
 
     const message = await prisma.message.create({
       data: {
         senderId: session.user.id,
         receiverId: targetReceiverId,
         content: finalContent,
-        messageType,
-        fileUrl,
-        fileName,
-        fileSize,
-        fileType,
+        messageType: effectiveMessageType,
+        fileUrl: effectiveFileUrl,
+        fileName: effectiveFileName,
+        fileSize: effectiveFileSize,
+        fileType: effectiveFileType,
         duration,
         isRead: false,
       },
@@ -107,6 +135,17 @@ export async function POST(request: Request) {
         createdAt: true,
       }
     });
+
+    if (allAttachmentIds.length > 0) {
+      try {
+        await prisma.attachment.updateMany({
+          where: { id: { in: allAttachmentIds } },
+          data: { messageId: message.id, status: "READY" },
+        });
+      } catch (attErr) {
+        console.warn("[Messages] Attachment link warning:", attErr);
+      }
+    }
 
     // Deliver cross-platform notification (In-app + PC Web / iPhone Safari PWA + Android Capacitor)
     // Strictly awaited so serverless functions (Vercel / Amplify) do not freeze or terminate early

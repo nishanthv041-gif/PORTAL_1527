@@ -16,6 +16,7 @@ import ChatMessageItem, { ChatMessage } from "./ChatMessageItem";
 import ChatComposer from "./ChatComposer";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import { syncAppBadgeWithServer } from "@/frontend/lib/pwa/badgeManager";
+import { apiFetch, ApiError } from "@/lib/apiFetch";
 
 interface ChatThreadClientProps {
   initialMessages: ChatMessage[];
@@ -230,7 +231,7 @@ export default function ChatThreadClient({
     }
   };
 
-  // Optimistic Message Submission
+  // Optimistic Message Submission with Safe apiFetch
   const handleSendMessage = async (payload: {
     content?: string;
     messageType: "TEXT" | "AUDIO" | "FILE" | "IMAGE";
@@ -239,6 +240,8 @@ export default function ChatThreadClient({
     fileSize?: number;
     fileType?: string;
     duration?: number;
+    attachmentId?: string;
+    attachmentIds?: string[];
   }): Promise<boolean> => {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
@@ -264,9 +267,12 @@ export default function ChatThreadClient({
     setMessages((prev) => [...prev, optimisticMsg]);
     setTimeout(() => scrollToBottom(true), 20);
 
-    // 2. Dispatch to backend API asynchronously
+    // 2. Dispatch to backend API asynchronously with safe apiFetch
     try {
-      const res = await fetch("/api/messages", {
+      const data = await apiFetch<{
+        success: boolean;
+        message: any;
+      }>("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -278,21 +284,20 @@ export default function ChatThreadClient({
           fileSize: payload.fileSize,
           fileType: payload.fileType,
           duration: payload.duration,
+          attachmentId: payload.attachmentId,
+          attachmentIds: payload.attachmentIds,
           clientTempId: tempId,
         }),
       });
 
-      const data = await res.json();
-
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "Failed to send message");
+      if (!data?.success || !data?.message) {
+        throw new Error("Failed to send message");
       }
 
-      // 3. Replace temporary message with confirmed database record (strictly avoid duplicate IDs)
+      // 3. Replace temporary message with confirmed database record
       setMessages((prev) => {
         const alreadyHasConfirmed = prev.some((m) => m.id === data.message.id);
         if (alreadyHasConfirmed) {
-          // Polling sync already inserted the real record; simply remove the temporary placeholder
           return prev.filter((m) => m.id !== tempId);
         }
         return prev.map((msg) =>

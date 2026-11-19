@@ -5,24 +5,23 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import path from "path";
 import fs from "fs/promises";
-
-// Max file size: 25MB
-const MAX_FILE_SIZE = 25 * 1024 * 1024;
-
-const ALLOWED_EXTENSIONS = new Set([
-  // Images
-  "jpg", "jpeg", "png", "gif", "webp",
-  // Audio
-  "webm", "ogg", "mp3", "wav", "m4a", "aac", "mp4",
-  // Documents
-  "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv"
-]);
+import { 
+  ALLOWED_EXTENSIONS, 
+  getMaxSizeBytesForExtension, 
+  getFileCategory, 
+  validateMagicBytes, 
+  sanitizeImageBuffer 
+} from "@/backend/lib/storage/magicBytes";
 
 export async function POST(request: Request) {
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   try {
     const session = await getServerSession(getAuthOptions());
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { ok: false, error: "Your session has expired. Please log in again.", requestId },
+        { status: 401 }
+      );
     }
 
     const formData = await request.formData();
@@ -30,30 +29,52 @@ export async function POST(request: Request) {
     const clientMessageType = formData.get("messageType") as string | null;
 
     if (!file || file.size === 0) {
-      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
-    }
-
-    if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: "File exceeds the maximum size limit of 25MB" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "No file was selected for upload.", requestId },
+        { status: 400 }
+      );
     }
 
     const originalName = file.name || "attachment";
-    // Sanitize extension
-    const ext = (path.extname(originalName).slice(1) || "bin").toLowerCase();
-    
-    // Check if extension or MIME is allowed
-    const mime = file.type.toLowerCase();
-    const isAudio = mime.startsWith("audio/") || ["webm", "ogg", "mp3", "wav", "m4a", "aac"].includes(ext);
-    const isImage = mime.startsWith("image/") || ["jpg", "jpeg", "png", "gif", "webp"].includes(ext);
-    
-    if (!isAudio && !isImage && !ALLOWED_EXTENSIONS.has(ext)) {
-      return NextResponse.json({ error: `File type .${ext} is not supported.` }, { status: 400 });
+    const rawExt = (path.extname(originalName).slice(1) || "bin").toLowerCase();
+
+    if (!ALLOWED_EXTENSIONS.has(rawExt)) {
+      return NextResponse.json(
+        { ok: false, error: `File type .${rawExt} is not supported.`, requestId },
+        { status: 415 }
+      );
     }
 
+    const maxAllowedBytes = getMaxSizeBytesForExtension(rawExt);
+    const category = getFileCategory(rawExt);
+
+    if (file.size > maxAllowedBytes) {
+      const maxMb = Math.round(maxAllowedBytes / (1024 * 1024));
+      return NextResponse.json(
+        { ok: false, error: `File exceeds the maximum size limit of ${maxMb}MB for ${category.toLowerCase()}s.`, requestId },
+        { status: 413 }
+      );
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    let buffer: any = Buffer.from(arrayBuffer);
+
+    // Validate magic bytes to reject disguised executables
+    const magicCheck = validateMagicBytes(buffer, rawExt);
+    if (!magicCheck.valid) {
+      return NextResponse.json(
+        { ok: false, error: magicCheck.error || "File validation failed.", requestId },
+        { status: 415 }
+      );
+    }
+
+    // Strip EXIF metadata from images
+    buffer = await sanitizeImageBuffer(buffer, rawExt);
+
     let detectedMessageType: "AUDIO" | "IMAGE" | "FILE" = "FILE";
-    if (clientMessageType === "AUDIO" || isAudio) {
+    if (clientMessageType === "AUDIO" || category === "AUDIO") {
       detectedMessageType = "AUDIO";
-    } else if (isImage) {
+    } else if (category === "IMAGE") {
       detectedMessageType = "IMAGE";
     }
 
@@ -61,60 +82,58 @@ export async function POST(request: Request) {
     const cleanBaseName = path.basename(originalName, path.extname(originalName))
       .replace(/[^a-zA-Z0-9_-]/g, "_")
       .slice(0, 40);
-    const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}-${cleanBaseName}.${ext}`;
+    const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}-${cleanBaseName}.${rawExt}`;
 
     let fileUrl: string;
 
     // 1. Try AWS S3 if configured
     const { isS3Configured, uploadBufferToS3 } = await import("@/backend/lib/storage/s3Storage");
     if (isS3Configured()) {
-      const arrayBuffer = await file.arrayBuffer();
-      const s3Res = await uploadBufferToS3(Buffer.from(arrayBuffer), `messages/${uniqueFileName}`, file.type || undefined);
+      const s3Res = await uploadBufferToS3(buffer, `messages/${uniqueFileName}`, file.type || undefined);
       if (s3Res.success && s3Res.s3Url) {
         fileUrl = s3Res.s3Url;
       } else {
         console.warn("S3 upload failed, falling back to robust storage:", s3Res.error);
-        fileUrl = await saveFileRobust(file, uniqueFileName);
+        fileUrl = await saveFileRobust(buffer, file.type, uniqueFileName);
       }
     } else if (process.env.BLOB_READ_WRITE_TOKEN) {
       // 2. Try Vercel Blob if configured
       try {
         const { put } = await import("@vercel/blob");
-        const blob = await put(`messages/${uniqueFileName}`, file, {
+        const blob = await put(`messages/${uniqueFileName}`, buffer, {
           access: "public",
           contentType: file.type || undefined,
         });
         fileUrl = blob.url;
       } catch (blobErr) {
         console.warn("Vercel Blob upload failed, falling back to robust storage:", blobErr);
-        fileUrl = await saveFileRobust(file, uniqueFileName);
+        fileUrl = await saveFileRobust(buffer, file.type, uniqueFileName);
       }
     } else {
-      fileUrl = await saveFileRobust(file, uniqueFileName);
+      fileUrl = await saveFileRobust(buffer, file.type, uniqueFileName);
     }
 
     return NextResponse.json({
+      ok: true,
       success: true,
       url: fileUrl,
       fileName: originalName,
-      fileSize: file.size,
-      fileType: file.type || ext,
+      fileSize: buffer.length,
+      fileType: file.type || rawExt,
       messageType: detectedMessageType,
+      requestId,
     });
-  } catch (error) {
-    const e = error as Error;
-    console.error("POST /api/messages/upload error:", e);
-    return NextResponse.json({ error: e.message || "Failed to upload file" }, { status: 500 });
+  } catch (error: any) {
+    console.error(`[POST /api/messages/upload][${requestId}] Error:`, error);
+    return NextResponse.json(
+      { ok: false, error: error.message || "Failed to upload file", requestId },
+      { status: 500 }
+    );
   }
 }
 
-async function saveFileRobust(file: File, uniqueFileName: string): Promise<string> {
-  const mime = file.type || "application/octet-stream";
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
-  // In serverless environments (Vercel, AWS Lambda), the filesystem is read-only
-  // and local writes to /var/task/public throw ENOENT / EROFS.
+async function saveFileRobust(buffer: Buffer, mime: string | undefined, uniqueFileName: string): Promise<string> {
+  const effectiveMime = mime || "application/octet-stream";
   const isServerless = Boolean(
     process.env.VERCEL || 
     process.env.AWS_LAMBDA_FUNCTION_NAME || 
@@ -134,7 +153,6 @@ async function saveFileRobust(file: File, uniqueFileName: string): Promise<strin
   }
 
   // Universal Serverless fallback: Self-contained Data URI
-  // Native HTML5 audio, video, img and download support with zero filesystem requirements
   const base64 = buffer.toString("base64");
-  return `data:${mime};base64,${base64}`;
+  return `data:${effectiveMime};base64,${base64}`;
 }

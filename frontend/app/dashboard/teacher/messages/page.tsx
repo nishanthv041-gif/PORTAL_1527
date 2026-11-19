@@ -4,6 +4,7 @@ import { prisma } from "@/backend/db/prisma";
 import Link from "next/link";
 import styles from "../../dashboard.module.css";
 import { MessageSquare, ShieldCheck, Users, ArrowRight } from "lucide-react";
+import TeacherBroadcastButton from "./TeacherBroadcastButton";
 
 export default async function TeacherMessagesPage() {
   const session = await getServerSession(getAuthOptions());
@@ -60,10 +61,14 @@ export default async function TeacherMessagesPage() {
   });
 
   const parents = Array.from(parentMap.values());
+  const teacherClasses = teacher.classes.map(c => ({ id: c.id, name: c.name, section: c.section }));
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title} style={{ margin: "0 0 1.5rem" }}>Messages &amp; Communication</h1>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", margin: "0 0 1.5rem" }}>
+        <h1 className={styles.title} style={{ margin: 0 }}>Messages &amp; Communication</h1>
+        <TeacherBroadcastButton classes={teacherClasses} />
+      </div>
 
       {/* School Administration Option */}
       <div className={styles.chartCard} style={{ marginBottom: "1.5rem" }}>

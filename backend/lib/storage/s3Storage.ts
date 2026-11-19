@@ -1,4 +1,10 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { 
+  S3Client, 
+  PutObjectCommand, 
+  GetObjectCommand, 
+  HeadObjectCommand, 
+  DeleteObjectCommand 
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const S3_REGION = process.env.AWS_REGION || "ap-southeast-1";
@@ -17,6 +23,14 @@ function getS3Client(): S3Client | null {
 
 export function isS3Configured(): boolean {
   return Boolean(S3_BUCKET);
+}
+
+export function getS3BucketName(): string | undefined {
+  return S3_BUCKET;
+}
+
+export function getS3Region(): string {
+  return S3_REGION;
 }
 
 /**
@@ -59,13 +73,13 @@ export async function uploadBufferToS3(
 }
 
 /**
- * Generate a short-lived pre-signed PUT URL for client-side uploads (15 minutes expiry)
+ * Generate a short-lived pre-signed PUT URL for direct browser uploads (15 minutes expiry)
  */
 export async function getPresignedUploadUrl(
   key: string,
   contentType: string,
   expiresInSeconds: number = 900 // 15 mins
-): Promise<{ uploadUrl: string; key: string } | null> {
+): Promise<{ uploadUrl: string; key: string; publicUrl: string } | null> {
   const client = getS3Client();
   if (!client || !S3_BUCKET) return null;
 
@@ -78,10 +92,87 @@ export async function getPresignedUploadUrl(
     });
 
     const uploadUrl = await getSignedUrl(client, command, { expiresIn: expiresInSeconds });
-    return { uploadUrl, key };
+    const publicUrl = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${key}`;
+    return { uploadUrl, key, publicUrl };
   } catch (err) {
     console.error("[S3Storage] Presigned upload URL generation failed:", err);
     return null;
+  }
+}
+
+/**
+ * Check object existence and metadata in S3
+ */
+export async function getS3ObjectMetadata(
+  key: string
+): Promise<{ exists: boolean; size?: number; contentType?: string } | null> {
+  const client = getS3Client();
+  if (!client || !S3_BUCKET) return null;
+
+  try {
+    const command = new HeadObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+    });
+    const head = await client.send(command);
+    return {
+      exists: true,
+      size: head.ContentLength,
+      contentType: head.ContentType,
+    };
+  } catch (err: unknown) {
+    const errorAny = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+    if (errorAny?.name === "NotFound" || errorAny?.$metadata?.httpStatusCode === 404) {
+      return { exists: false };
+    }
+    console.error("[S3Storage] HeadObject error:", err);
+    return null;
+  }
+}
+
+/**
+ * Fetch the first N bytes of an object from S3 for magic byte validation
+ */
+export async function getS3ObjectHeadBytes(
+  key: string,
+  maxBytes: number = 4096
+): Promise<Buffer | null> {
+  const client = getS3Client();
+  if (!client || !S3_BUCKET) return null;
+
+  try {
+    const command = new GetObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+      Range: `bytes=0-${maxBytes - 1}`,
+    });
+    const res = await client.send(command);
+    if (!res.Body) return null;
+    const byteArray = await res.Body.transformToByteArray();
+    return Buffer.from(byteArray);
+  } catch (err) {
+    console.error("[S3Storage] GetObject head bytes error:", err);
+    return null;
+  }
+}
+
+/**
+ * Delete an object from S3
+ */
+export async function deleteS3Object(key: string): Promise<boolean> {
+  const client = getS3Client();
+  if (!client || !S3_BUCKET) return false;
+
+  try {
+    const command = new DeleteObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+    });
+    await client.send(command);
+    return true;
+  } catch (err) {
+    console.error("[S3Storage] DeleteObject error:", err);
+    return false;
   }
 }
 
@@ -107,4 +198,3 @@ export async function getPresignedDownloadUrl(
     return null;
   }
 }
-

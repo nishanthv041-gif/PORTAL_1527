@@ -52,6 +52,7 @@ model User {
   complaintMessages ComplaintMessage[]
   sessions         UserSession[]
   reportCardExtractions ReportCardExtraction[]
+  uploadedAttachments   Attachment[]           @relation("UploaderAttachments")
 
   @@index([role, status])
   @@index([googleEmail])
@@ -1111,6 +1112,7 @@ model Message {
   duration           Int?      // in seconds for voice notes
   editedAt           DateTime?
   createdAt          DateTime  @default(now())
+  attachments        Attachment[]
 
   @@index([receiverId, isRead])
   @@index([senderId])
@@ -1118,6 +1120,27 @@ model Message {
   @@index([senderId, receiverId, createdAt])
   @@index([receiverId, senderId, createdAt])
   @@index([receiverId, senderId, isRead])
+  @@index([createdAt])
+}
+
+model Attachment {
+  id          String    @id @default(cuid())
+  fileName    String
+  fileSize    Int
+  fileType    String
+  storageKey  String    @unique
+  url         String
+  status      String    @default("PENDING") // PENDING, READY, FAILED, ORPHANED
+  uploaderId  String
+  uploader    User      @relation("UploaderAttachments", fields: [uploaderId], references: [id], onDelete: Cascade)
+  messageId   String?
+  message     Message?  @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  expiresAt   DateTime?
+
+  @@index([uploaderId, status])
+  @@index([messageId])
   @@index([createdAt])
 }
 

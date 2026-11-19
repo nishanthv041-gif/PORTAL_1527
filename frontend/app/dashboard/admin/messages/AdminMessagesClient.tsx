@@ -4,8 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { 
   Users, UserCheck, Search, MessageSquare, Mail, Phone, 
-  GraduationCap, BookOpen, ArrowRight, Bell, Filter
+  GraduationCap, BookOpen, ArrowRight, Bell, Filter, Send
 } from "lucide-react";
+import BroadcastModal from "@/frontend/components/chat/BroadcastModal";
 import { Class } from "@prisma/client";
 
 export type TeacherContact = {
@@ -65,6 +66,7 @@ export default function AdminMessagesClient({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClassId, setSelectedClassId] = useState<string>("ALL");
   const [unreadOnly, setUnreadOnly] = useState(false);
+  const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
 
   // Filter Teachers
   const filteredTeachers = teachers.filter(t => {
@@ -307,7 +309,37 @@ export default function AdminMessagesClient({
             </span>
           )}
         </button>
+
+        <button
+          type="button"
+          onClick={() => setIsBroadcastOpen(true)}
+          style={{
+            marginLeft: "auto",
+            padding: "0.55rem 1.1rem",
+            backgroundColor: "var(--primary, #6366f1)",
+            color: "#ffffff",
+            border: "none",
+            borderRadius: "8px",
+            fontWeight: 700,
+            fontSize: "0.88rem",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            boxShadow: "0 2px 6px rgba(99, 102, 241, 0.25)",
+            marginBottom: "4px",
+          }}
+        >
+          <Send size={15} /> Send File / Broadcast to All
+        </button>
       </div>
+
+      <BroadcastModal
+        isOpen={isBroadcastOpen}
+        onClose={() => setIsBroadcastOpen(false)}
+        currentUserRole="ADMIN"
+        classes={classes}
+      />
 
       {/* ======================================================== */}
       {/* CONTROLS: SEARCH & CLASS FILTER & UNREAD TOGGLE */}
