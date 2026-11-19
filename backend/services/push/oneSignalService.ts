@@ -211,6 +211,9 @@ export async function sendOneSignalPush(
               overallSuccess = true;
               break;
             }
+          } else if (res.status === 401 || res.status === 403) {
+            lastError = `OneSignal API Key Invalid/Expired (HTTP ${res.status}). Update ONESIGNAL_REST_API_KEY in AWS Amplify from OneSignal Dashboard -> Settings -> Keys & IDs.`;
+            lastData = data;
           } else {
             lastError = data.errors || `HTTP ${res.status}`;
             lastData = data;

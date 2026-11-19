@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { sendUnifiedBroadcast } from "@/backend/services/notifications/unifiedNotificationEngine";
 import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
+import { dispatchNotification } from "@/lib/dispatcher";
 import path from "path";
 import fs from "fs/promises";
 
@@ -237,36 +238,18 @@ export async function createAssignment(formData: FormData) {
       });
     }
 
-    // Notify parents of students in this class
+    // Notify parents of students in this class via unified dispatcher
     try {
-      const students = await prisma.student.findMany({
-        where: { classId, isActive: true },
-        select: {
-          parents: {
-            select: {
-              parent: {
-                select: { userId: true }
-              }
-            }
-          }
-        }
+      await dispatchNotification({
+        type: "HOMEWORK",
+        entityId: assignment.id,
+        audience: { classId },
+        title: `📚 New Homework: ${title}`,
+        body: `${subjectName ? `[${subjectName}] ` : ""}${title} assigned for ${assignment.class.name} - ${assignment.class.section}. Due: ${deadlineDate.toLocaleDateString()}.`,
+        url: "/dashboard/parent/homework",
+        tag: `homework-${assignment.id}-${Date.now()}`,
+        priority: "HIGH",
       });
-
-      const parentUserIds = Array.from(new Set(
-        students.flatMap(s => s.parents.map(p => p.parent.userId)).filter(Boolean)
-      ));
-
-      if (parentUserIds.length > 0) {
-        await sendInstantPortalNotification({
-          targetUserIds: parentUserIds,
-          category: "HOMEWORK",
-          title: `📚 New Homework: ${title}`,
-          body: `${subjectName ? `[${subjectName}] ` : ""}${title} assigned for ${assignment.class.name} - ${assignment.class.section}. Due: ${deadlineDate.toLocaleDateString()}.`,
-          link: "/dashboard/parent/homework",
-          tag: `homework-${assignment.id}`,
-          priority: "HIGH",
-        });
-      }
     } catch (notifErr) {
       console.warn("Could not send homework notifications:", notifErr);
     }
@@ -407,6 +390,49 @@ export async function addHomeworkComment(assignmentId: string, content: string) 
         content: cleanContent
       }
     });
+
+    // Notify counterpart (parents or teacher) of homework conversation message
+    try {
+      const assignment = await prisma.assignment.findUnique({
+        where: { id: assignmentId },
+        include: {
+          teacher: { select: { userId: true } },
+          class: { select: { name: true, section: true } }
+        }
+      });
+
+      if (assignment) {
+        const isTeacher = session.user.role === "TEACHER" || session.user.role === "ADMIN";
+        const commentSnippet = cleanContent.length > 90 ? cleanContent.slice(0, 87) + "..." : cleanContent;
+
+        if (isTeacher) {
+          await dispatchNotification({
+            type: "HOMEWORK",
+            entityId: assignmentId,
+            audience: { classId: assignment.classId },
+            excludeUserId: session.user.id,
+            title: `💬 Homework Message: ${assignment.title}`,
+            body: `${session.user.name || "Teacher"}: "${commentSnippet}"`,
+            url: "/dashboard/parent/homework",
+            tag: `homework-comment-${assignmentId}-${Date.now()}`,
+            priority: "HIGH",
+          });
+        } else if (assignment.teacher?.userId && assignment.teacher.userId !== session.user.id) {
+          await dispatchNotification({
+            type: "HOMEWORK",
+            entityId: assignmentId,
+            recipients: [assignment.teacher.userId],
+            title: `💬 Question on Homework: ${assignment.title}`,
+            body: `${session.user.name || "Parent"}: "${commentSnippet}"`,
+            url: `/dashboard/teacher/assignments/${assignmentId}`,
+            tag: `homework-comment-${assignmentId}-${Date.now()}`,
+            priority: "HIGH",
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.warn("Could not dispatch homework comment notification:", notifErr);
+    }
 
     revalidatePath(`/dashboard/teacher/assignments/${assignmentId}`);
     revalidatePath(`/dashboard/teacher/homework/${assignmentId}`);

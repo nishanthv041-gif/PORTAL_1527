@@ -634,25 +634,25 @@ export async function dispatchNotification(
         }
       })()
     );
-  } else if (targetUserIds.length > 0) {
-    // Record NO_DEVICES for direct web push layer if user has no subscriptions
-    const usersWithoutSubs = targetUserIds.filter(
-      (uid) => !pushSubs.some((s) => s.userId === uid)
-    );
-    if (usersWithoutSubs.length > 0) {
-      await prisma.notificationDelivery.createMany({
-        data: usersWithoutSubs.map((uid) => ({
-          eventType: normalizedType,
-          entityId: entityId || null,
-          recipientUserId: uid,
-          channel: "WEBPUSH",
-          status: "NO_DEVICES",
-          recipientsCount: 0,
-          errorMessage: "No active push subscriptions registered in database",
-          tag: deterministicTag,
-        })),
-      }).catch(() => {});
-    }
+  }
+
+  // Always record NO_DEVICES for direct web push layer if any recipient has no registered subscriptions
+  const usersWithoutSubs = targetUserIds.filter(
+    (uid) => !pushSubs.some((s) => s.userId === uid)
+  );
+  if (usersWithoutSubs.length > 0) {
+    await prisma.notificationDelivery.createMany({
+      data: usersWithoutSubs.map((uid) => ({
+        eventType: normalizedType,
+        entityId: entityId || null,
+        recipientUserId: uid,
+        channel: "WEBPUSH",
+        status: "NO_DEVICES",
+        recipientsCount: 0,
+        errorMessage: "No active push subscriptions registered in database",
+        tag: deterministicTag,
+      })),
+    }).catch(() => {});
   }
 
   // Await all concurrent tasks strictly so serverless lambdas never freeze mid-delivery

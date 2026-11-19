@@ -118,15 +118,34 @@ export default function PwaRegistration() {
               }
 
               if (p256dh && auth) {
-                await fetch("/api/notifications/push/subscribe", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    endpoint: sub.endpoint,
-                    keys: { p256dh, auth },
-                    userAgent: navigator.userAgent,
+                const detectedPlatform = /android/i.test(navigator.userAgent)
+                  ? "Android"
+                  : /iphone|ipad/i.test(navigator.userAgent)
+                  ? "iOS"
+                  : /windows/i.test(navigator.userAgent)
+                  ? "Windows"
+                  : "Web";
+
+                const subPayload = {
+                  endpoint: sub.endpoint,
+                  keys: { p256dh, auth },
+                  platform: detectedPlatform,
+                  userAgent: navigator.userAgent,
+                  deviceName: `${detectedPlatform} PWA`,
+                };
+
+                await Promise.allSettled([
+                  fetch("/api/notifications/push/subscribe", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(subPayload),
                   }),
-                }).catch(() => {});
+                  fetch("/api/push/subscribe", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(subPayload),
+                  }),
+                ]);
               }
             }
           } catch (err) {

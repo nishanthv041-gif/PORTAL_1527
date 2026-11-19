@@ -44,7 +44,7 @@ export async function scheduleMeetingAction(formData: FormData) {
         title: "New Meeting Scheduled",
         body: `A teacher has scheduled a meeting: ${agenda} on ${dateStr} at ${time}. Venue: ${location || link || "School Campus"}`,
         link: "/dashboard/parent/meetings",
-        tag: `meeting-sched-${meeting.id}`,
+        tag: `meeting-sched-${meeting.id}-${Date.now()}`,
         priority: "HIGH",
       }).catch(() => {});
     }
