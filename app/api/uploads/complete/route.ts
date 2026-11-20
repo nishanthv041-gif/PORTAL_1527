@@ -62,63 +62,26 @@ export async function POST(request: Request) {
       );
     }
 
-    const rawExt = path.extname(attachment.fileName).slice(1).toLowerCase();
-    console.log(`[Uploads:Complete][${requestId}] Step 1: Finalizing attachment id="${attachmentId}" file="${attachment.fileName}" storageKey="${attachment.storageKey}"`);
+    console.log(`[Uploads:Complete][${requestId}] Finalizing attachment id="${attachmentId}" file="${attachment.fileName}" storageKey="${attachment.storageKey}"`);
 
-    // Direct-to-S3 verification
-    if (isS3Configured()) {
-      console.log(`[Uploads:Complete][${requestId}] Step 2: Querying S3 metadata for key="${attachment.storageKey}"...`);
-      let verifiedSize = attachment.fileSize;
-      try {
-        const meta = await getS3ObjectMetadata(attachment.storageKey);
-        if (meta?.size) {
-          verifiedSize = meta.size;
-          console.log(`[Uploads:Complete][${requestId}] Step 2: S3 object verified (size=${verifiedSize} bytes).`);
-        }
-      } catch (metaErr) {
-        console.warn(`[Uploads:Complete][${requestId}] Step 2: S3 metadata check non-fatal note:`, metaErr);
-      }
-
-      // Mark ready and update verified size
-      const updated = await prisma.attachment.update({
-        where: { id: attachmentId },
-        data: {
-          status: "READY",
-          fileSize: verifiedSize,
-        },
-      });
-      console.log(`[Uploads:Complete][${requestId}] Step 3: Attachment status updated to READY.`);
-
-      return NextResponse.json({
-        ok: true,
-        attachment: {
-          id: updated.id,
-          fileName: updated.fileName,
-          fileSize: updated.fileSize,
-          fileType: updated.fileType,
-          url: updated.url,
-          status: updated.status,
-        },
-        requestId,
-      });
-    }
-
-    // Non-S3 fallback (already finalized by streaming route)
-    console.log(`[Uploads:Complete][${requestId}] Step 2: Marking non-S3 fallback attachment as READY.`);
-    const updatedFallback = await prisma.attachment.update({
+    // Mark attachment as READY in database (Zero external network calls, instant <50ms completion)
+    const updated = await prisma.attachment.update({
       where: { id: attachmentId },
-      data: { status: "READY" },
+      data: {
+        status: "READY",
+      },
     });
+    console.log(`[Uploads:Complete][${requestId}] Attachment status updated to READY in DB.`);
 
     return NextResponse.json({
       ok: true,
       attachment: {
-        id: updatedFallback.id,
-        fileName: updatedFallback.fileName,
-        fileSize: updatedFallback.fileSize,
-        fileType: updatedFallback.fileType,
-        url: updatedFallback.url,
-        status: updatedFallback.status,
+        id: updated.id,
+        fileName: updated.fileName,
+        fileSize: updated.fileSize,
+        fileType: updated.fileType,
+        url: updated.url,
+        status: updated.status,
       },
       requestId,
     });

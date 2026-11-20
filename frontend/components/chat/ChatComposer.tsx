@@ -152,15 +152,19 @@ export default function ChatComposer({
   const isSendingRef = useRef(false);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
-  // Cleanup object URLs on unmount
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
+
+  // Cleanup object URLs and abort pending uploads ONLY on unmount
   useEffect(() => {
     return () => {
-      attachments.forEach((att) => {
+      attachmentsRef.current.forEach((att) => {
         if (att.previewUrl) URL.revokeObjectURL(att.previewUrl);
       });
       abortControllersRef.current.forEach((c) => c.abort());
+      abortControllersRef.current.clear();
     };
-  }, [attachments]);
+  }, []);
 
   // Adjust textarea height automatically
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {

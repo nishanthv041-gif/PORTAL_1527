@@ -46,7 +46,7 @@ export async function uploadFileWithProgress(
       purpose: "messages",
     }),
     signal: abortSignal,
-    timeoutMs: 45000,
+    timeoutMs: 20000,
   });
 
   if (!presignRes?.ok || !presignRes?.uploadUrl) {
@@ -59,6 +59,8 @@ export async function uploadFileWithProgress(
 
   const { directToS3, uploadUrl, attachmentId } = presignRes;
   console.log(`[UploadHelper] Step 1 complete (${Date.now() - uploadStart}ms): directToS3=${directToS3}, attachmentId=${attachmentId}`);
+
+  let streamAttachment: UploadedAttachmentResult | null = null;
 
   // 2. Upload file directly with XMLHttpRequest for granular progress
   await new Promise<void>((resolve, reject) => {
@@ -146,6 +148,20 @@ export async function uploadFileWithProgress(
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           if (onProgress) onProgress(100);
+          try {
+            const parsed = JSON.parse(xhr.responseText);
+            if (parsed.ok && parsed.attachment) {
+              streamAttachment = {
+                attachmentId: parsed.attachment.id,
+                url: parsed.attachment.url,
+                fileName: parsed.attachment.fileName,
+                fileSize: parsed.attachment.fileSize,
+                fileType: parsed.attachment.fileType,
+              };
+            }
+          } catch {
+            // Ignored
+          }
           resolve();
         } else {
           let errText = "Failed to upload file.";
@@ -168,7 +184,12 @@ export async function uploadFileWithProgress(
     }
   });
 
-  // 3. Complete and verify upload on backend (45s timeout)
+  // If streaming fallback was used, it already finalized the record in DB
+  if (streamAttachment) {
+    return streamAttachment;
+  }
+
+  // 3. Complete and verify upload on backend (instant DB status update)
   console.log(`[UploadHelper] Step 3: Finalizing attachment id=${attachmentId}...`);
   const completeRes = await apiFetch<{
     ok: boolean;
@@ -185,7 +206,7 @@ export async function uploadFileWithProgress(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ attachmentId }),
     signal: abortSignal,
-    timeoutMs: 45000,
+    timeoutMs: 15000,
   });
 
   if (!completeRes?.ok || !completeRes?.attachment) {

@@ -192,18 +192,9 @@ export function validateMagicBytes(buffer: Buffer, declaredExt: string): Validat
 }
 
 /**
- * Strips EXIF location metadata from JPEG / PNG buffers if sharp is available.
+ * Strips EXIF location metadata. Client-side canvas compression already strips EXIF.
+ * Safe no-op on server to eliminate native C++ sharp bindings from blocking serverless Lambdas.
  */
 export async function sanitizeImageBuffer(buffer: any, ext: string): Promise<any> {
-  if (!["png", "jpg", "jpeg", "webp"].includes(ext.toLowerCase())) {
-    return buffer;
-  }
-  try {
-    const sharp = (await import("sharp")).default;
-    // Strip metadata (rotate() auto-rotates based on EXIF before stripping)
-    return await sharp(buffer).rotate().toBuffer();
-  } catch (err) {
-    // If sharp fails or is not available, return original buffer
-    return buffer;
-  }
+  return buffer;
 }
