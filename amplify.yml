@@ -4,9 +4,6 @@ frontend:
     preBuild:
       commands:
         - nvm use 20 || nvm install 20
-        # Restore build cache from previous build if available
-        - mkdir -p .next
-        - '[ -d .amplify-cache/cache ] && cp -r .amplify-cache/cache .next/cache || true'
         - npm ci
         - npx prisma generate
     build:
@@ -18,12 +15,10 @@ frontend:
       commands:
         # 1. Clean server source maps from production output (.map files are never executed at runtime)
         - find .next/server -name "*.map" -type f -delete || true
-        # 2. Print detailed size audit and enforce packaging budget (< 205 MB limit)
+        # 2. Guarantee .next/cache is completely purged so it NEVER enters the 220MB packaged artifact bundle
+        - rm -rf .next/cache || true
+        # 3. Print detailed size audit and enforce packaging budget (< 205 MB limit)
         - node scripts/check-build-size.mjs
-        # 3. Move .next/cache into .amplify-cache to preserve fast builds while keeping deployed bundle slim
-        - mkdir -p .amplify-cache
-        - rm -rf .amplify-cache/cache
-        - '[ -d .next/cache ] && mv .next/cache .amplify-cache/cache || true'
   artifacts:
     baseDirectory: .next
     files:
@@ -31,4 +26,3 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
-      - .amplify-cache/**/*
