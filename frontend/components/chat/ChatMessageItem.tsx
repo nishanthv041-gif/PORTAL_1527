@@ -50,6 +50,7 @@ export default function ChatMessageItem({
   onDelete,
   onRetry,
 }: ChatMessageItemProps) {
+  const [showLightbox, setShowLightbox] = useState(false);
   const isMine = message.senderId === currentUserId;
   const isPending = message.status === "sending";
   const isFailed = message.status === "failed";
@@ -119,8 +120,20 @@ export default function ChatMessageItem({
           <>
             {/* 1. Image Attachment */}
             {message.messageType === "IMAGE" && message.fileUrl && (
-              <div style={{ marginBottom: "0.5rem" }}>
-                <a href={message.fileUrl} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+              <div style={{ marginBottom: message.content && message.content !== "Sent an image" ? "0.5rem" : 0 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowLightbox(true)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    display: "block",
+                    width: "100%",
+                  }}
+                  title="Click to preview image"
+                >
                   <img
                     src={message.fileUrl}
                     alt={message.fileName || "Image"}
@@ -130,10 +143,9 @@ export default function ChatMessageItem({
                       borderRadius: "10px",
                       objectFit: "cover",
                       display: "block",
-                      cursor: "pointer",
                     }}
                   />
-                </a>
+                </button>
               </div>
             )}
 
@@ -206,6 +218,7 @@ export default function ChatMessageItem({
             {/* 4. Text Content (if not just the file placeholder name) */}
             {message.content && 
              !(message.messageType === "AUDIO" && message.content === "🎤 Voice message") && 
+             !(message.messageType === "IMAGE" && message.content === "Sent an image") && 
              !(message.messageType === "FILE" && message.content === `📎 ${message.fileName}`) && (
               <div style={{
                 fontSize: "0.92rem",
@@ -441,6 +454,96 @@ export default function ChatMessageItem({
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Click-to-Preview Lightbox Modal */}
+      {showLightbox && message.fileUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowLightbox(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            backgroundColor: "rgba(0, 0, 0, 0.85)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "relative",
+              maxWidth: "90vw",
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+          >
+            <div style={{
+              position: "absolute",
+              top: "-40px",
+              right: 0,
+              display: "flex",
+              gap: "0.5rem",
+            }}>
+              <a
+                href={message.fileUrl}
+                download={message.fileName || "image"}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: "#ffffff",
+                  background: "rgba(255, 255, 255, 0.2)",
+                  borderRadius: "50%",
+                  width: "36px",
+                  height: "36px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  textDecoration: "none",
+                }}
+                title="Download image"
+              >
+                <Download size={18} />
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowLightbox(false)}
+                style={{
+                  color: "#ffffff",
+                  background: "rgba(255, 255, 255, 0.2)",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "36px",
+                  height: "36px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                }}
+                title="Close preview"
+              >
+                ✕
+              </button>
+            </div>
+            <img
+              src={message.fileUrl}
+              alt={message.fileName || "Preview"}
+              style={{
+                maxWidth: "100%",
+                maxHeight: "85vh",
+                borderRadius: "8px",
+                objectFit: "contain",
+                boxShadow: "0 10px 30px rgba(0, 0, 0, 0.5)",
+              }}
+            />
           </div>
         </div>
       )}

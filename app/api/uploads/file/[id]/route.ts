@@ -5,10 +5,14 @@ import { prisma } from "@/backend/db/prisma";
 import path from "path";
 import fs from "fs/promises";
 
+import { getServerSession } from "next-auth/next";
+import { getAuthOptions } from "@/backend/auth/authOptions";
+
 /**
  * Streaming File Delivery Route
  *
  * Serves stored attachments cleanly to authenticated chat recipients:
+ * - RBAC: Only uploader, sender, recipient, or admin can access
  * - Redirects to AWS S3 if stored externally
  * - Streams decoded binary buffer with correct Content-Type if stored in DB
  * - Serves from local filesystem if stored on VM disk
@@ -20,6 +24,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session?.user?.id) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
     const { id } = await params;
     if (!id) {
       return new NextResponse("Attachment ID is required.", { status: 400 });
@@ -27,10 +36,25 @@ export async function GET(
 
     const attachment = await prisma.attachment.findUnique({
       where: { id },
+      include: {
+        message: {
+          select: { senderId: true, receiverId: true },
+        },
+      },
     });
 
     if (!attachment || !attachment.url) {
       return new NextResponse("Attachment not found.", { status: 404 });
+    }
+
+    // Access control: Caller must be uploader, sender, recipient, or admin
+    const isAdmin = session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN";
+    const isUploader = attachment.uploaderId === session.user.id;
+    const isSender = attachment.message?.senderId === session.user.id;
+    const isReceiver = attachment.message?.receiverId === session.user.id;
+
+    if (!isAdmin && !isUploader && !isSender && !isReceiver) {
+      return new NextResponse("Forbidden: Access denied to this file.", { status: 403 });
     }
 
     // 1. External S3 or CDN URL: 302 Redirect directly
