@@ -166,7 +166,9 @@ export default function ChatComposer({
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
   const attachmentsRef = useRef(attachments);
-  attachmentsRef.current = attachments;
+  useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
 
   // Cleanup object URLs and abort pending uploads ONLY on unmount
   useEffect(() => {
