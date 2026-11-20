@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getGeminiApiKeys } from "@/lib/ai/geminiKeys";
 
 const GeminiPeriodSlotSchema = z.object({
   order: z.number(),
@@ -44,8 +45,8 @@ interface GeminiExtractionOptions {
 export async function extractTimetableWithGemini(
   options: GeminiExtractionOptions
 ): Promise<GeminiTimetableOutput | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  const apiKeys = getGeminiApiKeys();
+  if (apiKeys.length === 0) {
     return null;
   }
 
@@ -89,60 +90,65 @@ Return ONLY a valid JSON object matching this exact schema:
 No markdown backticks, no explanatory text, return ONLY the raw JSON object.
 `;
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: prompt },
-                {
-                  inline_data: {
-                    mime_type: mimeType,
-                    data: base64Data
-                  }
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            response_mime_type: "application/json",
-            temperature: 0.1
-          }
-        })
-      }
-    );
-
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      console.warn("Gemini Vision API request failed with status:", response.status);
-      return null;
-    }
-
-    const data = await response.json();
-    const textOutput = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!textOutput) return null;
-
-    let parsedRaw: any;
+  // Try each configured API key in order (automatic failover)
+  for (let i = 0; i < apiKeys.length; i++) {
+    const apiKey = apiKeys[i];
     try {
-      parsedRaw = JSON.parse(textOutput);
-    } catch {
-      return null;
-    }
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 25000);
 
-    const zodResult = GeminiTimetableOutputSchema.safeParse(parsedRaw);
-    return zodResult.success ? zodResult.data : parsedRaw;
-  } catch (err) {
-    console.warn("Gemini Timetable vision extraction error:", err);
-    return null;
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { text: prompt },
+                  {
+                    inline_data: {
+                      mime_type: mimeType,
+                      data: base64Data
+                    }
+                  }
+                ]
+              }
+            ],
+            generationConfig: {
+              response_mime_type: "application/json",
+              temperature: 0.1
+            }
+          })
+        }
+      );
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        console.warn(`Gemini API key #${i + 1} returned status: ${response.status}. Trying next key if available...`);
+        continue;
+      }
+
+      const data = await response.json();
+      const textOutput = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!textOutput) continue;
+
+      let parsedRaw: any;
+      try {
+        parsedRaw = JSON.parse(textOutput);
+      } catch {
+        continue;
+      }
+
+      const zodResult = GeminiTimetableOutputSchema.safeParse(parsedRaw);
+      return zodResult.success ? zodResult.data : parsedRaw;
+    } catch (err) {
+      console.warn(`Gemini Timetable vision error on key #${i + 1}:`, err);
+    }
   }
+
+  return null;
 }

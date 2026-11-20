@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getGeminiApiKeys } from "@/lib/ai/geminiKeys";
 import {
   ExtractedSheetResult,
   ExtractedStudent,
@@ -54,7 +55,7 @@ export class GeminiProvider implements ExtractionProvider {
   name = "GEMINI" as const;
 
   async isAvailable(): Promise<boolean> {
-    return !!process.env.GEMINI_API_KEY;
+    return getGeminiApiKeys().length > 0;
   }
 
   async extractFromImage(
@@ -63,8 +64,8 @@ export class GeminiProvider implements ExtractionProvider {
     options?: ExtractionOptions
   ): Promise<ExtractedSheetResult> {
     const startTime = Date.now();
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+    const apiKeys = getGeminiApiKeys();
+    if (apiKeys.length === 0) {
       throw new Error("GEMINI_API_KEY is not configured.");
     }
 
@@ -84,7 +85,7 @@ export class GeminiProvider implements ExtractionProvider {
       }
     };
 
-    return this.executeCall(payload, apiKey, startTime);
+    return this.executeCall(payload, apiKeys, startTime);
   }
 
   async extractFromText(
@@ -92,8 +93,8 @@ export class GeminiProvider implements ExtractionProvider {
     options?: ExtractionOptions
   ): Promise<ExtractedSheetResult> {
     const startTime = Date.now();
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+    const apiKeys = getGeminiApiKeys();
+    if (apiKeys.length === 0) {
       throw new Error("GEMINI_API_KEY is not configured.");
     }
 
@@ -111,53 +112,61 @@ export class GeminiProvider implements ExtractionProvider {
       }
     };
 
-    return this.executeCall(payload, apiKey, startTime);
+    return this.executeCall(payload, apiKeys, startTime);
   }
 
   private async executeCall(
     payload: any,
-    apiKey: string,
+    apiKeys: string[],
     startTime: number
   ): Promise<ExtractedSheetResult> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    let lastError: Error | null = null;
 
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: controller.signal
-        }
-      );
+    for (let i = 0; i < apiKeys.length; i++) {
+      const apiKey = apiKeys[i];
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 25000);
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Gemini API returned HTTP ${res.status}: ${errorText}`);
-      }
-
-      const data = await res.json();
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!rawText) {
-        throw new Error("Empty response returned from Gemini API.");
-      }
-
-      let parsedJson: any;
       try {
-        parsedJson = JSON.parse(rawText.replace(/```json/g, "").replace(/```/g, "").trim());
-      } catch (jsonErr: any) {
-        throw new Error(`Failed to parse Gemini JSON output: ${jsonErr.message}`);
-      }
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          }
+        );
 
-      const validated = GeminiSheetSchema.safeParse(parsedJson);
-      if (!validated.success) {
-        throw new Error(`Gemini output failed schema validation: ${validated.error.message}`);
-      }
+        clearTimeout(timeout);
 
-      const output = validated.data;
-      const warnings: string[] = [];
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.warn(`[Gemini OCR] Key #${i + 1} failed (HTTP ${res.status}): ${errorText.slice(0, 100)}. Trying next key...`);
+          lastError = new Error(`Gemini API key #${i + 1} returned HTTP ${res.status}`);
+          continue;
+        }
+
+        const data = await res.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) {
+          throw new Error("Empty response returned from Gemini API.");
+        }
+
+        let parsedJson: any;
+        try {
+          parsedJson = JSON.parse(rawText.replace(/```json/g, "").replace(/```/g, "").trim());
+        } catch (jsonErr: any) {
+          throw new Error(`Failed to parse Gemini JSON output: ${jsonErr.message}`);
+        }
+
+        const validated = GeminiSheetSchema.safeParse(parsedJson);
+        if (!validated.success) {
+          throw new Error(`Gemini output failed schema validation: ${validated.error.message}`);
+        }
+
+        const output = validated.data;
+        const warnings: string[] = [];
       const normalizedSubjects = output.subjects.map(normalizeSubjectName);
 
       if (output.maxTotal && normalizedSubjects.length > 0) {
@@ -230,9 +239,15 @@ export class GeminiProvider implements ExtractionProvider {
         estimatedCostUsd: 0.0, // Free tier
         durationMs: Date.now() - startTime
       };
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[Gemini OCR] Call error on key #${i + 1}: ${err.message}. Trying next key...`);
     } finally {
       clearTimeout(timeout);
     }
   }
+
+  throw lastError || new Error("All configured Gemini API keys failed.");
+}
 }
 
