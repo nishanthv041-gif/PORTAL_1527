@@ -32,29 +32,95 @@ export async function POST(request: Request) {
     });
 
     if (contentTypeHeader.includes("application/json")) {
-      // JSON Payload (Immune to CloudFront/WAF multipart binary inspection blocks)
+      // JSON Payload
       const body = await request.json();
       attachmentId = body.attachmentId;
       fileName = body.fileName || "attachment";
       fileType = body.mimeType || body.fileType || "application/octet-stream";
-      const base64Data = body.base64Data || body.data || "";
 
-      console.log(`[POST /api/uploads/stream][${requestId}] Decision: JSON payload detected:`, {
-        attachmentId,
-        fileName,
-        fileType,
-        hasData: Boolean(base64Data),
-      });
+      if (body.chunkIndex !== undefined) {
+        // Chunked Upload Mode: Each chunk is ~4KB, well below AWS Amplify's CloudFront 8,192 byte limit
+        const chunkIndex = Number(body.chunkIndex);
+        const totalChunks = Number(body.totalChunks);
+        const chunkData = body.chunkData || "";
+        const isLastChunk = Boolean(body.isLastChunk);
 
-      if (!base64Data) {
-        return NextResponse.json(
-          { ok: false, code: "BAD_REQUEST", error: "No file data was provided.", requestId },
-          { status: 400 }
-        );
+        if (!attachmentId) {
+          return NextResponse.json(
+            { ok: false, code: "BAD_REQUEST", error: "attachmentId is required.", requestId },
+            { status: 400 }
+          );
+        }
+
+        const attachment = await prisma.attachment.findUnique({
+          where: { id: attachmentId },
+        });
+
+        if (!attachment) {
+          return NextResponse.json(
+            { ok: false, code: "NOT_FOUND", error: "Attachment record not found.", requestId },
+            { status: 404 }
+          );
+        }
+
+        const isAdmin = session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN";
+        if (attachment.uploaderId !== session.user.id && !isAdmin) {
+          return NextResponse.json(
+            { ok: false, code: "FORBIDDEN", error: "You do not have permission to upload this file.", requestId },
+            { status: 403 }
+          );
+        }
+
+        if (chunkIndex === 0) {
+          await prisma.attachment.update({
+            where: { id: attachmentId },
+            data: { url: chunkData },
+          });
+        } else {
+          await prisma.$executeRawUnsafe(
+            'UPDATE "Attachment" SET "url" = "url" || $1 WHERE id = $2',
+            chunkData,
+            attachmentId
+          );
+        }
+
+        if (!isLastChunk) {
+          return NextResponse.json({
+            ok: true,
+            chunkReceived: chunkIndex,
+            totalChunks,
+            requestId,
+          });
+        }
+
+        // On final chunk, read complete reassembled string
+        const assembled = await prisma.attachment.findUnique({
+          where: { id: attachmentId },
+        });
+
+        if (!assembled || !assembled.url) {
+          return NextResponse.json(
+            { ok: false, code: "ASSEMBLY_FAILED", error: "Could not assemble file chunks.", requestId },
+            { status: 500 }
+          );
+        }
+
+        const cleanBase64 = assembled.url.replace(/^data:[^;]+;base64,/, "");
+        buffer = Buffer.from(cleanBase64, "base64");
+      } else {
+        // Single JSON Payload (for small files < 6KB)
+        const base64Data = body.base64Data || body.data || "";
+
+        if (!base64Data) {
+          return NextResponse.json(
+            { ok: false, code: "BAD_REQUEST", error: "No file data was provided.", requestId },
+            { status: 400 }
+          );
+        }
+
+        const cleanBase64 = base64Data.replace(/^data:[^;]+;base64,/, "");
+        buffer = Buffer.from(cleanBase64, "base64");
       }
-
-      const cleanBase64 = base64Data.replace(/^data:[^;]+;base64,/, "");
-      buffer = Buffer.from(cleanBase64, "base64");
     } else {
       // Standard Multipart Form Data
       const formData = await request.formData();

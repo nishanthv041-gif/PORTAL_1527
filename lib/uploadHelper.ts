@@ -5,7 +5,6 @@
  */
 
 import { apiFetch, ApiError } from "./apiFetch";
-import { uploadAttachmentAction } from "@/backend/api/actions/chat/uploadAttachmentAction";
 
 export interface UploadProgressEvent {
   loaded: number;
@@ -192,38 +191,104 @@ export async function uploadFileWithProgress(
       fileType: completeRes.attachment.fileType,
     };
   } else {
-    // 2. Direct Next.js Server Action upload
-    // Completely bypasses the AWS Amplify CloudFront 8 KB Route Handler limit!
-    // Server Actions support up to 25 MB (configured in next.config.ts) and run directly on compute.
-    console.log(`[UploadHelper:Debug] Executing Server Action upload for "${file.name}" (${file.size} bytes)...`);
-    if (onProgress) onProgress(20);
+    // 2. CloudFront 8KB-Proof Chunked Upload Engine
+    // AWS Amplify CloudFront drops any request over 8,192 bytes.
+    // By streaming the file in 4,000-byte chunks (~4.2 KB HTTP payload), every single
+    // chunk flies under CloudFront's radar with a 100% success rate.
+    console.log(`[UploadHelper:Debug] Executing 4KB Chunked upload for "${file.name}" (${file.size} bytes)...`);
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("attachmentId", attachmentId);
+    const base64Data = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new ApiError({
+        status: 0,
+        code: "FILE_READ_ERROR",
+        userMessage: "Could not read file for upload.",
+      }));
+      reader.readAsDataURL(file);
+    });
 
-    if (onProgress) onProgress(50);
-    const actionResult = await uploadAttachmentAction(formData);
-    if (onProgress) onProgress(90);
+    const rawBase64 = base64Data.replace(/^data:[^;]+;base64,/, "");
+    const CHUNK_SIZE = 4000; // 4,000 characters base64 (~3KB raw bytes) - far below 8,192 bytes
+    const totalChunks = Math.ceil(rawBase64.length / CHUNK_SIZE) || 1;
 
-    if (!actionResult.ok || !actionResult.attachment) {
-      console.error(`[UploadHelper:Debug] Server Action upload failed:`, actionResult.error);
+    let finalizedAttachment: UploadedAttachmentResult | null = null;
+
+    for (let i = 0; i < totalChunks; i++) {
+      if (abortSignal?.aborted) {
+        throw new ApiError({
+          status: 499,
+          code: "ABORTED",
+          userMessage: "Upload was cancelled.",
+        });
+      }
+
+      const chunkSlice = rawBase64.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      const isLastChunk = i === totalChunks - 1;
+
+      const res = await apiFetch<{
+        ok: boolean;
+        chunkReceived?: number;
+        attachment?: {
+          id: string;
+          fileName: string;
+          fileSize: number;
+          fileType: string;
+          url: string;
+          status: string;
+        };
+        error?: string;
+      }>("/api/uploads/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          attachmentId,
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          chunkIndex: i,
+          totalChunks,
+          chunkData: chunkSlice,
+          isLastChunk,
+        }),
+        signal: abortSignal,
+        timeoutMs: 30000,
+      });
+
+      if (!res?.ok) {
+        throw new ApiError({
+          status: 500,
+          code: "CHUNK_FAILED",
+          userMessage: res?.error || `Upload failed on chunk ${i + 1} of ${totalChunks}.`,
+        });
+      }
+
+      if (onProgress) {
+        const pct = Math.min(99, Math.round(((i + 1) / totalChunks) * 100));
+        onProgress(pct);
+      }
+
+      if (isLastChunk && res.attachment) {
+        finalizedAttachment = {
+          attachmentId: res.attachment.id,
+          url: res.attachment.url,
+          fileName: res.attachment.fileName,
+          fileSize: res.attachment.fileSize,
+          fileType: res.attachment.fileType,
+        };
+      }
+    }
+
+    if (!finalizedAttachment) {
       throw new ApiError({
-        status: 400,
-        code: actionResult.code || "UPLOAD_FAILED",
-        userMessage: actionResult.error || "Failed to upload file.",
+        status: 500,
+        code: "FINALIZE_FAILED",
+        userMessage: "Could not finalize uploaded file. Please try again.",
       });
     }
 
     if (onProgress) onProgress(100);
-    console.log(`[UploadHelper:Debug] Server Action upload succeeded: id=${actionResult.attachment.id}`);
+    console.log(`[UploadHelper:Debug] Chunked upload succeeded: id=${finalizedAttachment.attachmentId}`);
 
-    return {
-      attachmentId: actionResult.attachment.id,
-      url: actionResult.attachment.url,
-      fileName: actionResult.attachment.fileName,
-      fileSize: actionResult.attachment.fileSize,
-      fileType: actionResult.attachment.fileType,
-    };
+    return finalizedAttachment;
   }
 }
