@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useMidnightMasterRefresh } from "@/frontend/hooks/useMidnightMasterRefresh";
 import { syncAppBadgeWithServer } from "@/frontend/lib/pwa/badgeManager";
 import { persistNativeSession } from "@/frontend/lib/authPersistence";
@@ -24,16 +25,13 @@ export default function SilentSessionRefresher() {
     if (typeof window === "undefined") return;
 
     // Immediately dismiss native Capacitor splash screen so app launches with zero lag
-    try {
-      const { Capacitor } = require("@capacitor/core");
-      if (Capacitor.isNativePlatform()) {
-        import("@capacitor/splash-screen")
-          .then(({ SplashScreen }) => {
-            SplashScreen.hide({ fadeOutDuration: 100 }).catch(() => {});
-          })
-          .catch(() => {});
-      }
-    } catch {}
+    if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
+      import("@capacitor/splash-screen")
+        .then(({ SplashScreen }) => {
+          SplashScreen.hide({ fadeOutDuration: 100 }).catch(() => {});
+        })
+        .catch(() => {});
+    }
 
     // Initial badge sync on portal launch
     syncAppBadgeWithServer().catch(() => {});

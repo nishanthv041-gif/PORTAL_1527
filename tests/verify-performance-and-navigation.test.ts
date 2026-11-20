@@ -102,7 +102,7 @@ function runPerformanceVerification() {
   if (fs.existsSync(nextConfigPath)) {
     const content = fs.readFileSync(nextConfigPath, "utf8");
     assert("nextConfig enables compress", content.includes("compress: true"));
-    assert("optimizePackageImports includes capacitor and icons", content.includes("@capacitor/core") && content.includes("lucide-react"));
+    assert("optimizePackageImports includes performance icon packages", content.includes("lucide-react") && content.includes("recharts"));
   }
 
   console.log("\n================================================================================");
