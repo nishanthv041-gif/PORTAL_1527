@@ -23,6 +23,18 @@ export default function SilentSessionRefresher() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    // Immediately dismiss native Capacitor splash screen so app launches with zero lag
+    try {
+      const { Capacitor } = require("@capacitor/core");
+      if (Capacitor.isNativePlatform()) {
+        import("@capacitor/splash-screen")
+          .then(({ SplashScreen }) => {
+            SplashScreen.hide({ fadeOutDuration: 100 }).catch(() => {});
+          })
+          .catch(() => {});
+      }
+    } catch {}
+
     // Initial badge sync on portal launch
     syncAppBadgeWithServer().catch(() => {});
 

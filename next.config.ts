@@ -49,7 +49,7 @@ const nextConfig: NextConfig = {
     ];
   },
   experimental: {
-    optimizePackageImports: ['lucide-react', 'recharts', 'date-fns', 'xlsx'],
+    optimizePackageImports: ['@capacitor/core', '@capacitor/preferences', 'lucide-react', 'recharts', 'date-fns', 'xlsx'],
     serverActions: {
       bodySizeLimit: '25mb',
     },

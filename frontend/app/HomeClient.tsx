@@ -1,7 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import ModernLoginForm from "@/frontend/components/ModernLoginForm";
+import { getPersistedNativeSession } from "@/frontend/lib/authPersistence";
 
 interface HomeClientProps {
   schoolName?: string;
@@ -16,7 +18,59 @@ export default function HomeClient({
   initialError,
   initialReason,
 }: HomeClientProps) {
-  // Ultra-fast zero-delay portal opening: on mobile (iOS/Android) and PC, directly opens straight to the landing / login page with 0ms delay
+  const router = useRouter();
+
+  // Instant auto-redirect for logged in user on phone & instant native splash dismissal
+  useEffect(() => {
+    // 1. Immediately hide native splash screen if running inside Capacitor mobile app
+    if (typeof window !== "undefined") {
+      try {
+        const { Capacitor } = require("@capacitor/core");
+        if (Capacitor.isNativePlatform()) {
+          import("@capacitor/splash-screen")
+            .then(({ SplashScreen }) => {
+              SplashScreen.hide({ fadeOutDuration: 100 }).catch(() => {});
+            })
+            .catch(() => {});
+        }
+      } catch {}
+    }
+
+    // 2. Check for persisted native session or active session for instant 0ms auto-entry to dashboard
+    getPersistedNativeSession()
+      .then((persisted) => {
+        if (persisted?.role) {
+          const role = persisted.role.toUpperCase();
+          const target =
+            role === "STAFF" || role === "NON_TEACHING_STAFF"
+              ? "/staff/my-bus"
+              : `/dashboard/${role.toLowerCase()}`;
+          router.replace(target);
+        }
+      })
+      .catch(() => {});
+
+    // 3. Fallback: Quick client session touch
+    fetch("/api/auth/session", { cache: "no-store" })
+      .then((res) => {
+        if (res.ok) {
+          return res.json();
+        }
+        return null;
+      })
+      .then((data) => {
+        if (data?.user?.role) {
+          const role = data.user.role.toUpperCase();
+          const target =
+            role === "STAFF" || role === "NON_TEACHING_STAFF"
+              ? "/staff/my-bus"
+              : `/dashboard/${role.toLowerCase()}`;
+          router.replace(target);
+        }
+      })
+      .catch(() => {});
+  }, [router]);
+
   return (
     <ModernLoginForm
       schoolName={schoolName}

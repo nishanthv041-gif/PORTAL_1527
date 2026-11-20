@@ -345,6 +345,20 @@ select option:hover {
 }
 
 /* ============================================================
+   ZERO-LAG MOBILE TOUCH & FAST TAP CONFIGURATION
+   ============================================================ */
+html,
+body,
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ============================================================
    RESPONSIVE UTILITIES (AUTO SCREEN-FIT)
    ============================================================ */
 .cards-grid-autofit {

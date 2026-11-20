@@ -288,9 +288,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
                         setPendingHref(link.href);
                         const checkbox = document.getElementById("mobile-menu-toggle") as HTMLInputElement | null;
                         if (checkbox && checkbox.checked) {
-                          setTimeout(() => {
-                            if (checkbox) checkbox.checked = false;
-                          }, 100);
+                          checkbox.checked = false;
                         }
                       }}
                       className={`${styles.navItem} ${isActive ? styles.navItemActive : ""} ${isPending ? styles.navItemPending : ""}`}

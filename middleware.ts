@@ -201,11 +201,27 @@ export async function middleware(req: NextRequest) {
       pathname === "/api/auth/callback/credentials" ||
       pathname === "/api/auth/signin";
 
+    // Polling, health checks, and chunked upload streaming have dedicated higher capacity
+    // to prevent real-time chat sync or file chunk transfers from consuming the mutation rate limit
+    const isHighFrequencyInternal =
+      pathname.startsWith("/api/messages/thread") ||
+      pathname.startsWith("/api/notifications/unread-count") ||
+      pathname.startsWith("/api/auth/session-status") ||
+      pathname.startsWith("/api/health") ||
+      pathname.startsWith("/api/uploads/stream");
+
     // 5 req/min on login routes, 30 req/min on general /api/* routes
     const limit = isAuthLogin ? 5 : 30;
-    const rateKey = isAuthLogin ? `auth:${clientIp}` : `api:${clientIp}`;
+    const rateKey = isAuthLogin
+      ? `auth:${clientIp}`
+      : isHighFrequencyInternal
+        ? `polling:${clientIp}`
+        : `api:${clientIp}`;
 
-    const { allowed, remaining, resetAt } = checkRateLimit(rateKey, limit, 60000);
+    // For polling & upload streaming chunks, allow up to 300 req/min; for standard endpoints, use 30 req/min
+    const effectiveLimit = isHighFrequencyInternal ? 300 : limit;
+
+    const { allowed, remaining, resetAt } = checkRateLimit(rateKey, effectiveLimit, 60000);
 
     if (!allowed) {
       const retryAfterSec = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000));

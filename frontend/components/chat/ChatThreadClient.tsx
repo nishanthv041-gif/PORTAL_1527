@@ -170,22 +170,22 @@ export default function ChatThreadClient({
       currentDelay = delay;
       clearInterval(intervalId);
       intervalId = setInterval(() => {
-        // If tab is visible but user has been idle for > 25s, back off to 5s
-        if (!document.hidden && Date.now() - lastUserActivity > 25000 && currentDelay < 5000) {
-          startPolling(5000);
+        // If tab is visible but user has been idle for > 25s, back off to 8s
+        if (!document.hidden && Date.now() - lastUserActivity > 25000 && currentDelay < 8000) {
+          startPolling(8000);
           return;
         }
         syncMessages();
       }, delay);
     };
 
-    startPolling(2000);
+    startPolling(4000);
 
     const onUserActive = () => {
       lastUserActivity = Date.now();
-      if (currentDelay !== 2000 && !document.hidden) {
+      if (currentDelay !== 4000 && !document.hidden) {
         syncMessages();
-        startPolling(2000);
+        startPolling(4000);
       }
     };
 
