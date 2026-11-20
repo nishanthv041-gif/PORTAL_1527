@@ -248,27 +248,34 @@ export default function NotificationStatusCard({
             {isSubscribing ? "Activating..." : "Enable Push Notifications"}
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={handleSendTest}
-            disabled={isTesting}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              padding: "0.45rem 0.95rem",
-              borderRadius: "8px",
-              border: "1px solid var(--border)",
-              backgroundColor: "var(--background)",
-              color: "var(--foreground)",
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              cursor: isTesting ? "not-allowed" : "pointer",
-            }}
-          >
-            {isTesting ? <RotateCw size={13} className="animate-spin" /> : <Send size={13} />}
-            {isTesting ? "Testing..." : "Send Test Alert"}
-          </button>
+          (userRole === "ADMIN" || userRole === "SUPER_ADMIN") ? (
+            <button
+              type="button"
+              onClick={handleSendTest}
+              disabled={isTesting}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                padding: "0.45rem 0.95rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                backgroundColor: "var(--background)",
+                color: "var(--foreground)",
+                fontSize: "0.8rem",
+                fontWeight: 600,
+                cursor: isTesting ? "not-allowed" : "pointer",
+              }}
+            >
+              {isTesting ? <RotateCw size={13} className="animate-spin" /> : <Send size={13} />}
+              {isTesting ? "Testing..." : "Send Test Alert"}
+            </button>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "#16a34a", fontSize: "0.82rem", fontWeight: 600 }}>
+              <CheckCircle2 size={16} />
+              <span>Active on this device</span>
+            </div>
+          )
         )}
       </div>
 

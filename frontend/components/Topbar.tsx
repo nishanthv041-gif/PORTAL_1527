@@ -335,13 +335,13 @@ export default function Topbar({
           )}
         </button>
 
-        {/* Test Push button: Available to all users so Teachers, Parents, and Admins can verify device push alerts */}
-        {user && (
+        {/* Test Push button: Strictly ADMIN only */}
+        {user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN") && (
           <button
             type="button"
             onClick={handleTestLockScreenNotification}
             disabled={isTestingPush}
-            title={user.role === "ADMIN" ? "Send a real test push notification" : "Test lock-screen push alerts on this device"}
+            title="Send a real test push notification"
             aria-label="Test Lock-Screen Notification"
             style={{
               display: "inline-flex",
