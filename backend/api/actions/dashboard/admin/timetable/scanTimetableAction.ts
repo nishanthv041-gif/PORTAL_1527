@@ -6,6 +6,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import type { ScannedSlot, ScanResult } from "./scanTimetableTypes";
 import type { PeriodSlotData, PeriodType } from "@/backend/lib/timetable/timetableTypes";
 import { extractTimetableWithGemini, type GeminiTimetableOutput } from "./extractTimetableGemini";
+import { isGeminiConfigured } from "@/lib/ai/geminiKeys";
 
 const DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 const DAY_ALIASES: Record<string, string> = {
@@ -261,10 +262,10 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
       // ────────────────────────────────────────────────────────────────
       if (mimeType.startsWith("image/") || /\.(jpg|jpeg|png|webp|bmp)$/i.test(extension)) {
         fileType = "Image / Photo";
-        const isGeminiConfigured = Boolean(process.env.GEMINI_API_KEY);
+        const geminiConfigured = isGeminiConfigured();
 
         let geminiOutput: GeminiTimetableOutput | null = null;
-        if (isGeminiConfigured) {
+        if (geminiConfigured) {
           geminiOutput = await extractTimetableWithGemini({
             buffer,
             mimeType: mimeType || "image/jpeg"
@@ -412,7 +413,7 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
         error: `Could not extract timetable data from "${fileName}". Please ensure the file contains day rows/columns and period subjects, or enter them manually.`,
         fileName,
         fileType,
-        scannerConfigured: Boolean(process.env.GEMINI_API_KEY)
+        scannerConfigured: isGeminiConfigured()
       };
     }
 
@@ -424,7 +425,7 @@ export async function scanTimetableAction(formData: FormData): Promise<ScanResul
       scannedSlots: finalSlots,
       warnings,
       totalScanned: finalSlots.length,
-      scannerConfigured: Boolean(process.env.GEMINI_API_KEY)
+      scannerConfigured: isGeminiConfigured()
     };
   } catch (error: any) {
     console.error("Timetable scan action error:", error);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getGeminiApiKeys } from "@/lib/ai/geminiKeys";
 import type {
   ScannedReportCardSubject,
   DetectedStudentEntry,
@@ -66,8 +67,8 @@ export async function extractWithGemini(options: GeminiExtractionOptions): Promi
   docTotal?: number;
   docPercentage?: number;
 } | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  const apiKeys = getGeminiApiKeys();
+  if (apiKeys.length === 0) {
     return null;
   }
 
@@ -117,60 +118,62 @@ Return ONLY a valid JSON object matching this exact schema:
 No markdown backticks, no explanatory text, return ONLY the raw JSON object.
 `;
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: prompt },
-                {
-                  inline_data: {
-                    mime_type: mimeType,
-                    data: base64Data
-                  }
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            response_mime_type: "application/json",
-            temperature: 0.1
-          }
-        })
-      }
-    );
-
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      console.warn("Gemini Vision API request failed with status:", response.status);
-      return null;
-    }
-
-    const data = await response.json();
-    const textOutput = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!textOutput) {
-      return null;
-    }
-
-    let parsedRaw: any;
+  for (let i = 0; i < apiKeys.length; i++) {
+    const apiKey = apiKeys[i];
     try {
-      parsedRaw = JSON.parse(textOutput);
-    } catch {
-      return null;
-    }
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 25000);
 
-    const zodResult = GeminiOutputSchema.safeParse(parsedRaw);
-    const parsedJson = zodResult.success ? zodResult.data : parsedRaw;
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { text: prompt },
+                  {
+                    inline_data: {
+                      mime_type: mimeType,
+                      data: base64Data
+                    }
+                  }
+                ]
+              }
+            ],
+            generationConfig: {
+              response_mime_type: "application/json",
+              temperature: 0.1
+            }
+          })
+        }
+      );
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        console.warn(`Gemini Vision API request failed with status: ${response.status} on key #${i + 1}. Trying next key if available...`);
+        continue;
+      }
+
+      const data = await response.json();
+      const textOutput = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!textOutput) {
+        continue;
+      }
+
+      let parsedRaw: any;
+      try {
+        parsedRaw = JSON.parse(textOutput);
+      } catch {
+        continue;
+      }
+
+      const zodResult = GeminiOutputSchema.safeParse(parsedRaw);
+      const parsedJson = zodResult.success ? zodResult.data : parsedRaw;
 
     if (!parsedJson.students || !Array.isArray(parsedJson.students) || parsedJson.students.length === 0) {
       return null;
@@ -240,9 +243,11 @@ No markdown backticks, no explanatory text, return ONLY the raw JSON object.
       docTotal: firstStudent?.docTotal,
       docPercentage: firstStudent?.docPercentage
     };
-  } catch (err) {
-    console.warn("Gemini vision extraction error, falling back:", err);
-    return null;
+    } catch (err) {
+      console.warn(`Gemini vision extraction error on key #${i + 1}:`, err);
+    }
   }
+
+  return null;
 }
 
