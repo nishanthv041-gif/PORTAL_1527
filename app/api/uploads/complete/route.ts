@@ -73,6 +73,10 @@ export async function POST(request: Request) {
     });
     console.log(`[Uploads:Complete][${requestId}] Attachment status updated to READY in DB.`);
 
+    const cleanPublicUrl = updated.url.startsWith("http")
+      ? updated.url
+      : `/api/uploads/file/${updated.id}`;
+
     return NextResponse.json({
       ok: true,
       attachment: {
@@ -80,7 +84,7 @@ export async function POST(request: Request) {
         fileName: updated.fileName,
         fileSize: updated.fileSize,
         fileType: updated.fileType,
-        url: updated.url,
+        url: cleanPublicUrl,
         status: updated.status,
       },
       requestId,

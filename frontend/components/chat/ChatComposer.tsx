@@ -135,6 +135,19 @@ async function compressImageIfNeeded(file: File): Promise<File> {
   });
 }
 
+function formatUploadError(uploadErr: any): string {
+  const statusPrefix = uploadErr?.status && uploadErr.status !== 0 ? `[HTTP ${uploadErr.status}] ` : "";
+  const rawMsg =
+    uploadErr instanceof ApiError
+      ? `${statusPrefix}${uploadErr.userMessage}`
+      : uploadErr?.message || "File upload failed. Please try again.";
+
+  if (rawMsg.toLowerCase().includes("unexpected response")) {
+    return "New update deployed. Please refresh the page (press F5 or reload) to upload.";
+  }
+  return rawMsg;
+}
+
 export default function ChatComposer({ 
   onSendMessage, 
   disabled = false,
@@ -326,11 +339,7 @@ export default function ChatComposer({
       );
     } catch (uploadErr: any) {
       abortControllersRef.current.delete(id);
-      const statusPrefix = uploadErr?.status && uploadErr.status !== 0 ? `[HTTP ${uploadErr.status}] ` : "";
-      const message =
-        uploadErr instanceof ApiError
-          ? `${statusPrefix}${uploadErr.userMessage}`
-          : uploadErr?.message || "File upload failed. Please try again.";
+      const message = formatUploadError(uploadErr);
 
       setAttachments((prev) =>
         prev.map((a) =>
@@ -402,11 +411,7 @@ export default function ChatComposer({
         } catch (uploadErr: any) {
           abortControllersRef.current.delete(att.id);
           hasUploadFailures = true;
-          const statusPrefix = uploadErr?.status && uploadErr.status !== 0 ? `[HTTP ${uploadErr.status}] ` : "";
-          const message =
-            uploadErr instanceof ApiError
-              ? `${statusPrefix}${uploadErr.userMessage}`
-              : uploadErr?.message || "File upload failed. Please try again.";
+          const message = formatUploadError(uploadErr);
           lastErrorMessage = message;
 
           setAttachments((prev) =>

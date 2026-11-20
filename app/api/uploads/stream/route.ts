@@ -266,11 +266,16 @@ export async function POST(request: Request) {
       },
     });
 
+    // Clean lightweight HTTP URL for frontend & message records (guarantees < 200 bytes JSON response)
+    const cleanPublicUrl = finalUrl.startsWith("http")
+      ? finalUrl
+      : `/api/uploads/file/${updated.id}`;
+
     console.log(`[POST /api/uploads/stream][${requestId}] Attachment finalized successfully:`, {
       attachmentId: updated.id,
       fileName: updated.fileName,
       fileSize: updated.fileSize,
-      urlPrefix: finalUrl.slice(0, 40),
+      url: cleanPublicUrl,
     });
 
     return NextResponse.json({
@@ -280,7 +285,7 @@ export async function POST(request: Request) {
         fileName: updated.fileName,
         fileSize: updated.fileSize,
         fileType: updated.fileType,
-        url: updated.url,
+        url: cleanPublicUrl,
         status: updated.status,
       },
       requestId,
