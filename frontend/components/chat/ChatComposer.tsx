@@ -446,10 +446,22 @@ export default function ChatComposer({
         ? (primaryUpload.fileType.startsWith("image/") ? "Sent an image" : primaryUpload.fileName)
         : "";
 
+      const cleanFileUrl = primaryUpload?.url?.startsWith("data:") && primaryUpload?.attachmentId
+        ? `/api/uploads/file/${primaryUpload.attachmentId}`
+        : primaryUpload?.url;
+
+      console.log("[ChatComposer:Debug] Submitting message with attachment:", {
+        content: trimmed || fallbackContent,
+        messageType,
+        fileUrl: cleanFileUrl,
+        fileName: primaryUpload?.fileName,
+        attachmentId: primaryUpload?.attachmentId,
+      });
+
       const success = await onSendMessage({
         content: trimmed || fallbackContent,
         messageType,
-        fileUrl: primaryUpload?.url,
+        fileUrl: cleanFileUrl,
         fileName: primaryUpload?.fileName,
         fileSize: primaryUpload?.fileSize,
         fileType: primaryUpload?.fileType,
@@ -460,16 +472,16 @@ export default function ChatComposer({
       if (success) {
         // Clear text and successfully uploaded attachments
         setText("");
+        setComposerError(null);
         setAttachments((prev) => {
-          const remaining = prev.filter((a) => a.status === "failed");
           prev.forEach((a) => {
-            if (a.status !== "failed" && a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+            if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
           });
-          return remaining;
+          return [];
         });
         if (textareaRef.current) textareaRef.current.style.height = "auto";
       } else {
-        setComposerError("Failed to deliver message. Your text and attachments have been preserved.");
+        setComposerError("Failed to deliver message. Click Retry on the message or check your connection.");
       }
     } catch (err: any) {
       console.error("[ChatComposer] Submit error:", err);

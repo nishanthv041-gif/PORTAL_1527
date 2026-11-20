@@ -28,9 +28,11 @@ export interface ChatMessage {
   fileSize?: number | null;
   fileType?: string | null;
   duration?: number | null;
+  attachmentId?: string | null;
   editedAt?: Date | string | null;
   createdAt: Date | string;
   status?: "sending" | "sent" | "failed";
+  errorMessage?: string;
 }
 
 interface ChatMessageItemProps {
@@ -235,12 +237,16 @@ export default function ChatMessageItem({
             <span>
               {isPending && <Clock size={12} style={{ opacity: 0.8 }} />}
               {isFailed && (
-                <span style={{ color: "#ef4444", display: "inline-flex", alignItems: "center", gap: "2px" }}>
+                <span 
+                  title={message.errorMessage || "Failed to deliver message"}
+                  style={{ color: "#ef4444", display: "inline-flex", alignItems: "center", gap: "2px" }}
+                >
                   <AlertCircle size={12} />
                   {onRetry && (
                     <button
                       type="button"
                       onClick={() => onRetry(message)}
+                      title={message.errorMessage || "Click to retry sending"}
                       style={{
                         background: "none",
                         border: "none",

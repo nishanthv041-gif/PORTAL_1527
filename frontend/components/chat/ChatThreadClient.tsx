@@ -245,6 +245,10 @@ export default function ChatThreadClient({
   }): Promise<boolean> => {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
+    const cleanFileUrl = payload.fileUrl?.startsWith("data:") && payload.attachmentId
+      ? `/api/uploads/file/${payload.attachmentId}`
+      : payload.fileUrl;
+
     const optimisticMsg: ChatMessage = {
       id: tempId,
       clientTempId: tempId,
@@ -259,6 +263,7 @@ export default function ChatThreadClient({
       fileSize: payload.fileSize,
       fileType: payload.fileType,
       duration: payload.duration,
+      attachmentId: payload.attachmentId,
       createdAt: new Date().toISOString(),
       status: "sending",
     };
@@ -269,6 +274,15 @@ export default function ChatThreadClient({
 
     // 2. Dispatch to backend API asynchronously with safe apiFetch
     try {
+      console.log("[ChatThreadClient:Debug] Sending message payload to /api/messages:", {
+        receiverId: otherUserId,
+        messageType: payload.messageType,
+        fileName: payload.fileName,
+        fileSize: payload.fileSize,
+        fileUrl: cleanFileUrl,
+        attachmentId: payload.attachmentId,
+      });
+
       const data = await apiFetch<{
         success: boolean;
         message: any;
@@ -279,7 +293,7 @@ export default function ChatThreadClient({
           receiverId: otherUserId,
           content: payload.content,
           messageType: payload.messageType,
-          fileUrl: payload.fileUrl,
+          fileUrl: cleanFileUrl,
           fileName: payload.fileName,
           fileSize: payload.fileSize,
           fileType: payload.fileType,
@@ -306,49 +320,78 @@ export default function ChatThreadClient({
       });
       return true;
     } catch (err: unknown) {
-      console.error("Message send failure:", err);
+      console.error("[ChatThreadClient:Debug] Message send failure:", err);
+      const errMsg = err instanceof ApiError 
+        ? err.userMessage 
+        : err instanceof Error 
+          ? err.message 
+          : "Message delivery failed. Click Retry.";
+
       // Update status to failed so user can retry
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === tempId ? { ...msg, status: "failed" } : msg
+          msg.id === tempId ? { ...msg, status: "failed", errorMessage: errMsg } : msg
         )
       );
       return false;
     }
   };
 
-  // Retry Failed Message
+  // Retry Failed Message with Safe apiFetch
   const handleRetryMessage = async (failedMsg: ChatMessage) => {
     setMessages((prev) =>
-      prev.map((m) => (m.id === failedMsg.id ? { ...m, status: "sending" } : m))
+      prev.map((m) => (m.id === failedMsg.id ? { ...m, status: "sending", errorMessage: undefined } : m))
     );
 
+    const cleanFileUrl = failedMsg.fileUrl?.startsWith("data:") && failedMsg.attachmentId
+      ? `/api/uploads/file/${failedMsg.attachmentId}`
+      : failedMsg.fileUrl;
+
     try {
-      const res = await fetch("/api/messages", {
+      console.log("[ChatThreadClient:Debug] Retrying message send:", {
+        id: failedMsg.id,
+        receiverId: otherUserId,
+        fileUrl: cleanFileUrl,
+        attachmentId: failedMsg.attachmentId,
+      });
+
+      const data = await apiFetch<{
+        success: boolean;
+        message: any;
+      }>("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           receiverId: otherUserId,
           content: failedMsg.content,
           messageType: failedMsg.messageType,
-          fileUrl: failedMsg.fileUrl,
+          fileUrl: cleanFileUrl,
           fileName: failedMsg.fileName,
           fileSize: failedMsg.fileSize,
           fileType: failedMsg.fileType,
           duration: failedMsg.duration,
+          attachmentId: failedMsg.attachmentId,
+          clientTempId: failedMsg.clientTempId || failedMsg.id,
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error);
+      if (!data?.success || !data?.message) {
+        throw new Error("Failed to send message on retry");
+      }
 
       setMessages((prev) =>
         prev.map((m) => (m.id === failedMsg.id ? { ...data.message, status: "sent" } : m))
       );
-    } catch (err) {
-      console.error("Retry failed:", err);
+    } catch (err: any) {
+      console.error("[ChatThreadClient:Debug] Retry failed:", err);
+      const errMsg = err instanceof ApiError 
+        ? err.userMessage 
+        : err instanceof Error 
+          ? err.message 
+          : "Retry failed. Click Retry to try again.";
+
       setMessages((prev) =>
-        prev.map((m) => (m.id === failedMsg.id ? { ...m, status: "failed" } : m))
+        prev.map((m) => (m.id === failedMsg.id ? { ...m, status: "failed", errorMessage: errMsg } : m))
       );
     }
   };

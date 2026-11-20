@@ -89,6 +89,7 @@ export async function GET(request: Request) {
           duration: true,
           editedAt: true,
           createdAt: true,
+          attachments: { select: { id: true }, take: 1 },
         }
       });
       messages = recentDesc.reverse();
@@ -112,6 +113,7 @@ export async function GET(request: Request) {
           duration: true,
           editedAt: true,
           createdAt: true,
+          attachments: { select: { id: true }, take: 1 },
         }
       });
     }
@@ -150,8 +152,21 @@ export async function GET(request: Request) {
       });
     }
 
+    // Cleanse any legacy Base64 Data URIs to prevent CloudFront JSON payload bloat
+    const sanitizedMessages = messages.map(m => {
+      let cleanUrl = m.fileUrl;
+      if (cleanUrl && cleanUrl.startsWith('data:') && m.attachments?.[0]?.id) {
+        cleanUrl = '/api/uploads/file/' + m.attachments[0].id;
+      }
+      return {
+        ...m,
+        fileUrl: cleanUrl,
+        attachments: undefined,
+      };
+    });
+
     return NextResponse.json({
-      messages,
+      messages: sanitizedMessages,
       clearedAt,
     }, {
       headers: {

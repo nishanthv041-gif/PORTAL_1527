@@ -43,12 +43,29 @@ export async function POST(request: Request) {
       ...(Array.isArray(attachmentIds) ? attachmentIds : [])
     ];
 
+    console.log(`[POST /api/messages] Received send message request:`, {
+      senderId: session.user.id,
+      receiverId,
+      messageType,
+      fileName,
+      fileSize,
+      fileUrlPrefix: typeof fileUrl === "string" ? fileUrl.slice(0, 40) : null,
+      attachmentId,
+      allAttachmentCount: allAttachmentIds.length,
+      hasContent: Boolean(content),
+    });
+
     if (allAttachmentIds.length > 0) {
       const firstAtt = await prisma.attachment.findUnique({
         where: { id: allAttachmentIds[0] }
       });
       if (firstAtt) {
-        effectiveFileUrl = firstAtt.url;
+        // Guarantee clean, lightweight HTTP URL (bypasses CloudFront payload limits)
+        if (firstAtt.url.startsWith("http://") || firstAtt.url.startsWith("https://")) {
+          effectiveFileUrl = firstAtt.url;
+        } else {
+          effectiveFileUrl = `/api/uploads/file/${firstAtt.id}`;
+        }
         effectiveFileName = firstAtt.fileName;
         effectiveFileSize = firstAtt.fileSize;
         effectiveFileType = firstAtt.fileType;
@@ -56,6 +73,8 @@ export async function POST(request: Request) {
           effectiveMessageType = firstAtt.fileType.startsWith("image/") ? "IMAGE" : "FILE";
         }
       }
+    } else if (effectiveFileUrl && effectiveFileUrl.startsWith("data:") && attachmentId) {
+      effectiveFileUrl = `/api/uploads/file/${attachmentId}`;
     }
 
     const cleanContent = (content || "").trim();
@@ -103,9 +122,45 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Admins can only message teachers and parents." }, { status: 403 });
     }
 
-    const finalContent = cleanContent || (effectiveMessageType === "AUDIO" ? "🎤 Voice message" : effectiveFileName ? `📎 ${effectiveFileName}` : "Attachment");
+    const finalContent = cleanContent || (
+      effectiveMessageType === "AUDIO" 
+        ? "🎤 Voice message" 
+        : effectiveMessageType === "IMAGE"
+          ? "Sent an image"
+          : effectiveFileName 
+            ? `📎 ${effectiveFileName}` 
+            : "Attachment"
+    );
 
-    const message = await prisma.message.create({
+    // Deduplication check: if client retried and message was already saved in last 10 seconds
+    const tenSecondsAgo = new Date(Date.now() - 10000);
+    const existing = await prisma.message.findFirst({
+      where: {
+        senderId: session.user.id,
+        receiverId: targetReceiverId,
+        content: finalContent,
+        createdAt: { gte: tenSecondsAgo },
+        ...(effectiveFileUrl ? { fileUrl: effectiveFileUrl } : {}),
+      },
+      select: {
+        id: true,
+        content: true,
+        senderId: true,
+        receiverId: true,
+        isRead: true,
+        isDeleted: true,
+        messageType: true,
+        fileUrl: true,
+        fileName: true,
+        fileSize: true,
+        fileType: true,
+        duration: true,
+        editedAt: true,
+        createdAt: true,
+      }
+    });
+
+    const message = existing || await prisma.message.create({
       data: {
         senderId: session.user.id,
         receiverId: targetReceiverId,
