@@ -36,14 +36,15 @@ export default function PwaWelcomeNotificationPrompt() {
     const currentPerm = Notification.permission;
     setPermission(currentPerm);
 
-    // If already granted, no need to show any prompt or floating button
-    if (currentPerm === "granted") {
+    // If already granted or dismissed, no need to show modal prompt
+    const isDismissed = localStorage.getItem("srt_pwa_notif_dismissed_v1") === "true";
+    if (currentPerm === "granted" || isDismissed) {
       setIsOpen(false);
       setShowFloatingPill(false);
       return;
     }
 
-    // PERSISTENT: Show prompt while opening the portal until user enables notifications
+    // Only show prompt if not previously dismissed
     const timer = setTimeout(() => {
       setIsOpen(true);
       setShowFloatingPill(false);
@@ -53,9 +54,11 @@ export default function PwaWelcomeNotificationPrompt() {
   }, []);
 
   const handleDismiss = () => {
+    try {
+      localStorage.setItem("srt_pwa_notif_dismissed_v1", "true");
+    } catch {}
     setIsOpen(false);
-    // Keep floating trigger available on screen until user enables notifications
-    setShowFloatingPill(true);
+    setShowFloatingPill(false);
   };
 
   const handleOpenPrompt = () => {

@@ -38,7 +38,7 @@ export default function NotificationPermissionGate({
   userRole?: string;
   children: React.ReactNode;
 }) {
-  // 0ms Instant check: If already granted, dismissed, or unsupported, unlock immediately without any spinner
+  // Instant 0ms check: Default to true so users on PC and mobile are NEVER blocked by a full-screen takeover modal on Ctrl+F5 or reload
   const [isPermitted, setIsPermitted] = useState<boolean>(() => {
     try {
       if (typeof window !== "undefined") {
@@ -53,7 +53,8 @@ export default function NotificationPermissionGate({
     } catch {
       return true;
     }
-    return false;
+    // Default to true on SSR & initial load to guarantee zero modal blocking on Ctrl+F5
+    return true;
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -198,6 +199,7 @@ export default function NotificationPermissionGate({
         if (typeof window !== "undefined") {
           localStorage.setItem("srt_notif_gate_dismissed", "true");
           sessionStorage.setItem("srt_notif_gate_dismissed", "true");
+          document.cookie = "srt_notif_gate_dismissed=true; path=/; max-age=31536000; SameSite=Lax";
         }
       } catch {}
 
@@ -233,6 +235,7 @@ export default function NotificationPermissionGate({
       if (typeof window !== "undefined") {
         localStorage.setItem("srt_notif_gate_dismissed", "true");
         sessionStorage.setItem("srt_notif_gate_dismissed", "true");
+        document.cookie = "srt_notif_gate_dismissed=true; path=/; max-age=31536000; SameSite=Lax";
       }
     } catch {}
     setIsPermitted(true);

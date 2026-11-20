@@ -103,6 +103,82 @@
   box-shadow: 10px 0 35px -5px rgba(0, 0, 0, 0.35);
 }
 
+/* ============================================================
+   CREST AWAKENING & STAGGERED FORM CASCADE
+   Fade and scale up SRT Crest (0.92 to 1.0, 400ms, cubic-bezier(0.22, 1, 0.36, 1))
+   Followed by 120ms staggered upward slide-in for form components
+   ============================================================ */
+
+@keyframes crestAwakening {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.crestContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.crestAwakening {
+  animation: crestAwakening 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes formCascadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cascadeHeader {
+  animation: formCascadeUp 400ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+  will-change: transform, opacity;
+}
+
+.cascadeInputs {
+  animation: formCascadeUp 400ms cubic-bezier(0.22, 1, 0.36, 1) 240ms both;
+  will-change: transform, opacity;
+}
+
+.cascadeActions {
+  animation: formCascadeUp 400ms cubic-bezier(0.22, 1, 0.36, 1) 360ms both;
+  will-change: transform, opacity;
+}
+
+/* Shared Element Crest Morph & Login Card Fade Out (280ms) */
+.cardFadeOut {
+  opacity: 0 !important;
+  transform: scale(0.98) !important;
+  transition: opacity 280ms cubic-bezier(0.22, 1, 0.36, 1), transform 280ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+  pointer-events: none !important;
+}
+
+.crestMorphing {
+  position: fixed !important;
+  top: 14px !important;
+  left: 16px !important;
+  width: 40px !important;
+  height: 40px !important;
+  z-index: 999999 !important;
+  transform: scale(1) translateZ(0) !important;
+  transition: all 280ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+  border-radius: 50% !important;
+}
+
 /* Brand logo & portal name */
 .brandRow {
   display: flex;
@@ -535,8 +611,10 @@
 }
 
 .navCircleButton {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 50%;
   border: 1.5px solid rgba(255, 255, 255, 0.4);
   background: transparent;
@@ -546,6 +624,8 @@
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .navCircleButton:hover {

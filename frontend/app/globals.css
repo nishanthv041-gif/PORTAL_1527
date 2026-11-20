@@ -145,6 +145,10 @@ html {
   overflow-x: hidden;
   max-width: 100%;
   width: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -158,10 +162,22 @@ body {
   overflow-x: hidden;
   max-width: 100%;
   width: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
   /* Smooth theme transition — only colour properties, not layout */
   transition:
     background-color 0.2s ease,
     color 0.2s ease;
+}
+
+button, input, select, textarea, a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+input, select, textarea {
+  font-size: 16px; /* Prevents involuntary iOS Safari auto-zoom on input focus */
 }
 
 ::placeholder {
