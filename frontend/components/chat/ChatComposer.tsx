@@ -361,6 +361,7 @@ export default function ChatComposer({
     try {
       const uploadedResults: QueuedAttachment["uploadedData"][] = [];
       let hasUploadFailures = false;
+      let lastErrorMessage = "";
 
       // 1. Upload any pending or failed attachments
       for (const att of attachments) {
@@ -406,6 +407,7 @@ export default function ChatComposer({
             uploadErr instanceof ApiError
               ? `${statusPrefix}${uploadErr.userMessage}`
               : uploadErr?.message || "File upload failed. Please try again.";
+          lastErrorMessage = message;
 
           setAttachments((prev) =>
             prev.map((a) =>
@@ -417,7 +419,7 @@ export default function ChatComposer({
 
       // If all attachments failed AND there is no text message, notify user and stop
       if (hasUploadFailures && uploadedResults.length === 0 && !trimmed) {
-        setComposerError("File upload failed. Click Retry on the file or check your internet connection.");
+        setComposerError(lastErrorMessage || "File upload failed. Click Retry on the file.");
         return;
       }
 

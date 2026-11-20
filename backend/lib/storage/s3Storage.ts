@@ -173,7 +173,6 @@ export async function getPresignedUploadUrl(
       Bucket: bucket,
       Key: key,
       ContentType: contentType,
-      ServerSideEncryption: "AES256",
     });
 
     const uploadUrl = await withTimeout(

@@ -17,7 +17,7 @@ export const ALLOWED_EXTENSIONS = new Set([
   // Images
   "png", "jpg", "jpeg", "webp", "gif",
   // Documents
-  "pdf", "docx", "xlsx", "pptx", "csv", "txt",
+  "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "txt", "zip",
   // Audio
   "mp3", "wav", "m4a", "aac", "ogg", "webm"
 ]);
@@ -25,7 +25,7 @@ export const ALLOWED_EXTENSIONS = new Set([
 export function getFileCategory(ext: string): "IMAGE" | "DOCUMENT" | "AUDIO" | "UNKNOWN" {
   const cleanExt = ext.toLowerCase().replace(/^\./, "");
   if (["png", "jpg", "jpeg", "webp", "gif"].includes(cleanExt)) return "IMAGE";
-  if (["pdf", "docx", "xlsx", "pptx", "csv", "txt"].includes(cleanExt)) return "DOCUMENT";
+  if (["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "txt", "zip"].includes(cleanExt)) return "DOCUMENT";
   if (["mp3", "wav", "m4a", "aac", "ogg", "webm"].includes(cleanExt)) return "AUDIO";
   return "UNKNOWN";
 }
@@ -117,13 +117,25 @@ export function validateMagicBytes(buffer: Buffer, declaredExt: string): Validat
       return { valid: true, detectedType: "application/pdf" };
     }
 
+    case "zip":
     case "docx":
     case "xlsx":
     case "pptx": {
       // Zip header: 50 4B 03 04 ('PK\x03\x04')
       const isPk = buffer[0] === 0x50 && buffer[1] === 0x4B && buffer[2] === 0x03 && buffer[3] === 0x04;
-      if (!isPk) return { valid: false, error: `File content does not match Office OpenXML (${ext}) format.` };
-      return { valid: true, detectedType: `application/vnd.openxmlformats-officedocument.${ext}` };
+      if (!isPk) return { valid: false, error: `File content does not match ${ext.toUpperCase()} archive/document format.` };
+      return { valid: true, detectedType: ext === "zip" ? "application/zip" : `application/vnd.openxmlformats-officedocument.${ext}` };
+    }
+
+    case "doc":
+    case "xls":
+    case "ppt": {
+      // OLE2 Compound File Header: D0 CF 11 E0 A1 B1 1A E1
+      const isOle2 = buffer.length >= 8 &&
+        buffer[0] === 0xD0 && buffer[1] === 0xCF && buffer[2] === 0x11 && buffer[3] === 0xE0 &&
+        buffer[4] === 0xA1 && buffer[5] === 0xB1 && buffer[6] === 0x1A && buffer[7] === 0xE1;
+      if (!isOle2) return { valid: false, error: `File content does not match Microsoft Office binary (${ext}) format.` };
+      return { valid: true, detectedType: `application/msword` };
     }
 
     case "csv":

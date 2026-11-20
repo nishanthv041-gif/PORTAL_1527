@@ -76,7 +76,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Clean base name and make unique storage key
     const cleanBase = path.basename(fileName, path.extname(fileName))
       .replace(/[^a-zA-Z0-9_-]/g, "_")
       .slice(0, 50);
@@ -84,7 +83,35 @@ export async function POST(request: Request) {
     const uniqueFileName = `${Date.now()}-${randomSuffix}-${cleanBase}.${rawExt}`;
     const storageKey = `uploads/${purpose}/${session.user.id}/${uniqueFileName}`;
 
-    const effectiveMime = mimeType || "application/octet-stream";
+    function inferMimeTypeFromExt(ext: string): string {
+      switch (ext) {
+        case "png": return "image/png";
+        case "jpg":
+        case "jpeg": return "image/jpeg";
+        case "webp": return "image/webp";
+        case "gif": return "image/gif";
+        case "pdf": return "application/pdf";
+        case "doc": return "application/msword";
+        case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        case "xls": return "application/vnd.ms-excel";
+        case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        case "ppt": return "application/vnd.ms-powerpoint";
+        case "pptx": return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+        case "txt": return "text/plain";
+        case "csv": return "text/csv";
+        case "zip": return "application/zip";
+        case "mp3": return "audio/mpeg";
+        case "wav": return "audio/wav";
+        case "m4a": return "audio/mp4";
+        case "webm": return "audio/webm";
+        case "ogg": return "audio/ogg";
+        default: return "application/octet-stream";
+      }
+    }
+
+    const effectiveMime = (mimeType && mimeType !== "application/octet-stream")
+      ? mimeType
+      : inferMimeTypeFromExt(rawExt);
     console.log(`[Uploads:Presign][${requestId}] Step 1: Received presign request for file="${fileName}" size=${sizeNumber} mime="${effectiveMime}" purpose="${purpose}" user="${session.user.id}"`);
 
     // 1. Direct-to-S3 Presigned Upload (Bypasses Next.js & CloudFront Edge entirely)

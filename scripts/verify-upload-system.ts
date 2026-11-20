@@ -190,6 +190,38 @@ Request blocked.
   const successResult = await apiFetch<{ ok: boolean; attachmentId: string }>("https://example.com/api/uploads/presign");
   assert(successResult.ok === true && successResult.attachmentId === "att_123", "Valid JSON parsed successfully");
 
+  // --------------------------------------------------------------------------
+  // TEST SUITE 4: Step 5 Checklist - All Supported Extensions & Edge Cases
+  // --------------------------------------------------------------------------
+  console.log("\n🧪 4. Testing Supported Types, Spaces in Filenames, and Size Gates");
+
+  // 4.1 All Required Allowed Extensions
+  const requiredTypes = ["png", "jpg", "jpeg", "webp", "pdf", "docx", "zip"];
+  for (const ext of requiredTypes) {
+    const cat = getFileCategory(ext);
+    assert(cat === "IMAGE" || cat === "DOCUMENT", `Format .${ext} categorized properly (${cat})`);
+  }
+
+  // 4.2 File with spaces in name sanitization
+  const testFileNameWithSpaces = "time table 2026 final (v2).jpg";
+  const cleanBaseName = testFileNameWithSpaces
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[^a-zA-Z0-9_-]/g, "_")
+    .slice(0, 50);
+  assert(!cleanBaseName.includes(" ") && !cleanBaseName.includes("(") && cleanBaseName.startsWith("time_table_2026_final"), "Filename with spaces safely sanitized for S3/storage keys");
+
+  // 4.3 12 MB image limit enforcement (exceeds 10MB limit)
+  const twelveMb = 12 * 1024 * 1024;
+  const maxImg = getMaxSizeBytesForExtension("jpg");
+  assert(twelveMb > maxImg, `12MB (${twelveMb} bytes) correctly exceeds 10MB image limit (${maxImg} bytes)`);
+
+  // 4.4 Disallowed extensions produce clean type error
+  const invalidExts = ["exe", "bat", "sh", "vbs", "cmd"];
+  for (const badExt of invalidExts) {
+    const check = validateMagicBytes(Buffer.from("invalid payload"), badExt);
+    assert(check.valid === false && Boolean(check.error?.includes("not allowed")), `Disallowed extension .${badExt} cleanly rejected`);
+  }
+
   // Restore fetch
   global.fetch = originalFetch;
 

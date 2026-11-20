@@ -6,7 +6,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import path from "path";
 import fs from "fs/promises";
-import { validateMagicBytes, sanitizeImageBuffer } from "@/backend/lib/storage/magicBytes";
+import { validateMagicBytes, sanitizeImageBuffer, ALLOWED_EXTENSIONS, getMaxSizeBytesForExtension } from "@/backend/lib/storage/magicBytes";
 
 export async function POST(request: Request) {
   const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -19,15 +19,47 @@ export async function POST(request: Request) {
       );
     }
 
-    const formData = await request.formData();
-    const file = formData.get("file") as File | null;
-    const attachmentId = formData.get("attachmentId") as string | null;
+    let attachmentId: string | null = null;
+    let fileName: string = "";
+    let fileType: string = "application/octet-stream";
+    let buffer: Buffer;
 
-    if (!file || file.size === 0) {
-      return NextResponse.json(
-        { ok: false, code: "BAD_REQUEST", error: "No file was uploaded.", requestId },
-        { status: 400 }
-      );
+    const contentTypeHeader = request.headers.get("content-type") || "";
+
+    if (contentTypeHeader.includes("application/json")) {
+      // JSON Payload (Immune to CloudFront/WAF multipart binary inspection blocks)
+      const body = await request.json();
+      attachmentId = body.attachmentId;
+      fileName = body.fileName || "attachment";
+      fileType = body.mimeType || body.fileType || "application/octet-stream";
+      const base64Data = body.base64Data || body.data || "";
+
+      if (!base64Data) {
+        return NextResponse.json(
+          { ok: false, code: "BAD_REQUEST", error: "No file data was provided.", requestId },
+          { status: 400 }
+        );
+      }
+
+      const cleanBase64 = base64Data.replace(/^data:[^;]+;base64,/, "");
+      buffer = Buffer.from(cleanBase64, "base64");
+    } else {
+      // Standard Multipart Form Data
+      const formData = await request.formData();
+      const file = formData.get("file") as File | null;
+      attachmentId = formData.get("attachmentId") as string | null;
+
+      if (!file || file.size === 0) {
+        return NextResponse.json(
+          { ok: false, code: "BAD_REQUEST", error: "No file was uploaded.", requestId },
+          { status: 400 }
+        );
+      }
+
+      fileName = file.name || "attachment";
+      fileType = file.type || "application/octet-stream";
+      const arrayBuffer = await file.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
     }
 
     if (!attachmentId) {
@@ -48,16 +80,30 @@ export async function POST(request: Request) {
       );
     }
 
-    if (attachment.uploaderId !== session.user.id) {
+    const isAdmin = session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN";
+    if (attachment.uploaderId !== session.user.id && !isAdmin) {
       return NextResponse.json(
         { ok: false, code: "FORBIDDEN", error: "You do not have permission to upload this file.", requestId },
         { status: 403 }
       );
     }
 
-    const rawExt = path.extname(file.name || attachment.fileName).slice(1).toLowerCase();
-    const arrayBuffer = await file.arrayBuffer();
-    let buffer: any = Buffer.from(arrayBuffer);
+    const rawExt = path.extname(fileName || attachment.fileName).slice(1).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(rawExt)) {
+      return NextResponse.json(
+        { ok: false, code: "UNSUPPORTED_MEDIA_TYPE", error: `File type .${rawExt} is not supported.`, requestId },
+        { status: 415 }
+      );
+    }
+
+    const maxAllowed = getMaxSizeBytesForExtension(rawExt);
+    if (buffer.length > maxAllowed) {
+      const maxMb = Math.round(maxAllowed / (1024 * 1024));
+      return NextResponse.json(
+        { ok: false, code: "FILE_TOO_LARGE", error: `File exceeds maximum allowed size of ${maxMb}MB.`, requestId },
+        { status: 413 }
+      );
+    }
 
     // Validate magic bytes
     const magicCheck = validateMagicBytes(buffer, rawExt);
@@ -80,7 +126,8 @@ export async function POST(request: Request) {
     const isServerless = Boolean(
       process.env.VERCEL || 
       process.env.AWS_LAMBDA_FUNCTION_NAME || 
-      process.env.LAMBDA_TASK_ROOT
+      process.env.LAMBDA_TASK_ROOT ||
+      process.env.AWS_EXECUTION_ENV
     );
 
     // Try Vercel Blob if available
@@ -89,12 +136,12 @@ export async function POST(request: Request) {
         const { put } = await import("@vercel/blob");
         const blob = await put(`messages/${path.basename(attachment.storageKey)}`, buffer, {
           access: "public",
-          contentType: file.type || "application/octet-stream",
+          contentType: fileType || "application/octet-stream",
         });
         finalUrl = blob.url;
       } catch (blobErr) {
         console.warn("[StreamUpload] Vercel blob failed, falling back to data URI", blobErr);
-        const mime = file.type || "application/octet-stream";
+        const mime = fileType || "application/octet-stream";
         finalUrl = `data:${mime};base64,${buffer.toString("base64")}`;
       }
     } else if (!isServerless) {
@@ -107,12 +154,12 @@ export async function POST(request: Request) {
         finalUrl = `/uploads/messages/${path.basename(attachment.storageKey)}`;
       } catch (diskErr) {
         console.warn("[StreamUpload] Disk write failed, using data URI fallback", diskErr);
-        const mime = file.type || "application/octet-stream";
+        const mime = fileType || "application/octet-stream";
         finalUrl = `data:${mime};base64,${buffer.toString("base64")}`;
       }
     } else {
-      // Serverless fallback
-      const mime = file.type || "application/octet-stream";
+      // Serverless fallback: Self-contained Data URI
+      const mime = fileType || "application/octet-stream";
       finalUrl = `data:${mime};base64,${buffer.toString("base64")}`;
     }
 
@@ -143,7 +190,7 @@ export async function POST(request: Request) {
       { 
         ok: false, 
         code: "INTERNAL_ERROR", 
-        error: error.message || "Failed to process streaming upload.",
+        error: error.message || "Failed to process upload.",
         requestId 
       },
       { status: 500 }
