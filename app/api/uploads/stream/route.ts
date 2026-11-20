@@ -25,6 +25,11 @@ export async function POST(request: Request) {
     let buffer: Buffer;
 
     const contentTypeHeader = request.headers.get("content-type") || "";
+    console.log(`[POST /api/uploads/stream][${requestId}] Request received:`, {
+      userId: session.user.id,
+      userRole: session.user.role,
+      receivedContentType: contentTypeHeader,
+    });
 
     if (contentTypeHeader.includes("application/json")) {
       // JSON Payload (Immune to CloudFront/WAF multipart binary inspection blocks)
@@ -33,6 +38,13 @@ export async function POST(request: Request) {
       fileName = body.fileName || "attachment";
       fileType = body.mimeType || body.fileType || "application/octet-stream";
       const base64Data = body.base64Data || body.data || "";
+
+      console.log(`[POST /api/uploads/stream][${requestId}] Decision: JSON payload detected:`, {
+        attachmentId,
+        fileName,
+        fileType,
+        hasData: Boolean(base64Data),
+      });
 
       if (!base64Data) {
         return NextResponse.json(
@@ -48,6 +60,13 @@ export async function POST(request: Request) {
       const formData = await request.formData();
       const file = formData.get("file") as File | null;
       attachmentId = formData.get("attachmentId") as string | null;
+
+      console.log(`[POST /api/uploads/stream][${requestId}] Decision: Multipart payload detected:`, {
+        attachmentId,
+        fileName: file?.name,
+        fileType: file?.type,
+        fileSize: file?.size,
+      });
 
       if (!file || file.size === 0) {
         return NextResponse.json(
@@ -89,7 +108,14 @@ export async function POST(request: Request) {
     }
 
     const rawExt = path.extname(fileName || attachment.fileName).slice(1).toLowerCase();
+    console.log(`[POST /api/uploads/stream][${requestId}] Validating file:`, {
+      detectedExtension: rawExt,
+      bufferLength: buffer.length,
+      fileType,
+    });
+
     if (!ALLOWED_EXTENSIONS.has(rawExt)) {
+      console.warn(`[POST /api/uploads/stream][${requestId}] Decision: Rejected - unsupported extension .${rawExt}`);
       return NextResponse.json(
         { ok: false, code: "UNSUPPORTED_MEDIA_TYPE", error: `File type .${rawExt} is not supported.`, requestId },
         { status: 415 }
@@ -99,6 +125,7 @@ export async function POST(request: Request) {
     const maxAllowed = getMaxSizeBytesForExtension(rawExt);
     if (buffer.length > maxAllowed) {
       const maxMb = Math.round(maxAllowed / (1024 * 1024));
+      console.warn(`[POST /api/uploads/stream][${requestId}] Decision: Rejected - size ${buffer.length} exceeds ${maxAllowed}`);
       return NextResponse.json(
         { ok: false, code: "FILE_TOO_LARGE", error: `File exceeds maximum allowed size of ${maxMb}MB.`, requestId },
         { status: 413 }
@@ -108,6 +135,7 @@ export async function POST(request: Request) {
     // Validate magic bytes
     const magicCheck = validateMagicBytes(buffer, rawExt);
     if (!magicCheck.valid) {
+      console.warn(`[POST /api/uploads/stream][${requestId}] Decision: Rejected - magic bytes invalid:`, magicCheck.error);
       await prisma.attachment.update({
         where: { id: attachmentId },
         data: { status: "FAILED" },
@@ -170,6 +198,13 @@ export async function POST(request: Request) {
         url: finalUrl,
         fileSize: buffer.length,
       },
+    });
+
+    console.log(`[POST /api/uploads/stream][${requestId}] Attachment finalized successfully:`, {
+      attachmentId: updated.id,
+      fileName: updated.fileName,
+      fileSize: updated.fileSize,
+      urlPrefix: finalUrl.slice(0, 40),
     });
 
     return NextResponse.json({

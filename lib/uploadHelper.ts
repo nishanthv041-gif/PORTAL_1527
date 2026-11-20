@@ -26,7 +26,12 @@ export async function uploadFileWithProgress(
   abortSignal?: AbortSignal
 ): Promise<UploadedAttachmentResult> {
   const uploadStart = Date.now();
-  console.log(`[UploadHelper] Step 1: Requesting presigned session for "${file.name}" (${file.size} bytes)...`);
+  console.log(`[UploadHelper:Debug] Starting upload:`, {
+    fileName: file.name,
+    fileType: file.type,
+    fileSize: file.size,
+    lastModified: file.lastModified,
+  });
 
   // 1. Request presigned upload session from backend (45s timeout to absorb cold starts)
   const presignRes = await apiFetch<{
@@ -104,6 +109,14 @@ export async function uploadFileWithProgress(
 
     if (directToS3) {
       // Direct-to-S3 pre-signed PUT
+      const reqHeaders = presignRes.headers || { "Content-Type": file.type || "application/octet-stream" };
+      console.log(`[UploadHelper:Debug] Sending PUT to S3:`, {
+        url: uploadUrl,
+        headers: reqHeaders,
+        fileSize: file.size,
+        fileType: file.type,
+      });
+
       xhr.open("PUT", uploadUrl, true);
       xhr.timeout = 180000; // 3 minutes timeout for large files
 
@@ -118,8 +131,15 @@ export async function uploadFileWithProgress(
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           if (onProgress) onProgress(100);
+          console.log(`[UploadHelper:Debug] S3 upload succeeded with status ${xhr.status}`);
           resolve();
         } else {
+          console.error(`[UploadHelper:Debug] S3 PUT failed with status ${xhr.status}:`, {
+            status: xhr.status,
+            statusText: xhr.statusText,
+            responseHeaders: xhr.getAllResponseHeaders(),
+            responseBody: xhr.responseText?.slice(0, 500),
+          });
           let cleanMessage = "Storage rejected the upload.";
           if (xhr.status === 403) {
             cleanMessage = "Storage authorization expired or access was denied. S3 CORS or permissions may need updating.";
@@ -142,6 +162,14 @@ export async function uploadFileWithProgress(
 
       reader.onload = () => {
         const base64Data = reader.result as string;
+        console.log(`[UploadHelper:Debug] Sending JSON POST to streaming route:`, {
+          url: uploadUrl,
+          headers: { "Content-Type": "application/json" },
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+        });
+
         xhr.open("POST", uploadUrl, true);
         xhr.setRequestHeader("Content-Type", "application/json");
         xhr.timeout = 180000;
@@ -149,6 +177,7 @@ export async function uploadFileWithProgress(
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             if (onProgress) onProgress(100);
+            console.log(`[UploadHelper:Debug] Streaming upload succeeded with status ${xhr.status}`);
             try {
               const parsed = JSON.parse(xhr.responseText);
               if (parsed.ok && parsed.attachment) {
@@ -165,6 +194,12 @@ export async function uploadFileWithProgress(
             }
             resolve();
           } else {
+            console.error(`[UploadHelper:Debug] Streaming upload failed with status ${xhr.status}:`, {
+              status: xhr.status,
+              statusText: xhr.statusText,
+              responseHeaders: xhr.getAllResponseHeaders(),
+              responseBody: xhr.responseText?.slice(0, 500),
+            });
             let errText = "Failed to upload file.";
             try {
               const parsed = JSON.parse(xhr.responseText);
