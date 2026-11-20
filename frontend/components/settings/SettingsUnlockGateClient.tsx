@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useTransition } from "react";
+import React, { useState, useEffect, useTransition, Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -15,7 +15,7 @@ interface SettingsUnlockGateClientProps {
   logoUrl?: string;
 }
 
-export default function SettingsUnlockGateClient({
+function SettingsUnlockGateClientInner({
   initialLockedUntil,
   initialRemainingMinutes,
   returnUrl = "/dashboard/admin/settings",
@@ -377,6 +377,14 @@ export default function SettingsUnlockGateClient({
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SettingsUnlockGateClient(props: SettingsUnlockGateClientProps) {
+  return (
+    <Suspense fallback={null}>
+      <SettingsUnlockGateClientInner {...props} />
+    </Suspense>
   );
 }
 

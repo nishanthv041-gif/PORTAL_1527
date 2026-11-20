@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Users, Home, Building2, Loader2 } from "lucide-react";
 
@@ -23,7 +23,7 @@ export type ChildData = {
   } | null;
 };
 
-export default function ChildSwitcher({ 
+function ChildSwitcherInner({ 
   studentList, 
   selectedChildId 
 }: { 
@@ -210,5 +210,13 @@ export default function ChildSwitcher({
         })}
       </div>
     </div>
+  );
+}
+
+export default function ChildSwitcher(props: { studentList: ChildData[]; selectedChildId: string }) {
+  return (
+    <Suspense fallback={null}>
+      <ChildSwitcherInner {...props} />
+    </Suspense>
   );
 }

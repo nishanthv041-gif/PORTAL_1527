@@ -16,6 +16,10 @@ const cspHeader = `
 `;
 
 const nextConfig: NextConfig = {
+  typescript: {
+    // Keep strict types during local test suite, but avoid edge compiler exits on CI
+    ignoreBuildErrors: false,
+  },
   // Only produce standalone output when explicitly targeted for Docker containers
   output: process.env.BUILD_TARGET === "docker" ? "standalone" : undefined,
   compress: true,

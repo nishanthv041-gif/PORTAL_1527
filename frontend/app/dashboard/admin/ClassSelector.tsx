@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./ClassSelector.module.css";
 import { Search, X } from "lucide-react";
@@ -15,7 +15,7 @@ interface ClassSelectorProps {
   classes: ClassItem[];
 }
 
-export default function ClassSelector({ classes }: ClassSelectorProps) {
+function ClassSelectorInner({ classes }: ClassSelectorProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentClassId = searchParams.get("classId");
@@ -82,5 +82,13 @@ export default function ClassSelector({ classes }: ClassSelectorProps) {
         ))}
       </div>
     </div>
+  );
+}
+
+export default function ClassSelector(props: ClassSelectorProps) {
+  return (
+    <Suspense fallback={<div className={styles.selectorContainer} />}>
+      <ClassSelectorInner {...props} />
+    </Suspense>
   );
 }

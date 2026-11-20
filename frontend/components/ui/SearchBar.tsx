@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useTransition, useCallback, useId, useRef } from "react";
+import React, { useState, useEffect, useTransition, useCallback, useId, useRef, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Search, X } from "lucide-react";
 import Spinner from "./Spinner";
@@ -22,7 +22,7 @@ export interface SearchBarProps {
   id?: string;
 }
 
-export default function SearchBar({
+function SearchBarInner({
   placeholder = "Search...",
   paramName = "q",
   defaultValue,
@@ -175,5 +175,13 @@ export default function SearchBar({
         )}
       </div>
     </div>
+  );
+}
+
+export default function SearchBar(props: SearchBarProps) {
+  return (
+    <Suspense fallback={<div className={`${styles.searchBarContainer} ${props.className || ""}`} style={props.style} />}>
+      <SearchBarInner {...props} />
+    </Suspense>
   );
 }

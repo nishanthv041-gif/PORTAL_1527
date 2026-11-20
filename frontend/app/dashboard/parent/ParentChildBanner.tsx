@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { 
@@ -30,7 +30,7 @@ function setChildCookie(childId: string) {
   }
 }
 
-export default function ParentChildBanner({
+function ParentChildBannerInner({
   selectedChild,
   studentList,
   activePage = "dashboard"
@@ -205,5 +205,17 @@ export default function ParentChildBanner({
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ParentChildBanner(props: {
+  selectedChild: BannerChildData;
+  studentList: BannerChildData[];
+  activePage?: "dashboard" | "classes" | "timetable" | "other";
+}) {
+  return (
+    <Suspense fallback={null}>
+      <ParentChildBannerInner {...props} />
+    </Suspense>
   );
 }
