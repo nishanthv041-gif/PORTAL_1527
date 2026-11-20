@@ -178,7 +178,7 @@ export async function getPresignedUploadUrl(
 
     const uploadUrl = await withTimeout(
       getSignedUrl(client, command, { expiresIn: expiresInSeconds }),
-      4000,
+      1500,
       "getPresignedUploadUrl"
     );
 
@@ -205,7 +205,7 @@ export async function getS3ObjectMetadata(
       Bucket: bucket,
       Key: key,
     });
-    const head = await withTimeout(client.send(command), 4000, "getS3ObjectMetadata");
+    const head = await withTimeout(client.send(command), 1500, "getS3ObjectMetadata");
     return {
       exists: true,
       size: head.ContentLength,
@@ -222,7 +222,7 @@ export async function getS3ObjectMetadata(
 }
 
 /**
- * Fetch the first N bytes of an object from S3 for magic byte validation with strict 4s timeout
+ * Fetch the first N bytes of an object from S3 for magic byte validation with strict 1.5s timeout
  */
 export async function getS3ObjectHeadBytes(
   key: string,
@@ -238,7 +238,7 @@ export async function getS3ObjectHeadBytes(
       Key: key,
       Range: `bytes=0-${maxBytes - 1}`,
     });
-    const res = await withTimeout(client.send(command), 4000, "getS3ObjectHeadBytes");
+    const res = await withTimeout(client.send(command), 1500, "getS3ObjectHeadBytes");
     if (!res.Body) return null;
     const byteArray = await res.Body.transformToByteArray();
     return Buffer.from(byteArray);
@@ -261,7 +261,7 @@ export async function deleteS3Object(key: string): Promise<boolean> {
       Bucket: bucket,
       Key: key,
     });
-    await withTimeout(client.send(command), 4000, "deleteS3Object");
+    await withTimeout(client.send(command), 1500, "deleteS3Object");
     return true;
   } catch (err) {
     console.error("[S3Storage] DeleteObject error:", err);
@@ -288,7 +288,7 @@ export async function getPresignedDownloadUrl(
 
     return await withTimeout(
       getSignedUrl(client, command, { expiresIn: expiresInSeconds }),
-      4000,
+      1500,
       "getPresignedDownloadUrl"
     );
   } catch (err) {

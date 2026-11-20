@@ -25,7 +25,10 @@ export async function uploadFileWithProgress(
   onProgress?: (percentage: number) => void,
   abortSignal?: AbortSignal
 ): Promise<UploadedAttachmentResult> {
-  // 1. Request presigned upload session from backend (15s timeout)
+  const uploadStart = Date.now();
+  console.log(`[UploadHelper] Step 1: Requesting presigned session for "${file.name}" (${file.size} bytes)...`);
+
+  // 1. Request presigned upload session from backend (45s timeout to absorb cold starts)
   const presignRes = await apiFetch<{
     ok: boolean;
     directToS3: boolean;
@@ -43,7 +46,7 @@ export async function uploadFileWithProgress(
       purpose: "messages",
     }),
     signal: abortSignal,
-    timeoutMs: 15000,
+    timeoutMs: 45000,
   });
 
   if (!presignRes?.ok || !presignRes?.uploadUrl) {
@@ -55,6 +58,7 @@ export async function uploadFileWithProgress(
   }
 
   const { directToS3, uploadUrl, attachmentId } = presignRes;
+  console.log(`[UploadHelper] Step 1 complete (${Date.now() - uploadStart}ms): directToS3=${directToS3}, attachmentId=${attachmentId}`);
 
   // 2. Upload file directly with XMLHttpRequest for granular progress
   await new Promise<void>((resolve, reject) => {
@@ -164,7 +168,8 @@ export async function uploadFileWithProgress(
     }
   });
 
-  // 3. Complete and verify upload on backend (15s timeout)
+  // 3. Complete and verify upload on backend (45s timeout)
+  console.log(`[UploadHelper] Step 3: Finalizing attachment id=${attachmentId}...`);
   const completeRes = await apiFetch<{
     ok: boolean;
     attachment: {
@@ -180,7 +185,7 @@ export async function uploadFileWithProgress(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ attachmentId }),
     signal: abortSignal,
-    timeoutMs: 15000,
+    timeoutMs: 45000,
   });
 
   if (!completeRes?.ok || !completeRes?.attachment) {
