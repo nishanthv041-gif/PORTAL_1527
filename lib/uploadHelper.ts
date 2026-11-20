@@ -5,6 +5,7 @@
  */
 
 import { apiFetch, ApiError } from "./apiFetch";
+import { uploadAttachmentAction } from "@/backend/api/actions/chat/uploadAttachmentAction";
 
 export interface UploadProgressEvent {
   loaded: number;
@@ -65,50 +66,47 @@ export async function uploadFileWithProgress(
   const { directToS3, uploadUrl, attachmentId } = presignRes;
   console.log(`[UploadHelper] Step 1 complete (${Date.now() - uploadStart}ms): directToS3=${directToS3}, attachmentId=${attachmentId}`);
 
-  let streamAttachment: UploadedAttachmentResult | null = null;
+  if (directToS3) {
+    // 2. Direct-to-S3 pre-signed PUT with granular progress
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
 
-  // 2. Upload file directly with XMLHttpRequest for granular progress
-  await new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-
-    if (abortSignal) {
-      abortSignal.addEventListener("abort", () => {
-        xhr.abort();
-        reject(new ApiError({
-          status: 499,
-          code: "ABORTED",
-          userMessage: "Upload was cancelled.",
-        }));
-      });
-    }
-
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable && onProgress) {
-        const pct = Math.min(99, Math.round((event.loaded / event.total) * 100));
-        onProgress(pct);
+      if (abortSignal) {
+        abortSignal.addEventListener("abort", () => {
+          xhr.abort();
+          reject(new ApiError({
+            status: 499,
+            code: "ABORTED",
+            userMessage: "Upload was cancelled.",
+          }));
+        });
       }
-    };
 
-    xhr.onerror = () => {
-      reject(new ApiError({
-        status: 0,
-        code: "NETWORK_ERROR",
-        userMessage: "Network connection failed during upload. Please check your connection and retry.",
-        isNetworkError: true,
-      }));
-    };
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && onProgress) {
+          const pct = Math.min(99, Math.round((event.loaded / event.total) * 100));
+          onProgress(pct);
+        }
+      };
 
-    xhr.ontimeout = () => {
-      reject(new ApiError({
-        status: 408,
-        code: "TIMEOUT",
-        userMessage: "Upload timed out after 3 minutes. Please check your internet connection speed and retry.",
-        isNetworkError: true,
-      }));
-    };
+      xhr.onerror = () => {
+        reject(new ApiError({
+          status: 0,
+          code: "NETWORK_ERROR",
+          userMessage: "Network connection failed during upload. Please check your connection and retry.",
+          isNetworkError: true,
+        }));
+      };
 
-    if (directToS3) {
-      // Direct-to-S3 pre-signed PUT
+      xhr.ontimeout = () => {
+        reject(new ApiError({
+          status: 408,
+          code: "TIMEOUT",
+          userMessage: "Upload timed out after 3 minutes. Please check your internet connection speed and retry.",
+          isNetworkError: true,
+        }));
+      };
+
       const reqHeaders = presignRes.headers || { "Content-Type": file.type || "application/octet-stream" };
       console.log(`[UploadHelper:Debug] Sending PUT to S3:`, {
         url: uploadUrl,
@@ -156,125 +154,76 @@ export async function uploadFileWithProgress(
       };
 
       xhr.send(file);
-    } else {
-      // Fallback JSON-based streaming route (Guaranteed 100% bypass of CloudFront/WAF multipart binary inspection)
-      const reader = new FileReader();
-
-      reader.onload = () => {
-        const base64Data = reader.result as string;
-        console.log(`[UploadHelper:Debug] Sending JSON POST to streaming route:`, {
-          url: uploadUrl,
-          headers: { "Content-Type": "application/json" },
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-        });
-
-        xhr.open("POST", uploadUrl, true);
-        xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.timeout = 180000;
-
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            if (onProgress) onProgress(100);
-            console.log(`[UploadHelper:Debug] Streaming upload succeeded with status ${xhr.status}`);
-            try {
-              const parsed = JSON.parse(xhr.responseText);
-              if (parsed.ok && parsed.attachment) {
-                streamAttachment = {
-                  attachmentId: parsed.attachment.id,
-                  url: parsed.attachment.url,
-                  fileName: parsed.attachment.fileName,
-                  fileSize: parsed.attachment.fileSize,
-                  fileType: parsed.attachment.fileType,
-                };
-              }
-            } catch {
-              // Ignored
-            }
-            resolve();
-          } else {
-            console.error(`[UploadHelper:Debug] Streaming upload failed with status ${xhr.status}:`, {
-              status: xhr.status,
-              statusText: xhr.statusText,
-              responseHeaders: xhr.getAllResponseHeaders(),
-              responseBody: xhr.responseText?.slice(0, 500),
-            });
-            let errText = "Failed to upload file.";
-            try {
-              const parsed = JSON.parse(xhr.responseText);
-              if (parsed.error) errText = parsed.error;
-            } catch {
-              // Non-JSON response
-            }
-            reject(new ApiError({
-              status: xhr.status,
-              code: `STREAM_${xhr.status}`,
-              userMessage: errText,
-              rawText: xhr.responseText?.slice(0, 300),
-            }));
-          }
-        };
-
-        xhr.send(JSON.stringify({
-          attachmentId,
-          fileName: file.name,
-          mimeType: file.type || "application/octet-stream",
-          base64Data,
-        }));
-      };
-
-      reader.onerror = () => {
-        reject(new ApiError({
-          status: 0,
-          code: "FILE_READ_ERROR",
-          userMessage: "Could not read file for upload.",
-          isNetworkError: false,
-        }));
-      };
-
-      reader.readAsDataURL(file);
-    }
-  });
-
-  // If streaming fallback was used, it already finalized the record in DB
-  if (streamAttachment) {
-    return streamAttachment;
-  }
-
-  // 3. Complete and verify upload on backend (instant DB status update)
-  console.log(`[UploadHelper] Step 3: Finalizing attachment id=${attachmentId}...`);
-  const completeRes = await apiFetch<{
-    ok: boolean;
-    attachment: {
-      id: string;
-      fileName: string;
-      fileSize: number;
-      fileType: string;
-      url: string;
-      status: string;
-    };
-  }>("/api/uploads/complete", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ attachmentId }),
-    signal: abortSignal,
-    timeoutMs: 15000,
-  });
-
-  if (!completeRes?.ok || !completeRes?.attachment) {
-    throw new ApiError({
-      status: 500,
-      code: "COMPLETE_FAILED",
-      userMessage: "Could not finalize attachment. Please try again.",
     });
-  }
 
-  return {
-    attachmentId: completeRes.attachment.id,
-    url: completeRes.attachment.url,
-    fileName: completeRes.attachment.fileName,
-    fileSize: completeRes.attachment.fileSize,
-    fileType: completeRes.attachment.fileType,
-  };
+    // 3. Complete and verify upload on backend (instant DB status update)
+    console.log(`[UploadHelper] Step 3: Finalizing attachment id=${attachmentId}...`);
+    const completeRes = await apiFetch<{
+      ok: boolean;
+      attachment: {
+        id: string;
+        fileName: string;
+        fileSize: number;
+        fileType: string;
+        url: string;
+        status: string;
+      };
+    }>("/api/uploads/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attachmentId }),
+      signal: abortSignal,
+      timeoutMs: 15000,
+    });
+
+    if (!completeRes?.ok || !completeRes?.attachment) {
+      throw new ApiError({
+        status: 500,
+        code: "COMPLETE_FAILED",
+        userMessage: "Could not finalize attachment. Please try again.",
+      });
+    }
+
+    return {
+      attachmentId: completeRes.attachment.id,
+      url: completeRes.attachment.url,
+      fileName: completeRes.attachment.fileName,
+      fileSize: completeRes.attachment.fileSize,
+      fileType: completeRes.attachment.fileType,
+    };
+  } else {
+    // 2. Direct Next.js Server Action upload
+    // Completely bypasses the AWS Amplify CloudFront 8 KB Route Handler limit!
+    // Server Actions support up to 25 MB (configured in next.config.ts) and run directly on compute.
+    console.log(`[UploadHelper:Debug] Executing Server Action upload for "${file.name}" (${file.size} bytes)...`);
+    if (onProgress) onProgress(20);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("attachmentId", attachmentId);
+
+    if (onProgress) onProgress(50);
+    const actionResult = await uploadAttachmentAction(formData);
+    if (onProgress) onProgress(90);
+
+    if (!actionResult.ok || !actionResult.attachment) {
+      console.error(`[UploadHelper:Debug] Server Action upload failed:`, actionResult.error);
+      throw new ApiError({
+        status: 400,
+        code: actionResult.code || "UPLOAD_FAILED",
+        userMessage: actionResult.error || "Failed to upload file.",
+      });
+    }
+
+    if (onProgress) onProgress(100);
+    console.log(`[UploadHelper:Debug] Server Action upload succeeded: id=${actionResult.attachment.id}`);
+
+    return {
+      attachmentId: actionResult.attachment.id,
+      url: actionResult.attachment.url,
+      fileName: actionResult.attachment.fileName,
+      fileSize: actionResult.attachment.fileSize,
+      fileType: actionResult.attachment.fileType,
+    };
+  }
 }
