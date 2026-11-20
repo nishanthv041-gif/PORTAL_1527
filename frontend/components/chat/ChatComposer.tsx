@@ -322,9 +322,10 @@ export default function ChatComposer({
       );
     } catch (uploadErr: any) {
       abortControllersRef.current.delete(id);
+      const statusPrefix = uploadErr?.status && uploadErr.status !== 0 ? `[HTTP ${uploadErr.status}] ` : "";
       const message =
         uploadErr instanceof ApiError
-          ? uploadErr.userMessage
+          ? `${statusPrefix}${uploadErr.userMessage}`
           : uploadErr?.message || "File upload failed. Please try again.";
 
       setAttachments((prev) =>
@@ -396,9 +397,10 @@ export default function ChatComposer({
         } catch (uploadErr: any) {
           abortControllersRef.current.delete(att.id);
           hasUploadFailures = true;
+          const statusPrefix = uploadErr?.status && uploadErr.status !== 0 ? `[HTTP ${uploadErr.status}] ` : "";
           const message =
             uploadErr instanceof ApiError
-              ? uploadErr.userMessage
+              ? `${statusPrefix}${uploadErr.userMessage}`
               : uploadErr?.message || "File upload failed. Please try again.";
 
           setAttachments((prev) =>

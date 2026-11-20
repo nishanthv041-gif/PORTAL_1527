@@ -85,11 +85,20 @@ export async function POST(request: Request) {
     const storageKey = `uploads/${purpose}/${session.user.id}/${uniqueFileName}`;
 
     const effectiveMime = mimeType || "application/octet-stream";
+    console.log(`[Uploads:Presign][${requestId}] Step 1: Received presign request for file="${fileName}" size=${sizeNumber} mime="${effectiveMime}" purpose="${purpose}" user="${session.user.id}"`);
 
     // 1. Direct-to-S3 Presigned Upload (Bypasses Next.js & CloudFront Edge entirely)
-    if (isS3Configured()) {
+    const s3Active = isS3Configured();
+    console.log(`[Uploads:Presign][${requestId}] Step 2: Storage backend check: isS3Configured=${s3Active}`);
+
+    if (s3Active) {
+      const presignStart = Date.now();
       const presigned = await getPresignedUploadUrl(storageKey, effectiveMime, 900); // 15 mins
+      const presignElapsed = Date.now() - presignStart;
+      console.log(`[Uploads:Presign][${requestId}] Step 3: getPresignedUploadUrl finished in ${presignElapsed}ms (success=${Boolean(presigned)})`);
+
       if (presigned) {
+        const dbStart = Date.now();
         const attachment = await prisma.attachment.create({
           data: {
             fileName,
@@ -102,6 +111,7 @@ export async function POST(request: Request) {
             expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24hr auto-expiry for pending
           },
         });
+        console.log(`[Uploads:Presign][${requestId}] Step 4: DB attachment record created in ${Date.now() - dbStart}ms (id=${attachment.id}). Returning direct S3 upload URL.`);
 
         return NextResponse.json({
           ok: true,
@@ -114,10 +124,13 @@ export async function POST(request: Request) {
           },
           requestId,
         });
+      } else {
+        console.warn(`[Uploads:Presign][${requestId}] Step 3: S3 presign failed or timed out. Falling back to streaming route.`);
       }
     }
 
-    // 2. Direct streaming route fallback (if S3 is unconfigured)
+    // 2. Direct streaming route fallback (if S3 is unconfigured or presigning timed out)
+    console.log(`[Uploads:Presign][${requestId}] Step 4: Initializing streaming fallback attachment...`);
     const fallbackAttachment = await prisma.attachment.create({
       data: {
         fileName,
@@ -130,6 +143,7 @@ export async function POST(request: Request) {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
     });
+    console.log(`[Uploads:Presign][${requestId}] Step 5: Fallback attachment created (id=${fallbackAttachment.id}). Returning streaming upload URL.`);
 
     return NextResponse.json({
       ok: true,

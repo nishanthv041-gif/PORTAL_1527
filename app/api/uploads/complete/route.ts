@@ -63,11 +63,14 @@ export async function POST(request: Request) {
     }
 
     const rawExt = path.extname(attachment.fileName).slice(1).toLowerCase();
+    console.log(`[Uploads:Complete][${requestId}] Step 1: Finalizing attachment id="${attachmentId}" file="${attachment.fileName}" storageKey="${attachment.storageKey}"`);
 
     // Direct-to-S3 verification
     if (isS3Configured()) {
+      console.log(`[Uploads:Complete][${requestId}] Step 2: Querying S3 metadata for key="${attachment.storageKey}"...`);
       const meta = await getS3ObjectMetadata(attachment.storageKey);
       if (!meta || !meta.exists) {
+        console.warn(`[Uploads:Complete][${requestId}] Step 2: File not found in S3 (exists=false or check failed).`);
         return NextResponse.json(
           { 
             ok: false, 
@@ -78,13 +81,14 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+      console.log(`[Uploads:Complete][${requestId}] Step 2: S3 object verified (size=${meta.size} bytes).`);
 
       // Sniff magic bytes from the first 4KB of the uploaded S3 object
       const headBytes = await getS3ObjectHeadBytes(attachment.storageKey, 4096);
       if (headBytes) {
         const magicCheck = validateMagicBytes(headBytes, rawExt);
         if (!magicCheck.valid) {
-          console.warn(`[Security] Magic byte validation failed for ${attachment.fileName}: ${magicCheck.error}`);
+          console.warn(`[Uploads:Complete][${requestId}][Security] Magic byte validation failed for ${attachment.fileName}: ${magicCheck.error}`);
           // Delete compromised or fake object immediately
           await deleteS3Object(attachment.storageKey);
           await prisma.attachment.update({
@@ -111,6 +115,7 @@ export async function POST(request: Request) {
           fileSize: meta.size ?? attachment.fileSize,
         },
       });
+      console.log(`[Uploads:Complete][${requestId}] Step 3: Attachment status updated to READY.`);
 
       return NextResponse.json({
         ok: true,
@@ -127,6 +132,7 @@ export async function POST(request: Request) {
     }
 
     // Non-S3 fallback (already finalized by streaming route)
+    console.log(`[Uploads:Complete][${requestId}] Step 2: Marking non-S3 fallback attachment as READY.`);
     const updatedFallback = await prisma.attachment.update({
       where: { id: attachmentId },
       data: { status: "READY" },

@@ -25,7 +25,7 @@ export async function uploadFileWithProgress(
   onProgress?: (percentage: number) => void,
   abortSignal?: AbortSignal
 ): Promise<UploadedAttachmentResult> {
-  // 1. Request presigned upload session from backend (120s timeout)
+  // 1. Request presigned upload session from backend (15s timeout)
   const presignRes = await apiFetch<{
     ok: boolean;
     directToS3: boolean;
@@ -43,7 +43,7 @@ export async function uploadFileWithProgress(
       purpose: "messages",
     }),
     signal: abortSignal,
-    timeoutMs: 120000,
+    timeoutMs: 15000,
   });
 
   if (!presignRes?.ok || !presignRes?.uploadUrl) {
@@ -164,7 +164,7 @@ export async function uploadFileWithProgress(
     }
   });
 
-  // 3. Complete and verify upload on backend (120s timeout)
+  // 3. Complete and verify upload on backend (15s timeout)
   const completeRes = await apiFetch<{
     ok: boolean;
     attachment: {
@@ -180,7 +180,7 @@ export async function uploadFileWithProgress(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ attachmentId }),
     signal: abortSignal,
-    timeoutMs: 120000,
+    timeoutMs: 15000,
   });
 
   if (!completeRes?.ok || !completeRes?.attachment) {

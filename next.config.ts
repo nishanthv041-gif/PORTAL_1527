@@ -21,7 +21,6 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
   devIndicators: false,
-  serverExternalPackages: ['sharp'],
   images: {
     formats: ['image/avif', 'image/webp'],
   },
