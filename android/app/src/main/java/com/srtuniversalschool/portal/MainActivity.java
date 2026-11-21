@@ -9,6 +9,8 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Immediately switch from launch theme to application theme (eliminates hanging splash)
+        setTheme(R.style.AppTheme_NoActionBar);
         super.onCreate(savedInstanceState);
 
         // Ensure third-party cookies and session persistence for NextAuth
@@ -18,6 +20,7 @@ public class MainActivity extends BridgeActivity {
         if (currentWebView != null) {
             cookieManager.setAcceptThirdPartyCookies(currentWebView, true);
         }
+        cookieManager.flush();
 
         // Handle Android hardware back navigation
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {

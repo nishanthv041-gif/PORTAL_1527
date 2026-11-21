@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth/next";
-import { getAuthOptions } from "@/backend/auth/authOptions";
+import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { redirect } from "next/navigation";
 import HomeClient from "./HomeClient";
 import { getSystemSettings } from "@/backend/api/actions/dashboard/admin/settings/actions";
@@ -10,20 +9,15 @@ interface HomeProps {
 
 export default async function Home(props: HomeProps) {
   const searchParams = await props.searchParams;
-  const session = await getServerSession(getAuthOptions());
+  const session = await getCachedServerSession();
 
-  if (session) {
-    switch (session.user.role) {
-      case "ADMIN":
-        redirect("/dashboard/admin");
-      case "TEACHER":
-        redirect("/dashboard/teacher");
-      case "PARENT":
-        redirect("/dashboard/parent");
-      case "STUDENT":
-      default:
-        redirect("/dashboard");
-    }
+  if (session?.user?.role) {
+    const role = session.user.role.toUpperCase();
+    if (role === "ADMIN") redirect("/dashboard/admin");
+    if (role === "TEACHER") redirect("/dashboard/teacher");
+    if (role === "PARENT") redirect("/dashboard/parent");
+    if (role === "STAFF" || role === "NON_TEACHING_STAFF") redirect("/staff/my-bus");
+    redirect("/dashboard");
   }
 
   const settings = await getSystemSettings();

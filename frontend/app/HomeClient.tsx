@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Capacitor } from "@capacitor/core";
 import ModernLoginForm from "@/frontend/components/ModernLoginForm";
@@ -20,6 +20,19 @@ export default function HomeClient({
   initialReason,
 }: HomeClientProps) {
   const router = useRouter();
+  const [isRedirecting, setIsRedirecting] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const persisted = localStorage.getItem("srt_native_auth_session");
+      if (persisted) {
+        const parsed = JSON.parse(persisted);
+        return !!parsed?.role;
+      }
+    } catch {
+      return false;
+    }
+    return false;
+  });
 
   // Instant auto-redirect for logged in user on phone & instant native splash dismissal
   useEffect(() => {
@@ -27,11 +40,11 @@ export default function HomeClient({
     if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
       const winCap = (window as unknown as { Capacitor?: { Plugins?: { SplashScreen?: { hide: (opts?: { fadeOutDuration?: number }) => Promise<void> } } } })?.Capacitor;
       if (winCap?.Plugins?.SplashScreen?.hide) {
-        winCap.Plugins.SplashScreen.hide({ fadeOutDuration: 100 }).catch(() => {});
+        winCap.Plugins.SplashScreen.hide({ fadeOutDuration: 0 }).catch(() => {});
       } else {
         import("@capacitor/splash-screen")
           .then(({ SplashScreen }) => {
-            SplashScreen.hide({ fadeOutDuration: 100 }).catch(() => {});
+            SplashScreen.hide({ fadeOutDuration: 0 }).catch(() => {});
           })
           .catch(() => {});
       }
@@ -41,6 +54,7 @@ export default function HomeClient({
     getPersistedNativeSession()
       .then((persisted) => {
         if (persisted?.role) {
+          setIsRedirecting(true);
           const role = persisted.role.toUpperCase();
           const target =
             role === "STAFF" || role === "NON_TEACHING_STAFF"
@@ -61,6 +75,7 @@ export default function HomeClient({
       })
       .then((data) => {
         if (data?.user?.role) {
+          setIsRedirecting(true);
           const role = data.user.role.toUpperCase();
           const target =
             role === "STAFF" || role === "NON_TEACHING_STAFF"
@@ -71,6 +86,14 @@ export default function HomeClient({
       })
       .catch(() => {});
   }, [router]);
+
+  if (isRedirecting) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-[#060a28]">
+        <div className="w-8 h-8 border-2 border-[#f2b84b]/30 border-t-[#f2b84b] rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <ModernLoginForm
