@@ -153,6 +153,12 @@ function getClientIp(req: NextRequest): string {
 // -----------------------------------------------------------------------------
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Instant bypass for AWS Amplify deployment health probes and monitoring
+  if (pathname.startsWith("/api/health")) {
+    return NextResponse.next();
+  }
+
   const origin = req.headers.get("origin");
 
   // A. CORS Preflight & Origin Verification
