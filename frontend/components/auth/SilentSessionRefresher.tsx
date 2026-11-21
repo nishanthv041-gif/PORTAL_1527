@@ -26,11 +26,16 @@ export default function SilentSessionRefresher() {
 
     // Immediately dismiss native Capacitor splash screen so app launches with zero lag
     if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
-      import("@capacitor/splash-screen")
-        .then(({ SplashScreen }) => {
-          SplashScreen.hide({ fadeOutDuration: 100 }).catch(() => {});
-        })
-        .catch(() => {});
+      const winCap = (window as unknown as { Capacitor?: { Plugins?: { SplashScreen?: { hide: (opts?: { fadeOutDuration?: number }) => Promise<void> } } } })?.Capacitor;
+      if (winCap?.Plugins?.SplashScreen?.hide) {
+        winCap.Plugins.SplashScreen.hide({ fadeOutDuration: 100 }).catch(() => {});
+      } else {
+        import("@capacitor/splash-screen")
+          .then(({ SplashScreen }) => {
+            SplashScreen.hide({ fadeOutDuration: 100 }).catch(() => {});
+          })
+          .catch(() => {});
+      }
     }
 
     // Initial badge sync on portal launch

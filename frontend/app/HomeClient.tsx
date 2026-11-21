@@ -25,11 +25,16 @@ export default function HomeClient({
   useEffect(() => {
     // 1. Immediately hide native splash screen if running inside Capacitor mobile app
     if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
-      import("@capacitor/splash-screen")
-        .then(({ SplashScreen }) => {
-          SplashScreen.hide({ fadeOutDuration: 100 }).catch(() => {});
-        })
-        .catch(() => {});
+      const winCap = (window as unknown as { Capacitor?: { Plugins?: { SplashScreen?: { hide: (opts?: { fadeOutDuration?: number }) => Promise<void> } } } })?.Capacitor;
+      if (winCap?.Plugins?.SplashScreen?.hide) {
+        winCap.Plugins.SplashScreen.hide({ fadeOutDuration: 100 }).catch(() => {});
+      } else {
+        import("@capacitor/splash-screen")
+          .then(({ SplashScreen }) => {
+            SplashScreen.hide({ fadeOutDuration: 100 }).catch(() => {});
+          })
+          .catch(() => {});
+      }
     }
 
     // 2. Check for persisted native session or active session for instant 0ms auto-entry to dashboard
