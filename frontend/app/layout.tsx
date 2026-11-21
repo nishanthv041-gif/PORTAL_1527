@@ -143,23 +143,7 @@ export default async function RootLayout({
   const flashPreventionScript = `
   (function() {
     try {
-      // 1. Instant 0ms pre-hydration redirection to dashboard on phone (bypasses login screen & splash delay)
-      if (window.location.pathname === '/') {
-        var s = localStorage.getItem('srt_native_auth_session');
-        if (s) {
-          try {
-            var p = JSON.parse(s);
-            if (p && p.role) {
-              var r = String(p.role).toUpperCase();
-              var t = (r === 'STAFF' || r === 'NON_TEACHING_STAFF') ? '/staff/my-bus' : ('/dashboard/' + r.toLowerCase());
-              window.location.replace(t);
-              return;
-            }
-          } catch(e) {}
-        }
-      }
-
-      // 2. Theme flash prevention
+      // 1. Theme flash prevention - runs synchronously before paint
       var cached = localStorage.getItem('theme-cache');
       var valid = cached === 'dark' || cached === 'light';
       var current = document.documentElement.getAttribute('data-theme');

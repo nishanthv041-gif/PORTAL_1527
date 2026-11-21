@@ -1,5 +1,6 @@
 package com.srtuniversalschool.portal;
 
+import android.graphics.Color;
 import android.os.Bundle;
 import android.webkit.CookieManager;
 import android.webkit.WebView;
@@ -18,6 +19,7 @@ public class MainActivity extends BridgeActivity {
         cookieManager.setAcceptCookie(true);
         WebView currentWebView = getBridge().getWebView();
         if (currentWebView != null) {
+            currentWebView.setBackgroundColor(Color.parseColor("#060a28"));
             cookieManager.setAcceptThirdPartyCookies(currentWebView, true);
         }
         cookieManager.flush();

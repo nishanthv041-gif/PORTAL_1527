@@ -12,60 +12,30 @@ export default function RootLoading() {
         padding: "1.5rem",
         boxSizing: "border-box",
         backgroundColor: "var(--background, #0f172a)",
+        gap: "1.25rem",
       }}
     >
       <div
         style={{
-          width: "100%",
-          maxWidth: "460px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "1.25rem",
-          alignItems: "center",
+          width: "50px",
+          height: "50px",
+          borderRadius: "50%",
+          border: "4px solid rgba(242, 184, 75, 0.2)",
+          borderTopColor: "#f2b84b",
+          animation: "rootSpin 0.8s linear infinite",
         }}
-      >
-        {/* Crest Skeleton */}
-        <div
-          style={{
-            width: "64px",
-            height: "64px",
-            borderRadius: "50%",
-            background: "linear-gradient(90deg, rgba(59, 130, 246, 0.1) 25%, rgba(59, 130, 246, 0.25) 50%, rgba(59, 130, 246, 0.1) 75%)",
-            backgroundSize: "200% 100%",
-            animation: "skeletonShimmer 1.2s infinite ease-in-out",
-          }}
-        />
-
-        {/* Title Bar Skeleton */}
-        <div
-          style={{
-            width: "220px",
-            height: "24px",
-            borderRadius: "8px",
-            background: "linear-gradient(90deg, rgba(255, 255, 255, 0.05) 25%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0.05) 75%)",
-            backgroundSize: "200% 100%",
-            animation: "skeletonShimmer 1.2s infinite ease-in-out",
-          }}
-        />
-
-        {/* Card Shell Skeleton */}
-        <div
-          style={{
-            width: "100%",
-            height: "260px",
-            borderRadius: "18px",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            background: "linear-gradient(90deg, rgba(30, 41, 59, 0.4) 25%, rgba(30, 41, 59, 0.7) 50%, rgba(30, 41, 59, 0.4) 75%)",
-            backgroundSize: "200% 100%",
-            animation: "skeletonShimmer 1.2s infinite ease-in-out",
-          }}
-        />
+      />
+      <div style={{ textAlign: "center" }}>
+        <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.25rem" }}>
+          SRT Universal School
+        </h3>
+        <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+          Connecting to portal...
+        </p>
       </div>
-
       <style>{`
-        @keyframes skeletonShimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
+        @keyframes rootSpin {
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </div>

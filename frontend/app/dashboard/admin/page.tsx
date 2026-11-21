@@ -9,7 +9,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { startOfSchoolDay, endOfSchoolDay, getSchoolNow } from "@/lib/time";
 
-export const revalidate = 0;
+export const revalidate = 15;
 
 const PassFailChart = dynamic(() => import("./PassFailChart"), {
   loading: () => (
