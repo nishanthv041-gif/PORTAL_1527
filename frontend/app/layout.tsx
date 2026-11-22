@@ -23,8 +23,8 @@ export const viewport: Viewport = {
   maximumScale: 5,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
+    { media: "(prefers-color-scheme: light)", color: "#000000" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
   ],
 };
 
@@ -98,7 +98,7 @@ export async function generateMetadata(): Promise<Metadata> {
     manifest: "/manifest.webmanifest",
     appleWebApp: {
       capable: true,
-      statusBarStyle: "black-translucent",
+      statusBarStyle: "black",
       title: "SRT Portal",
     },
     robots: {
