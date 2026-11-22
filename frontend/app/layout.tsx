@@ -219,6 +219,8 @@ export default async function RootLayout({
         <link rel="preload" href="/logo/srt-logo.svg" as="image" type="image/svg+xml" />
         {/* PWA & Mobile Web App Manifest Links */}
         <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="theme-color" content="#000000" />
+        <meta name="msapplication-navbutton-color" content="#000000" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

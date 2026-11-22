@@ -30,6 +30,16 @@ export default function HomeClient({
     if (isAuth) return false;
     if (typeof window !== "undefined") {
       try {
+        // Skip splash in standalone PWA / installed app mode
+        if (
+          window.matchMedia("(display-mode: standalone)").matches ||
+          (navigator as unknown as { standalone?: boolean }).standalone
+        ) {
+          return false;
+        }
+        if (localStorage.getItem("srt_splash_shown") === "true") {
+          return false;
+        }
         return sessionStorage.getItem("srt_splash_shown") !== "true";
       } catch {
         return false;
@@ -90,6 +100,7 @@ export default function HomeClient({
   const handleSplashComplete = () => {
     setShowSplash(false);
     try {
+      localStorage.setItem("srt_splash_shown", "true");
       sessionStorage.setItem("srt_splash_shown", "true");
     } catch {}
   };

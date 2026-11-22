@@ -16,6 +16,10 @@ public class MainActivity extends BridgeActivity {
         setTheme(R.style.AppTheme_NoActionBar);
         super.onCreate(savedInstanceState);
 
+        // Enforce solid black system bars (status bar and navigation bar)
+        getWindow().setStatusBarColor(Color.BLACK);
+        getWindow().setNavigationBarColor(Color.BLACK);
+
         // Ensure third-party cookies and session persistence for NextAuth
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
@@ -54,7 +58,7 @@ public class MainActivity extends BridgeActivity {
         final WebView currentWebView = getBridge().getWebView();
         if (currentWebView == null) return;
 
-        currentWebView.setBackgroundColor(Color.parseColor("#060a28"));
+        currentWebView.setBackgroundColor(Color.parseColor("#000000"));
         CookieManager.getInstance().setAcceptThirdPartyCookies(currentWebView, true);
 
         // Add JavaScript interface for dynamic screenshot restriction (Parent Portal only)

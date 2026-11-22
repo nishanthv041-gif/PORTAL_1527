@@ -39,11 +39,20 @@ export default function SplashScreen({
   const router = useRouter();
   const [isVisible, setIsVisible] = useState<boolean>(() => {
     if (forceShow) return true;
-    if (typeof window === "undefined") return true;
+    if (typeof window === "undefined") return false;
     try {
+      // Standalone installed PWA: open immediately without splash delay
+      if (
+        window.matchMedia("(display-mode: standalone)").matches ||
+        (navigator as unknown as { standalone?: boolean }).standalone
+      ) {
+        return false;
+      }
+      // If already shown once on this device or session, don't show again
+      if (localStorage.getItem(SESSION_STORAGE_KEY) === "true") return false;
       return sessionStorage.getItem(SESSION_STORAGE_KEY) !== "true";
     } catch {
-      return true;
+      return false;
     }
   });
 
@@ -56,6 +65,7 @@ export default function SplashScreen({
     setIsExiting(true);
 
     try {
+      localStorage.setItem(SESSION_STORAGE_KEY, "true");
       sessionStorage.setItem(SESSION_STORAGE_KEY, "true");
     } catch {
       // Ignore private mode / iframe restrictions

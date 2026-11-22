@@ -415,14 +415,27 @@ textarea {
 
 /* ============================================================
    UNIVERSAL MOBILE TAB & SYSTEM BAR COLOR ENFORCEMENT
-   Ensures browser tabs, address bars, and mobile bottom tab bars
-   are solid full black (#000000) on all phones and devices.
+   Ensures browser tabs, address bars, mobile top headers,
+   and mobile bottom tab bars are solid full black (#000000)
+   on all phones and devices.
    ============================================================ */
 :root {
   --app-tab-black: #000000;
 }
 
 @media (max-width: 768px) {
+  /* Mobile topbars and headers */
+  header,
+  header[class*="topbar"],
+  div[class*="topbar"],
+  .topbar,
+  .mobile-header {
+    background-color: #000000 !important;
+    background: #000000 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #ffffff !important;
+  }
+
   /* Mobile bottom navigation tab bars */
   nav[class*="bottomNav"],
   div[class*="bottomNav"],

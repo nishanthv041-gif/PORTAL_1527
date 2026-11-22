@@ -18,11 +18,7 @@
   overflow: hidden;
   box-sizing: border-box;
   padding: env(safe-area-inset-top, 24px) env(safe-area-inset-right, 24px) env(safe-area-inset-bottom, 24px) env(safe-area-inset-left, 24px);
-  background: radial-gradient(circle at 50% 42%,
-      #0d174a 0%,
-      #060a28 35%,
-      #020414 70%,
-      #00020a 100%);
+  background: #000000;
   color: #ffffff;
   user-select: none;
   touch-action: manipulation;
