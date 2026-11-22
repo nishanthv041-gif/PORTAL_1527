@@ -2,7 +2,9 @@ package com.srtuniversalschool.portal;
 
 import android.graphics.Color;
 import android.os.Bundle;
+import android.view.WindowManager;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
@@ -21,6 +23,28 @@ public class MainActivity extends BridgeActivity {
         if (currentWebView != null) {
             currentWebView.setBackgroundColor(Color.parseColor("#060a28"));
             cookieManager.setAcceptThirdPartyCookies(currentWebView, true);
+
+            // Add JavaScript interface for dynamic screenshot restriction (Parent Portal only)
+            currentWebView.addJavascriptInterface(new Object() {
+                @JavascriptInterface
+                public void setSecureMode(final boolean enabled) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (enabled) {
+                                getWindow().setFlags(
+                                    WindowManager.LayoutParams.FLAG_SECURE,
+                                    WindowManager.LayoutParams.FLAG_SECURE
+                                );
+                            } else {
+                                getWindow().clearFlags(
+                                    WindowManager.LayoutParams.FLAG_SECURE
+                                );
+                            }
+                        }
+                    });
+                }
+            }, "AndroidSecureScreen");
         }
         cookieManager.flush();
 

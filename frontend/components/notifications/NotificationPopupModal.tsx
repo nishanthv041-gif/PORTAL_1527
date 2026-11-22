@@ -56,7 +56,7 @@ export default function NotificationPopupModal({
     }
   }, []);
 
-  // Helper to filter out already-read notifications
+  // Helper to filter out already-read notifications and already-seen popup notifications
   const filterActiveUnread = (items: UnifiedNotification[]) => {
     if (!items || items.length === 0) return [];
     const clearedTimeStr = typeof window !== "undefined" ? localStorage.getItem(CLEARED_TIMESTAMP_KEY) : null;
@@ -69,8 +69,9 @@ export default function NotificationPopupModal({
     }
 
     // Sort to prioritize BIRTHDAY wishes and URGENT alerts at the front
+    // Once seen in pop-up, it is NOT shown in pop-up again, but remains in notification history page!
     const unreadItems = items
-      .filter(n => !n.isRead && new Date(n.timestamp).getTime() > clearedTime)
+      .filter(n => !n.isRead && new Date(n.timestamp).getTime() > clearedTime && !seenIdRef.current.has(n.id))
       .sort((a, b) => {
         if (a.category === "BIRTHDAY" && b.category !== "BIRTHDAY") return -1;
         if (b.category === "BIRTHDAY" && a.category !== "BIRTHDAY") return 1;
@@ -92,8 +93,11 @@ export default function NotificationPopupModal({
     if (!items || items.length === 0) return;
     const ids = items.map(n => n.id);
 
+    // Save IDs permanently to seen list so they NEVER pop up again
+    ids.forEach(id => seenIdRef.current.add(id));
     if (typeof window !== "undefined") {
       try {
+        localStorage.setItem(SEEN_POPUP_IDS_KEY, JSON.stringify(Array.from(seenIdRef.current)));
         sessionStorage.setItem("srt_portal_popup_dismissed_session", "true");
       } catch {}
     }

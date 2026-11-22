@@ -555,12 +555,7 @@ export async function deleteUnifiedNotificationAction(notificationId: string): P
     const userId = session.user.id;
     invalidateUserNotifCache(userId);
 
-    if (notificationId.startsWith("notif-")) {
-      const realId = notificationId.replace("notif-", "");
-      await prisma.notification.deleteMany({
-        where: { id: realId }
-      });
-    } else if (notificationId.startsWith("msg-")) {
+    if (notificationId.startsWith("msg-")) {
       const realId = notificationId.replace("msg-", "");
       await prisma.message.updateMany({
         where: { id: realId, receiverId: userId },
@@ -571,8 +566,14 @@ export async function deleteUnifiedNotificationAction(notificationId: string): P
       if (session.user.role === "ADMIN") {
         await prisma.announcement.deleteMany({ where: { id: realId } });
       }
+    } else {
+      const realId = notificationId.startsWith("notif-") ? notificationId.replace("notif-", "") : notificationId;
+      await prisma.notification.deleteMany({
+        where: { id: realId, userId }
+      });
     }
 
+    revalidatePath("/notifications");
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/admin/notifications");
     revalidatePath("/dashboard/parent/notifications");
@@ -614,6 +615,7 @@ export async function clearAllNotificationsAction(): Promise<{ success?: boolean
       data: { isRead: true }
     });
 
+    revalidatePath("/notifications");
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/parent/notifications");
     revalidatePath("/dashboard/teacher/notifications");
@@ -641,6 +643,17 @@ export async function deleteAllNotificationsAction(): Promise<{ success?: boolea
       where: { userId }
     });
 
+    await prisma.notificationRecipient.deleteMany({
+      where: { userId }
+    }).catch(() => {});
+
+    // Also hide messages for receiver
+    await prisma.message.updateMany({
+      where: { receiverId: userId },
+      data: { deletedForReceiver: true, isRead: true }
+    }).catch(() => {});
+
+    revalidatePath("/notifications");
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/parent/notifications");
     revalidatePath("/dashboard/teacher/notifications");

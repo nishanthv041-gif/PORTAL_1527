@@ -35,9 +35,22 @@ export async function deleteNotificationAction(id: string) {
   try {
     await prisma.notification.delete({ where: { id } });
     revalidatePath("/dashboard/parent/notifications");
+    revalidatePath("/notifications");
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof Error) return { error: error.message };
     return { error: "Failed to delete notification." };
+  }
+}
+
+export async function deleteAllParentNotificationsAction(userId: string) {
+  try {
+    await prisma.notification.deleteMany({ where: { userId } });
+    revalidatePath("/dashboard/parent/notifications");
+    revalidatePath("/notifications");
+    return { success: true };
+  } catch (error: unknown) {
+    if (error instanceof Error) return { error: error.message };
+    return { error: "Failed to clear notifications." };
   }
 }

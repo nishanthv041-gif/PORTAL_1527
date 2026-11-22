@@ -12,6 +12,7 @@ import {
 import { CakeIcon as Cake } from "@/frontend/components/birthdays/BirthdayIcons";
 import BirthdayWishCard from "@/frontend/components/birthdays/BirthdayWishCard";
 import { parseBirthdayCardPayload, getNotificationDisplayText } from "@/frontend/components/birthdays/birthdayCardUtils";
+import { deleteUnifiedNotificationAction, deleteAllNotificationsAction } from "@/backend/api/actions/notifications/unifiedNotificationActions";
 
 export interface PortalNotificationItem {
   id: string;
@@ -291,6 +292,50 @@ export default function NotificationsCenterClient({
     }
   };
 
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
+
+  // 0ms Optimistic Delete One Notification Quickly
+  const handleDeleteOne = async (notifId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const prevList = [...notifications];
+    setNotifications((prev) => prev.filter((n) => n.id !== notifId));
+
+    try {
+      await deleteUnifiedNotificationAction(notifId);
+      window.dispatchEvent(new CustomEvent("notifications-cleared"));
+    } catch {
+      // Rollback on network failure
+      setNotifications(prevList);
+    }
+  };
+
+  // 0ms Optimistic Delete All Notifications Permanently in One Click
+  const handleDeleteAll = async () => {
+    if (notifications.length === 0 || isDeletingAll) return;
+    if (!window.confirm("Are you sure you want to clear all notifications? This cannot be undone.")) return;
+
+    setIsDeletingAll(true);
+    const prevList = [...notifications];
+    setNotifications([]);
+
+    try {
+      await deleteAllNotificationsAction();
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.removeItem("srt_portal_seen_popup_ids");
+        } catch {}
+      }
+      window.dispatchEvent(new CustomEvent("notifications-cleared"));
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch {
+      setNotifications(prevList);
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
   // 0ms Optimistic Clear Read Notifications
   const handleClearRead = () => {
     setNotifications((prev) => prev.filter((n) => !n.isRead));
@@ -395,6 +440,33 @@ export default function NotificationsCenterClient({
             >
               <Trash2 size={15} />
               <span>Clear read</span>
+            </button>
+          )}
+
+          {/* Delete All Notifications Once Option */}
+          {notifications.length > 0 && (
+            <button
+              type="button"
+              onClick={handleDeleteAll}
+              disabled={isDeletingAll}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                padding: "0.55rem 0.9rem",
+                borderRadius: "8px",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                background: "rgba(239, 68, 68, 0.08)",
+                border: "1px solid rgba(239, 68, 68, 0.25)",
+                color: "#ef4444",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              title="Delete all notifications permanently in one click"
+            >
+              <Trash2 size={15} />
+              <span>Clear all</span>
             </button>
           )}
         </div>
@@ -584,6 +656,36 @@ export default function NotificationsCenterClient({
                           }}
                         />
                       )}
+                      {/* One by one notification deletion option */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteOne(notif.id, e)}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "var(--text-muted, #94a3b8)",
+                          cursor: "pointer",
+                          padding: "4px",
+                          borderRadius: "6px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          marginLeft: "0.3rem",
+                          transition: "color 0.15s ease, background-color 0.15s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = "#ef4444";
+                          e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.1)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = "var(--text-muted, #94a3b8)";
+                          e.currentTarget.style.backgroundColor = "transparent";
+                        }}
+                        title="Delete notification"
+                        aria-label="Delete notification"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </div>
 

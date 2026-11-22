@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Bell, CheckCircle, Clock, Trash2, ExternalLink } from "lucide-react";
 import MarkReadButton from "./MarkReadButton";
 import ToggleNotifications from "@/frontend/components/ToggleNotifications";
-import { toggleNotificationsEnabled, deleteNotificationAction } from "@/backend/api/actions/dashboard/parent/notifications/actions";
+import { toggleNotificationsEnabled, deleteNotificationAction, deleteAllParentNotificationsAction } from "@/backend/api/actions/dashboard/parent/notifications/actions";
 import { getNotificationDisplayText } from "@/frontend/components/birthdays/birthdayCardUtils";
 
 export default async function ParentNotificationsPage() {
@@ -37,8 +37,35 @@ export default async function ParentNotificationsPage() {
 
   return (
     <div className={styles.dashboard}>
-      <div style={{ marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
         <h1 className={styles.title} style={{ margin: 0 }}>Notifications</h1>
+        {notifications.length > 0 && (
+          <form action={async () => {
+            "use server";
+            await deleteAllParentNotificationsAction(session.user.id);
+          }}>
+            <button
+              type="submit"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.5rem 0.85rem',
+                borderRadius: '8px',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                color: '#ef4444',
+                cursor: 'pointer',
+              }}
+              title="Delete all notifications"
+            >
+              <Trash2 size={15} />
+              <span>Clear all</span>
+            </button>
+          </form>
+        )}
       </div>
 
       <ToggleNotifications 
