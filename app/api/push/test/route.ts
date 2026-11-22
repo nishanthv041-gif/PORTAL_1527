@@ -2,18 +2,31 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
+import webpush from "web-push";
+import { sendOneSignalPush, ONESIGNAL_APP_ID } from "@/backend/services/push/oneSignalService";
 import { dispatchNotification } from "@/lib/dispatcher";
-import { ONESIGNAL_APP_ID } from "@/backend/services/push/oneSignalService";
 
 export const dynamic = "force-dynamic";
 
-/**
- * POST /api/push/test
- * 
- * Production Test Push Endpoint.
- * Executes the EXACT same dispatchNotification() pipeline as real business events (OneSignal + WebPush),
- * guaranteeing that any successful test confirms the real event path.
- */
+// Ensure VAPID keys are initialized as auxiliary fallback
+const VAPID_PUBLIC_KEY =
+  process.env.VAPID_PUBLIC_KEY ||
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+  "BBIHzbc-DVhlpPB_plCE0gUMpCSsHiqA1Y5FVyP-ax6p0HWnFZILFISth4FYfyAp0gywswCBxz4GfDnXm_c-Agk";
+
+const VAPID_PRIVATE_KEY =
+  process.env.VAPID_PRIVATE_KEY ||
+  "ExZi6lTrD-JWJN9cqk88AA6Y8-vxTYaxwhaY4AUwMFc";
+
+const VAPID_SUBJECT =
+  process.env.VAPID_SUBJECT || "mailto:admin@nipoportal.com";
+
+try {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+} catch (err) {
+  console.warn("[Push Test API] VAPID initialization warning:", err);
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(getAuthOptions());
@@ -21,80 +34,202 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized. Please log in first." }, { status: 401 });
     }
 
-    let bodyPayload: any = {};
+    const userId = session.user.id;
+    const userName = session.user.name || "User";
+
+    // 1. Calculate recipient's exact unread notification count from PostgreSQL
+    let unreadCount = 1;
     try {
-      bodyPayload = await req.json();
+      const [unreadNotifs, unreadMsgs] = await Promise.all([
+        prisma.notification.count({ where: { userId, isRead: false } }),
+        prisma.message.count({ where: { receiverId: userId, isRead: false } }),
+      ]);
+      unreadCount = Math.max(1, unreadNotifs + unreadMsgs);
     } catch {
-      // If GET or empty body, parse query parameters
-      const url = new URL(req.url);
-      bodyPayload = {
-        role: url.searchParams.get("role"),
-        broadcast: url.searchParams.get("broadcast") === "true",
-        title: url.searchParams.get("title"),
-        body: url.searchParams.get("body") || url.searchParams.get("message"),
-        url: url.searchParams.get("url"),
-      };
+      unreadCount = 1;
     }
 
-    const targetUserId = bodyPayload.targetUserId || session.user.id;
+    const bodyPayload = await req.json().catch(() => ({}));
     const isBroadcast = Boolean(bodyPayload.broadcast);
-    const targetRole = bodyPayload.role ? String(bodyPayload.role).toUpperCase() : undefined;
     const title = bodyPayload.title || "🔔 Portal Push Test";
     const body =
       bodyPayload.body ||
       bodyPayload.message ||
-      "Unified Push Notification (OneSignal + WebPush) is operational on SRT Portal!";
+      "OneSignal Web Push & direct WebPush are operational on SRT Portal!";
     const url = bodyPayload.url || "/dashboard";
 
-    let audience: { all?: boolean; admin?: boolean; teachers?: boolean; parents?: boolean; students?: boolean } | undefined = undefined;
-    if (isBroadcast) {
-      audience = { all: true };
-    } else if (targetRole) {
-      if (targetRole === "ADMIN") audience = { admin: true };
-      else if (targetRole === "TEACHER") audience = { teachers: true };
-      else if (targetRole === "PARENT") audience = { parents: true };
-      else if (targetRole === "STUDENT") audience = { students: true };
-    }
-
-    // 1. Dispatch through the REAL unified pipeline
-    const dispatchResult = await dispatchNotification({
-      type: "TEST",
-      recipients: (isBroadcast || targetRole) ? undefined : [targetUserId],
-      audience,
+    // 2. Primary Dispatch: OneSignal REST API
+    const oneSignalResult = await sendOneSignalPush({
+      userId,
+      broadcast: isBroadcast,
       title,
       body,
       url,
-      priority: "HIGH",
-      tag: `test-${Date.now()}`,
+      unreadCount,
+      category: "TEST",
     });
 
-    // 2. Query latest delivery trace rows for immediate diagnostic feedback
-    const latestTraces = await prisma.notificationDelivery.findMany({
-      where: targetRole || isBroadcast ? {} : { recipientUserId: targetUserId },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-    });
+    // 3. Auxiliary Dispatch: Direct Web Push to subscriptions in PostgreSQL (fallback)
+    const [pushSubs, pwaSubs, registrySubs] = await Promise.all([
+      prisma.pushSubscription.findMany({
+        where: isBroadcast ? { isActive: true } : { userId, isActive: true },
+        select: { id: true, endpoint: true, p256dh: true, auth: true, platform: true, deviceName: true },
+      }),
+      prisma.pwaSubscription.findMany({
+        where: isBroadcast ? {} : { userId },
+        select: { id: true, endpoint: true, p256dhKey: true, authKey: true, deviceType: true },
+      }).catch(() => []),
+      prisma.deviceNotificationsRegistry.findMany({
+        where: isBroadcast ? {} : { userId },
+        select: { id: true, endpoint: true, p256dh: true, auth: true, deviceId: true },
+      }).catch(() => []),
+    ]);
+
+    const targetMap = new Map<string, { endpoint: string; p256dh: string; auth: string; source: string; platform: string }>();
+
+    for (const sub of pushSubs) {
+      if (sub.endpoint && sub.p256dh && sub.auth) {
+        targetMap.set(sub.endpoint, {
+          endpoint: sub.endpoint,
+          p256dh: sub.p256dh,
+          auth: sub.auth,
+          source: "pushSubscription",
+          platform: sub.platform || "WEB",
+        });
+      }
+    }
+
+    for (const sub of pwaSubs) {
+      if (sub.endpoint && sub.p256dhKey && sub.authKey && !targetMap.has(sub.endpoint)) {
+        targetMap.set(sub.endpoint, {
+          endpoint: sub.endpoint,
+          p256dh: sub.p256dhKey,
+          auth: sub.authKey,
+          source: "pwaSubscription",
+          platform: sub.deviceType?.toUpperCase() === "IOS" ? "IOS" : "WEB",
+        });
+      }
+    }
+
+    for (const sub of registrySubs) {
+      if (sub.endpoint && sub.p256dh && sub.auth && !targetMap.has(sub.endpoint)) {
+        targetMap.set(sub.endpoint, {
+          endpoint: sub.endpoint,
+          p256dh: sub.p256dh,
+          auth: sub.auth,
+          source: "deviceRegistry",
+          platform: "WEB",
+        });
+      }
+    }
+
+    const uniqueTargets = Array.from(targetMap.values());
+    let webPushDelivered = 0;
+    let webPushFailed = 0;
+    const deviceResults: Array<{ endpoint: string; status: "DELIVERED" | "FAILED"; statusCode?: number; error?: string }> = [];
+
+    if (uniqueTargets.length > 0) {
+      const payload = JSON.stringify({
+        title,
+        body,
+        url,
+        unreadCount,
+        badgeCount: unreadCount,
+        icon: "/icon-192x192.png",
+        badge: "/badge-72x72.png",
+        vibrate: [200, 100, 200],
+        requireInteraction: true,
+        renotify: true,
+        tag: `test-${userId}`,
+        data: {
+          url,
+          unreadCount,
+          timestamp: Date.now(),
+        },
+      });
+
+      const webOptions = {
+        TTL: 60,
+        urgency: "high" as const,
+        headers: {
+          Urgency: "high",
+        },
+      };
+
+      await Promise.allSettled(
+        uniqueTargets.map(async (target) => {
+          try {
+            const res = await webpush.sendNotification(
+              {
+                endpoint: target.endpoint,
+                keys: {
+                  p256dh: target.p256dh,
+                  auth: target.auth,
+                },
+              },
+              payload,
+              webOptions
+            );
+
+            webPushDelivered++;
+            deviceResults.push({
+              endpoint: target.endpoint.slice(0, 45) + "...",
+              status: "DELIVERED",
+              statusCode: res.statusCode || 201,
+            });
+          } catch (pushErr: any) {
+            webPushFailed++;
+            const statusCode = pushErr?.statusCode || 500;
+            const errorMsg = pushErr?.message || pushErr?.body || "Failed to deliver push";
+
+            deviceResults.push({
+              endpoint: target.endpoint.slice(0, 45) + "...",
+              status: "FAILED",
+              statusCode,
+              error: errorMsg,
+            });
+
+            if (statusCode === 404 || statusCode === 410) {
+              await Promise.allSettled([
+                prisma.pushSubscription.deleteMany({ where: { endpoint: target.endpoint } }),
+                prisma.pwaSubscription.deleteMany({ where: { endpoint: target.endpoint } }),
+                prisma.deviceNotificationsRegistry.deleteMany({ where: { endpoint: target.endpoint } }),
+              ]);
+            }
+          }
+        })
+      );
+    }
+
+    const overallSuccess = oneSignalResult.success || webPushDelivered > 0;
 
     return NextResponse.json({
-      success: dispatchResult.success,
-      targetUserId: (isBroadcast || targetRole) ? null : targetUserId,
-      targetRole: targetRole || (isBroadcast ? "ALL" : null),
-      dispatchResult,
-      oneSignalAppId: ONESIGNAL_APP_ID,
-      deliveryTraces: latestTraces,
-      message: dispatchResult.success
-        ? "Push notification dispatched successfully through unified pipeline."
-        : "Push dispatch failed. Check delivery traces and device registration.",
+      success: overallSuccess,
+      userId,
+      userName,
+      unreadCount,
+      oneSignal: {
+        appId: ONESIGNAL_APP_ID,
+        externalId: userId,
+        result: oneSignalResult,
+      },
+      webPush: {
+        subscriptionsFound: uniqueTargets.length,
+        delivered: webPushDelivered,
+        failed: webPushFailed,
+        deviceResults,
+      },
+      message: overallSuccess
+        ? "Push notification dispatched successfully."
+        : "Push dispatch complete.",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errMessage = error instanceof Error ? error.message : "Internal server error";
     console.error("[Push Test API] Error:", error);
-    return NextResponse.json(
-      { success: false, error: error?.message || "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: errMessage }, { status: 500 });
   }
 }
 
-export async function GET(req: Request) {
-  return POST(req);
+export async function GET() {
+  return POST(new Request("https://localhost/api/push/test", { method: "POST" }));
 }

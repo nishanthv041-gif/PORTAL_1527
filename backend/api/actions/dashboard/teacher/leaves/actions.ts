@@ -152,7 +152,7 @@ export async function acceptLeaveRequest(leaveRequestId: string) {
         body: `Leave request for ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()} has been approved.`,
         url: "/dashboard/parent/leaves",
         priority: "HIGH",
-        tag: `leave-approved-${leaveRequestId}-${Date.now()}`,
+        tag: `leave-approved-${leaveRequestId}`,
       }).catch((err) => console.warn("[LeaveAction] Push notification error:", err));
     }
 
@@ -211,7 +211,7 @@ export async function rejectLeaveRequest(leaveRequestId: string) {
         body: `Leave request for ${new Date(leave!.startDate).toLocaleDateString()} to ${new Date(leave!.endDate).toLocaleDateString()} has been declined.`,
         url: "/dashboard/parent/leaves",
         priority: "HIGH",
-        tag: `leave-declined-${leaveRequestId}-${Date.now()}`,
+        tag: `leave-declined-${leaveRequestId}`,
       }).catch((err) => console.warn("[LeaveAction] Push notification error:", err));
     }
 

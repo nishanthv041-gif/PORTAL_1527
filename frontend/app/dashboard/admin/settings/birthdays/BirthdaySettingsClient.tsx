@@ -571,7 +571,7 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                     Live Notification Preview (Parent View)
                   </div>
                   <div className="text-xs font-bold text-gray-900 dark:text-white">
-                    Happy Birthday, Aarav Sharma! 🎂
+                    Happy Birthday, [Student Name]! 🎂
                   </div>
                   <p className="text-xs text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-line">
                     {(settings.language === "TA"
@@ -579,7 +579,7 @@ export default function BirthdaySettingsClient({ initialSettings, dashboardMeta 
                       : settings.language === "BOTH"
                         ? `${settings.parentTemplateEn || ""}\n\n${settings.parentTemplateTa || ""}`
                         : settings.parentTemplateEn) ||
-                      "Dear Parent, SRT School wishes Aarav Sharma a very happy birthday! May this year bring happiness, good health, and abundant success. - SRT Universal School"
+                      "Dear Parent, SRT School wishes your child a very happy birthday! May this year bring happiness, good health, and abundant success. - SRT Universal School"
                     }
                   </p>
                 </div>

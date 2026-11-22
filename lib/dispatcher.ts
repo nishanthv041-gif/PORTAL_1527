@@ -294,10 +294,10 @@ export async function dispatchNotification(
   const normalizedType = (type || "GENERAL").toUpperCase();
   const normalizedPriority = (priority || "HIGH").toUpperCase();
   const timestamp = Date.now();
-  // Dynamic tag: ensures each notification is seen and alerts the device without silent browser replacement
+  // Deterministic tag: ensures the OS collapses notifications for the same event/entity rather than spamming
   const deterministicTag = options.tag
-    ? (options.tag.match(/-\d{10,}$/) ? options.tag : `${options.tag}-${timestamp}`)
-    : `${normalizedType.toLowerCase()}-${entityId || "event"}-${timestamp}`;
+    ? options.tag
+    : `${normalizedType.toLowerCase()}-${entityId || "event"}`;
 
   // 2. Insert In-App Notification records (PostgreSQL)
   let inAppCount = 0;
@@ -312,6 +312,8 @@ export async function dispatchNotification(
         type: normalizedType,
         priority: normalizedPriority,
         link: url,
+        data: data || {},
+        dedupeKey: deterministicTag,
         targetType: options.targetType || (options.audience?.all ? "ALL" : options.audience?.roles?.length ? "ROLE" : options.audience?.classId ? "CLASS" : null),
         targetRole: options.targetRole || (options.audience?.roles?.join(",") || null),
         isRead: false,

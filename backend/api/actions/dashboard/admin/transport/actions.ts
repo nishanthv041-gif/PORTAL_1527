@@ -1022,7 +1022,7 @@ export async function triggerBusKeypadAction(params: {
           title: `🚨 EMERGENCY SOS: Bus ${targetBus.busNumber}`,
           body: `Driver ${targetBus.driverName} (${targetBus.driverPhone}) pressed Emergency Key 2! Urgent action needed.`,
           link: teacherUserId ? "/staff/my-bus" : "/admin/buses",
-          tag: `bus-emergency-${targetBus.id}-${Date.now()}`,
+          tag: `bus-emergency-${targetBus.id}`,
           priority: "URGENT",
           bypass48h: true,
         }).catch((err) => console.warn("Emergency push note error:", err));

@@ -150,7 +150,7 @@ export async function acceptExamRequest(requestId: string) {
         body: `Your exam request for ${subjectName} (${request.class.name}-${request.class.section}) on ${formattedDate} has been approved.`,
         url: "/dashboard/teacher/exams",
         priority: "HIGH",
-        tag: `exam-teacher-${requestId}-${Date.now()}`,
+        tag: `exam-teacher-${requestId}`,
       }).catch(() => {});
     }
 
@@ -163,7 +163,7 @@ export async function acceptExamRequest(requestId: string) {
         body: `${subjectName} Exam for ${request.class.name}-${request.class.section} is scheduled on ${formattedDate}.`,
         url: "/dashboard/parent/exams",
         priority: "HIGH",
-        tag: `exam-parent-${requestId}-${Date.now()}`,
+        tag: `exam-parent-${requestId}`,
       }).catch(() => {});
     }
 

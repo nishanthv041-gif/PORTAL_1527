@@ -76,7 +76,7 @@ export async function setSchoolDayStatusAction(payload: {
       body: notifBody,
       url: "/dashboard/calendar",
       priority: payload.status === "LEAVE_DAY" ? "HIGH" : "NORMAL",
-      tag: `calendar-${payload.date}-${Date.now()}`,
+      tag: `calendar-${payload.date}`,
     }).catch((err) => console.warn("[CalendarAction] Push error:", err));
 
     revalidateAllCalendarAndAttendancePaths();

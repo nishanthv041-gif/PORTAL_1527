@@ -119,11 +119,11 @@ export function reconstructTableFromWords(
   const dataLines = lines.slice(headerIdx + 1);
   const students: ScanStudent[] = [];
 
-  // Filter out footer rows (e.g. "Sample marks for layout preview", "Total marks: 500")
+  // Filter out footer rows (e.g. preview watermarks or printed totals)
   const filteredDataLines = dataLines.filter((l) => {
     const norm = l.text.toLowerCase();
-    if (norm.includes("layout preview") || norm.includes("sample marks")) return false;
-    if (norm.startsWith("total marks:") && norm.includes("maximum")) return false;
+    if (norm.includes("preview") || norm.includes("sample")) return false;
+    if (norm.startsWith("total") && norm.includes("maximum")) return false;
     return true;
   });
 

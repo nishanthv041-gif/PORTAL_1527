@@ -359,7 +359,7 @@ export async function sendNotificationToActiveDevices(
     url: targetUrl,
     icon: payloadObj.icon || "/icons/icon-192x192.png",
     badge: payloadObj.badge || "/icons/icon-192x192.png",
-    tag: payloadObj.tag || `notif-${Date.now()}`,
+    tag: payloadObj.tag || "notif-general",
     data: {
       url: targetUrl,
       timestamp: Date.now(),

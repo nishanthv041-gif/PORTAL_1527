@@ -5,7 +5,7 @@
  * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
 
-const CACHE_NAME = "srt-pwa-v16-live";
+const CACHE_NAME = "srt-pwa-v17-live";
 const PRECACHE_ASSETS = [
   "/offline.html",
   "/manifest.webmanifest",
@@ -313,15 +313,18 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+// In-memory deduplication set for sliding 60-second window to eliminate repeating / duplicate pushes
+const seenPushIdentifiers = new Map();
+
 // 4. Push Event: Show OS-level notifications from Web Push API
 self.addEventListener("push", (event) => {
   const showPushNotification = async () => {
     let title = "SRT Portal";
     let body = "You have a new school notification.";
-    let targetUrl = "/";
+    let targetUrl = "/dashboard";
     let iconUrl = "/icon-192x192.png";
     let badgeUrl = "/badge-72x72.png";
-    let tag = "srt-portal-" + Date.now();
+    let tag = null;
     let notificationId = null;
     let unreadCount = 1;
 
@@ -350,6 +353,26 @@ self.addEventListener("push", (event) => {
           const txt = event.data.text();
           if (txt) body = txt;
         } catch { }
+      }
+    }
+
+    // Stable deterministic tag
+    tag = tag || (notificationId ? "notif-" + notificationId : "srt-general");
+
+    // Deduplication check: drop duplicate pushes delivered via multiple channels within 60s
+    const dedupeIdentifier = notificationId ? "id:" + notificationId : (tag !== "srt-general" ? "tag:" + tag : "content:" + title + ":" + body);
+    const now = Date.now();
+    const lastSeen = seenPushIdentifiers.get(dedupeIdentifier);
+    if (lastSeen && (now - lastSeen < 60000)) {
+      console.log("[ServiceWorker] Dropping duplicate push received within 60s:", dedupeIdentifier);
+      return;
+    }
+    seenPushIdentifiers.set(dedupeIdentifier, now);
+
+    // Prune stale cache entries (> 2 minutes)
+    for (const [key, ts] of seenPushIdentifiers.entries()) {
+      if (now - ts > 120000) {
+        seenPushIdentifiers.delete(key);
       }
     }
 

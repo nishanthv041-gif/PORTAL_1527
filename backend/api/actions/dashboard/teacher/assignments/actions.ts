@@ -247,7 +247,7 @@ export async function createAssignment(formData: FormData) {
         title: `📚 New Homework: ${title}`,
         body: `${subjectName ? `[${subjectName}] ` : ""}${title} assigned for ${assignment.class.name} - ${assignment.class.section}. Due: ${deadlineDate.toLocaleDateString()}.`,
         url: "/dashboard/parent/assignments",
-        tag: `homework-${assignment.id}-${Date.now()}`,
+        tag: `homework-${assignment.id}`,
         priority: "HIGH",
       });
     } catch (notifErr) {

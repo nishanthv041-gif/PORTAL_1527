@@ -118,7 +118,7 @@ export async function sendOneSignalPush(
         unreadCount: safeBadgeCount,
         url: resolvedUrl,
         category,
-        tag: tag || `${category.toLowerCase()}-${Date.now()}`,
+        tag: tag || category.toLowerCase(),
         ...additionalData,
       },
       web_buttons: [

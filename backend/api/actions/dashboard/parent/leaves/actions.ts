@@ -55,7 +55,7 @@ export async function applyLeaveAction(formData: FormData) {
         body: `Leave requested from ${startDateStr} to ${endDateStr}. Reason: ${reason.slice(0, 80)}`,
         url: "/dashboard/teacher/leaves",
         priority: "HIGH",
-        tag: `leave-request-${newLeave.id}-${Date.now()}`,
+        tag: `leave-request-${newLeave.id}`,
       }).catch((err) => console.warn("[LeaveAction] Push notification error:", err));
     }
 

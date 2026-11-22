@@ -45,6 +45,12 @@ npm run dev
 
 Open [SRT Universal School Portal](https://nipoportal.vercel.app) to view the portal.
 
+## Documentation
+
+- **[System Audit & Findings](docs/AUDIT.md)**: Full codebase audit covering notification deduplication, mobile PWA views, and database architecture.
+- **[Notification Engine Architecture](docs/NOTIFICATIONS.md)**: Specifications for VAPID Web Push, OneSignal REST API, Service Worker deduplication, and all `/api/notifications/*` REST endpoints.
+- **[Test Report](docs/TEST_REPORT.md)**: Comprehensive verification suite results and deployment verification.
+
 ## Production Build
 
 ```bash

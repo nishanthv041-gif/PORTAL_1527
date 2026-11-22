@@ -601,7 +601,7 @@ export async function clearAllNotificationsAction(): Promise<{ success?: boolean
     // Mark all direct DB notifications as read
     await prisma.notification.updateMany({
       where: { userId, isRead: false },
-      data: { isRead: true }
+      data: { isRead: true, readAt: new Date() }
     });
 
     await prisma.notificationRecipient.updateMany({
@@ -685,7 +685,7 @@ export async function markNotificationsAsSeenInPopupAction(notificationIds: stri
         const realId = notifId.replace("notif-", "");
         await prisma.notification.updateMany({
           where: { id: realId, userId },
-          data: { isRead: true }
+          data: { isRead: true, readAt: new Date() }
         });
       } else if (notifId.startsWith("msg-")) {
         const realId = notifId.replace("msg-", "");
@@ -703,7 +703,7 @@ export async function markNotificationsAsSeenInPopupAction(notificationIds: stri
           if (existing) {
             await prisma.notification.update({
               where: { id: existing.id },
-              data: { isRead: true }
+              data: { isRead: true, readAt: new Date() }
             });
           } else {
             await prisma.notification.create({
@@ -713,7 +713,8 @@ export async function markNotificationsAsSeenInPopupAction(notificationIds: stri
                 content: ann.content,
                 type: "ANNOUNCEMENT",
                 link: ann.fileUrl || (session.user.role === "ADMIN" ? "/dashboard/admin/announcements" : "/dashboard/parent/announcements"),
-                isRead: true
+                isRead: true,
+                readAt: new Date()
               }
             });
           }
@@ -728,7 +729,7 @@ export async function markNotificationsAsSeenInPopupAction(notificationIds: stri
           if (existing) {
             await prisma.notification.update({
               where: { id: existing.id },
-              data: { isRead: true }
+              data: { isRead: true, readAt: new Date() }
             });
           } else {
             await prisma.notification.create({
@@ -738,7 +739,8 @@ export async function markNotificationsAsSeenInPopupAction(notificationIds: stri
                 content: `Scheduled meeting on ${new Date(m.date).toLocaleDateString()} at ${m.time}. ${m.location ? `Place: ${m.location}.` : (m.link ? `Link: ${m.link}.` : "")} Agenda: ${m.agenda}`,
                 type: "MEETING",
                 link: session.user.role === "ADMIN" ? "/dashboard/admin/meetings" : session.user.role === "TEACHER" ? "/dashboard/teacher/meetings" : "/dashboard/parent/meetings",
-                isRead: true
+                isRead: true,
+                readAt: new Date()
               }
             });
           }
@@ -752,7 +754,7 @@ export async function markNotificationsAsSeenInPopupAction(notificationIds: stri
       } else {
         await prisma.notification.updateMany({
           where: { id: notifId, userId },
-          data: { isRead: true }
+          data: { isRead: true, readAt: new Date() }
         }).catch(() => {});
       }
     }

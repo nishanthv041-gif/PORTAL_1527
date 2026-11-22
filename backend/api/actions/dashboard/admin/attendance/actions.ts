@@ -85,7 +85,7 @@ export async function adminUpdateAttendance(
             title: `Attendance Alert: ${studentName} Absent`,
             body: `${studentName} was marked absent for the ${sessionType.toLowerCase()} session on ${dateStr}.`,
             link: "/dashboard/parent/attendance",
-            tag: `att-${studentId}-${dateStr}-${sessionType}-${Date.now()}`,
+            tag: `att-${studentId}-${dateStr}-${sessionType}`,
             priority: "URGENT",
             bypass48h: true,
           });
@@ -185,7 +185,7 @@ export async function adminBulkAttendance(data: {
               title: `Attendance Alert: ${studentName} Absent`,
               body: `${studentName} was marked absent for the ${sessionType.toLowerCase()} session on ${item.date}.`,
               link: "/dashboard/parent/attendance",
-              tag: `att-${item.studentId}-${item.date}-${sessionType}-${Date.now()}`,
+              tag: `att-${item.studentId}-${item.date}-${sessionType}`,
               priority: "URGENT",
               bypass48h: true,
             });

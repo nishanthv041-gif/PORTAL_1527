@@ -834,7 +834,7 @@ export async function publishExamToReportCardsAction(examId: string) {
         body: `Official verified report cards and marks for ${exam.name} have been published. Tap to view your child's performance.`,
         url: `/dashboard/parent/report-cards`,
         priority: "HIGH",
-        tag: `report-card-exam-${examId}-${Date.now()}`,
+        tag: `report-card-exam-${examId}`,
       }).catch((err) => console.warn("[PublishReportCard] Push dispatch error:", err));
     }
 

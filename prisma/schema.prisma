@@ -1167,7 +1167,11 @@ model Notification {
   category     String?   @default("GENERAL") // ANNOUNCEMENT, MEETING, MESSAGE, REPORT_CARD, BUS_MESSAGE, HOMEWORK, ATTENDANCE, GENERAL
   priority     String?   @default("NORMAL")  // NORMAL, URGENT, HIGH
   link         String?
+  data         Json?     // Optional JSON payload for extra context and client actions
   isRead       Boolean   @default(false)
+  readAt       DateTime? // Timestamp when notification was read (null = unread)
+  deliveredAt  DateTime? // Timestamp when push notification was dispatched
+  dedupeKey    String?   // Idempotency key (e.g. attendance:2026-04-14:student123)
   targetType   String?   // ALL, ROLE, CLASS, USER
   targetRole   String?
   targetGroup  String?
@@ -1179,10 +1183,12 @@ model Notification {
   deliveryLogs NotificationDeliveryLog[]
 
   @@index([userId, createdAt])
+  @@index([userId, readAt])
   @@index([userId, isRead, createdAt])
   @@index([userId, isRead, type])
   @@index([userId, category])
   @@index([userId, isRead, category])
+  @@index([dedupeKey])
   @@index([createdAt])
   @@index([scheduledFor])
 }

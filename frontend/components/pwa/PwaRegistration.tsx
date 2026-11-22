@@ -45,6 +45,7 @@ export default function PwaRegistration() {
 
     const registerSW = async () => {
       try {
+        // Register unified Service Worker (also delegates /OneSignalSDKWorker.js)
         const registration = await navigator.serviceWorker.register("/sw.js", {
           scope: "/",
         });

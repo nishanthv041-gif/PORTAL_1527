@@ -86,8 +86,9 @@ export default function NotificationPopupModal({
 
     // Sort to prioritize BIRTHDAY wishes and URGENT alerts at the front
     // Once seen in pop-up, it is NOT shown in pop-up again, but remains safely in notification history page!
+    // Auto popup only applies to urgent announcements or birthday cards so normal usage is never interrupted
     const unreadItems = items
-      .filter(n => !n.isRead && new Date(n.timestamp).getTime() > clearedTime && !seenIdRef.current.has(n.id))
+      .filter(n => !n.isRead && new Date(n.timestamp).getTime() > clearedTime && !seenIdRef.current.has(n.id) && (n.category === "BIRTHDAY" || n.priority === "URGENT"))
       .sort((a, b) => {
         if (a.category === "BIRTHDAY" && b.category !== "BIRTHDAY") return -1;
         if (b.category === "BIRTHDAY" && a.category !== "BIRTHDAY") return 1;
@@ -192,12 +193,13 @@ export default function NotificationPopupModal({
       };
     }
 
-    // Fast 5s background poll when tab is active for instant notification arrival
+    // Fast 5000ms background poll when tab is active for urgent school intimations
+    const POLL_INTERVAL_MS = 5000;
     const interval = setInterval(() => {
       if (!document.hidden) {
         checkFreshNotifications();
       }
-    }, 5000);
+    }, POLL_INTERVAL_MS);
 
     const handleVisibility = () => {
       if (!document.hidden) {

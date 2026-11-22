@@ -89,7 +89,7 @@ export async function createAnnouncementAction(formData: FormData) {
           title: `📢 ${title}`,
           body: content.slice(0, 150),
           link: targetType === "TEACHERS" ? "/dashboard/teacher/announcements" : "/dashboard/parent/announcements",
-          tag: `announcement-${newAnnouncement.id}-${Date.now()}`,
+          tag: `announcement-${newAnnouncement.id}`,
           priority: priority === "HIGH" ? "HIGH" : "NORMAL",
           bypass48h: true, // Urgent school announcements reach all active devices
         });
