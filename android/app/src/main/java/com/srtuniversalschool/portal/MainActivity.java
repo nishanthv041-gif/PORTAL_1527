@@ -19,40 +19,14 @@ public class MainActivity extends BridgeActivity {
         // Ensure third-party cookies and session persistence for NextAuth
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
-        WebView currentWebView = getBridge().getWebView();
-        if (currentWebView != null) {
-            currentWebView.setBackgroundColor(Color.parseColor("#060a28"));
-            cookieManager.setAcceptThirdPartyCookies(currentWebView, true);
-
-            // Add JavaScript interface for dynamic screenshot restriction (Parent Portal only)
-            currentWebView.addJavascriptInterface(new Object() {
-                @JavascriptInterface
-                public void setSecureMode(final boolean enabled) {
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (enabled) {
-                                getWindow().setFlags(
-                                    WindowManager.LayoutParams.FLAG_SECURE,
-                                    WindowManager.LayoutParams.FLAG_SECURE
-                                );
-                            } else {
-                                getWindow().clearFlags(
-                                    WindowManager.LayoutParams.FLAG_SECURE
-                                );
-                            }
-                        }
-                    });
-                }
-            }, "AndroidSecureScreen");
-        }
+        setupSecureScreenBridge();
         cookieManager.flush();
 
         // Handle Android hardware back navigation
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                WebView webView = getBridge().getWebView();
+                WebView webView = getBridge() != null ? getBridge().getWebView() : null;
                 if (webView != null && webView.canGoBack()) {
                     webView.goBack();
                 } else {
@@ -61,5 +35,62 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         });
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        setupSecureScreenBridge();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        setupSecureScreenBridge();
+    }
+
+    private void setupSecureScreenBridge() {
+        if (getBridge() == null) return;
+        final WebView currentWebView = getBridge().getWebView();
+        if (currentWebView == null) return;
+
+        currentWebView.setBackgroundColor(Color.parseColor("#060a28"));
+        CookieManager.getInstance().setAcceptThirdPartyCookies(currentWebView, true);
+
+        // Add JavaScript interface for dynamic screenshot restriction (Parent Portal only)
+        currentWebView.addJavascriptInterface(new Object() {
+            @JavascriptInterface
+            public void setSecureMode(final boolean enabled) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (enabled) {
+                            getWindow().setFlags(
+                                WindowManager.LayoutParams.FLAG_SECURE,
+                                WindowManager.LayoutParams.FLAG_SECURE
+                            );
+                        } else {
+                            getWindow().clearFlags(
+                                WindowManager.LayoutParams.FLAG_SECURE
+                            );
+                        }
+                    }
+                });
+            }
+        }, "AndroidSecureScreen");
+
+        // Inspect current URL if already loaded on resume
+        String url = currentWebView.getUrl();
+        if (url != null && url.contains("/parent")) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    getWindow().setFlags(
+                        WindowManager.LayoutParams.FLAG_SECURE,
+                        WindowManager.LayoutParams.FLAG_SECURE
+                    );
+                }
+            });
+        }
     }
 }

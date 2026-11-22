@@ -8,7 +8,7 @@ import { ToastProvider } from "@/frontend/components/ui/Toast";
 import SessionGuard from "@/frontend/components/auth/SessionGuard";
 import PwaRegistration from "@/frontend/components/pwa/PwaRegistration";
 import PwaWelcomeNotificationPrompt from "@/frontend/components/pwa/PwaWelcomeNotificationPrompt";
-import IosInstallPrompt from "@/frontend/components/IosInstallPrompt";
+import UnifiedInstallPrompt from "@/frontend/components/pwa/UnifiedInstallPrompt";
 import SilentSessionRefresher from "@/frontend/components/auth/SilentSessionRefresher";
 
 import Script from "next/script";
@@ -267,7 +267,7 @@ export default async function RootLayout({
         <SpeedInsights />
         <PwaRegistration />
         <PwaWelcomeNotificationPrompt />
-        <IosInstallPrompt />
+        <UnifiedInstallPrompt />
         <SilentSessionRefresher />
 
       </body>

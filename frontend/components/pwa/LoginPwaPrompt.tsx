@@ -72,15 +72,20 @@ export default function LoginPwaPrompt() {
   }, []);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    try {
-      await deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
-      if (choice.outcome === "accepted") {
-        setDeferredPrompt(null);
+    if (deferredPrompt) {
+      try {
+        await deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        if (choice.outcome === "accepted") {
+          setDeferredPrompt(null);
+        }
+      } catch (err) {
+        console.warn("[PWA Login] Install prompt error:", err);
+        window.dispatchEvent(new CustomEvent("open-install-prompt"));
       }
-    } catch (err) {
-      console.warn("[PWA Login] Install prompt error:", err);
+    } else {
+      // Trigger universal install modal with step-by-step guidance
+      window.dispatchEvent(new CustomEvent("open-install-prompt"));
     }
   };
 
@@ -91,8 +96,8 @@ export default function LoginPwaPrompt() {
     } catch {}
   };
 
-  // If already installed, running standalone, or dismissed, do not render
-  if (isStandalone || isDismissed) {
+  // If already installed or running standalone, do not render
+  if (isStandalone) {
     return null;
   }
 
@@ -136,7 +141,7 @@ export default function LoginPwaPrompt() {
             <X size={14} />
           </button>
         </div>
-      ) : deferredPrompt ? (
+      ) : (
         <div className={styles.androidBanner}>
           <button
             type="button"
@@ -148,7 +153,7 @@ export default function LoginPwaPrompt() {
             <span>Install SRT App</span>
           </button>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
