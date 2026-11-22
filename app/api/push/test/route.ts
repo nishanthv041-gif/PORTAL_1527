@@ -21,9 +21,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized. Please log in first." }, { status: 401 });
     }
 
-    const bodyPayload = await req.json().catch(() => ({}));
+    let bodyPayload: any = {};
+    try {
+      bodyPayload = await req.json();
+    } catch {
+      // If GET or empty body, parse query parameters
+      const url = new URL(req.url);
+      bodyPayload = {
+        role: url.searchParams.get("role"),
+        broadcast: url.searchParams.get("broadcast") === "true",
+        title: url.searchParams.get("title"),
+        body: url.searchParams.get("body") || url.searchParams.get("message"),
+        url: url.searchParams.get("url"),
+      };
+    }
+
     const targetUserId = bodyPayload.targetUserId || session.user.id;
     const isBroadcast = Boolean(bodyPayload.broadcast);
+    const targetRole = bodyPayload.role ? String(bodyPayload.role).toUpperCase() : undefined;
     const title = bodyPayload.title || "🔔 Portal Push Test";
     const body =
       bodyPayload.body ||
@@ -31,11 +46,21 @@ export async function POST(req: Request) {
       "Unified Push Notification (OneSignal + WebPush) is operational on SRT Portal!";
     const url = bodyPayload.url || "/dashboard";
 
+    let audience: { all?: boolean; admin?: boolean; teachers?: boolean; parents?: boolean; students?: boolean } | undefined = undefined;
+    if (isBroadcast) {
+      audience = { all: true };
+    } else if (targetRole) {
+      if (targetRole === "ADMIN") audience = { admin: true };
+      else if (targetRole === "TEACHER") audience = { teachers: true };
+      else if (targetRole === "PARENT") audience = { parents: true };
+      else if (targetRole === "STUDENT") audience = { students: true };
+    }
+
     // 1. Dispatch through the REAL unified pipeline
     const dispatchResult = await dispatchNotification({
       type: "TEST",
-      recipients: isBroadcast ? undefined : [targetUserId],
-      audience: isBroadcast ? { all: true } : undefined,
+      recipients: (isBroadcast || targetRole) ? undefined : [targetUserId],
+      audience,
       title,
       body,
       url,
@@ -45,14 +70,15 @@ export async function POST(req: Request) {
 
     // 2. Query latest delivery trace rows for immediate diagnostic feedback
     const latestTraces = await prisma.notificationDelivery.findMany({
-      where: { recipientUserId: targetUserId },
+      where: targetRole || isBroadcast ? {} : { recipientUserId: targetUserId },
       orderBy: { createdAt: "desc" },
       take: 5,
     });
 
     return NextResponse.json({
       success: dispatchResult.success,
-      targetUserId,
+      targetUserId: (isBroadcast || targetRole) ? null : targetUserId,
+      targetRole: targetRole || (isBroadcast ? "ALL" : null),
       dispatchResult,
       oneSignalAppId: ONESIGNAL_APP_ID,
       deliveryTraces: latestTraces,

@@ -5,11 +5,8 @@
  * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
 
-const CACHE_NAME = "srt-pwa-v11";
+const CACHE_NAME = "srt-pwa-v16-live";
 const PRECACHE_ASSETS = [
-  "/",
-  "/dashboard",
-  "/login",
   "/offline.html",
   "/manifest.webmanifest",
   "/manifest.json",
@@ -38,20 +35,20 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// 2. Activate Event: Clean up outdated caches
+// 2. Activate Event: Immediately purge all outdated/broken caches & take control
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
+            console.info("[SW] Deleting obsolete cache:", key);
             return caches.delete(key);
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 // ============================================================================
@@ -219,41 +216,56 @@ self.addEventListener("fetch", (event) => {
     return; // Pass through to network directly
   }
 
-  // Handle HTML Page Navigations: Instant Stale-While-Revalidate App Shell
-  // Tapping installed app loads cached shell immediately in <50ms, dismissing the OS splash instantly!
+  // Handle HTML Page Navigations: Resilient Network-First with Safe Fallback
+  // NEVER reject and NEVER return network-error response so Chrome never triggers ERR_FAILED!
   if (request.mode === "navigate") {
     event.respondWith(
-      (async () => {
-        const cache = await caches.open(CACHE_NAME);
-
-        // 1. Instant Cache Match: Check exact request, pathname, or app shell entry points
-        const cachedPage =
-          (await cache.match(request)) ||
-          (await cache.match(url.pathname)) ||
-          (await cache.match("/dashboard")) ||
-          (await cache.match("/login")) ||
-          (await cache.match("/"));
-
-        // 2. Background Revalidation: Updates cache silently without delaying the UI
-        const networkFetch = fetch(request)
-          .then(async (networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              await cache.put(request, networkResponse.clone());
-            }
-            return networkResponse;
-          })
-          .catch(async () => {
+      fetch(request)
+        .then((networkResponse) => {
+          // Live server response succeeded - return directly to the browser
+          return networkResponse;
+        })
+        .catch(async (fetchError) => {
+          console.warn("[SW] Navigation network fetch failed, using fallback:", fetchError);
+          // Network failed (offline or network error) - fallback to cached offline shell
+          try {
+            const cache = await caches.open(CACHE_NAME);
             const cachedOffline = await cache.match("/offline.html");
-            return cachedOffline || Response.error();
-          });
+            if (cachedOffline) {
+              return cachedOffline;
+            }
+          } catch (cacheErr) {}
 
-        if (cachedPage) {
-          event.waitUntil(networkFetch);
-          return cachedPage;
-        }
-
-        return networkFetch;
-      })()
+          // Resilient 200 HTML response: NEVER reject (which causes ERR_FAILED in Chrome)
+          return new Response(
+            `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SRT Portal</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #060a28; color: #fff; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; box-sizing: border-box; }
+    .card { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); padding: 2rem; border-radius: 12px; max-width: 400px; width: 100%; }
+    h2 { color: #f2b84b; margin-top: 0; }
+    p { color: #cbd5e1; font-size: 0.95rem; line-height: 1.5; }
+    .btn { display: inline-block; background: #2563eb; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; margin-top: 1rem; border: none; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>SRT Portal</h2>
+    <p>Connecting to portal... If your network is offline, please check your connection and tap Retry.</p>
+    <button class="btn" onclick="window.location.reload()">Retry Connection</button>
+  </div>
+</body>
+</html>`,
+            {
+              status: 200,
+              headers: { "Content-Type": "text/html; charset=utf-8" },
+            }
+          );
+        })
     );
     return;
   }
@@ -296,7 +308,7 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(request).catch(async () => {
       const cached = await caches.match(request);
-      return cached || Response.error();
+      return cached || new Response("", { status: 408, statusText: "Network Timeout" });
     })
   );
 });
@@ -435,17 +447,17 @@ self.addEventListener("notificationclick", (event) => {
         for (const client of windowClients) {
           if (client.url.startsWith(self.location.origin)) {
             if ("navigate" in client) {
-              client.navigate(fullTargetUrl);
+              client.navigate(fullTargetUrl).catch(() => {});
             }
             if ("focus" in client) {
-              return client.focus();
+              return client.focus().catch(() => {});
             }
             return;
           }
         }
         // Otherwise, open a new window
         if (clients.openWindow) {
-          return clients.openWindow(fullTargetUrl);
+          return clients.openWindow(fullTargetUrl).catch(() => {});
         }
       })
   );

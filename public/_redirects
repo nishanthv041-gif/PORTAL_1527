@@ -1,0 +1,11 @@
+# AWS Amplify Client-Side Route Rewrites & Fallbacks
+/_next/static/*  /_next/static/:splat  200
+/icons/*         /icons/:splat         200
+/images/*        /images/:splat        200
+/logo/*          /logo/:splat          200
+/api/*           /api/:splat           200
+/dashboard       /dashboard            200
+/dashboard/*     /dashboard            200
+/login           /login                200
+/staff/*         /staff                200
+/offline.html    /offline.html         200

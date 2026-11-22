@@ -111,9 +111,19 @@ function runPerformanceVerification() {
   assert("public/sw.js exists", fs.existsSync(swPath));
   if (fs.existsSync(swPath)) {
     const swContent = fs.readFileSync(swPath, "utf8");
-    assert("sw.js precaches /dashboard and /login app shell", swContent.includes('"/dashboard"') && swContent.includes('"/login"'));
-    assert("sw.js implements instant Stale-While-Revalidate for navigations", swContent.includes("request.mode === \"navigate\"") && swContent.includes("cachedPage"));
+    assert("sw.js precaches offline shell and manifest", swContent.includes('"/offline.html"') && swContent.includes('"/manifest.webmanifest"'));
+    assert("sw.js implements resilient Network-First navigation without ERR_FAILED", swContent.includes("request.mode === \"navigate\"") && !swContent.includes("Response.error()"));
     assert("sw.js skips waiting on install", swContent.includes("self.skipWaiting()"));
+  }
+
+  const redirectsPath = path.join(process.cwd(), "public/_redirects");
+  assert("public/_redirects exists for AWS Amplify SPA routing", fs.existsSync(redirectsPath));
+
+  const oneSignalWorkerPath = path.join(process.cwd(), "public/OneSignalSDKWorker.js");
+  assert("OneSignalSDKWorker.js exists", fs.existsSync(oneSignalWorkerPath));
+  if (fs.existsSync(oneSignalWorkerPath)) {
+    const osContent = fs.readFileSync(oneSignalWorkerPath, "utf8");
+    assert("OneSignalSDKWorker.js delegates to unified /sw.js", osContent.includes('importScripts("/sw.js")'));
   }
 
   const pwaRegPath = path.join(process.cwd(), "frontend/components/pwa/PwaRegistration.tsx");
