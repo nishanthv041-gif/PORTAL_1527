@@ -36,6 +36,14 @@ export default function PwaWelcomeNotificationPrompt() {
     const currentPerm = Notification.permission;
     setPermission(currentPerm);
 
+    // Do not show modal on home or login pages so user can enter credentials without interruption
+    const path = window.location.pathname;
+    if (path === "/" || path === "/login" || path.startsWith("/login/")) {
+      setIsOpen(false);
+      setShowFloatingPill(false);
+      return;
+    }
+
     // If already granted or dismissed, no need to show modal prompt
     const isDismissed = localStorage.getItem("srt_pwa_notif_dismissed_v1") === "true";
     if (currentPerm === "granted" || isDismissed) {

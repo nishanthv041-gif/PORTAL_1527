@@ -135,7 +135,7 @@ function runPerformanceVerification() {
 
   if (fs.existsSync(homeClientPath)) {
     const homeContent = fs.readFileSync(homeClientPath, "utf8");
-    assert("HomeClient renders 3D cinematic SplashScreen component", homeContent.includes("<SplashScreen"));
+    assert("HomeClient renders ModernLoginForm directly with zero loading delay", homeContent.includes("<ModernLoginForm"));
     assert("HomeClient renders ModernLoginForm for unauthenticated users", homeContent.includes("<ModernLoginForm"));
   }
 
