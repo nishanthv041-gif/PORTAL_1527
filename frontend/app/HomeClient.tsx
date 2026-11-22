@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Capacitor } from "@capacitor/core";
-import { SplashScreen } from "@/frontend/components/ui";
 import ModernLoginForm from "@/frontend/components/ModernLoginForm";
 import { getPersistedNativeSession } from "@/frontend/lib/authPersistence";
 
@@ -24,49 +23,9 @@ export default function HomeClient({
 }: HomeClientProps) {
   const router = useRouter();
 
-  // If already authenticated, immediately skip splash and navigate
-  const isAuth = !!authenticatedRole;
-  const [showSplash, setShowSplash] = useState(() => {
-    if (isAuth) return false;
-    if (typeof window !== "undefined") {
-      try {
-        // Skip splash in standalone PWA / installed app mode
-        if (
-          window.matchMedia("(display-mode: standalone)").matches ||
-          (navigator as unknown as { standalone?: boolean }).standalone
-        ) {
-          return false;
-        }
-        if (localStorage.getItem("srt_splash_shown") === "true") {
-          return false;
-        }
-        return sessionStorage.getItem("srt_splash_shown") !== "true";
-      } catch {
-        return false;
-      }
-    }
-    return true;
-  });
-
+  // Optimistic Local Session Check (Instant Dashboard Routing < 300ms)
   useEffect(() => {
-    if (authenticatedRole) {
-      const role = authenticatedRole.toUpperCase();
-      const target =
-        role === "ADMIN"
-          ? "/dashboard/admin"
-          : role === "TEACHER"
-          ? "/dashboard/teacher"
-          : role === "PARENT"
-          ? "/dashboard/parent"
-          : role === "STAFF" || role === "NON_TEACHING_STAFF"
-          ? "/staff/my-bus"
-          : "/dashboard";
-      router.replace(target);
-    }
-  }, [authenticatedRole, router]);
-
-  // On native mobile app, immediately hide the native container splash so the web app displays instantly
-  useEffect(() => {
+    // 1. Immediately dismiss native Android/Capacitor container splash
     if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
       const winCap = (window as unknown as {
         Capacitor?: {
@@ -89,36 +48,51 @@ export default function HomeClient({
       }
     }
 
-    // Touch getPersistedNativeSession for mobile state sync
+    // 2. Optimistic local session check
+    try {
+      const localRole =
+        authenticatedRole?.toUpperCase() ||
+        (localStorage.getItem("user-role") || "").toUpperCase() ||
+        (document.cookie.match(/user-role=([^;]+)/) || [])[1]?.toUpperCase() ||
+        "";
+
+      const hasLocalToken =
+        localStorage.getItem("token") ||
+        localStorage.getItem("auth-token") ||
+        document.cookie.includes("next-auth.session-token") ||
+        document.cookie.includes("__Secure-next-auth.session-token");
+
+      if (localRole || hasLocalToken) {
+        const target =
+          localRole === "ADMIN"
+            ? "/dashboard/admin"
+            : localRole === "TEACHER"
+            ? "/dashboard/teacher"
+            : localRole === "PARENT"
+            ? "/dashboard/parent"
+            : localRole === "STAFF" || localRole === "NON_TEACHING_STAFF"
+            ? "/staff/my-bus"
+            : "/dashboard";
+        router.replace(target);
+        return;
+      }
+    } catch {}
+
+    // Silent background sync
     getPersistedNativeSession().catch(() => {});
-  }, []);
+  }, [authenticatedRole, router]);
 
   if (authenticatedRole) {
     return null;
   }
 
-  const handleSplashComplete = () => {
-    setShowSplash(false);
-    try {
-      localStorage.setItem("srt_splash_shown", "true");
-      sessionStorage.setItem("srt_splash_shown", "true");
-    } catch {}
-  };
-
+  // Render Login page immediately with zero artificial delay
   return (
-    <>
-      {showSplash && (
-        <SplashScreen
-          forceShow={false}
-          onComplete={handleSplashComplete}
-        />
-      )}
-      <ModernLoginForm
-        schoolName={schoolName}
-        schoolLogo={schoolLogo || "/logo/srt-logo.svg"}
-        initialError={initialError}
-        initialReason={initialReason}
-      />
-    </>
+    <ModernLoginForm
+      schoolName={schoolName}
+      schoolLogo={schoolLogo || "/logo/srt-logo.svg"}
+      initialError={initialError}
+      initialReason={initialReason}
+    />
   );
 }

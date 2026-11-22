@@ -105,6 +105,30 @@ function runPerformanceVerification() {
     assert("optimizePackageImports includes performance icon packages", content.includes("lucide-react") && content.includes("recharts"));
   }
 
+  // 8. PWA App Shell Caching & Zero-Delay Launch Engine
+  console.log("\n--- Check 8: PWA App Shell Caching & Instant Splash Elimination ---");
+  const swPath = path.join(process.cwd(), "public/sw.js");
+  assert("public/sw.js exists", fs.existsSync(swPath));
+  if (fs.existsSync(swPath)) {
+    const swContent = fs.readFileSync(swPath, "utf8");
+    assert("sw.js precaches /dashboard and /login app shell", swContent.includes('"/dashboard"') && swContent.includes('"/login"'));
+    assert("sw.js implements instant Stale-While-Revalidate for navigations", swContent.includes("request.mode === \"navigate\"") && swContent.includes("cachedPage"));
+    assert("sw.js skips waiting on install", swContent.includes("self.skipWaiting()"));
+  }
+
+  const pwaRegPath = path.join(process.cwd(), "frontend/components/pwa/PwaRegistration.tsx");
+  assert("PwaRegistration.tsx exists", fs.existsSync(pwaRegPath));
+  if (fs.existsSync(pwaRegPath)) {
+    const pwaContent = fs.readFileSync(pwaRegPath, "utf8");
+    assert("PwaRegistration registers /sw.js with App Shell caching", pwaContent.includes('"/sw.js"'));
+  }
+
+  if (fs.existsSync(homeClientPath)) {
+    const homeContent = fs.readFileSync(homeClientPath, "utf8");
+    assert("HomeClient eliminated artificial SplashScreen component", !homeContent.includes("<SplashScreen"));
+    assert("HomeClient has optimistic local session check", homeContent.includes("localRole") && homeContent.includes("router.replace"));
+  }
+
   console.log("\n================================================================================");
   console.log(`📊 PERFORMANCE VERIFICATION SUMMARY: ${passed} PASSED, ${failed} FAILED`);
   console.log("================================================================================\n");

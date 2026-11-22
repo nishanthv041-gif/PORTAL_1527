@@ -27,9 +27,16 @@ export default async function Home(props: HomeProps) {
     redirect(target);
   }
 
-  const settings = await getSystemSettings();
-  const schoolName = settings.SCHOOL_NAME || "SRT UNIVERSAL SCHOOL";
-  const schoolLogo = settings.SCHOOL_LOGO || "/logo/srt-logo.svg";
+  let schoolName = "SRT UNIVERSAL SCHOOL";
+  let schoolLogo = "/logo/srt-logo.svg";
+  try {
+    const settings = await Promise.race([
+      getSystemSettings(),
+      new Promise<Record<string, string>>((resolve) => setTimeout(() => resolve({}), 80)),
+    ]);
+    if (settings.SCHOOL_NAME) schoolName = settings.SCHOOL_NAME;
+    if (settings.SCHOOL_LOGO) schoolLogo = settings.SCHOOL_LOGO;
+  } catch {}
 
   return (
     <HomeClient

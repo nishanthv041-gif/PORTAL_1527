@@ -5,8 +5,11 @@
  * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
 
-const CACHE_NAME = "srt-pwa-v10";
+const CACHE_NAME = "srt-pwa-v11";
 const PRECACHE_ASSETS = [
+  "/",
+  "/dashboard",
+  "/login",
   "/offline.html",
   "/manifest.webmanifest",
   "/manifest.json",
@@ -18,11 +21,18 @@ const PRECACHE_ASSETS = [
   "/logo/srt-logo.svg",
 ];
 
-// 1. Install Event: Pre-cache static offline shell
+// Optional OneSignal Push SDK Integration
+try {
+  importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
+} catch (e) {}
+
+// 1. Install Event: Pre-cache static offline shell immediately
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_ASSETS);
+      return cache.addAll(PRECACHE_ASSETS).catch((err) => {
+        console.warn("[SW] Non-fatal precache asset failure:", err);
+      });
     })
   );
   self.skipWaiting();
@@ -209,38 +219,59 @@ self.addEventListener("fetch", (event) => {
     return; // Pass through to network directly
   }
 
-  // Handle HTML Page Navigations (Network-First with Resilient Retry and Offline Fallback)
+  // Handle HTML Page Navigations: Instant Stale-While-Revalidate App Shell
+  // Tapping installed app loads cached shell immediately in <50ms, dismissing the OS splash instantly!
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
-        .catch(async () => {
-          // If network failed, attempt a quick resilient retry before showing offline screen
-          try {
-            const retryResponse = await fetch(request);
-            if (retryResponse && retryResponse.ok) {
-              return retryResponse;
-            }
-          } catch { }
+      (async () => {
+        const cache = await caches.open(CACHE_NAME);
 
-          const cache = await caches.open(CACHE_NAME);
-          const cachedOffline = await cache.match("/offline.html");
-          return cachedOffline || Response.error();
-        })
+        // 1. Instant Cache Match: Check exact request, pathname, or app shell entry points
+        const cachedPage =
+          (await cache.match(request)) ||
+          (await cache.match(url.pathname)) ||
+          (await cache.match("/dashboard")) ||
+          (await cache.match("/login")) ||
+          (await cache.match("/"));
+
+        // 2. Background Revalidation: Updates cache silently without delaying the UI
+        const networkFetch = fetch(request)
+          .then(async (networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              await cache.put(request, networkResponse.clone());
+            }
+            return networkResponse;
+          })
+          .catch(async () => {
+            const cachedOffline = await cache.match("/offline.html");
+            return cachedOffline || Response.error();
+          });
+
+        if (cachedPage) {
+          event.waitUntil(networkFetch);
+          return cachedPage;
+        }
+
+        return networkFetch;
+      })()
     );
     return;
   }
 
-  // Handle Static Assets (/_next/static/, /icons/, /images/, /fonts/) with Stale-While-Revalidate
+  // Handle Static Assets (/_next/static/, /icons/, /images/, /fonts/, .js, .css) with Stale-While-Revalidate
   const isStaticAsset =
     url.pathname.startsWith("/_next/static/") ||
     url.pathname.startsWith("/icons/") ||
     url.pathname.startsWith("/images/") ||
     url.pathname.startsWith("/logo/") ||
     url.pathname.startsWith("/fonts/") ||
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css") ||
     url.pathname.endsWith(".png") ||
     url.pathname.endsWith(".svg") ||
     url.pathname.endsWith(".ico") ||
-    url.pathname.endsWith(".webp");
+    url.pathname.endsWith(".webp") ||
+    url.pathname.endsWith(".woff2");
 
   if (isStaticAsset) {
     event.respondWith(

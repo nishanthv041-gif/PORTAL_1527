@@ -3,12 +3,20 @@
  * SRT Universal School Portal
  * 
  * Supports:
- * 1. OneSignal Push Notifications (via OneSignalSDK.sw.js v16)
- * 2. Direct VAPID Web Push (Android Chrome, iOS Safari PWA, Windows & macOS)
- * 3. Lock-screen popups with vibration & sound for chat messages, announcements, meetings & alerts
- * 4. WhatsApp-style home screen app icon badge count (setAppBadge / clearAppBadge)
- * 5. Notification click navigation directly to the chat thread or target page
+ * 1. Unified App Shell Caching & Offline Engine (via /sw.js)
+ * 2. OneSignal Push Notifications (via OneSignalSDK.sw.js v16)
+ * 3. Direct VAPID Web Push (Android Chrome, iOS Safari PWA, Windows & macOS)
+ * 4. Lock-screen popups with vibration & sound for chat messages, announcements, meetings & alerts
+ * 5. WhatsApp-style home screen app icon badge count (setAppBadge / clearAppBadge)
+ * 6. Notification click navigation directly to the chat thread or target page
  */
+
+// Import Core High-Performance Service Worker & App Shell Caching Engine
+try {
+  importScripts("/sw.js");
+} catch (swErr) {
+  console.warn("[OneSignal Worker] Could not load /sw.js caching engine:", swErr);
+}
 
 // 1. Core Lifecycle: Immediate activation without waiting for existing tabs to close
 self.addEventListener("install", (event) => {

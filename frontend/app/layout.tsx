@@ -38,9 +38,11 @@ export async function generateMetadata(): Promise<Metadata> {
   const appUrl = getAppUrl();
   const ogImageUrl = `${appUrl}/images/og-preview.png`;
   try {
-    const settings = await getSystemSettings();
+    const settings = await Promise.race([
+      getSystemSettings(),
+      new Promise<Record<string, string>>((resolve) => setTimeout(() => resolve({}), 80)),
+    ]);
     if (settings.SCHOOL_NAME) schoolName = settings.SCHOOL_NAME;
-
   } catch (err) { }
 
   const dynamicTitle = DEFAULT_TITLE;
@@ -133,7 +135,10 @@ export default async function RootLayout({
   let defaultThemeMode = "light";
   let settings: Record<string, string> = {};
   try {
-    settings = await getSystemSettings();
+    settings = await Promise.race([
+      getSystemSettings(),
+      new Promise<Record<string, string>>((resolve) => setTimeout(() => resolve({}), 80)),
+    ]);
     const rawMode = settings.THEME_MODE || "System";
     if (rawMode === "Dark") defaultThemeMode = "dark";
     if (rawMode === "Light") defaultThemeMode = "light";

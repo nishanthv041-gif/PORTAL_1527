@@ -28,11 +28,11 @@ export default function SilentSessionRefresher() {
     if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
       const winCap = (window as unknown as { Capacitor?: { Plugins?: { SplashScreen?: { hide: (opts?: { fadeOutDuration?: number }) => Promise<void> } } } })?.Capacitor;
       if (winCap?.Plugins?.SplashScreen?.hide) {
-        winCap.Plugins.SplashScreen.hide({ fadeOutDuration: 100 }).catch(() => {});
+        winCap.Plugins.SplashScreen.hide({ fadeOutDuration: 0 }).catch(() => {});
       } else {
         import("@capacitor/splash-screen")
           .then(({ SplashScreen }) => {
-            SplashScreen.hide({ fadeOutDuration: 100 }).catch(() => {});
+            SplashScreen.hide({ fadeOutDuration: 0 }).catch(() => {});
           })
           .catch(() => {});
       }
