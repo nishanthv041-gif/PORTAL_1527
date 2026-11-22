@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Megaphone, Clock, Trash2, Users, BookOpen, GraduationCap, Link as LinkIcon, AlertCircle, Edit2, Loader2 } from "lucide-react";
 import { createAnnouncementAction, deleteAnnouncementAction } from "@/backend/api/actions/dashboard/admin/announcements/actions";
@@ -8,6 +8,7 @@ import { Announcement, Class } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 export default function AnnouncementsClient({ announcements, classes }: { announcements: Announcement[], classes: Class[] }) {
+  const [, startTransition] = useTransition();
   const [announcementList, setAnnouncementList] = useState<Announcement[]>(announcements);
   const [activeTab, setActiveTab] = useState<"TEACHER" | "PARENT">("TEACHER");
   const [showCreate, setShowCreate] = useState(false);
@@ -132,7 +133,9 @@ export default function AnnouncementsClient({ announcements, classes }: { announ
         setAnnouncementList(previousList);
         alert(res.error);
       } else {
-        router.refresh();
+        startTransition(() => {
+          router.refresh();
+        });
       }
     } catch (err: any) {
       setDeletingId(null);

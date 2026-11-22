@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, ShieldAlert, Calendar, User, FileText, Trash2, ShieldCheck, Shield } from "lucide-react";
 import { createDisciplineRecordAction, deleteDisciplineRecordAction } from "@/backend/api/actions/dashboard/admin/discipline/actions";
 import { DisciplineRecord, Student, Class } from "@prisma/client";
@@ -11,12 +12,20 @@ type StudentWithClass = Student & { class: Class | null };
 type DisciplineRecordWithRelations = DisciplineRecord & { student: StudentWithClass };
 
 export default function DisciplineClient({ records, students }: { records: DisciplineRecordWithRelations[], students: StudentWithClass[] }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [recordList, setRecordList] = useState<DisciplineRecordWithRelations[]>(records);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [selectedSeverity, setSelectedSeverity] = useState("MEDIUM");
   const [selectedStatus, setSelectedStatus] = useState("OPEN");
   const confirm = useConfirm();
+
+  useEffect(() => {
+    setRecordList(records);
+  }, [records]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -28,6 +37,9 @@ export default function DisciplineClient({ records, students }: { records: Disci
       alert(res.error);
     } else {
       setShowCreate(false);
+      startTransition(() => {
+        router.refresh();
+      });
     }
   };
 
@@ -41,8 +53,27 @@ export default function DisciplineClient({ records, students }: { records: Disci
     });
     if (!ok) return;
 
-    const res = await deleteDisciplineRecordAction(id);
-    if (res.error) alert(res.error);
+    const previousList = [...recordList];
+    // 0ms instant optimistic UI removal (< 10ms visual update)
+    setRecordList(prev => prev.filter(r => r.id !== id));
+    setDeletingId(id);
+
+    try {
+      const res = await deleteDisciplineRecordAction(id);
+      setDeletingId(null);
+      if (res.error) {
+        setRecordList(previousList);
+        alert(res.error);
+      } else {
+        startTransition(() => {
+          router.refresh();
+        });
+      }
+    } catch (err: any) {
+      setDeletingId(null);
+      setRecordList(previousList);
+      alert(err?.message || "Failed to delete discipline record.");
+    }
   };
 
   const getSeverityIcon = (severity: string) => {
@@ -141,7 +172,7 @@ export default function DisciplineClient({ records, students }: { records: Disci
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))', gap: '1.25rem', width: '100%', minWidth: 0 }}>
-        {records.map(record => (
+        {recordList.map(record => (
           <div key={record.id} style={{ background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
             <div style={{ padding: '1.5rem', flex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
@@ -154,7 +185,20 @@ export default function DisciplineClient({ records, students }: { records: Disci
                   </div>
                   <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>{record.incident}</h3>
                 </div>
-                <button onClick={() => handleDelete(record.id)} style={{ background: 'transparent', border: 'none', color: "var(--danger)", cursor: 'pointer', padding: '0.25rem' }}>
+                <button 
+                  onClick={() => handleDelete(record.id)} 
+                  disabled={deletingId === record.id}
+                  style={{ 
+                    background: 'transparent', 
+                    border: 'none', 
+                    color: "var(--danger)", 
+                    cursor: deletingId === record.id ? 'not-allowed' : 'pointer', 
+                    padding: '0.25rem',
+                    opacity: deletingId === record.id ? 0.4 : 1,
+                    transition: 'opacity 0.15s ease'
+                  }}
+                  title="Delete record"
+                >
                   <Trash2 size={16} />
                 </button>
               </div>

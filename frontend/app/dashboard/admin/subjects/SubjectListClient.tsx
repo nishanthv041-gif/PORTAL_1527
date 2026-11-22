@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { BookOpen, Plus, LayoutDashboard, Trash2, UserCheck, Check, School, Pencil, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -28,6 +28,7 @@ export default function SubjectListClient({
 }) {
   const router = useRouter();
   const confirm = useConfirm();
+  const [, startTransition] = useTransition();
   const [subjectList, setSubjectList] = useState(subjects);
   const [showCreate, setShowCreate] = useState(false);
   const [editingSubject, setEditingSubject] = useState<{ name: string; instances: SubjectWithRelations[] } | null>(null);
@@ -166,7 +167,9 @@ export default function SubjectListClient({
         alert(res.error);
         setSubjectList(previousSubjects); // Rollback on error
       } else {
-        router.refresh();
+        startTransition(() => {
+          router.refresh();
+        });
       }
     } catch (err: any) {
       setDeletingName(null);

@@ -66,7 +66,16 @@ CREATE INDEX IF NOT EXISTS "idx_staff_attendance_status"
 
 -- 7. Notification Table Indexes
 CREATE INDEX IF NOT EXISTS "idx_notification_recipient_read_created" 
-  ON "Notification" ("recipientId", "isRead", "createdAt" DESC);
+  ON "Notification" ("userId", "isRead", "createdAt" DESC);
+
+CREATE INDEX IF NOT EXISTS "idx_notification_user_created" 
+  ON "Notification" ("userId", "createdAt" DESC);
+
+CREATE INDEX IF NOT EXISTS "idx_notification_user_read_created" 
+  ON "Notification" ("userId", "isRead", "createdAt" DESC);
+
+CREATE INDEX IF NOT EXISTS "idx_notification_recipient_user_read" 
+  ON "NotificationRecipient" ("userId", "read");
 
 -- 8. Message Table Indexes
 CREATE INDEX IF NOT EXISTS "idx_message_sender_receiver_created" 
@@ -74,3 +83,23 @@ CREATE INDEX IF NOT EXISTS "idx_message_sender_receiver_created"
 
 CREATE INDEX IF NOT EXISTS "idx_message_receiver_unread" 
   ON "Message" ("receiverId", "isRead");
+
+-- 9. UserSession Table Indexes for High-Speed Authentication and Single-Device Lookups
+CREATE INDEX IF NOT EXISTS "idx_user_session_session_revoked" 
+  ON "UserSession" ("sessionId", "revokedAt");
+
+CREATE INDEX IF NOT EXISTS "idx_user_session_user_revoked" 
+  ON "UserSession" ("userId", "revokedAt");
+
+-- 10. System Entity Indexes for Fast Clear & Delete Mutations
+CREATE INDEX IF NOT EXISTS "idx_announcement_created" 
+  ON "Announcement" ("createdAt" DESC);
+
+CREATE INDEX IF NOT EXISTS "idx_event_date" 
+  ON "Event" ("date");
+
+CREATE INDEX IF NOT EXISTS "idx_discipline_student_created" 
+  ON "DisciplineRecord" ("studentId", "createdAt" DESC);
+
+CREATE INDEX IF NOT EXISTS "idx_complaint_status_created" 
+  ON "Complaint" ("status", "createdAt" DESC);

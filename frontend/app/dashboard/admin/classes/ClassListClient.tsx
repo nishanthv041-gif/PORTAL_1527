@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus, Users, LayoutDashboard, Trash2, Edit3,
@@ -36,6 +36,7 @@ export default function ClassListClient({
 }) {
   const router = useRouter();
   const confirm = useConfirm();
+  const [, startTransition] = useTransition();
   const [classList, setClassList] = useState(classes);
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -225,7 +226,9 @@ export default function ClassListClient({
         alert(res.error);
         setClassList(previousList); // Rollback on error
       } else {
-        router.refresh();
+        startTransition(() => {
+          router.refresh();
+        });
       }
     } catch (err: any) {
       setDeletingId(null);
@@ -257,7 +260,9 @@ export default function ClassListClient({
         alert(res.error);
         setClassList(previousList);
       } else {
-        router.refresh();
+        startTransition(() => {
+          router.refresh();
+        });
       }
     } catch (err: any) {
       setDeletingId(null);

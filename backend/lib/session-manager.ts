@@ -15,6 +15,37 @@ export interface CreateSessionParams {
   deviceInfo?: string;
 }
 
+export interface ValidateSessionResult {
+  valid: boolean;
+  session?: any;
+  user?: any;
+  reason?: SessionRevocationReason;
+  revokedAt?: Date;
+  error?: any;
+}
+
+interface CachedSessionValidation {
+  result: ValidateSessionResult;
+  cachedAt: number;
+}
+
+// In-memory session validation cache (25s TTL) to eliminate 200-400ms DB round-trip on every button click/mutation
+const sessionValidationCache = new Map<string, CachedSessionValidation>();
+const SESSION_CACHE_TTL_MS = 25 * 1000;
+
+export function invalidateSessionValidationCache(sessionId?: string, userId?: string) {
+  if (sessionId) {
+    sessionValidationCache.delete(sessionId);
+  }
+  if (userId) {
+    for (const [key, val] of sessionValidationCache.entries()) {
+      if (val.result.user?.id === userId || val.result.session?.userId === userId) {
+        sessionValidationCache.delete(key);
+      }
+    }
+  }
+}
+
 /**
  * Creates a new UserSession.
  * If user's role is in SINGLE_DEVICE_ROLES (Parent, Teacher), revokes ALL active
@@ -32,6 +63,7 @@ export async function createUserSession({
   const normalizedRole = userRole?.toUpperCase() || "";
 
   if (SINGLE_DEVICE_ROLES.includes(normalizedRole)) {
+    invalidateSessionValidationCache(undefined, userId);
     // Atomic race-safe transaction with row-level lock on User record
     return await prisma.$transaction(async (tx) => {
       // Serialize concurrent logins for this specific user in Postgres
@@ -80,9 +112,15 @@ export async function createUserSession({
  * Validates a session by sessionId against the database.
  * Enforces revoked status, idle timeout (6 hours), and optional absolute max session limit.
  */
-export async function validateSession(sessionId: string) {
+export async function validateSession(sessionId: string): Promise<ValidateSessionResult> {
   if (!sessionId) {
     return { valid: false, reason: "LOGOUT" as SessionRevocationReason };
+  }
+
+  // Fast In-Memory Cache Lookup (0ms response for active button actions and mutations)
+  const cached = sessionValidationCache.get(sessionId);
+  if (cached && Date.now() - cached.cachedAt < SESSION_CACHE_TTL_MS) {
+    return cached.result;
   }
 
   try {
@@ -103,10 +141,12 @@ export async function validateSession(sessionId: string) {
     });
 
     if (!session) {
+      sessionValidationCache.delete(sessionId);
       return { valid: false, reason: "LOGOUT" as SessionRevocationReason };
     }
 
     if (session.revokedAt) {
+      sessionValidationCache.delete(sessionId);
       return {
         valid: false,
         reason: (session.revokedReason as SessionRevocationReason) || "LOGOUT",
@@ -115,6 +155,7 @@ export async function validateSession(sessionId: string) {
     }
 
     if (session.user?.status === "INACTIVE") {
+      sessionValidationCache.delete(sessionId);
       await revokeSession(sessionId, "ADMIN_FORCED");
       return { valid: false, reason: "ADMIN_FORCED" as SessionRevocationReason };
     }
@@ -125,6 +166,7 @@ export async function validateSession(sessionId: string) {
 
     // Check idle timeout
     if (now - lastActiveTime > idleLimitMs) {
+      sessionValidationCache.delete(sessionId);
       await revokeSession(sessionId, "IDLE_TIMEOUT");
       return { valid: false, reason: "IDLE_TIMEOUT" as SessionRevocationReason };
     }
@@ -134,6 +176,7 @@ export async function validateSession(sessionId: string) {
       const createdTime = new Date(session.createdAt).getTime();
       const maxLimitMs = MAX_SESSION_HOURS * 3600 * 1000;
       if (now - createdTime > maxLimitMs) {
+        sessionValidationCache.delete(sessionId);
         await revokeSession(sessionId, "MAX_TIME");
         return { valid: false, reason: "MAX_TIME" as SessionRevocationReason };
       }
@@ -141,11 +184,18 @@ export async function validateSession(sessionId: string) {
 
     // Check expiresAt
     if (now > new Date(session.expiresAt).getTime()) {
+      sessionValidationCache.delete(sessionId);
       await revokeSession(sessionId, "IDLE_TIMEOUT");
       return { valid: false, reason: "IDLE_TIMEOUT" as SessionRevocationReason };
     }
 
-    return { valid: true, session, user: session.user };
+    const validResult = { valid: true, session, user: session.user };
+    sessionValidationCache.set(sessionId, {
+      result: validResult,
+      cachedAt: Date.now(),
+    });
+
+    return validResult;
   } catch (error) {
     console.error("[SessionManager] validateSession error:", error);
     // On temporary DB connection error, don't arbitrarily logout unless confirmed
@@ -198,6 +248,7 @@ export async function revokeSession(
   reason: SessionRevocationReason = "LOGOUT"
 ) {
   if (!sessionId) return;
+  invalidateSessionValidationCache(sessionId);
   try {
     await prisma.userSession.updateMany({
       where: { sessionId, revokedAt: null },
@@ -219,6 +270,7 @@ export async function revokeAllUserSessions(
   reason: SessionRevocationReason = "PASSWORD_CHANGED"
 ) {
   if (!userId) return;
+  invalidateSessionValidationCache(undefined, userId);
   try {
     await prisma.$transaction([
       prisma.userSession.updateMany({

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Megaphone, Clock, AlertCircle, Link as LinkIcon, Edit2, Trash2, BookOpen, Users, GraduationCap } from "lucide-react";
 import { Announcement, Class } from "@prisma/client";
@@ -16,14 +16,20 @@ export default function TeacherAnnouncementsClient({
   classes: Class[];
   currentUserId: string;
 }) {
+  const router = useRouter();
+  const confirm = useConfirm();
+  const [, startTransition] = useTransition();
+  const [announcementList, setAnnouncementList] = useState<Announcement[]>(announcements);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [targetType, setTargetType] = useState("CLASS");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
-  const router = useRouter();
-  const confirm = useConfirm();
+  useEffect(() => {
+    setAnnouncementList(announcements);
+  }, [announcements]);
 
   const handleEditClick = (announcement: Announcement) => {
     setEditingId(announcement.id);
@@ -42,12 +48,27 @@ export default function TeacherAnnouncementsClient({
     });
     if (!ok) return;
 
-    const res = await fetch(`/api/announcements/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      const errorData = await res.json();
-      alert(errorData.error || "Failed to delete announcement");
-    } else {
-      router.refresh();
+    const previousList = [...announcementList];
+    // 0ms instant optimistic UI removal (< 10ms visual update)
+    setAnnouncementList(prev => prev.filter(a => a.id !== id));
+    setDeletingId(id);
+
+    try {
+      const res = await fetch(`/api/announcements/${id}`, { method: "DELETE" });
+      setDeletingId(null);
+      if (!res.ok) {
+        const errorData = await res.json();
+        setAnnouncementList(previousList);
+        alert(errorData.error || "Failed to delete announcement");
+      } else {
+        startTransition(() => {
+          router.refresh();
+        });
+      }
+    } catch (err: any) {
+      setDeletingId(null);
+      setAnnouncementList(previousList);
+      alert(err?.message || "Failed to delete announcement");
     }
   };
 
@@ -118,7 +139,7 @@ export default function TeacherAnnouncementsClient({
       <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", background: "var(--card-bg)", padding: "1.5rem", borderRadius: "12px", border: "1px solid var(--border-color)" }}>
         <h3 style={{ fontSize: "1.25rem", fontWeight: 600, margin: 0 }}>School Announcements</h3>
         
-        {announcements.map((announcement) => {
+        {announcementList.map((announcement) => {
           const isExpired = announcement.expiryDate && new Date(announcement.expiryDate) < new Date();
           if (isExpired && announcement.authorId !== currentUserId) return null; // Hide expired unless they are the author
 
@@ -149,7 +170,20 @@ export default function TeacherAnnouncementsClient({
                       }} style={{ background: "transparent", border: "none", color: "inherit", opacity: 0.7, cursor: "pointer", padding: 0 }}>
                         <Edit2 size={16} />
                       </button>
-                      <button onClick={() => handleDelete(announcement.id)} style={{ background: "transparent", border: "none", color: "var(--danger)", cursor: "pointer", padding: 0 }}>
+                      <button 
+                        onClick={() => handleDelete(announcement.id)} 
+                        disabled={deletingId === announcement.id}
+                        style={{ 
+                          background: "transparent", 
+                          border: "none", 
+                          color: "var(--danger)", 
+                          cursor: deletingId === announcement.id ? "not-allowed" : "pointer", 
+                          padding: 0,
+                          opacity: deletingId === announcement.id ? 0.4 : 1,
+                          transition: "opacity 0.15s ease"
+                        }}
+                        title="Delete announcement"
+                      >
                         <Trash2 size={16} />
                       </button>
                     </div>

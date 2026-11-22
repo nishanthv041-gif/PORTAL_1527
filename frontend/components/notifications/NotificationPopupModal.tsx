@@ -26,6 +26,21 @@ const DISMISSED_KEY = "srt_portal_popup_notif_dismissed";
 const FRESH_LOGIN_KEY = "srt_portal_fresh_login";
 const SEEN_POPUP_IDS_KEY = "srt_portal_seen_popup_ids";
 
+// Synchronous client helper to retrieve seen IDs without race condition
+function getInitialSeenIds(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const stored = localStorage.getItem(SEEN_POPUP_IDS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return new Set(parsed);
+      }
+    }
+  } catch {}
+  return new Set();
+}
+
 export default function NotificationPopupModal({
   initialNotifications = [],
   notificationsEnabled = true,
@@ -34,14 +49,14 @@ export default function NotificationPopupModal({
   notificationsEnabled?: boolean;
 }) {
   const router = useRouter();
-  const [notifications, setNotifications] = useState<UnifiedNotification[]>(initialNotifications);
+  const [notifications, setNotifications] = useState<UnifiedNotification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isClearing, setIsClearing] = useState(false);
-  const seenIdRef = useRef<Set<string>>(new Set());
+  const seenIdRef = useRef<Set<string>>(getInitialSeenIds());
   const cachedRecentRef = useRef<UnifiedNotification[]>(initialNotifications || []);
 
-  // Initialize seen IDs from localStorage on client
+  // Ensure seen IDs are always hydrated
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
@@ -57,6 +72,7 @@ export default function NotificationPopupModal({
   }, []);
 
   // Helper to filter out already-read notifications and already-seen popup notifications
+  // Any new notification shows ONLY ONCE on the pop-up notification on first time
   const filterActiveUnread = (items: UnifiedNotification[]) => {
     if (!items || items.length === 0) return [];
     const clearedTimeStr = typeof window !== "undefined" ? localStorage.getItem(CLEARED_TIMESTAMP_KEY) : null;
@@ -69,7 +85,7 @@ export default function NotificationPopupModal({
     }
 
     // Sort to prioritize BIRTHDAY wishes and URGENT alerts at the front
-    // Once seen in pop-up, it is NOT shown in pop-up again, but remains in notification history page!
+    // Once seen in pop-up, it is NOT shown in pop-up again, but remains safely in notification history page!
     const unreadItems = items
       .filter(n => !n.isRead && new Date(n.timestamp).getTime() > clearedTime && !seenIdRef.current.has(n.id))
       .sort((a, b) => {
@@ -80,12 +96,16 @@ export default function NotificationPopupModal({
 
     // Deduplicate by id and title
     const seen = new Set<string>();
-    return unreadItems.filter(n => {
+    const unique = unreadItems.filter(n => {
       const sig = `${n.id}-${(n.title || "").trim().toLowerCase()}`;
       if (seen.has(sig)) return false;
       seen.add(sig);
       return true;
     });
+
+    // Requirement: Any new notification shows ONLY ONCE on the pop-up notification on first time.
+    // Never bombard the user with 9+ historical items at once; present only the latest single new alert!
+    return unique.slice(0, 1);
   };
 
   // Helper to mark a list of notifications as dismissed/read when user actually closes or interacts
@@ -105,24 +125,33 @@ export default function NotificationPopupModal({
     markNotificationsAsSeenInPopupAction(ids).catch(() => {});
   };
 
-  // Sync if initialNotifications prop updates (fast initial SSR paint)
-  // Automatically shows popup when user opens/logs into portal with unread notifications (including messages)
+  // Show popup ONLY when there is a genuinely new notification that hasn't been shown in popup yet
   useEffect(() => {
     if (initialNotifications && initialNotifications.length > 0) {
       const activeUnread = filterActiveUnread(initialNotifications);
       if (activeUnread.length > 0) {
-        setNotifications(activeUnread);
+        const itemToShow = activeUnread[0];
+        setNotifications([itemToShow]);
         setCurrentIndex(0);
-        // Fast popup: Open automatically within 100ms on login / page load
+
+        // Mark as seen immediately so it NEVER pops up again on reload
+        seenIdRef.current.add(itemToShow.id);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(SEEN_POPUP_IDS_KEY, JSON.stringify(Array.from(seenIdRef.current)));
+          } catch {}
+        }
+        markNotificationsAsSeenInPopupAction([itemToShow.id]).catch(() => {});
+
         const timer = setTimeout(() => {
           setIsOpen(true);
-        }, 100);
+        }, 120);
         return () => clearTimeout(timer);
       }
     }
   }, [initialNotifications]);
 
-  // Fast active polling: checks every 5 seconds for newly sent messages and alerts
+  // Fast active polling: checks for newly sent messages and alerts while user is on the portal
   useEffect(() => {
     if (!notificationsEnabled) return;
 
@@ -135,8 +164,19 @@ export default function NotificationPopupModal({
           const activeFresh = filterActiveUnread(fresh);
 
           if (activeFresh.length > 0) {
-            setNotifications(activeFresh);
+            const itemToShow = activeFresh[0];
+            setNotifications([itemToShow]);
             setCurrentIndex(0);
+
+            // Mark as seen immediately so it NEVER pops up again
+            seenIdRef.current.add(itemToShow.id);
+            if (typeof window !== "undefined") {
+              try {
+                localStorage.setItem(SEEN_POPUP_IDS_KEY, JSON.stringify(Array.from(seenIdRef.current)));
+              } catch {}
+            }
+            markNotificationsAsSeenInPopupAction([itemToShow.id]).catch(() => {});
+
             setIsOpen(true);
           }
         })

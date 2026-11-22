@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { 
   Bell, Info, AlertTriangle, CheckCircle, XCircle, Clock, 
   Trash2, Plus, Send, X, Check, Megaphone, MessageSquare,
@@ -53,11 +53,18 @@ export default function NotificationsClient({
 }) {
   const router = useRouter();
   const confirm = useConfirm();
+  const [, startTransition] = useTransition();
+  const [notifList, setNotifList] = useState<NotificationWithUser[]>(notifications);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"HISTORY" | "PUSH_SETTINGS">("HISTORY");
   const [showCreate, setShowCreate] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNotifList(notifications);
+  }, [notifications]);
 
   // Form State
   const [targetType, setTargetType] = useState("ALL");
@@ -76,10 +83,10 @@ export default function NotificationsClient({
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<"ALL" | "UNREAD" | "READ">("ALL");
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-  const readCount = notifications.filter(n => n.isRead).length;
+  const unreadCount = notifList.filter(n => !n.isRead).length;
+  const readCount = notifList.filter(n => n.isRead).length;
 
-  const filteredNotifications = notifications.filter(n => {
+  const filteredNotifications = notifList.filter(n => {
     if (filterStatus === "UNREAD") return !n.isRead;
     if (filterStatus === "READ") return n.isRead;
     return true;
@@ -124,17 +131,51 @@ export default function NotificationsClient({
     });
     if (!ok) return;
 
-    const res = await deleteNotification(id);
-    if (res.error) alert(res.error);
-    else router.refresh();
+    const previousList = [...notifList];
+    // 0ms instant optimistic UI removal (< 10ms visual update)
+    setNotifList(prev => prev.filter(n => n.id !== id));
+    setDeletingId(id);
+
+    try {
+      const res = await deleteNotification(id);
+      setDeletingId(null);
+      if (res.error) {
+        setNotifList(previousList);
+        alert(res.error);
+      } else {
+        startTransition(() => {
+          router.refresh();
+        });
+      }
+    } catch (err: any) {
+      setDeletingId(null);
+      setNotifList(previousList);
+      alert(err?.message || "Failed to delete notification.");
+    }
   };
 
   const handleMarkParticularRead = async (id: string) => {
     setMarkingId(id);
-    const res = await markNotificationReadAction(`notif-${id}`);
-    setMarkingId(null);
-    if (res.error) alert(res.error);
-    else router.refresh();
+    const previousList = [...notifList];
+    // 0ms instant optimistic UI update
+    setNotifList(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+
+    try {
+      const res = await markNotificationReadAction(`notif-${id}`);
+      setMarkingId(null);
+      if (res.error) {
+        setNotifList(previousList);
+        alert(res.error);
+      } else {
+        startTransition(() => {
+          router.refresh();
+        });
+      }
+    } catch (err: any) {
+      setMarkingId(null);
+      setNotifList(previousList);
+      alert(err?.message || "Failed to mark as read.");
+    }
   };
 
   const handleRetryFailed = async (notifId: string) => {
@@ -713,14 +754,17 @@ export default function NotificationsClient({
               </div>
               <button
                 onClick={() => handleDelete(notif.id)}
+                disabled={deletingId === notif.id}
                 style={{
                   background: "rgba(239, 68, 68, 0.08)",
                   border: "1px solid rgba(239, 68, 68, 0.2)",
-                  cursor: "pointer",
+                  cursor: deletingId === notif.id ? "not-allowed" : "pointer",
                   color: "#ef4444",
                   padding: "0.35rem",
                   borderRadius: "6px",
-                  flexShrink: 0
+                  flexShrink: 0,
+                  opacity: deletingId === notif.id ? 0.4 : 1,
+                  transition: "opacity 0.15s ease",
                 }}
                 title="Delete notification"
               >

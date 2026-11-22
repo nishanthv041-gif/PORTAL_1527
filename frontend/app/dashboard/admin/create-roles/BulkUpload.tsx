@@ -134,14 +134,18 @@ export default function BulkUpload({
     });
     if (!ok) return;
 
+    const previousHistory = [...history];
+    // 0ms instant optimistic UI removal
+    setHistory(prev => prev.filter(h => h.id !== id));
+
     try {
       const res = await deleteImportBatchAction(id);
-      if (res.success) {
-        setHistory(prev => prev.filter(h => h.id !== id));
-      } else {
+      if (!res.success) {
+        setHistory(previousHistory);
         alert(res.error || "Failed to delete record.");
       }
     } catch (e: any) {
+      setHistory(previousHistory);
       alert(e.message || "Failed to delete record.");
     }
   };

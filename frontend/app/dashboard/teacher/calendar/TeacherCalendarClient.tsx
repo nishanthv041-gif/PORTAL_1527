@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Trash2, Calendar as CalendarIcon, MapPin, Clock, Users } from "lucide-react";
 import { createTeacherEventAction, deleteTeacherEventAction } from "@/backend/api/actions/dashboard/teacher/calendar/actions";
 
@@ -8,17 +9,25 @@ import { CalendarEvent } from "@prisma/client";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 
 export default function TeacherCalendarClient({ events, currentUserName }: { events: CalendarEvent[], currentUserName: string }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [eventList, setEventList] = useState<CalendarEvent[]>(events);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [view, setView] = useState<'Day' | 'Week' | 'Month'>('Day');
   const [showCreate, setShowCreate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const confirm = useConfirm();
 
+  useEffect(() => {
+    setEventList(events);
+  }, [events]);
+
   // Default to today
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const filteredEvents = events.filter(e => {
+  const filteredEvents = eventList.filter(e => {
     const eventDate = new Date(e.date);
     eventDate.setHours(0,0,0,0);
     
@@ -48,6 +57,9 @@ export default function TeacherCalendarClient({ events, currentUserName }: { eve
       setError(result.error);
     } else {
       setShowCreate(false);
+      startTransition(() => {
+        router.refresh();
+      });
     }
   };
 
@@ -61,7 +73,27 @@ export default function TeacherCalendarClient({ events, currentUserName }: { eve
     });
     if (!ok) return;
 
-    await deleteTeacherEventAction(id);
+    const previousEvents = [...eventList];
+    // 0ms instant optimistic UI removal (< 10ms visual update)
+    setEventList(prev => prev.filter(e => e.id !== id));
+    setDeletingId(id);
+
+    try {
+      const res = await deleteTeacherEventAction(id);
+      setDeletingId(null);
+      if (res?.error) {
+        setEventList(previousEvents);
+        alert(res.error);
+      } else {
+        startTransition(() => {
+          router.refresh();
+        });
+      }
+    } catch (err: any) {
+      setDeletingId(null);
+      setEventList(previousEvents);
+      alert(err?.message || "Failed to delete event.");
+    }
   };
 
   const getEventColor = (type: string) => {
@@ -239,7 +271,17 @@ export default function TeacherCalendarClient({ events, currentUserName }: { eve
                 {event.organizer === currentUserName && (
                   <button 
                     onClick={() => handleDelete(event.id)}
-                    style={{ background: 'none', border: 'none', color: "var(--danger)", cursor: 'pointer', padding: '0.5rem', borderRadius: '8px' }}
+                    disabled={deletingId === event.id}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: "var(--danger)",
+                      cursor: deletingId === event.id ? 'not-allowed' : 'pointer',
+                      padding: '0.5rem',
+                      borderRadius: '8px',
+                      opacity: deletingId === event.id ? 0.4 : 1,
+                      transition: 'opacity 0.15s ease'
+                    }}
                     title="Delete Event"
                   >
                     <Trash2 size={20} />

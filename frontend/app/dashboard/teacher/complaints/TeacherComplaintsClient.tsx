@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { User, Clock, AlertCircle, Edit2, Trash2 } from "lucide-react";
 import { raiseComplaintAction } from "@/backend/api/actions/dashboard/teacher/complaints/actions";
@@ -32,6 +32,11 @@ export default function TeacherComplaintsClient({
   teacherId: string;
   students: { id: string; name: string; rollNo: string; className: string }[];
 }) {
+  const router = useRouter();
+  const confirm = useConfirm();
+  const [, startTransition] = useTransition();
+  const [complaintList, setComplaintList] = useState<ComplaintWithStudent[]>(complaints);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingComplaint, setEditingComplaint] = useState<ComplaintWithStudent | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,6 +44,10 @@ export default function TeacherComplaintsClient({
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("BEHAVIOR");
   const [selectedSeverity, setSelectedSeverity] = useState("LOW");
+
+  useEffect(() => {
+    setComplaintList(complaints);
+  }, [complaints]);
 
   useEffect(() => {
     if (editingComplaint) {
@@ -51,9 +60,6 @@ export default function TeacherComplaintsClient({
       setSelectedSeverity("LOW");
     }
   }, [editingComplaint]);
-
-  const router = useRouter();
-  const confirm = useConfirm();
 
   const handleEditClick = (complaint: ComplaintWithStudent) => {
     setEditingId(complaint.id);
@@ -71,12 +77,27 @@ export default function TeacherComplaintsClient({
     });
     if (!ok) return;
 
-    const res = await fetch(`/api/complaints/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      const errorData = await res.json();
-      alert(errorData.error || "Failed to delete complaint");
-    } else {
-      router.refresh();
+    const previousList = [...complaintList];
+    // 0ms instant optimistic UI removal (< 10ms visual update)
+    setComplaintList(prev => prev.filter(c => c.id !== id));
+    setDeletingId(id);
+
+    try {
+      const res = await fetch(`/api/complaints/${id}`, { method: "DELETE" });
+      setDeletingId(null);
+      if (!res.ok) {
+        const errorData = await res.json();
+        setComplaintList(previousList);
+        alert(errorData.error || "Failed to delete complaint");
+      } else {
+        startTransition(() => {
+          router.refresh();
+        });
+      }
+    } catch (err: any) {
+      setDeletingId(null);
+      setComplaintList(previousList);
+      alert(err?.message || "Failed to delete complaint");
     }
   };
 
@@ -128,7 +149,7 @@ export default function TeacherComplaintsClient({
       <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", background: "var(--card-bg)", padding: "1.5rem", borderRadius: "12px", border: "1px solid var(--border)" }}>
         <h3 style={{ fontSize: "1.25rem", fontWeight: 600, margin: 0 }}>My Raised Complaints</h3>
 
-        {complaints.map((complaint) => (
+        {complaintList.map((complaint) => (
           <div key={complaint.id} style={{ display: "flex", flexDirection: "column", padding: "1.25rem", border: "1px solid var(--border)", borderRadius: "8px", backgroundColor: "var(--background)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem" }}>
               <h4 style={{ margin: 0, color: "var(--primary)", fontSize: "1.1rem" }}>{complaint.title}</h4>
@@ -153,7 +174,20 @@ export default function TeacherComplaintsClient({
                     }} style={{ background: "transparent", border: "none", color: "inherit", opacity: 0.7, cursor: "pointer", padding: 0 }}>
                       <Edit2 size={16} />
                     </button>
-                    <button onClick={() => handleDelete(complaint.id)} style={{ background: "transparent", border: "none", color: "var(--danger)", cursor: "pointer", padding: 0 }}>
+                    <button 
+                      onClick={() => handleDelete(complaint.id)} 
+                      disabled={deletingId === complaint.id}
+                      style={{ 
+                        background: "transparent", 
+                        border: "none", 
+                        color: "var(--danger)", 
+                        cursor: deletingId === complaint.id ? "not-allowed" : "pointer", 
+                        padding: 0,
+                        opacity: deletingId === complaint.id ? 0.4 : 1,
+                        transition: "opacity 0.15s ease"
+                      }}
+                      title="Delete complaint"
+                    >
                       <Trash2 size={16} />
                     </button>
                   </div>

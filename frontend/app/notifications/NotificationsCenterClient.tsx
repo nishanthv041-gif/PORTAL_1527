@@ -293,12 +293,14 @@ export default function NotificationsCenterClient({
   };
 
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // 0ms Optimistic Delete One Notification Quickly
   const handleDeleteOne = async (notifId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const prevList = [...notifications];
     setNotifications((prev) => prev.filter((n) => n.id !== notifId));
+    setDeletingId(notifId);
 
     try {
       await deleteUnifiedNotificationAction(notifId);
@@ -306,6 +308,8 @@ export default function NotificationsCenterClient({
     } catch {
       // Rollback on network failure
       setNotifications(prevList);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -660,18 +664,20 @@ export default function NotificationsCenterClient({
                       <button
                         type="button"
                         onClick={(e) => handleDeleteOne(notif.id, e)}
+                        disabled={deletingId === notif.id}
                         style={{
                           background: "transparent",
                           border: "none",
                           color: "var(--text-muted, #94a3b8)",
-                          cursor: "pointer",
+                          cursor: deletingId === notif.id ? "not-allowed" : "pointer",
                           padding: "4px",
                           borderRadius: "6px",
                           display: "inline-flex",
                           alignItems: "center",
                           justifyContent: "center",
                           marginLeft: "0.3rem",
-                          transition: "color 0.15s ease, background-color 0.15s ease",
+                          opacity: deletingId === notif.id ? 0.4 : 1,
+                          transition: "color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease",
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.color = "#ef4444";
