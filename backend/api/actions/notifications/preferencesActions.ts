@@ -84,24 +84,40 @@ export async function updateUserNotificationPreferencesAction(
 
     const userId = session.user.id;
 
-    const updated = await prisma.notificationPreference.upsert({
-      where: { userId },
-      create: {
-        userId,
-        enabled: updates.enabled ?? true,
-        general: updates.general ?? true,
-        account: updates.account ?? true,
-        alerts: updates.alerts ?? true,
-        academic: updates.academic ?? true,
-        admin: updates.admin ?? true,
-        maintenance: updates.maintenance ?? true,
-      },
-      update: {
-        ...updates,
-      },
-    });
+    // Synchronize both NotificationPreference and User.notificationsEnabled models
+    const [updated] = await Promise.all([
+      prisma.notificationPreference.upsert({
+        where: { userId },
+        create: {
+          userId,
+          enabled: updates.enabled ?? true,
+          general: updates.general ?? true,
+          account: updates.account ?? true,
+          alerts: updates.alerts ?? true,
+          academic: updates.academic ?? true,
+          admin: updates.admin ?? true,
+          maintenance: updates.maintenance ?? true,
+        },
+        update: {
+          ...updates,
+        },
+      }),
+      updates.enabled !== undefined
+        ? prisma.user.update({
+            where: { id: userId },
+            data: { notificationsEnabled: updates.enabled },
+          })
+        : Promise.resolve(null),
+      updates.enabled === false
+        ? prisma.pushSubscription.updateMany({
+            where: { userId },
+            data: { isActive: false },
+          })
+        : Promise.resolve(null),
+    ]);
 
     revalidatePath("/dashboard");
+    revalidatePath("/settings");
     return { success: true, preferences: updated };
   } catch (error: unknown) {
     console.error("[Preferences] Error updating:", error);

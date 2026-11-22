@@ -5,8 +5,10 @@
  * Security: Strict bypass for all /api/, NextAuth, and dynamic private data.
  */
 
-const CACHE_NAME = "srt-pwa-v17-live";
+const CACHE_NAME = "srt-pwa-v18-live";
 const PRECACHE_ASSETS = [
+  "/",
+  "/login",
   "/offline.html",
   "/manifest.webmanifest",
   "/manifest.json",
@@ -216,27 +218,48 @@ self.addEventListener("fetch", (event) => {
     return; // Pass through to network directly
   }
 
-  // Handle HTML Page Navigations: Resilient Network-First with Safe Fallback
+  // Handle HTML Page Navigations: Fast Mobile Network-First with Instant Cache Fallback
+  // Caches successful page visits so phone launches under 200ms without splash hangs!
   // NEVER reject and NEVER return network-error response so Chrome never triggers ERR_FAILED!
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
-        .then((networkResponse) => {
-          // Live server response succeeded - return directly to the browser
+      (async () => {
+        try {
+          // Fast mobile network timeout: 1500ms
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+          const networkResponse = await fetch(request, { signal: controller.signal });
+          clearTimeout(timeoutId);
+
+          if (networkResponse && networkResponse.status === 200) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(request, networkResponse.clone()).catch(() => {});
+            return networkResponse;
+          }
           return networkResponse;
-        })
-        .catch(async (fetchError) => {
-          console.warn("[SW] Navigation network fetch failed, using fallback:", fetchError);
-          // Network failed (offline or network error) - fallback to cached offline shell
+        } catch (fetchError) {
+          // Mobile network timed out (>1.5s) or device is offline: serve instantly from cache!
           try {
             const cache = await caches.open(CACHE_NAME);
+            // 1. Try exact matching cached page
+            const cachedPage = await cache.match(request);
+            if (cachedPage) {
+              return cachedPage;
+            }
+            // 2. Fallback to cached root or login shell
+            const cachedRoot = (await cache.match("/")) || (await cache.match("/login"));
+            if (cachedRoot) {
+              return cachedRoot;
+            }
+            // 3. Fallback to offline shell
             const cachedOffline = await cache.match("/offline.html");
             if (cachedOffline) {
               return cachedOffline;
             }
           } catch (cacheErr) {}
 
-          // Resilient 200 HTML response: NEVER reject (which causes ERR_FAILED in Chrome)
+          // 4. Guaranteed 200 HTML response: NEVER reject (which causes ERR_FAILED in Chrome)
           return new Response(
             `<!DOCTYPE html>
 <html lang="en">
@@ -265,7 +288,8 @@ self.addEventListener("fetch", (event) => {
               headers: { "Content-Type": "text/html; charset=utf-8" },
             }
           );
-        })
+        }
+      })()
     );
     return;
   }

@@ -12,6 +12,7 @@ import UnifiedInstallPrompt from "@/frontend/components/pwa/UnifiedInstallPrompt
 import IosInstallPrompt from "@/frontend/components/IosInstallPrompt";
 import SilentSessionRefresher from "@/frontend/components/auth/SilentSessionRefresher";
 import OfflineBanner from "@/frontend/components/OfflineBanner";
+import GlobalAppMount from "@/frontend/components/GlobalAppMount";
 
 import Script from "next/script";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -272,6 +273,7 @@ export default async function RootLayout({
           </ToastProvider>
         </ThemeProvider>
         <SpeedInsights />
+        <GlobalAppMount />
         <OfflineBanner />
         <PwaRegistration />
         <PwaWelcomeNotificationPrompt />

@@ -30,6 +30,7 @@ import {
   saveSchoolDefaultsAction,
 } from "@/backend/api/actions/settings/userSettingsActions";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
+import PushNotificationManager from "@/frontend/components/notifications/PushNotificationManager";
 
 
 export interface SettingsUser {
@@ -873,6 +874,11 @@ export const SettingsClient = memo(function SettingsClient({
               </button>
             </div>
           </form>
+
+          {/* OS Push Notifications & Category Management */}
+          <div style={{ marginTop: "2rem" }}>
+            <PushNotificationManager />
+          </div>
         </div>
       )}
 

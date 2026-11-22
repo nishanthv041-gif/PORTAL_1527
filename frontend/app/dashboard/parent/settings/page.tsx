@@ -3,6 +3,7 @@ import { getAuthOptions } from "@/backend/auth/authOptions";
 import { prisma } from "@/backend/db/prisma";
 import styles from "../../dashboard.module.css";
 import SettingsForm from "../../teacher/settings/SettingsForm";
+import PushNotificationManager from "@/frontend/components/notifications/PushNotificationManager";
 
 export default async function ParentSettingsPage() {
   const session = await getServerSession(getAuthOptions());
@@ -19,7 +20,7 @@ export default async function ParentSettingsPage() {
 
   return (
     <div className={styles.dashboard}>
-      <h1 className={styles.title}>Settings</h1>
+      <h1 className={styles.title}>Parent Settings</h1>
       
       <div className={styles.chartCard}>
         <h3 className={styles.chartHeader}>Profile Information</h3>
@@ -30,6 +31,10 @@ export default async function ParentSettingsPage() {
           phone={user.parent?.phone || ""} 
           qualification="" // Parent model doesn't have qualification in our basic setup
         />
+      </div>
+
+      <div className={styles.chartCard} style={{ marginTop: "1.5rem" }}>
+        <PushNotificationManager />
       </div>
     </div>
   );

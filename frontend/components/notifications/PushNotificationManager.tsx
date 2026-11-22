@@ -163,12 +163,88 @@ export default function PushNotificationManager() {
     }
   };
 
-  // Toggle category preference
+  // Toggle category preference or Master ON/OFF with true unsubscribe & rollback
   const handleTogglePreference = async (key: keyof UserNotificationPreferences) => {
     const updatedValue = !preferences[key];
+
+    // Master Switch Special Handling
+    if (key === "enabled") {
+      if (!updatedValue) {
+        // User is turning Master OFF: True client & server unsubscribe
+        const prevPrefs = { ...preferences };
+        setPreferences({ ...preferences, enabled: false });
+        setLoading(true);
+        try {
+          if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+            const reg = await navigator.serviceWorker.ready;
+            const sub = await reg.pushManager.getSubscription();
+            if (sub) {
+              const endpoint = sub.endpoint;
+              await sub.unsubscribe().catch(() => {});
+              await Promise.allSettled([
+                fetch("/api/push/unsubscribe", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ endpoint }),
+                }),
+                fetch("/api/notifications/push/unsubscribe", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ endpoint }),
+                }),
+              ]);
+            }
+          }
+          setIsSubscribed(false);
+          await updateUserNotificationPreferencesAction({ enabled: false });
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("notification-preference-changed", {
+                detail: { enabled: false },
+              })
+            );
+          }
+          await loadData();
+        } catch (err) {
+          console.error("[Push] Error turning off:", err);
+          setPreferences(prevPrefs);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      } else {
+        // User is turning Master ON: Check browser permission first
+        if (typeof window !== "undefined" && "Notification" in window) {
+          if (Notification.permission === "denied") {
+            alert(
+              "Notifications are blocked by your browser settings. Please click the site settings/lock icon in your browser address bar and set Notifications to 'Allow'."
+            );
+            return;
+          }
+        }
+        setPreferences({ ...preferences, enabled: true });
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("notification-preference-changed", {
+              detail: { enabled: true },
+            })
+          );
+        }
+        await updateUserNotificationPreferencesAction({ enabled: true });
+        await handleEnablePush();
+        return;
+      }
+    }
+
+    // Category switch
     const newPrefs = { ...preferences, [key]: updatedValue };
     setPreferences(newPrefs);
-    await updateUserNotificationPreferencesAction({ [key]: updatedValue });
+    try {
+      await updateUserNotificationPreferencesAction({ [key]: updatedValue });
+    } catch (err) {
+      console.error("[Preferences] Error updating category:", err);
+      setPreferences(preferences); // Rollback on failure
+    }
   };
 
   // Remove specific registered device
@@ -400,6 +476,8 @@ export default function PushNotificationManager() {
             <label className={styles.switch}>
               <input
                 type="checkbox"
+                role="switch"
+                aria-checked={preferences.enabled}
                 checked={preferences.enabled}
                 onChange={() => handleTogglePreference("enabled")}
               />
@@ -416,6 +494,8 @@ export default function PushNotificationManager() {
             <label className={styles.switch}>
               <input
                 type="checkbox"
+                role="switch"
+                aria-checked={preferences.general}
                 disabled={!preferences.enabled}
                 checked={preferences.general}
                 onChange={() => handleTogglePreference("general")}
@@ -433,6 +513,8 @@ export default function PushNotificationManager() {
             <label className={styles.switch}>
               <input
                 type="checkbox"
+                role="switch"
+                aria-checked={preferences.account}
                 disabled={!preferences.enabled}
                 checked={preferences.account}
                 onChange={() => handleTogglePreference("account")}
@@ -450,6 +532,8 @@ export default function PushNotificationManager() {
             <label className={styles.switch}>
               <input
                 type="checkbox"
+                role="switch"
+                aria-checked={preferences.alerts}
                 disabled={!preferences.enabled}
                 checked={preferences.alerts}
                 onChange={() => handleTogglePreference("alerts")}
@@ -467,6 +551,8 @@ export default function PushNotificationManager() {
             <label className={styles.switch}>
               <input
                 type="checkbox"
+                role="switch"
+                aria-checked={preferences.academic}
                 disabled={!preferences.enabled}
                 checked={preferences.academic}
                 onChange={() => handleTogglePreference("academic")}
@@ -484,6 +570,8 @@ export default function PushNotificationManager() {
             <label className={styles.switch}>
               <input
                 type="checkbox"
+                role="switch"
+                aria-checked={preferences.admin}
                 disabled={!preferences.enabled}
                 checked={preferences.admin}
                 onChange={() => handleTogglePreference("admin")}
@@ -501,6 +589,8 @@ export default function PushNotificationManager() {
             <label className={styles.switch}>
               <input
                 type="checkbox"
+                role="switch"
+                aria-checked={preferences.maintenance}
                 disabled={!preferences.enabled}
                 checked={preferences.maintenance}
                 onChange={() => handleTogglePreference("maintenance")}

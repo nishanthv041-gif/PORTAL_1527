@@ -66,6 +66,38 @@ export interface SendNotificationResult {
   skippedDedupeCount: number;
 }
 
+function mapTypeToPreferenceCategory(
+  type: string,
+  category: string
+): "general" | "account" | "alerts" | "academic" | "admin" | "maintenance" {
+  const t = (type || "").toUpperCase();
+  const c = (category || "").toUpperCase();
+
+  if (t === "PASSWORD" || t === "SECURITY" || c === "ACCOUNT") return "account";
+  if (
+    t === "BUS" ||
+    t === "URGENT" ||
+    c === "ALERTS" ||
+    c === "EMERGENCY" ||
+    t === "DISCIPLINE"
+  ) {
+    return "alerts";
+  }
+  if (
+    t === "REPORT_CARD" ||
+    t === "MARKS" ||
+    t === "ASSIGNMENT" ||
+    t === "ATTENDANCE" ||
+    t === "HOMEWORK" ||
+    c === "ACADEMIC"
+  ) {
+    return "academic";
+  }
+  if (t === "ADMIN" || c === "ADMIN" || t === "BATCH") return "admin";
+  if (t === "MAINTENANCE" || c === "MAINTENANCE") return "maintenance";
+  return "general";
+}
+
 export class NotificationService {
   /**
    * Primary entry point for sending notifications across the entire portal.
@@ -210,10 +242,51 @@ export class NotificationService {
     let pushFailed = 0;
 
     try {
-      // Fetch active web push subscriptions for eligible users
+      // Filter out users who turned OFF notifications or disabled this category
+      const [usersMeta, preferences] = await Promise.all([
+        prisma.user.findMany({
+          where: { id: { in: eligibleUserIds } },
+          select: { id: true, notificationsEnabled: true },
+        }),
+        prisma.notificationPreference.findMany({
+          where: { userId: { in: eligibleUserIds } },
+        }),
+      ]);
+
+      const userEnabledMap = new Map(usersMeta.map((u) => [u.id, u.notificationsEnabled ?? true]));
+      const prefMap = new Map(preferences.map((p) => [p.userId, p]));
+      const prefCategory = mapTypeToPreferenceCategory(normalizedType, normalizedCategory);
+
+      const pushAllowedUserIds = eligibleUserIds.filter((uid) => {
+        // 1. Check user model master switch
+        if (userEnabledMap.has(uid) && userEnabledMap.get(uid) === false) {
+          return false;
+        }
+        // 2. Check notification preference model
+        const userPref = prefMap.get(uid);
+        if (userPref) {
+          if (!userPref.enabled) return false;
+          if (userPref[prefCategory] === false) return false;
+        }
+        return true;
+      });
+
+      if (pushAllowedUserIds.length === 0) {
+        return {
+          success: true,
+          notificationId: firstNotificationId,
+          recipientsCount: uniqueUserIds.length,
+          inAppCount,
+          pushSent: 0,
+          pushFailed: 0,
+          skippedDedupeCount,
+        };
+      }
+
+      // Fetch active web push subscriptions for allowed users
       const subscriptions = await prisma.pushSubscription.findMany({
         where: {
-          userId: { in: eligibleUserIds },
+          userId: { in: pushAllowedUserIds },
           isActive: true,
         },
         select: {

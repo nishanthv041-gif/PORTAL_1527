@@ -181,15 +181,40 @@ export async function updateUserPreferences(input: UpdatePreferencesInput) {
 
     const themeToSave = input.theme === "system" ? "light" : input.theme;
 
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: {
-        theme: themeToSave,
-        notificationsEnabled: input.notificationsEnabled,
-      },
-    });
+    await Promise.all([
+      prisma.user.update({
+        where: { id: session.user.id },
+        data: {
+          theme: themeToSave,
+          notificationsEnabled: input.notificationsEnabled,
+        },
+      }),
+      prisma.notificationPreference.upsert({
+        where: { userId: session.user.id },
+        create: {
+          userId: session.user.id,
+          enabled: input.notificationsEnabled,
+          general: true,
+          account: true,
+          alerts: true,
+          academic: true,
+          admin: true,
+          maintenance: true,
+        },
+        update: {
+          enabled: input.notificationsEnabled,
+        },
+      }),
+      !input.notificationsEnabled
+        ? prisma.pushSubscription.updateMany({
+            where: { userId: session.user.id },
+            data: { isActive: false },
+          })
+        : Promise.resolve(null),
+    ]);
 
     revalidatePath("/settings");
+    revalidatePath("/dashboard");
     return { success: true, message: "Preferences saved successfully." };
   } catch (err: unknown) {
     console.error("updateUserPreferences error:", err);
