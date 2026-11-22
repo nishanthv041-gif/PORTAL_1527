@@ -92,15 +92,7 @@ export default function ParentScreenshotProtection() {
       triggerSecurityNotice();
     };
 
-    // 6. Focus / Blur Privacy Shield (Activates when screen capture overlays or hardware buttons are pressed)
-    const handleBlur = () => {
-      setIsWindowBlurred(true);
-    };
-
-    const handleFocus = () => {
-      setIsWindowBlurred(false);
-    };
-
+    // 6. Focus / Visibility Handling (Conceals sensitive data when switching apps/screenshotting without UI lag)
     const handleVisibilityChange = () => {
       if (document.hidden) {
         setIsWindowBlurred(true);
@@ -112,8 +104,6 @@ export default function ParentScreenshotProtection() {
     window.addEventListener("touchstart", handleTouchStart, { passive: true });
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("contextmenu", handleContextMenu, true);
-    window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
@@ -133,8 +123,6 @@ export default function ParentScreenshotProtection() {
       window.removeEventListener("touchstart", handleTouchStart);
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("contextmenu", handleContextMenu, true);
-      window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [triggerSecurityNotice]);

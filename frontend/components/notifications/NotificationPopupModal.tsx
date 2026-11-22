@@ -280,6 +280,7 @@ export default function NotificationPopupModal({
     // When closed, ensure all seen notifications are marked as seen and stored in database
     markShownNotificationsAsSeen(notifications);
     setIsOpen(false);
+    window.dispatchEvent(new CustomEvent("notification-count-changed", { detail: { unreadCount: 0 } }));
   };
 
   // Lock background body scroll when modal is open
@@ -371,9 +372,32 @@ export default function NotificationPopupModal({
 
     // Dispatch event to hide the red dot on the bell
     window.dispatchEvent(new CustomEvent("notifications-cleared"));
+    window.dispatchEvent(new CustomEvent("notification-count-changed", { detail: { unreadCount: 0 } }));
 
     // Refresh the page so notification counts update
     router.refresh();
+  };
+
+  const handleDismissCurrent = async () => {
+    if (!current) return;
+    const dismissedId = current.id;
+    seenIdRef.current.add(dismissedId);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(SEEN_POPUP_IDS_KEY, JSON.stringify(Array.from(seenIdRef.current)));
+      } catch {}
+    }
+    markNotificationsAsSeenInPopupAction([dismissedId]).catch(() => {});
+
+    // Optimistically update popup and decrement badge
+    const remaining = notifications.filter((n) => n.id !== dismissedId);
+    setNotifications(remaining);
+    window.dispatchEvent(new CustomEvent("notification-count-changed", { detail: { delta: -1 } }));
+    if (remaining.length === 0) {
+      setIsOpen(false);
+    } else {
+      setCurrentIndex((prev) => Math.min(prev, remaining.length - 1));
+    }
   };
 
   // Icon for category
@@ -554,6 +578,90 @@ export default function NotificationPopupModal({
             >
               <span>Close</span>
             </button>
+          </div>
+
+          {/* Quick Management Toolbar: View History, Dismiss, & Clear All Options */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginTop: "1.1rem",
+            paddingTop: "0.75rem",
+            borderTop: "1px solid var(--border-color, rgba(226, 232, 240, 0.6))",
+            gap: "0.5rem",
+            flexWrap: "wrap",
+            width: "100%",
+          }}>
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                router.push("/dashboard/parent/notifications");
+              }}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "var(--primary, #2563eb)",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                padding: "0.3rem 0.5rem",
+                borderRadius: "6px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+              }}
+              title="Open full notifications history page"
+            >
+              <span>📜 History & Clear</span>
+            </button>
+
+            <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+              <button
+                type="button"
+                onClick={handleDismissCurrent}
+                style={{
+                  background: "rgba(100, 116, 139, 0.1)",
+                  border: "1px solid rgba(100, 116, 139, 0.2)",
+                  color: "var(--text-secondary, #64748b)",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  padding: "0.35rem 0.65rem",
+                  borderRadius: "8px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.3rem",
+                  transition: "all 0.15s ease",
+                }}
+                title="Dismiss this notification"
+              >
+                <span>Dismiss</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClearAll}
+                disabled={isClearing}
+                style={{
+                  background: "rgba(239, 68, 68, 0.08)",
+                  border: "1px solid rgba(239, 68, 68, 0.25)",
+                  color: "#ef4444",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  cursor: isClearing ? "wait" : "pointer",
+                  padding: "0.35rem 0.65rem",
+                  borderRadius: "8px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.3rem",
+                  transition: "all 0.15s ease",
+                }}
+                title="Clear all notifications permanently"
+              >
+                <span>{isClearing ? "Clearing..." : "Clear all"}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

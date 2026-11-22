@@ -304,6 +304,7 @@ export default function NotificationsCenterClient({
 
     try {
       await deleteUnifiedNotificationAction(notifId);
+      window.dispatchEvent(new CustomEvent("notification-count-changed", { detail: { delta: -1 } }));
       window.dispatchEvent(new CustomEvent("notifications-cleared"));
     } catch {
       // Rollback on network failure
@@ -330,6 +331,7 @@ export default function NotificationsCenterClient({
         } catch {}
       }
       window.dispatchEvent(new CustomEvent("notifications-cleared"));
+      window.dispatchEvent(new CustomEvent("notification-count-changed", { detail: { unreadCount: 0 } }));
       startTransition(() => {
         router.refresh();
       });

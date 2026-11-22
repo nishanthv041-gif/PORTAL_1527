@@ -173,7 +173,12 @@ export default function Topbar({
       lastUnreadFetchTime = now;
       inFlightUnreadPromise = (async () => {
         try {
-          const res = await fetch("/api/notifications/unread-count", {
+          const clearedTime = typeof window !== "undefined" ? localStorage.getItem("srt_portal_notif_cleared_time") : null;
+          const url = clearedTime
+            ? `/api/notifications/unread-count?clearedTime=${encodeURIComponent(clearedTime)}`
+            : "/api/notifications/unread-count";
+
+          const res = await fetch(url, {
             cache: "no-store",
             signal,
           });
@@ -240,6 +245,26 @@ export default function Topbar({
       clearAppBadgeCount().catch(() => {});
     };
 
+    // Listen for incremental/direct count change events
+    const handleCountChanged = (e: Event) => {
+      const customEvent = e as CustomEvent<{ unreadCount?: number; delta?: number }>;
+      if (typeof customEvent.detail?.unreadCount === "number") {
+        const c = Math.max(0, customEvent.detail.unreadCount);
+        setUnreadCount(c);
+        setShowRedDot(c > 0);
+        if (c === 0) clearAppBadgeCount().catch(() => {});
+        else setAppBadgeCount(c).catch(() => {});
+      } else if (typeof customEvent.detail?.delta === "number") {
+        setUnreadCount((prev) => {
+          const next = Math.max(0, prev + customEvent.detail.delta!);
+          setShowRedDot(next > 0);
+          if (next === 0) clearAppBadgeCount().catch(() => {});
+          else setAppBadgeCount(next).catch(() => {});
+          return next;
+        });
+      }
+    };
+
     // Listen for ServiceWorker badge changes (when push arrives in background)
     const handleSwMessage = (e: MessageEvent) => {
       if (e.data && e.data.type === "APP_BADGE_CHANGED") {
@@ -259,12 +284,14 @@ export default function Topbar({
     }
 
     window.addEventListener("notifications-cleared", handleCleared);
+    window.addEventListener("notification-count-changed", handleCountChanged);
     return () => {
       abortController.abort();
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleWindowFocus);
       window.removeEventListener("notifications-cleared", handleCleared);
+      window.removeEventListener("notification-count-changed", handleCountChanged);
       if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
         navigator.serviceWorker.removeEventListener("message", handleSwMessage);
       }

@@ -28,12 +28,16 @@ export async function GET(req: NextRequest) {
     }
 
     const userId = token.id as string;
+    const clearedTimeParam = req.nextUrl.searchParams.get("clearedTime");
+    const clearedFilter = clearedTimeParam && !isNaN(new Date(clearedTimeParam).getTime())
+      ? { createdAt: { gt: new Date(clearedTimeParam) } }
+      : {};
 
     const [counts, unreadMessagesCount] = await Promise.all([
       timer.measure("db-notif-counts", () =>
         prisma.notification.groupBy({
           by: ["category"],
-          where: { userId, isRead: false },
+          where: { userId, isRead: false, ...clearedFilter },
           _count: { _all: true },
         })
       ),
@@ -43,6 +47,7 @@ export async function GET(req: NextRequest) {
             receiverId: userId,
             isRead: false,
             isDeleted: false,
+            ...clearedFilter,
           },
         })
       ),

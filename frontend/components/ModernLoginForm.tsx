@@ -56,6 +56,15 @@ export default function ModernLoginForm({
     if (err === "CredentialsSignin") {
       return "Invalid email, phone number, or password. Please verify your credentials.";
     }
+    if (err === "OAuthSignin" || err === "OAuthCallback" || err === "Configuration") {
+      return "Google Sign-In is not currently enabled for this school deployment. Please log in using your User ID and Password above.";
+    }
+    if (err === "AccessDenied") {
+      return "Access denied. Your Google account is not registered with the school. Please use your credentials.";
+    }
+    if (err.includes("AccessDenied")) {
+      return err;
+    }
     return err;
   };
 
@@ -68,6 +77,15 @@ export default function ModernLoginForm({
   const [showNotifGate, setShowNotifGate] = useState(false);
   const [isRequestingNotif, setIsRequestingNotif] = useState(false);
   const [notifGranted, setNotifGranted] = useState(false);
+
+  // Ensure any error immediately clears loading and morphing states to keep form visible
+  useEffect(() => {
+    if (error) {
+      setIsMorphing(false);
+      setLoading(false);
+      setGoogleLoading(false);
+    }
+  }, [error]);
 
   // Check URL reason parameter and notification setup status on mount
   useEffect(() => {
@@ -231,19 +249,44 @@ export default function ModernLoginForm({
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
-    setIsMorphing(true);
-    try {
-      sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
-      sessionStorage.setItem("srt_portal_fresh_login", "true");
-      sessionStorage.setItem("srt_bento_cascade", "true");
-    } catch {}
+    setError("");
+
     try {
       const target = defaultRole ? `/dashboard/${defaultRole.toLowerCase()}` : "/dashboard";
-      await new Promise((resolve) => setTimeout(resolve, 280));
-      await signIn("google", { callbackUrl: target });
+      const res = await signIn("google", { callbackUrl: target, redirect: false });
+
+      if (res?.error) {
+        setGoogleLoading(false);
+        setIsMorphing(false);
+        if (res.error === "Configuration" || res.error === "OAuthSignin") {
+          setError(
+            "Google Sign-In is not currently enabled on this school deployment. Please enter your User ID or Email and Password above to log in."
+          );
+        } else if (res.error === "AccessDenied") {
+          setError("Your Google account is not registered. Please log in using your User ID and Password.");
+        } else {
+          setError(`Google Sign-In error: ${res.error}. Please use your credentials.`);
+        }
+        return;
+      }
+
+      if (res?.url) {
+        try {
+          sessionStorage.removeItem("srt_portal_popup_notif_dismissed");
+          sessionStorage.setItem("srt_portal_fresh_login", "true");
+          sessionStorage.setItem("srt_bento_cascade", "true");
+        } catch {}
+        // Only trigger morphing when actual valid navigation url exists
+        setIsMorphing(true);
+        window.location.href = res.url;
+      } else {
+        setGoogleLoading(false);
+        setIsMorphing(false);
+      }
     } catch {
       setGoogleLoading(false);
       setIsMorphing(false);
+      setError("Unable to connect to Google Sign-In. Please sign in with your User ID and Password.");
     }
   };
 

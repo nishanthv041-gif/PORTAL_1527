@@ -53,11 +53,15 @@ export default function ParentNotificationsClient({
     setNotifications((prev) => prev.filter((n) => n.id !== id));
     setDeletingId(id);
 
+    // Immediately decrement topbar badge
+    window.dispatchEvent(new CustomEvent("notification-count-changed", { detail: { delta: -1 } }));
+
     try {
       const res = await deleteNotificationAction(id);
       setDeletingId(null);
       if (res?.error) {
         setNotifications(previousList);
+        window.dispatchEvent(new CustomEvent("notification-count-changed", { detail: { delta: 1 } }));
         alert(res.error);
       } else {
         startTransition(() => {
@@ -67,6 +71,7 @@ export default function ParentNotificationsClient({
     } catch (err: any) {
       setDeletingId(null);
       setNotifications(previousList);
+      window.dispatchEvent(new CustomEvent("notification-count-changed", { detail: { delta: 1 } }));
       alert(err?.message || "Failed to delete notification.");
     }
   };
@@ -86,6 +91,10 @@ export default function ParentNotificationsClient({
     // Immediate optimistic clearance
     setNotifications([]);
     setIsClearingAll(true);
+
+    // Immediately clear Topbar badge and app badge count
+    window.dispatchEvent(new CustomEvent("notifications-cleared"));
+    window.dispatchEvent(new CustomEvent("notification-count-changed", { detail: { unreadCount: 0 } }));
 
     try {
       const res = await deleteAllParentNotificationsAction(userId);
