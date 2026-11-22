@@ -11,9 +11,6 @@ import {
   AlertCircle,
   Loader2,
   GraduationCap,
-  Shield,
-  UserCheck,
-  Users,
 } from "lucide-react";
 import styles from "@/frontend/app/login/modern-login.module.css";
 import ThemeToggle from "@/frontend/components/ThemeToggle";
@@ -46,7 +43,6 @@ export default function ModernLoginForm({
   initialReason = null,
 }: ModernLoginFormProps) {
   const router = useRouter();
-  const [selectedRole, setSelectedRole] = useState<string | null>(defaultRole || null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -97,13 +93,6 @@ export default function ModernLoginForm({
     }
   }, []);
 
-  // Sync selectedRole if defaultRole changes
-  useEffect(() => {
-    if (defaultRole) {
-      setSelectedRole(defaultRole);
-    }
-  }, [defaultRole]);
-
   // Carousel State
   const [activeSlide, setActiveSlide] = useState(0);
 
@@ -153,9 +142,8 @@ export default function ModernLoginForm({
         password,
       };
 
-      const roleToExpect = selectedRole || defaultRole;
-      if (roleToExpect) {
-        signInOptions.expectedRole = roleToExpect;
+      if (defaultRole) {
+        signInOptions.expectedRole = defaultRole;
       }
 
       const res = await signIn("credentials", signInOptions);
@@ -174,8 +162,8 @@ export default function ModernLoginForm({
 
         // Direct fast-path routing: eliminates double-redirect delay
         let target = "/dashboard";
-        if (roleToExpect) {
-          target = `/dashboard/${roleToExpect.toLowerCase()}`;
+        if (defaultRole) {
+          target = `/dashboard/${defaultRole.toLowerCase()}`;
         } else {
           try {
             const sessRes = await fetch("/api/auth/session");
@@ -218,8 +206,7 @@ export default function ModernLoginForm({
     setError("");
 
     try {
-      const roleToExpect = selectedRole || defaultRole;
-      const target = roleToExpect ? `/dashboard/${roleToExpect.toLowerCase()}` : "/dashboard";
+      const target = defaultRole ? `/dashboard/${defaultRole.toLowerCase()}` : "/dashboard";
       const res = await signIn("google", { callbackUrl: target, redirect: false });
 
       if (res?.error) {
@@ -260,32 +247,6 @@ export default function ModernLoginForm({
   const portalDisplayName = schoolName.toLowerCase().includes("portal")
     ? schoolName
     : `${schoolName} Portal`;
-
-  const roleLabel = selectedRole
-    ? selectedRole === "ADMIN"
-      ? "Admin Portal"
-      : selectedRole === "TEACHER"
-      ? "Teacher Portal"
-      : "Parent Portal"
-    : portalDisplayName;
-
-  const emailPlaceholder =
-    selectedRole === "ADMIN"
-      ? "Administrator Email or User ID"
-      : selectedRole === "TEACHER"
-      ? "Teacher ID or Registered Email"
-      : selectedRole === "PARENT"
-      ? "Parent Mobile Number or Email"
-      : "User ID, Email or Phone Number";
-
-  const submitButtonLabel =
-    selectedRole === "ADMIN"
-      ? "Log in as Admin"
-      : selectedRole === "TEACHER"
-      ? "Log in as Teacher"
-      : selectedRole === "PARENT"
-      ? "Log in as Parent"
-      : "Log in";
 
   return (
     <div className={styles.pageWrapper}>
@@ -340,52 +301,8 @@ export default function ModernLoginForm({
             <div className={styles.cascadeHeader}>
               <h1 className={styles.headline}>Get started!</h1>
               <p className={styles.subheadline}>
-                Welcome to {roleLabel}. Enter your credentials to access your dashboard.
+                Welcome to {portalDisplayName}. Enter your credentials to access your academic dashboard.
               </p>
-            </div>
-
-            {/* Role Selection Tabs */}
-            <div className={styles.roleTabs} role="tablist" aria-label="Select Portal Role">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={selectedRole === null}
-                onClick={() => setSelectedRole(null)}
-                className={`${styles.roleTab} ${selectedRole === null ? styles.roleTabActive : ""}`}
-              >
-                <GraduationCap size={15} />
-                <span>All Portals</span>
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={selectedRole === "ADMIN"}
-                onClick={() => setSelectedRole("ADMIN")}
-                className={`${styles.roleTab} ${selectedRole === "ADMIN" ? styles.roleTabActive : ""}`}
-              >
-                <Shield size={14} />
-                <span>Admin</span>
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={selectedRole === "TEACHER"}
-                onClick={() => setSelectedRole("TEACHER")}
-                className={`${styles.roleTab} ${selectedRole === "TEACHER" ? styles.roleTabActive : ""}`}
-              >
-                <UserCheck size={14} />
-                <span>Teacher</span>
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={selectedRole === "PARENT"}
-                onClick={() => setSelectedRole("PARENT")}
-                className={`${styles.roleTab} ${selectedRole === "PARENT" ? styles.roleTabActive : ""}`}
-              >
-                <Users size={14} />
-                <span>Parent</span>
-              </button>
             </div>
 
             {/* Error Message Notification */}
@@ -407,7 +324,7 @@ export default function ModernLoginForm({
                     inputMode="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder={emailPlaceholder}
+                    placeholder="User ID, Email or Phone"
                     className={styles.inputField}
                     required
                     autoComplete="username"
@@ -457,7 +374,7 @@ export default function ModernLoginForm({
                       Signing in...
                     </>
                   ) : (
-                    submitButtonLabel
+                    "Log in"
                   )}
                 </button>
 

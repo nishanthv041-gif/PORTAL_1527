@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Capacitor } from "@capacitor/core";
+import SplashScreen from "@/frontend/components/ui/SplashScreen";
 import ModernLoginForm from "@/frontend/components/ModernLoginForm";
 import { getPersistedNativeSession } from "@/frontend/lib/authPersistence";
 
@@ -22,10 +23,12 @@ export default function HomeClient({
   authenticatedRole = null,
 }: HomeClientProps) {
   const router = useRouter();
+  // Home Page Animation: always displays without missing on open and on logout
+  const [showSplash, setShowSplash] = useState(true);
+  const [targetDashboard, setTargetDashboard] = useState<string | null>(null);
 
-  // Instant Launch Engine: On mount, hide native container splash immediately (<50ms) and route authenticated sessions
+  // On native mobile app, immediately hide the native container splash so the rich 3D web animation is visible
   useEffect(() => {
-    // 1. Immediately dismiss native splash container on Android / iOS
     if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
       const winCap = (window as unknown as {
         Capacitor?: {
@@ -48,7 +51,7 @@ export default function HomeClient({
       }
     }
 
-    // 2. If authenticatedRole was passed from server session, navigate smoothly to role dashboard
+    // Determine target dashboard if user already has an active session
     if (authenticatedRole) {
       const role = authenticatedRole.toUpperCase();
       const target =
@@ -61,38 +64,51 @@ export default function HomeClient({
           : role === "STAFF" || role === "NON_TEACHING_STAFF"
           ? "/staff/my-bus"
           : "/dashboard";
-      router.replace(target);
-      return;
+      setTargetDashboard(target);
+    } else {
+      getPersistedNativeSession()
+        .then((session) => {
+          if (session?.role) {
+            const role = session.role.toUpperCase();
+            const target =
+              role === "ADMIN"
+                ? "/dashboard/admin"
+                : role === "TEACHER"
+                ? "/dashboard/teacher"
+                : role === "PARENT"
+                ? "/dashboard/parent"
+                : role === "STAFF" || role === "NON_TEACHING_STAFF"
+                ? "/staff/my-bus"
+                : "/dashboard";
+            setTargetDashboard(target);
+          }
+        })
+        .catch(() => {});
     }
+  }, [authenticatedRole]);
 
-    // 3. Touch getPersistedNativeSession for instant direct dashboard entry if session exists
-    getPersistedNativeSession()
-      .then((session) => {
-        if (session?.role) {
-          const role = session.role.toUpperCase();
-          const target =
-            role === "ADMIN"
-              ? "/dashboard/admin"
-              : role === "TEACHER"
-              ? "/dashboard/teacher"
-              : role === "PARENT"
-              ? "/dashboard/parent"
-              : role === "STAFF" || role === "NON_TEACHING_STAFF"
-              ? "/staff/my-bus"
-              : "/dashboard";
-          router.replace(target);
-        }
-      })
-      .catch(() => {});
-  }, [authenticatedRole, router]);
+  // When splash loading animation completes: go to dashboard if logged in, or reveal login form
+  const handleSplashComplete = () => {
+    setShowSplash(false);
+    if (targetDashboard) {
+      router.replace(targetDashboard);
+    }
+  };
 
-  // Zero-delay direct render: users see the login page fully and immediately across Mobile, PC, iOS, and Mac
   return (
-    <ModernLoginForm
-      schoolName={schoolName}
-      schoolLogo={schoolLogo || "/logo/srt-logo.svg"}
-      initialError={initialError}
-      initialReason={initialReason}
-    />
+    <>
+      {showSplash && (
+        <SplashScreen
+          forceShow={true}
+          onComplete={handleSplashComplete}
+        />
+      )}
+      <ModernLoginForm
+        schoolName={schoolName}
+        schoolLogo={schoolLogo || "/logo/srt-logo.svg"}
+        initialError={initialError}
+        initialReason={initialReason}
+      />
+    </>
   );
 }
