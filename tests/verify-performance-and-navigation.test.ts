@@ -135,8 +135,8 @@ function runPerformanceVerification() {
 
   if (fs.existsSync(homeClientPath)) {
     const homeContent = fs.readFileSync(homeClientPath, "utf8");
-    assert("HomeClient eliminated artificial SplashScreen component", !homeContent.includes("<SplashScreen"));
-    assert("HomeClient has optimistic local session check", homeContent.includes("localRole") && homeContent.includes("router.replace"));
+    assert("HomeClient renders 3D cinematic SplashScreen component", homeContent.includes("<SplashScreen"));
+    assert("HomeClient renders ModernLoginForm for unauthenticated users", homeContent.includes("<ModernLoginForm"));
   }
 
   console.log("\n================================================================================");

@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Capacitor } from "@capacitor/core";
+import SplashScreen from "@/frontend/components/ui/SplashScreen";
 import ModernLoginForm from "@/frontend/components/ModernLoginForm";
 import { getPersistedNativeSession } from "@/frontend/lib/authPersistence";
 
@@ -22,10 +23,10 @@ export default function HomeClient({
   authenticatedRole = null,
 }: HomeClientProps) {
   const router = useRouter();
+  const [showSplash, setShowSplash] = useState(true);
 
-  // Optimistic Local Session Check (Instant Dashboard Routing < 300ms)
+  // On native mobile app, immediately hide the native container splash so the full 3D web animation is visible
   useEffect(() => {
-    // 1. Immediately dismiss native Android/Capacitor container splash
     if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
       const winCap = (window as unknown as {
         Capacitor?: {
@@ -48,51 +49,47 @@ export default function HomeClient({
       }
     }
 
-    // 2. Optimistic local session check
+    // Touch getPersistedNativeSession for mobile state sync
+    getPersistedNativeSession().catch(() => {});
+  }, []);
+
+  const handleSplashComplete = () => {
+    setShowSplash(false);
     try {
-      const localRole =
-        authenticatedRole?.toUpperCase() ||
-        (localStorage.getItem("user-role") || "").toUpperCase() ||
-        (document.cookie.match(/user-role=([^;]+)/) || [])[1]?.toUpperCase() ||
-        "";
-
-      const hasLocalToken =
-        localStorage.getItem("token") ||
-        localStorage.getItem("auth-token") ||
-        document.cookie.includes("next-auth.session-token") ||
-        document.cookie.includes("__Secure-next-auth.session-token");
-
-      if (localRole || hasLocalToken) {
-        const target =
-          localRole === "ADMIN"
-            ? "/dashboard/admin"
-            : localRole === "TEACHER"
-            ? "/dashboard/teacher"
-            : localRole === "PARENT"
-            ? "/dashboard/parent"
-            : localRole === "STAFF" || localRole === "NON_TEACHING_STAFF"
-            ? "/staff/my-bus"
-            : "/dashboard";
-        router.replace(target);
-        return;
-      }
+      sessionStorage.setItem("srt_splash_shown", "true");
     } catch {}
 
-    // Silent background sync
-    getPersistedNativeSession().catch(() => {});
-  }, [authenticatedRole, router]);
+    // If authenticatedRole was passed from server session, navigate smoothly to role dashboard
+    if (authenticatedRole) {
+      const role = authenticatedRole.toUpperCase();
+      const target =
+        role === "ADMIN"
+          ? "/dashboard/admin"
+          : role === "TEACHER"
+          ? "/dashboard/teacher"
+          : role === "PARENT"
+          ? "/dashboard/parent"
+          : role === "STAFF" || role === "NON_TEACHING_STAFF"
+          ? "/staff/my-bus"
+          : "/dashboard";
+      router.replace(target);
+    }
+  };
 
-  if (authenticatedRole) {
-    return null;
-  }
-
-  // Render Login page immediately with zero artificial delay
   return (
-    <ModernLoginForm
-      schoolName={schoolName}
-      schoolLogo={schoolLogo || "/logo/srt-logo.svg"}
-      initialError={initialError}
-      initialReason={initialReason}
-    />
+    <>
+      {showSplash && (
+        <SplashScreen
+          forceShow={true}
+          onComplete={handleSplashComplete}
+        />
+      )}
+      <ModernLoginForm
+        schoolName={schoolName}
+        schoolLogo={schoolLogo || "/logo/srt-logo.svg"}
+        initialError={initialError}
+        initialReason={initialReason}
+      />
+    </>
   );
 }
