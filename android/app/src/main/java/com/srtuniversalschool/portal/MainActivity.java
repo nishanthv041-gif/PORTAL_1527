@@ -16,9 +16,18 @@ public class MainActivity extends BridgeActivity {
         setTheme(R.style.AppTheme_NoActionBar);
         super.onCreate(savedInstanceState);
 
-        // Enforce solid black system bars (status bar and navigation bar)
-        getWindow().setStatusBarColor(Color.BLACK);
-        getWindow().setNavigationBarColor(Color.BLACK);
+        // Adapt status bar & navigation bar to Android dark/light system mode
+        int nightModeFlags = getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+        if (nightModeFlags == android.content.res.Configuration.UI_MODE_NIGHT_YES) {
+            getWindow().setStatusBarColor(Color.parseColor("#0f172a"));
+            getWindow().setNavigationBarColor(Color.parseColor("#0f172a"));
+        } else {
+            getWindow().setStatusBarColor(Color.parseColor("#ffffff"));
+            getWindow().setNavigationBarColor(Color.parseColor("#ffffff"));
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                getWindow().getDecorView().setSystemUiVisibility(android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+            }
+        }
 
         // Ensure third-party cookies and session persistence for NextAuth
         CookieManager cookieManager = CookieManager.getInstance();

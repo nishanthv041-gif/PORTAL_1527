@@ -414,35 +414,51 @@ textarea {
 }
 
 /* ============================================================
-   UNIVERSAL MOBILE TAB & SYSTEM BAR COLOR ENFORCEMENT
-   Ensures browser tabs, address bars, mobile top headers,
-   and mobile bottom tab bars are solid full black (#000000)
-   on all phones and devices.
+   UNIVERSAL MOBILE TAB & SYSTEM BAR COLOR HARMONY
+   Connects inside app top bars (toper) and bottom bars
+   to Light (Bright), Dark, and System colour modes.
    ============================================================ */
-:root {
-  --app-tab-black: #000000;
+
+/* Light / Bright Theme: Crisp clean light surfaces */
+[data-theme="light"] header,
+[data-theme="light"] header[class*="topbar"],
+[data-theme="light"] div[class*="topbar"],
+[data-theme="light"] .topbar,
+[data-theme="light"] .mobile-header {
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
 }
 
-@media (max-width: 768px) {
-  /* Mobile topbars and headers */
-  header,
-  header[class*="topbar"],
-  div[class*="topbar"],
-  .topbar,
-  .mobile-header {
-    background-color: #000000 !important;
-    background: #000000 !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
-    color: #ffffff !important;
-  }
+[data-theme="light"] nav[class*="bottomNav"],
+[data-theme="light"] div[class*="bottomNav"],
+[data-theme="light"] .mobile-bottom-tabs,
+[data-theme="light"] .bottom-nav-bar {
+  background-color: rgba(255, 255, 255, 0.98) !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-top: 1px solid #e2e8f0 !important;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08) !important;
+}
 
-  /* Mobile bottom navigation tab bars */
-  nav[class*="bottomNav"],
-  div[class*="bottomNav"],
-  .mobile-bottom-tabs,
-  .bottom-nav-bar {
-    background-color: #000000 !important;
-    background: #000000 !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
-  }
+/* Dark Theme: Rich deep dark surfaces */
+[data-theme="dark"] header,
+[data-theme="dark"] header[class*="topbar"],
+[data-theme="dark"] div[class*="topbar"],
+[data-theme="dark"] .topbar,
+[data-theme="dark"] .mobile-header {
+  background-color: #0f172a !important;
+  background: #0f172a !important;
+  border-bottom: 1px solid #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] nav[class*="bottomNav"],
+[data-theme="dark"] div[class*="bottomNav"],
+[data-theme="dark"] .mobile-bottom-tabs,
+[data-theme="dark"] .bottom-nav-bar {
+  background-color: rgba(15, 23, 42, 0.98) !important;
+  background: rgba(15, 23, 42, 0.98) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 -4px 25px rgba(0, 0, 0, 0.45) !important;
 }

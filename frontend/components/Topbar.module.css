@@ -103,15 +103,14 @@
 
 @media (max-width: 768px) {
   .topbar {
-    background: #000000 !important;
-    background-color: #000000 !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
-    color: #ffffff !important;
+    background-color: var(--card) !important;
+    border-bottom: 1px solid var(--border) !important;
+    color: var(--foreground) !important;
   }
   .backBtn {
-    background: #111111 !important;
-    border-color: rgba(255, 255, 255, 0.2) !important;
-    color: #ffffff !important;
+    background: var(--card-bg) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-secondary) !important;
   }
 }
 

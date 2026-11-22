@@ -32,6 +32,19 @@ function applyTheme(theme: Theme) {
   } catch {
     // Private-browsing or quota exceeded — ignore
   }
+
+  // Dynamically update browser tab / system theme-color meta tags to match theme
+  try {
+    const tabColor = resolvedTheme === "dark" ? "#0f172a" : "#ffffff";
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute("content", tabColor);
+    }
+    const metaMsColor = document.querySelector('meta[name="msapplication-navbutton-color"]');
+    if (metaMsColor) {
+      metaMsColor.setAttribute("content", tabColor);
+    }
+  } catch {}
 }
 
 interface ThemeProviderProps {
