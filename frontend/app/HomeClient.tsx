@@ -23,58 +23,35 @@ export default function HomeClient({
   authenticatedRole = null,
 }: HomeClientProps) {
   const router = useRouter();
-  // Check if splash has already been shown in this session or on mobile
-  const [showSplash, setShowSplash] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      if (Capacitor.isNativePlatform()) return false;
-      return sessionStorage.getItem("srt_splash_shown") !== "true";
-    } catch {
-      return false;
-    }
-  });
+  const [showSplash, setShowSplash] = useState(true);
 
-  // On native mobile app or when authenticated, immediately hide native splash and skip delay
+  // On native mobile app, immediately hide the native container splash so the full 3D web animation is visible
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      if (Capacitor.isNativePlatform()) {
-        setShowSplash(false);
-        const winCap = (window as unknown as {
-          Capacitor?: {
-            Plugins?: {
-              SplashScreen?: {
-                hide: (opts?: { fadeOutDuration?: number }) => Promise<void>;
-              };
+    if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
+      const winCap = (window as unknown as {
+        Capacitor?: {
+          Plugins?: {
+            SplashScreen?: {
+              hide: (opts?: { fadeOutDuration?: number }) => Promise<void>;
             };
           };
-        })?.Capacitor;
+        };
+      })?.Capacitor;
 
-        if (winCap?.Plugins?.SplashScreen?.hide) {
-          winCap.Plugins.SplashScreen.hide({ fadeOutDuration: 0 }).catch(() => {});
-        } else {
-          import("@capacitor/splash-screen")
-            .then(({ SplashScreen }) => {
-              SplashScreen.hide({ fadeOutDuration: 0 }).catch(() => {});
-            })
-            .catch(() => {});
-        }
-      }
-
-      // If user is authenticated, redirect immediately without waiting
-      if (authenticatedRole) {
-        setShowSplash(false);
-        const role = authenticatedRole.toUpperCase();
-        const target =
-          role === "STAFF" || role === "NON_TEACHING_STAFF"
-            ? "/staff/my-bus"
-            : `/dashboard/${role.toLowerCase()}`;
-        router.replace(target);
+      if (winCap?.Plugins?.SplashScreen?.hide) {
+        winCap.Plugins.SplashScreen.hide({ fadeOutDuration: 0 }).catch(() => {});
+      } else {
+        import("@capacitor/splash-screen")
+          .then(({ SplashScreen }) => {
+            SplashScreen.hide({ fadeOutDuration: 0 }).catch(() => {});
+          })
+          .catch(() => {});
       }
     }
 
     // Touch getPersistedNativeSession for mobile state sync
     getPersistedNativeSession().catch(() => {});
-  }, [authenticatedRole, router]);
+  }, []);
 
   const handleSplashComplete = () => {
     setShowSplash(false);
@@ -97,7 +74,7 @@ export default function HomeClient({
     <>
       {showSplash && (
         <SplashScreen
-          forceShow={false}
+          forceShow={true}
           onComplete={handleSplashComplete}
         />
       )}

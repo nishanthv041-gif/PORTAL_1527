@@ -71,18 +71,18 @@ export default function SplashScreen({
           router.replace(redirectTo, { scroll: false });
         }
       }
-    }, 280);
+    }, 550);
   }, [isExiting, onComplete, redirectTo, router]);
 
   useEffect(() => {
     if (!isVisible) return;
 
-    // Crisp animation cycle: ~2.0 seconds for smooth rotation & reveal without lag
-    let duration = 2000;
+    // Full cinematic animation cycle: ~5.6 seconds for mass 3D rotation, shine sweep, letter-by-letter reveal, divider, tagline, and progress fill
+    let duration = 5600;
     try {
       const isReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (isReduced) {
-        duration = 600; // Accelerated gentle fade for reduced motion
+        duration = 1800; // Gentle transition for reduced motion
       }
     } catch {}
 
