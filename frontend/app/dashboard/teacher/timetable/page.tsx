@@ -122,6 +122,7 @@ export default async function TeacherTimetablePage({
       </div>
 
       <TeacherTimetableClient
+        teacherId={teacher.id}
         classes={classes}
         initialClassId={initialClassId}
         teacherSchedule={teacherSchedule as any}

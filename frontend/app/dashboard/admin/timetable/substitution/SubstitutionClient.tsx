@@ -18,7 +18,9 @@ import {
   Undo2,
   Trash2,
   CheckSquare,
-  Square
+  Square,
+  ArrowLeftRight,
+  Sparkles
 } from "lucide-react";
 import {
   markTeacherAbsenceAction,
@@ -28,8 +30,11 @@ import {
   undoSubstitutionAssignmentAction,
   cancelAbsenceAction,
   getSubstitutionDataForDateAction,
+  getStaffShiftPeriodsWithFreeTeachersAction,
+  saveStaffShiftBatchAction,
   type FreeTeacherItem,
-  type AbsentPeriodSlot
+  type AbsentPeriodSlot,
+  type StaffShiftPeriodSlot
 } from "@/backend/api/actions/dashboard/admin/substitution/substitutionActions";
 import { formatSchoolDate } from "@/backend/lib/timetable/getEffectiveTimetable";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
@@ -92,16 +97,15 @@ export default function SubstitutionClient({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // STEP A: Mark Teacher Absent Modal
-  const [showMarkModal, setShowMarkModal] = useState(false);
-  const [modalTeacherId, setModalTeacherId] = useState("");
-  const [modalDate, setModalDate] = useState(selectedDate);
-  const [modalReason, setModalReason] = useState("Medical Leave");
-  const [modalFullDay, setModalFullDay] = useState(true);
-  const [modalSelectedPeriods, setModalSelectedPeriods] = useState<number[]>([]);
-  const [modalTeacherSearch, setModalTeacherSearch] = useState("");
-  const [modalPeriodsAvailable, setModalPeriodsAvailable] = useState<number[]>([]);
-  const [loadingModalPeriods, setLoadingModalPeriods] = useState(false);
+  // Staff Shift Changing Modal State
+  const [showShiftModal, setShowShiftModal] = useState(false);
+  const [shiftTeacherId, setShiftTeacherId] = useState("");
+  const [shiftDate, setShiftDate] = useState(selectedDate);
+  const [shiftReason, setShiftReason] = useState("Official Duty / Training");
+  const [shiftCustomReason, setShiftCustomReason] = useState("");
+  const [shiftPeriods, setShiftPeriods] = useState<StaffShiftPeriodSlot[]>([]);
+  const [loadingShiftPeriods, setLoadingShiftPeriods] = useState(false);
+  const [periodShiftSelections, setPeriodShiftSelections] = useState<Record<string, string>>({});
 
   // Active absence record for current teacher
   const currentAbsence = useMemo(() => {
@@ -204,49 +208,82 @@ export default function SubstitutionClient({
     setIsFreePeriodChoice(false);
   };
 
-  // When modalTeacherId changes, load their scheduled periods for that day
+  // Load staff assigned classes and their period-free substitute teachers
   useEffect(() => {
-    if (!modalTeacherId || modalFullDay) {
-      setModalPeriodsAvailable([]);
+    if (!shiftTeacherId) {
+      setShiftPeriods([]);
+      setPeriodShiftSelections({});
       return;
     }
-    setLoadingModalPeriods(true);
-    getAbsentTeacherPeriodsAction(modalTeacherId, modalDate).then(res => {
-      if (res.success && res.periods.length > 0) {
-        const pNums = res.periods.map(p => p.period);
-        setModalPeriodsAvailable(pNums);
-        setModalSelectedPeriods(pNums);
-      } else {
-        setModalPeriodsAvailable([]);
-        setModalSelectedPeriods([]);
+    let isCancelled = false;
+    setLoadingShiftPeriods(true);
+    getStaffShiftPeriodsWithFreeTeachersAction({
+      teacherId: shiftTeacherId,
+      dateStr: shiftDate
+    }).then(res => {
+      if (!isCancelled) {
+        if (res.success && res.periods) {
+          setShiftPeriods(res.periods);
+          const initialMap: Record<string, string> = {};
+          res.periods.forEach(p => {
+            if (p.status === "ASSIGNED" && p.substituteTeacherId) {
+              initialMap[p.timetableEntryId] = p.substituteTeacherId;
+            } else if (p.status === "FREE_PERIOD") {
+              initialMap[p.timetableEntryId] = "FREE";
+            }
+          });
+          setPeriodShiftSelections(initialMap);
+        } else {
+          setShiftPeriods([]);
+        }
+        setLoadingShiftPeriods(false);
       }
-      setLoadingModalPeriods(false);
     });
-  }, [modalTeacherId, modalDate, modalFullDay]);
+    return () => { isCancelled = true; };
+  }, [shiftTeacherId, shiftDate]);
 
-  // STEP A: Submit Mark Absent
-  const handleSaveAbsence = async () => {
-    if (!modalTeacherId) {
-      setErrorMessage("Please select a teacher to mark absent.");
+  // Submit Staff Shift
+  const handleSaveStaffShifts = async () => {
+    if (!shiftTeacherId) {
+      setErrorMessage("Please select a staff member to shift.");
       return;
     }
+
+    const finalReason = shiftReason === "Other" && shiftCustomReason.trim()
+      ? shiftCustomReason.trim()
+      : shiftReason;
+
+    // Build shift payload from periodShiftSelections
+    const shiftPayload = Object.entries(periodShiftSelections)
+      .filter(([_, subVal]) => Boolean(subVal))
+      .map(([slotId, subVal]) => ({
+        timetableEntryId: slotId,
+        substituteTeacherId: subVal === "FREE" ? null : subVal,
+        isFreePeriod: subVal === "FREE",
+        note: `Staff Shift: ${finalReason}`
+      }));
+
+    if (shiftPayload.length === 0) {
+      setErrorMessage("Please select at least one substitute staff or Free Period to reassign.");
+      return;
+    }
+
     setErrorMessage(null);
     startTransition(async () => {
-      const res = await markTeacherAbsenceAction({
-        teacherId: modalTeacherId,
-        dateStr: modalDate,
-        fullDay: modalFullDay,
-        periodNumbers: !modalFullDay ? modalSelectedPeriods : undefined,
-        reason: modalReason
+      const res = await saveStaffShiftBatchAction({
+        teacherId: shiftTeacherId,
+        dateStr: shiftDate,
+        reason: finalReason,
+        shifts: shiftPayload
       });
 
       if (!res.success) {
-        setErrorMessage(res.error || "Failed to mark absence.");
+        setErrorMessage(res.error || "Failed to save staff shifts.");
       } else {
-        setShowMarkModal(false);
-        setActiveTeacherId(modalTeacherId);
-        setSelectedDate(modalDate);
-        setToastMessage(`Teacher marked absent. Now select periods and assign substitutes.`);
+        setShowShiftModal(false);
+        setActiveTeacherId(shiftTeacherId);
+        setSelectedDate(shiftDate);
+        setToastMessage(`Staff shifts saved successfully for ${shiftPayload.length} period(s)! Timetables updated across portals.`);
         await refreshData();
       }
     });
@@ -391,17 +428,30 @@ export default function SubstitutionClient({
         <button
           type="button"
           onClick={() => {
-            setModalDate(selectedDate);
-            setModalTeacherId("");
-            setModalReason("Medical Leave");
-            setModalFullDay(true);
+            setShiftDate(selectedDate);
+            setShiftTeacherId(activeTeacherId || "");
+            setShiftReason("Official Duty / Training");
+            setShiftCustomReason("");
             setErrorMessage(null);
-            setShowMarkModal(true);
+            setShowShiftModal(true);
           }}
           disabled={isPending}
-          style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", padding: "0.65rem 1.15rem", borderRadius: "8px", background: "var(--danger)", color: "#fff", border: "none", cursor: "pointer", fontWeight: 700, fontSize: "0.875rem" }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            padding: "0.65rem 1.25rem",
+            borderRadius: "8px",
+            background: "linear-gradient(135deg, #2563eb, #3b82f6)",
+            color: "#fff",
+            border: "none",
+            cursor: "pointer",
+            fontWeight: 700,
+            fontSize: "0.875rem",
+            boxShadow: "0 2px 8px rgba(37, 99, 235, 0.25)"
+          }}
         >
-          <UserX size={16} /> Mark Teacher Absent
+          <ArrowLeftRight size={16} /> Staff Shift Changing
         </button>
       </div>
 
@@ -414,7 +464,7 @@ export default function SubstitutionClient({
           {/* Header & Absent Teacher Selector */}
           <div>
             <label style={{ display: "block", fontSize: "0.8rem", color: "var(--text-secondary)", fontWeight: 600, marginBottom: "0.35rem" }}>
-              Viewing Absent Teacher:
+              Viewing Staff Member / Shifts:
             </label>
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
               <select
@@ -791,155 +841,250 @@ export default function SubstitutionClient({
         </div>
       )}
 
-      {/* STEP A: MARK TEACHER ABSENT DIALOG */}
-      {showMarkModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-          <div style={{ background: "var(--card-bg)", borderRadius: "14px", border: "1px solid var(--border-color)", width: "100%", maxWidth: "500px", maxHeight: "90vh", overflowY: "auto", padding: "1.5rem", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
-              <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <UserX size={20} style={{ color: "var(--danger)" }} /> Mark Teacher Absent
-              </h3>
-              <button onClick={() => setShowMarkModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={18} /></button>
+      {/* STAFF SHIFT CHANGING DIALOG */}
+      {showShiftModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "var(--card-bg)", borderRadius: "16px", border: "1px solid var(--border-color)", width: "100%", maxWidth: "620px", maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.4)", overflow: "hidden" }}>
+
+            {/* Modal Header */}
+            <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <div style={{ padding: "0.45rem", borderRadius: "8px", background: "rgba(99, 102, 241, 0.12)", color: "var(--primary)" }}>
+                  <ArrowLeftRight size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>Staff Shift Changing</h3>
+                  <p style={{ margin: "0.15rem 0 0 0", fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                    Reassign teaching classes to available period-free faculty
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowShiftModal(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}
+              >
+                <X size={18} />
+              </button>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              {/* Teacher Selector with Search */}
+            {/* Modal Body */}
+            <div style={{ padding: "1.25rem 1.5rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
+
+              {/* Staff Selector */}
               <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.35rem" }}>
-                  Absent Teacher *
+                <label style={{ display: "block", fontSize: "0.825rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                  Select Staff Member to Shift *
                 </label>
                 <select
-                  value={modalTeacherId}
-                  onChange={(e) => setModalTeacherId(e.target.value)}
-                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontWeight: 600, fontSize: "0.9rem" }}
+                  value={shiftTeacherId}
+                  onChange={(e) => setShiftTeacherId(e.target.value)}
+                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontWeight: 700, fontSize: "0.9rem" }}
                 >
-                  <option value="">-- Choose Absent Teacher --</option>
+                  <option value="">-- Choose Staff Member --</option>
                   {allTeachers.map(t => (
                     <option key={t.id} value={t.id}>
-                      {t.name} ({t.subjects.join(", ") || "Faculty"})
+                      {t.name} {t.subjects.length > 0 ? `(${t.subjects.join(", ")})` : ""}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Absence Date */}
-              <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.35rem" }}>
-                  Absence Date: <span style={{ color: "var(--primary)" }}>{formatSchoolDate(modalDate)}</span>
-                </label>
-                <input
-                  type="date"
-                  value={modalDate}
-                  onChange={(e) => setModalDate(e.target.value)}
-                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.9rem" }}
-                />
-              </div>
-
-              {/* Reason */}
-              <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.35rem" }}>
-                  Reason for Absence
-                </label>
-                <select
-                  value={modalReason}
-                  onChange={(e) => setModalReason(e.target.value)}
-                  style={{ width: "100%", padding: "0.65rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.9rem" }}
-                >
-                  <option value="Medical Leave">Medical Leave / Sick Leave</option>
-                  <option value="Personal Emergency">Personal Emergency</option>
-                  <option value="Official Duty / Training">Official Duty / Training</option>
-                  <option value="Casual Leave">Casual Leave</option>
-                  <option value="Bereavement">Bereavement Leave</option>
-                </select>
-              </div>
-
-              {/* Full Day Checkbox */}
-              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                <input
-                  type="checkbox"
-                  id="modalFullDayCb"
-                  checked={modalFullDay}
-                  onChange={(e) => setModalFullDay(e.target.checked)}
-                  style={{ width: "16px", height: "16px" }}
-                />
-                <label htmlFor="modalFullDayCb" style={{ fontSize: "0.875rem", fontWeight: 600, cursor: "pointer" }}>
-                  Full day absence (all scheduled periods on this day)
-                </label>
-              </div>
-
-              {/* If Full Day is Unchecked: Show Teacher's Periods as Checkboxes */}
-              {!modalFullDay && (
-                <div style={{ background: "var(--input-bg)", padding: "0.85rem", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, marginBottom: "0.4rem" }}>
-                    Select Affected Periods for this date:
+              {/* Date & Shift Reason Row */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.75rem" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.825rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                    Shift Date:
                   </label>
-                  {loadingModalPeriods ? (
-                    <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Loading scheduled periods...</div>
-                  ) : modalPeriodsAvailable.length === 0 ? (
-                    <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                      {modalTeacherId ? "No classes scheduled for this teacher on this day." : "Select a teacher first."}
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                      {modalPeriodsAvailable.map(p => {
-                        const isChecked = modalSelectedPeriods.includes(p);
-                        return (
-                          <button
-                            key={p}
-                            type="button"
-                            onClick={() => {
-                              setModalSelectedPeriods(prev =>
-                                prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
-                              );
-                            }}
-                            style={{
-                              padding: "0.4rem 0.75rem",
-                              borderRadius: "6px",
-                              border: isChecked ? "1px solid var(--primary)" : "1px solid var(--border-color)",
-                              background: isChecked ? "var(--primary)" : "var(--card-bg)",
-                              color: isChecked ? "var(--primary-fg)" : "inherit",
-                              cursor: "pointer",
-                              fontSize: "0.82rem",
-                              fontWeight: 700
-                            }}
-                          >
-                            Period {p}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <input
+                    type="date"
+                    value={shiftDate}
+                    onChange={(e) => setShiftDate(e.target.value)}
+                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.85rem", fontWeight: 600 }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: "0.825rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                    Staff Shift Reason *
+                  </label>
+                  <select
+                    value={shiftReason}
+                    onChange={(e) => setShiftReason(e.target.value)}
+                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.85rem", fontWeight: 600 }}
+                  >
+                    <option value="Official Duty / Training">Official Duty / Training (OD)</option>
+                    <option value="Medical Leave">Medical Leave / Sick Leave</option>
+                    <option value="Personal Emergency">Personal Emergency</option>
+                    <option value="Exam Invigilation Duty">Exam Invigilation Duty</option>
+                    <option value="Departmental Reassignment">Departmental Reassignment</option>
+                    <option value="Casual Leave">Casual Leave</option>
+                    <option value="Other">Other Reason (Specify below)</option>
+                  </select>
+                </div>
+              </div>
+
+              {shiftReason === "Other" && (
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Enter custom staff shift reason..."
+                    value={shiftCustomReason}
+                    onChange={(e) => setShiftCustomReason(e.target.value)}
+                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.85rem" }}
+                  />
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.6rem", marginTop: "0.5rem" }}>
+              {/* Class-by-Class Shift Section */}
+              <div style={{ marginTop: "0.5rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                  <label style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                    Assigned Classes &amp; Shift Options:
+                  </label>
+                  {shiftPeriods.length > 0 && (
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                      {shiftPeriods.length} scheduled class{shiftPeriods.length === 1 ? "" : "es"}
+                    </span>
+                  )}
+                </div>
+
+                {!shiftTeacherId ? (
+                  <div style={{ padding: "2rem", textAlign: "center", border: "1px dashed var(--border-color)", borderRadius: "10px", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+                    <ArrowLeftRight size={28} style={{ opacity: 0.3, margin: "0 auto 0.5rem" }} />
+                    <p style={{ margin: 0 }}>Select a staff member above to view their scheduled classes for this date.</p>
+                  </div>
+                ) : loadingShiftPeriods ? (
+                  <div style={{ padding: "2.5rem", textAlign: "center", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+                    <Loader2 size={24} className="animate-spin" style={{ margin: "0 auto 0.5rem", color: "var(--primary)" }} />
+                    Loading assigned classes and period-free teachers...
+                  </div>
+                ) : shiftPeriods.length === 0 ? (
+                  <div style={{ padding: "2rem", textAlign: "center", border: "1px dashed var(--border-color)", borderRadius: "10px", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+                    <CheckCircle size={28} style={{ opacity: 0.4, margin: "0 auto 0.5rem", color: "#10b981" }} />
+                    <p style={{ margin: 0, fontWeight: 600, color: "var(--text-primary)" }}>No classes scheduled</p>
+                    <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem" }}>This staff member has no teaching periods on this day of the week.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    {shiftPeriods.map(p => {
+                      const selectedVal = periodShiftSelections[p.timetableEntryId] || "";
+                      const hasFreeTeachers = p.freeTeachers.length > 0;
+
+                      return (
+                        <div
+                          key={p.timetableEntryId}
+                          style={{
+                            background: "var(--input-bg)",
+                            border: `1px solid ${selectedVal ? "var(--primary)" : "var(--border-color)"}`,
+                            borderRadius: "10px",
+                            padding: "0.85rem",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.5rem"
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.4rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <span style={{ fontWeight: 800, fontSize: "0.85rem", background: "var(--card-bg)", padding: "0.2rem 0.5rem", borderRadius: "6px", border: "1px solid var(--border-color)" }}>
+                                Period {p.period}
+                              </span>
+                              <span style={{ fontWeight: 700, fontSize: "0.92rem" }}>
+                                {p.subjectName}
+                              </span>
+                              <span style={{ fontSize: "0.75rem", background: "rgba(99, 102, 241, 0.12)", color: "var(--primary)", padding: "0.15rem 0.5rem", borderRadius: "999px", fontWeight: 700 }}>
+                                {p.className}
+                              </span>
+                            </div>
+
+                            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                              <Clock size={12} /> {p.startTime} - {p.endTime}
+                              {p.classroom && <span>• Rm {p.classroom}</span>}
+                            </div>
+                          </div>
+
+                          {/* Substitute selector - ONLY shows that period's free teachers! */}
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
+                              <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-secondary)" }}>
+                                Shift To Staff (Timing: {p.startTime} - {p.endTime}):
+                              </label>
+                              <span style={{ fontSize: "0.72rem", color: hasFreeTeachers ? "#10b981" : "var(--danger)", fontWeight: 700 }}>
+                                {hasFreeTeachers ? `✓ ${p.freeTeachers.length} Staff Free in Period ${p.period}` : "⚠️ No Staff Free in this Period"}
+                              </span>
+                            </div>
+
+                            <select
+                              value={selectedVal}
+                              onChange={(e) => setPeriodShiftSelections(prev => ({
+                                ...prev,
+                                [p.timetableEntryId]: e.target.value
+                              }))}
+                              style={{
+                                width: "100%",
+                                padding: "0.55rem 0.75rem",
+                                borderRadius: "8px",
+                                border: selectedVal ? "1.5px solid var(--primary)" : "1px solid var(--border-color)",
+                                background: "var(--card-bg)",
+                                color: "inherit",
+                                fontSize: "0.85rem",
+                                fontWeight: 600
+                              }}
+                            >
+                              <option value="">-- Keep Original Staff (No Shift) --</option>
+                              <option value="FREE">-- Mark as Free / Study Period (No Teacher) --</option>
+                              {hasFreeTeachers && (
+                                <optgroup label={`Free Staff in Period ${p.period} (${p.freeTeachers.length} Available)`}>
+                                  {p.freeTeachers.map(ft => (
+                                    <option key={ft.id} value={ft.id}>
+                                      {ft.name} {ft.subjects.length > 0 ? `• [${ft.subjects.join(", ")}]` : ""}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                            </select>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: "1rem 1.5rem", borderTop: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--card-bg)" }}>
+              <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                {Object.values(periodShiftSelections).filter(Boolean).length} period(s) marked for shift
+              </div>
+
+              <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
                   type="button"
-                  onClick={() => setShowMarkModal(false)}
-                  style={{ padding: "0.65rem 1rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "transparent", color: "inherit", cursor: "pointer" }}
+                  onClick={() => setShowShiftModal(false)}
+                  style={{ padding: "0.55rem 1rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "transparent", color: "inherit", cursor: "pointer", fontWeight: 600 }}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={handleSaveAbsence}
-                  disabled={isPending || !modalTeacherId}
+                  onClick={handleSaveStaffShifts}
+                  disabled={isPending || !shiftTeacherId || Object.values(periodShiftSelections).filter(Boolean).length === 0}
                   style={{
-                    padding: "0.65rem 1.25rem",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.45rem",
+                    padding: "0.55rem 1.25rem",
                     borderRadius: "8px",
                     border: "none",
-                    background: "var(--danger)",
+                    background: Object.values(periodShiftSelections).filter(Boolean).length > 0 ? "linear-gradient(135deg, #2563eb, #3b82f6)" : "rgba(107, 114, 128, 0.3)",
                     color: "#fff",
                     fontWeight: 700,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.45rem"
+                    cursor: Object.values(periodShiftSelections).filter(Boolean).length > 0 ? "pointer" : "not-allowed"
                   }}
                 >
-                  {isPending ? <Loader2 size={16} className="animate-spin" /> : <UserX size={16} />}
-                  Mark Absent &amp; Continue
+                  {isPending ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />}
+                  Confirm &amp; Save Staff Shifts
                 </button>
               </div>
             </div>

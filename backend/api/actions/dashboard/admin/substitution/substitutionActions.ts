@@ -818,3 +818,539 @@ export async function getSubstitutionDataForDateAction(dateStr: string) {
     };
   }
 }
+
+export interface StaffShiftPeriodSlot {
+  timetableEntryId: string;
+  period: number;
+  startTime: string;
+  endTime: string;
+  classId: string;
+  className: string;
+  subjectId?: string | null;
+  subjectName: string;
+  classroom?: string | null;
+  status: "NOT_ASSIGNED" | "ASSIGNED" | "FREE_PERIOD";
+  substituteTeacherId?: string | null;
+  substituteTeacherName?: string | null;
+  substitutionId?: string | null;
+  note?: string | null;
+  freeTeachers: Array<{
+    id: string;
+    name: string;
+    subjects: string[];
+  }>;
+}
+
+/**
+ * Returns a staff member's assigned classes on a specific date,
+ * and for EACH period, calculates strictly the teachers who are FREE in that exact period!
+ * Accessible by Admins and Teachers (teachers can inspect their own classes).
+ */
+export async function getStaffShiftPeriodsWithFreeTeachersAction(opts: {
+  teacherId?: string;
+  dateStr: string;
+}): Promise<{
+  success: boolean;
+  teacher?: { id: string; name: string };
+  date: string;
+  formattedDate: string;
+  dayOfWeek: string;
+  periods: StaffShiftPeriodSlot[];
+  error?: string;
+}> {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session) {
+      return {
+        success: false,
+        date: opts.dateStr,
+        formattedDate: opts.dateStr,
+        dayOfWeek: "",
+        periods: [],
+        error: "Unauthorized"
+      };
+    }
+
+    const { dateStr } = opts;
+    const targetDate = normalizeDateToUTC(dateStr);
+    const dayOfWeek = DAYS_OF_WEEK[targetDate.getUTCDay()];
+
+    // Resolve target teacher
+    let targetTeacherId = opts.teacherId;
+    if (!targetTeacherId) {
+      if (session.user.role === "TEACHER") {
+        const t = await prisma.teacher.findUnique({
+          where: { userId: session.user.id },
+          select: { id: true }
+        });
+        targetTeacherId = t?.id;
+      }
+    }
+
+    if (!targetTeacherId) {
+      return {
+        success: false,
+        date: dateStr,
+        formattedDate: formatSchoolDate(targetDate),
+        dayOfWeek,
+        periods: [],
+        error: "Please specify a teacher."
+      };
+    }
+
+    // Verify permission: teachers may only inspect their own slots; admins may inspect anyone
+    if (session.user.role === "TEACHER") {
+      const teacherOwn = await prisma.teacher.findUnique({
+        where: { userId: session.user.id },
+        select: { id: true }
+      });
+      if (!teacherOwn || teacherOwn.id !== targetTeacherId) {
+        return {
+          success: false,
+          date: dateStr,
+          formattedDate: formatSchoolDate(targetDate),
+          dayOfWeek,
+          periods: [],
+          error: "Unauthorized to access other staff's shift schedule."
+        };
+      }
+    }
+
+    const teacher = await prisma.teacher.findUnique({
+      where: { id: targetTeacherId },
+      include: { user: true }
+    });
+
+    if (!teacher) {
+      return {
+        success: false,
+        date: dateStr,
+        formattedDate: formatSchoolDate(targetDate),
+        dayOfWeek,
+        periods: [],
+        error: "Teacher not found."
+      };
+    }
+
+    // 1. Fetch teacher's scheduled timetable slots for this day of week
+    const slots = await prisma.timetable.findMany({
+      where: {
+        dayOfWeek,
+        isBreak: false,
+        OR: [
+          { teacherId: targetTeacherId },
+          { subject: { teacherId: targetTeacherId } }
+        ]
+      },
+      include: {
+        class: { select: { id: true, name: true, section: true } },
+        subject: { select: { id: true, name: true } }
+      },
+      orderBy: [{ period: "asc" }, { startTime: "asc" }]
+    });
+
+    if (slots.length === 0) {
+      return {
+        success: true,
+        teacher: { id: teacher.id, name: teacher.user.name || "Teacher" },
+        date: dateStr,
+        formattedDate: formatSchoolDate(targetDate),
+        dayOfWeek,
+        periods: []
+      };
+    }
+
+    const periodNumbers = Array.from(new Set(slots.map(s => s.period)));
+
+    // 2. Fetch all active teachers
+    const allTeachers = await prisma.teacher.findMany({
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        subjects: { select: { name: true } }
+      },
+      orderBy: { user: { name: "asc" } }
+    });
+
+    // 3. Fetch active absences on this date
+    const absencesToday = await prisma.teacherAbsence.findMany({
+      where: { date: targetDate, status: "ACTIVE" }
+    });
+    const absentTeacherIds = new Set(absencesToday.map(a => a.teacherId));
+    absentTeacherIds.add(targetTeacherId);
+
+    // 4. Fetch regular slots across the school for these periods
+    const regularSlots = await prisma.timetable.findMany({
+      where: {
+        dayOfWeek,
+        isBreak: false,
+        period: { in: periodNumbers }
+      },
+      select: {
+        period: true,
+        teacherId: true,
+        subject: { select: { teacherId: true } }
+      }
+    });
+
+    // 5. Fetch already assigned substitutions on this date for these periods
+    const assignedSubs = await prisma.substitution.findMany({
+      where: {
+        date: targetDate,
+        status: "ASSIGNED",
+        substituteTeacherId: { not: null }
+      },
+      include: {
+        timetableEntry: { select: { period: true } }
+      }
+    });
+
+    // Map: periodNumber -> Set of busy teacherIds
+    const busyByPeriod = new Map<number, Set<string>>();
+    for (const r of regularSlots) {
+      const tId = r.teacherId || r.subject?.teacherId;
+      if (tId) {
+        if (!busyByPeriod.has(r.period)) busyByPeriod.set(r.period, new Set());
+        busyByPeriod.get(r.period)!.add(tId);
+      }
+    }
+    for (const s of assignedSubs) {
+      if (s.substituteTeacherId) {
+        const p = s.timetableEntry.period;
+        if (!busyByPeriod.has(p)) busyByPeriod.set(p, new Set());
+        busyByPeriod.get(p)!.add(s.substituteTeacherId);
+      }
+    }
+
+    // 6. Fetch existing substitutions on these slots for this date
+    const currentSubs = await prisma.substitution.findMany({
+      where: {
+        date: targetDate,
+        timetableEntryId: { in: slots.map(s => s.id) }
+      },
+      include: {
+        substituteTeacher: { include: { user: { select: { name: true } } } }
+      }
+    });
+    const subMap = new Map<string, typeof currentSubs[0]>();
+    currentSubs.forEach(s => subMap.set(s.timetableEntryId, s));
+
+    // 7. Assemble period list with strictly-period-free teachers
+    const periods: StaffShiftPeriodSlot[] = slots.map(slot => {
+      const sub = subMap.get(slot.id);
+      let status: StaffShiftPeriodSlot["status"] = "NOT_ASSIGNED";
+      if (sub) {
+        if (sub.status === "ASSIGNED" && sub.substituteTeacherId) {
+          status = "ASSIGNED";
+        } else if (sub.status === "UNASSIGNED" || (!sub.substituteTeacherId && sub.note?.includes("Free Period"))) {
+          status = "FREE_PERIOD";
+        }
+      }
+
+      const busyInThisPeriod = busyByPeriod.get(slot.period) || new Set<string>();
+
+      // Filter teachers: not absent today, not the current teacher, and not busy in this period
+      const freeTeachersForSlot = allTeachers
+        .filter(t => !absentTeacherIds.has(t.id) && !busyInThisPeriod.has(t.id))
+        .map(t => ({
+          id: t.id,
+          name: t.user.name || "Faculty Member",
+          subjects: t.subjects.map(s => s.name)
+        }));
+
+      return {
+        timetableEntryId: slot.id,
+        period: slot.period,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        classId: slot.classId,
+        className: `${slot.class.name} - ${slot.class.section}`,
+        subjectId: slot.subjectId,
+        subjectName: slot.subject?.name || "Subject",
+        classroom: slot.classroom,
+        status,
+        substituteTeacherId: sub?.substituteTeacherId || null,
+        substituteTeacherName: sub?.substituteTeacher?.user?.name || null,
+        substitutionId: sub?.id || null,
+        note: sub?.note || null,
+        freeTeachers: freeTeachersForSlot
+      };
+    });
+
+    return {
+      success: true,
+      teacher: { id: teacher.id, name: teacher.user.name || "Teacher" },
+      date: dateStr,
+      formattedDate: formatSchoolDate(targetDate),
+      dayOfWeek,
+      periods
+    };
+  } catch (error: any) {
+    console.error("getStaffShiftPeriodsWithFreeTeachersAction error:", error);
+    return {
+      success: false,
+      date: opts.dateStr,
+      formattedDate: opts.dateStr,
+      dayOfWeek: "",
+      periods: [],
+      error: error.message || "Failed to load staff shift periods."
+    };
+  }
+}
+
+/**
+ * Saves staff shift class reassignments.
+ * Allows Admin (for any staff) or Teacher (for their own assigned classes).
+ * Upserts TeacherAbsence record, sets Substitutions, and notifies both staff members and parents.
+ */
+export async function saveStaffShiftBatchAction(data: {
+  teacherId: string;
+  dateStr: string;
+  reason?: string;
+  shifts: Array<{
+    timetableEntryId: string;
+    substituteTeacherId: string | null;
+    isFreePeriod?: boolean;
+    note?: string;
+  }>;
+}): Promise<{ success: boolean; count?: number; error?: string }> {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session) {
+      return { success: false, error: "Unauthorized: Please log in." };
+    }
+
+    const { teacherId, dateStr, reason = "Staff Shift", shifts } = data;
+    if (!teacherId) return { success: false, error: "Please select a staff member." };
+    if (!dateStr) return { success: false, error: "Please specify the date." };
+    if (!shifts || shifts.length === 0) {
+      return { success: false, error: "No classes selected for shift." };
+    }
+
+    const isAdmin = session.user.role === "ADMIN";
+    const isTeacher = session.user.role === "TEACHER";
+
+    if (!isAdmin && !isTeacher) {
+      return { success: false, error: "Unauthorized: Staff or Admin role required." };
+    }
+
+    // If teacher, verify they own this teacher profile
+    if (isTeacher) {
+      const teacherProfile = await prisma.teacher.findUnique({
+        where: { userId: session.user.id },
+        select: { id: true }
+      });
+      if (!teacherProfile || teacherProfile.id !== teacherId) {
+        return { success: false, error: "You can only reassign your own class schedule." };
+      }
+    }
+
+    const targetDate = normalizeDateToUTC(dateStr);
+    const formattedDate = formatSchoolDate(targetDate);
+
+    // Get original teacher details
+    const origTeacher = await prisma.teacher.findUnique({
+      where: { id: teacherId },
+      include: { user: true }
+    });
+    const origTeacherName = origTeacher?.user?.name || "Faculty Member";
+
+    // Track notifications to dispatch
+    const notificationQueue: Array<{ userId: string; title: string; content: string; link: string }> = [];
+
+    // Find all scheduled slots for teacher on this day to know if it's full day
+    const dayOfWeek = DAYS_OF_WEEK[targetDate.getUTCDay()];
+    const totalTeacherSlots = await prisma.timetable.count({
+      where: {
+        dayOfWeek,
+        isBreak: false,
+        OR: [
+          { teacherId },
+          { subject: { teacherId } }
+        ]
+      }
+    });
+
+    const isFullDay = shifts.length >= totalTeacherSlots;
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Create or update TeacherAbsence record
+      let absence = await tx.teacherAbsence.findFirst({
+        where: {
+          teacherId,
+          date: targetDate,
+          status: "ACTIVE"
+        }
+      });
+
+      if (!absence) {
+        absence = await tx.teacherAbsence.create({
+          data: {
+            teacherId,
+            date: targetDate,
+            fullDay: isFullDay,
+            reason: reason || "Staff Shift",
+            source: isAdmin ? "ADMIN_MARKED" : "TEACHER_SHIFT",
+            status: "ACTIVE"
+          }
+        });
+      } else {
+        await tx.teacherAbsence.update({
+          where: { id: absence.id },
+          data: {
+            reason: reason || absence.reason,
+            fullDay: isFullDay || absence.fullDay
+          }
+        });
+      }
+
+      // 2. Process each shifted class slot
+      for (const item of shifts) {
+        const slot = await tx.timetable.findUnique({
+          where: { id: item.timetableEntryId },
+          include: {
+            class: {
+              include: {
+                students: {
+                  select: {
+                    parents: {
+                      select: {
+                        parent: { select: { userId: true } }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            subject: true
+          }
+        });
+
+        if (!slot) continue;
+
+        const isFree = Boolean(item.isFreePeriod) || !item.substituteTeacherId;
+        const subTeacherId = isFree ? null : item.substituteTeacherId;
+        const status = isFree ? "UNASSIGNED" : "ASSIGNED";
+        const note = item.note || (isFree ? `Free Period (Staff Shift: ${reason})` : `Staff Shift: ${reason}`);
+
+        // Upsert substitution
+        const existing = await tx.substitution.findFirst({
+          where: {
+            date: targetDate,
+            timetableEntryId: item.timetableEntryId
+          }
+        });
+
+        if (existing) {
+          await tx.substitution.update({
+            where: { id: existing.id },
+            data: {
+              absentTeacherId: teacherId,
+              substituteTeacherId: subTeacherId,
+              absenceId: absence.id,
+              status,
+              note
+            }
+          });
+        } else {
+          await tx.substitution.create({
+            data: {
+              date: targetDate,
+              timetableEntryId: item.timetableEntryId,
+              absentTeacherId: teacherId,
+              substituteTeacherId: subTeacherId,
+              absenceId: absence.id,
+              status,
+              note
+            }
+          });
+        }
+
+        const className = `${slot.class.name} - ${slot.class.section}`;
+        const subjectName = slot.subject?.name || "Class";
+
+        // Notify Substitute Teacher
+        if (subTeacherId) {
+          const subTeacher = await tx.teacher.findUnique({
+            where: { id: subTeacherId },
+            include: { user: true }
+          });
+
+          if (subTeacher?.user?.id) {
+            notificationQueue.push({
+              userId: subTeacher.user.id,
+              title: "Staff Shift: Class Duty Assigned",
+              content: `You have been assigned Class ${className} - Period ${slot.period} (${subjectName}) on ${formattedDate}. Assigned by: ${origTeacherName}. Reason: ${reason}.`,
+              link: "/dashboard/teacher/timetable"
+            });
+          }
+
+          // If assigned by Admin, notify the original teacher
+          if (isAdmin && origTeacher?.user?.id) {
+            notificationQueue.push({
+              userId: origTeacher.user.id,
+              title: "Staff Shift Updated by Admin",
+              content: `Your Class ${className} - Period ${slot.period} on ${formattedDate} has been shifted to ${subTeacher?.user?.name || "Substitute Teacher"}. Reason: ${reason}.`,
+              link: "/dashboard/teacher/timetable"
+            });
+          }
+
+          // If assigned by Teacher, notify Admin users
+          if (!isAdmin) {
+            const adminUsers = await tx.user.findMany({
+              where: { role: "ADMIN", status: "ACTIVE" },
+              select: { id: true }
+            });
+            for (const admin of adminUsers) {
+              notificationQueue.push({
+                userId: admin.id,
+                title: "Staff Shift Notification",
+                content: `${origTeacherName} has shifted Class ${className} - Period ${slot.period} (${subjectName}) to ${subTeacher?.user?.name || "substitute"} on ${formattedDate}. Reason: ${reason}.`,
+                link: "/dashboard/admin/timetable/substitution"
+              });
+            }
+          }
+
+          // Notify Class Parents
+          for (const st of slot.class.students) {
+            for (const ps of st.parents) {
+              if (ps.parent?.userId) {
+                notificationQueue.push({
+                  userId: ps.parent.userId,
+                  title: "Class Schedule Update",
+                  content: `${subjectName} on ${formattedDate} (Period ${slot.period}) will be covered by ${subTeacher?.user?.name || "Faculty"}.`,
+                  link: "/dashboard/parent/timetable"
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // Log Audit
+      await tx.timetableAudit.create({
+        data: {
+          action: "SUBSTITUTE",
+          userId: session.user.id,
+          details: `Staff shift by ${session.user.name || session.user.role}: ${origTeacherName} reassigned ${shifts.length} classes on ${dateStr}. Reason: ${reason}`
+        }
+      }).catch(err => console.warn("Audit log warning:", err));
+    });
+
+    // Send notifications in parallel background
+    Promise.all(
+      notificationQueue.map(n => sendNotification(n.userId, n.title, n.content, n.link))
+    ).catch(err => console.warn("Error sending staff shift notifications:", err));
+
+    revalidatePath("/dashboard/admin/timetable");
+    revalidatePath("/dashboard/admin/timetable/substitution");
+    revalidatePath("/dashboard/teacher");
+    revalidatePath("/dashboard/teacher/timetable");
+    revalidatePath("/dashboard/parent");
+    revalidatePath("/dashboard/parent/timetable");
+
+    return { success: true, count: shifts.length };
+  } catch (error: any) {
+    console.error("saveStaffShiftBatchAction error:", error);
+    return { success: false, error: error.message || "Failed to save staff shift." };
+  }
+}

@@ -147,9 +147,10 @@ export default function ParentDashboardTimetableCard({
         background: "var(--card-bg, #151f32)",
         border: "1px solid var(--border-color, rgba(255, 255, 255, 0.12))",
         borderRadius: "16px",
-        padding: "1.35rem 1.6rem",
+        padding: "clamp(0.85rem, 3vw, 1.6rem)",
         marginBottom: "1.75rem",
         boxShadow: "0 4px 20px rgba(0, 0, 0, 0.15)",
+        overflow: "hidden"
       }}
     >
       {/* Header: Title, Description, and Link */}
@@ -221,32 +222,36 @@ export default function ParentDashboardTimetableCard({
           paddingBottom: "0.85rem",
           borderBottom: "1px solid var(--border-color, rgba(255, 255, 255, 0.08))",
           marginBottom: "1.25rem",
+          width: "100%"
         }}
       >
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", width: "100%", maxWidth: "420px" }}>
           <button
             type="button"
             onClick={() => setActiveTab("today")}
             style={{
               display: "inline-flex",
               alignItems: "center",
+              justifyContent: "center",
               gap: "0.45rem",
-              padding: "0.5rem 1rem",
+              padding: "0.5rem 0.65rem",
               borderRadius: "8px",
               border: "none",
-              fontSize: "0.875rem",
+              fontSize: "0.85rem",
               fontWeight: activeTab === "today" ? 700 : 500,
               backgroundColor:
                 activeTab === "today" ? "var(--primary, #6366f1)" : "rgba(255, 255, 255, 0.05)",
               color: activeTab === "today" ? "#ffffff" : "var(--text-secondary, #94a3b8)",
               cursor: "pointer",
               transition: "all 0.15s ease",
+              minWidth: 0,
+              width: "100%"
             }}
           >
-            <Clock size={15} />
-            <span style={{ whiteSpace: "nowrap" }}>
-              Today&apos;s Schedule ({activeWeekday}
-              {isTodaySchoolDay && displayTodaySlots.length > 0 ? ` • ${displayTodaySlots.length} Periods` : ""})
+            <Clock size={15} style={{ flexShrink: 0 }} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              Today ({activeWeekday.slice(0, 3)}
+              {isTodaySchoolDay && displayTodaySlots.length > 0 ? ` • ${displayTodaySlots.length}P` : ""})
             </span>
           </button>
 
@@ -256,29 +261,30 @@ export default function ParentDashboardTimetableCard({
             style={{
               display: "inline-flex",
               alignItems: "center",
+              justifyContent: "center",
               gap: "0.45rem",
-              padding: "0.5rem 1rem",
+              padding: "0.5rem 0.65rem",
               borderRadius: "8px",
               border: "none",
-              fontSize: "0.875rem",
+              fontSize: "0.85rem",
               fontWeight: activeTab === "weekly" ? 700 : 500,
               backgroundColor:
                 activeTab === "weekly" ? "var(--primary, #6366f1)" : "rgba(255, 255, 255, 0.05)",
               color: activeTab === "weekly" ? "#ffffff" : "var(--text-secondary, #94a3b8)",
               cursor: "pointer",
-              whiteSpace: "nowrap",
-              flexShrink: 0,
               transition: "all 0.15s ease",
+              minWidth: 0,
+              width: "100%"
             }}
           >
-            <Calendar size={15} />
-            <span style={{ whiteSpace: "nowrap" }}>Weekly Timetable</span>
+            <Calendar size={15} style={{ flexShrink: 0 }} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Weekly</span>
           </button>
         </div>
 
         {/* Day Pills when in Weekly tab */}
         {activeTab === "weekly" && (
-          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center", maxWidth: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
             <button
               type="button"
               onClick={() => setSelectedDayFilter("ALL")}
@@ -295,6 +301,7 @@ export default function ParentDashboardTimetableCard({
                 color: selectedDayFilter === "ALL" ? "#ffffff" : "var(--text-secondary, #94a3b8)",
                 cursor: "pointer",
                 whiteSpace: "nowrap",
+                flexShrink: 0
               }}
             >
               All Days
@@ -326,6 +333,7 @@ export default function ParentDashboardTimetableCard({
                       : "var(--text-secondary, #94a3b8)",
                     cursor: "pointer",
                     whiteSpace: "nowrap",
+                    flexShrink: 0
                   }}
                 >
                   {d.slice(0, 3)}

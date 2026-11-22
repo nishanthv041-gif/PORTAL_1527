@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useSchoolToday } from "@/frontend/hooks/useSchoolToday";
 import {
   Calendar as CalendarIcon, Clock, MapPin, User,
   BookOpen, CheckCircle2, PlayCircle,
-  CalendarDays, ChevronRight, GraduationCap
+  CalendarDays, ChevronRight, GraduationCap,
+  ArrowLeftRight, X, Loader2, AlertCircle, Sparkles
 } from "lucide-react";
+import {
+  getStaffShiftPeriodsWithFreeTeachersAction,
+  saveStaffShiftBatchAction,
+  type StaffShiftPeriodSlot
+} from "@/backend/api/actions/dashboard/admin/substitution/substitutionActions";
+import { formatSchoolDate } from "@/backend/lib/timetable/getEffectiveTimetable";
 
 const DAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 const SCHOOL_DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
@@ -43,6 +50,7 @@ type TimetableSlot = {
 };
 
 export default function TeacherTimetableClient({
+  teacherId,
   classes,
   initialClassId,
   teacherSchedule,
@@ -50,6 +58,7 @@ export default function TeacherTimetableClient({
   classTimetableMap,
   teacherName
 }: {
+  teacherId?: string;
   classes: ClassType[];
   initialClassId: string;
   teacherSchedule: TimetableSlot[];
@@ -70,6 +79,93 @@ export default function TeacherTimetableClient({
   const [viewMode, setViewMode] = useState<"class" | "mySchedule">("class");
   const [selectedClassId, setSelectedClassId] = useState<string>(initialClassId || (classes[0]?.id || ""));
   const schoolTime = useSchoolToday();
+
+  // Staff Shift Changing State
+  const [showShiftModal, setShowShiftModal] = useState(false);
+  const [shiftDate, setShiftDate] = useState(() => {
+    const d = new Date();
+    return d.toISOString().split("T")[0];
+  });
+  const [shiftReason, setShiftReason] = useState("Official Duty / Training");
+  const [shiftCustomReason, setShiftCustomReason] = useState("");
+  const [shiftPeriods, setShiftPeriods] = useState<StaffShiftPeriodSlot[]>([]);
+  const [loadingShiftPeriods, setLoadingShiftPeriods] = useState(false);
+  const [periodShiftSelections, setPeriodShiftSelections] = useState<Record<string, string>>({});
+  const [isShiftPending, startShiftTransition] = useTransition();
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Fetch teacher's scheduled periods and strictly period-free teachers
+  useEffect(() => {
+    if (!showShiftModal) return;
+    let isCancelled = false;
+    setLoadingShiftPeriods(true);
+    getStaffShiftPeriodsWithFreeTeachersAction({
+      teacherId,
+      dateStr: shiftDate
+    }).then(res => {
+      if (!isCancelled) {
+        if (res.success && res.periods) {
+          setShiftPeriods(res.periods);
+          const initialMap: Record<string, string> = {};
+          res.periods.forEach(p => {
+            if (p.status === "ASSIGNED" && p.substituteTeacherId) {
+              initialMap[p.timetableEntryId] = p.substituteTeacherId;
+            } else if (p.status === "FREE_PERIOD") {
+              initialMap[p.timetableEntryId] = "FREE";
+            }
+          });
+          setPeriodShiftSelections(initialMap);
+        } else {
+          setShiftPeriods([]);
+        }
+        setLoadingShiftPeriods(false);
+      }
+    });
+    return () => { isCancelled = true; };
+  }, [showShiftModal, shiftDate, teacherId]);
+
+  const handleSaveStaffShifts = async () => {
+    if (!teacherId) {
+      setErrorMessage("Teacher profile identifier not found.");
+      return;
+    }
+
+    const finalReason = shiftReason === "Other" && shiftCustomReason.trim()
+      ? shiftCustomReason.trim()
+      : shiftReason;
+
+    const shiftPayload = Object.entries(periodShiftSelections)
+      .filter(([_, subVal]) => Boolean(subVal))
+      .map(([slotId, subVal]) => ({
+        timetableEntryId: slotId,
+        substituteTeacherId: subVal === "FREE" ? null : subVal,
+        isFreePeriod: subVal === "FREE",
+        note: `Staff Shift: ${finalReason}`
+      }));
+
+    if (shiftPayload.length === 0) {
+      setErrorMessage("Please select at least one substitute staff member or Free Period.");
+      return;
+    }
+
+    setErrorMessage(null);
+    startShiftTransition(async () => {
+      const res = await saveStaffShiftBatchAction({
+        teacherId,
+        dateStr: shiftDate,
+        reason: finalReason,
+        shifts: shiftPayload
+      });
+
+      if (!res.success) {
+        setErrorMessage(res.error || "Failed to submit staff shift.");
+      } else {
+        setShowShiftModal(false);
+        setToastMessage(`Staff shift submitted for ${shiftPayload.length} class(es)! Substitute faculty & School Admin notified.`);
+      }
+    });
+  };
 
   const todayDayName = schoolTime.weekday;
   const isSchoolDay = schoolTime.isSchoolDay;
@@ -154,34 +250,83 @@ export default function TeacherTimetableClient({
           </button>
         </div>
 
-        {/* Class Selector for Class Timetable view */}
-        {viewMode === "class" && (
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-secondary)" }}>
-              Select Class:
-            </label>
-            <select
-              value={selectedClassId}
-              onChange={(e) => setSelectedClassId(e.target.value)}
-              style={{
-                padding: "0.55rem 1rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color)",
-                background: "var(--card-bg)",
-                color: "inherit",
-                fontSize: "0.875rem",
-                fontWeight: 600
-              }}
-            >
-              {classes.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.name} - Section {c.section}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        {/* Right Action Controls: Class Selector + Shift Class Assignment Button */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          {viewMode === "class" && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+                Select Class:
+              </label>
+              <select
+                value={selectedClassId}
+                onChange={(e) => setSelectedClassId(e.target.value)}
+                style={{
+                  padding: "0.55rem 1rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  background: "var(--card-bg)",
+                  color: "inherit",
+                  fontSize: "0.875rem",
+                  fontWeight: 600
+                }}
+              >
+                {classes.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} - Section {c.section}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              setErrorMessage(null);
+              setShowShiftModal(true);
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.55rem 1.15rem",
+              borderRadius: "8px",
+              background: "linear-gradient(135deg, #2563eb, #3b82f6)",
+              color: "#ffffff",
+              border: "none",
+              cursor: "pointer",
+              fontWeight: 700,
+              fontSize: "0.85rem",
+              boxShadow: "0 2px 8px rgba(37, 99, 235, 0.25)",
+              whiteSpace: "nowrap"
+            }}
+            title="Shift your assigned classes to an available colleague"
+          >
+            <ArrowLeftRight size={15} /> Shift Class Assignment
+          </button>
+        </div>
       </div>
+
+      {/* Toast & Error Alerts */}
+      {toastMessage && (
+        <div style={{ background: "rgba(16, 185, 129, 0.12)", color: "#10b981", border: "1px solid rgba(16, 185, 129, 0.3)", borderRadius: "10px", padding: "0.85rem 1.25rem", marginBottom: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <CheckCircle2 size={18} />
+            <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>{toastMessage}</span>
+          </div>
+          <button onClick={() => setToastMessage(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={16} /></button>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div style={{ background: "var(--danger-bg)", color: "var(--danger)", border: "1px solid var(--border-color)", borderRadius: "10px", padding: "0.85rem 1.25rem", marginBottom: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <AlertCircle size={18} />
+            <span style={{ fontSize: "0.9rem" }}>{errorMessage}</span>
+          </div>
+          <button onClick={() => setErrorMessage(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={16} /></button>
+        </div>
+      )}
 
       {/* Live On-Time Class Tracker Banner */}
       <div
@@ -428,6 +573,33 @@ export default function TeacherTimetableClient({
                               <span>Room {slot.classroom}</span>
                             </div>
                           )}
+
+                          {viewMode === "mySchedule" && !slot.isBreak && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setErrorMessage(null);
+                                setShowShiftModal(true);
+                              }}
+                              style={{
+                                marginTop: "0.55rem",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                                padding: "0.25rem 0.65rem",
+                                borderRadius: "6px",
+                                border: "1px solid rgba(99, 102, 241, 0.35)",
+                                background: "rgba(99, 102, 241, 0.08)",
+                                color: "var(--primary)",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                cursor: "pointer"
+                              }}
+                              title="Shift this class to another teacher"
+                            >
+                              <ArrowLeftRight size={12} /> Shift Class
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -436,6 +608,235 @@ export default function TeacherTimetableClient({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* TEACHER STAFF SHIFT CHANGING MODAL */}
+      {showShiftModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "var(--card-bg)", borderRadius: "16px", border: "1px solid var(--border-color)", width: "100%", maxWidth: "600px", maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.4)", overflow: "hidden" }}>
+
+            {/* Modal Header */}
+            <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <div style={{ padding: "0.45rem", borderRadius: "8px", background: "rgba(99, 102, 241, 0.12)", color: "var(--primary)" }}>
+                  <ArrowLeftRight size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>Shift Class Assignment</h3>
+                  <p style={{ margin: "0.15rem 0 0 0", fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                    Reassign your class periods to available period-free colleagues with shift reason
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowShiftModal(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: "1.25rem 1.5rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
+
+              {/* Date & Shift Reason Row */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.75rem" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.825rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                    Class Date:
+                  </label>
+                  <input
+                    type="date"
+                    value={shiftDate}
+                    onChange={(e) => setShiftDate(e.target.value)}
+                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.85rem", fontWeight: 600 }}
+                  />
+                  <div style={{ fontSize: "0.75rem", color: "var(--primary)", marginTop: "0.2rem", fontWeight: 600 }}>
+                    {formatSchoolDate(shiftDate)}
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: "0.825rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                    Staff Shift Reason *
+                  </label>
+                  <select
+                    value={shiftReason}
+                    onChange={(e) => setShiftReason(e.target.value)}
+                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.85rem", fontWeight: 600 }}
+                  >
+                    <option value="Official Duty / Training">Official Duty / Training (OD)</option>
+                    <option value="Medical Leave">Medical Leave / Sick Leave</option>
+                    <option value="Personal Emergency">Personal Emergency</option>
+                    <option value="Exam Invigilation Duty">Exam Invigilation Duty</option>
+                    <option value="School Event / Activity">School Event / Activity</option>
+                    <option value="Casual Leave">Casual Leave</option>
+                    <option value="Other">Other Reason (Specify below)</option>
+                  </select>
+                </div>
+              </div>
+
+              {shiftReason === "Other" && (
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Please specify shift reason..."
+                    value={shiftCustomReason}
+                    onChange={(e) => setShiftCustomReason(e.target.value)}
+                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--input-bg)", color: "inherit", fontSize: "0.85rem" }}
+                  />
+                </div>
+              )}
+
+              {/* Class-by-Class Shift Section */}
+              <div style={{ marginTop: "0.5rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                  <label style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                    Your Scheduled Classes &amp; Shift Options:
+                  </label>
+                  {shiftPeriods.length > 0 && (
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                      {shiftPeriods.length} class{shiftPeriods.length === 1 ? "" : "es"}
+                    </span>
+                  )}
+                </div>
+
+                {loadingShiftPeriods ? (
+                  <div style={{ padding: "2.5rem", textAlign: "center", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+                    <Loader2 size={24} className="animate-spin" style={{ margin: "0 auto 0.5rem", color: "var(--primary)" }} />
+                    Loading your assigned classes &amp; available colleagues...
+                  </div>
+                ) : shiftPeriods.length === 0 ? (
+                  <div style={{ padding: "2rem", textAlign: "center", border: "1px dashed var(--border-color)", borderRadius: "10px", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+                    <CheckCircle2 size={28} style={{ opacity: 0.4, margin: "0 auto 0.5rem", color: "#10b981" }} />
+                    <p style={{ margin: 0, fontWeight: 600, color: "var(--text-primary)" }}>No classes scheduled on this day</p>
+                    <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem" }}>You do not have any teaching classes on this day of the week.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    {shiftPeriods.map(p => {
+                      const selectedVal = periodShiftSelections[p.timetableEntryId] || "";
+                      const hasFreeTeachers = p.freeTeachers.length > 0;
+
+                      return (
+                        <div
+                          key={p.timetableEntryId}
+                          style={{
+                            background: "var(--input-bg)",
+                            border: `1px solid ${selectedVal ? "var(--primary)" : "var(--border-color)"}`,
+                            borderRadius: "10px",
+                            padding: "0.85rem",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.5rem"
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.4rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <span style={{ fontWeight: 800, fontSize: "0.85rem", background: "var(--card-bg)", padding: "0.2rem 0.5rem", borderRadius: "6px", border: "1px solid var(--border-color)" }}>
+                                Period {p.period}
+                              </span>
+                              <span style={{ fontWeight: 700, fontSize: "0.92rem" }}>
+                                {p.subjectName}
+                              </span>
+                              <span style={{ fontSize: "0.75rem", background: "rgba(99, 102, 241, 0.12)", color: "var(--primary)", padding: "0.15rem 0.5rem", borderRadius: "999px", fontWeight: 700 }}>
+                                {p.className}
+                              </span>
+                            </div>
+
+                            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                              <Clock size={12} /> {p.startTime} - {p.endTime}
+                              {p.classroom && <span>• Rm {p.classroom}</span>}
+                            </div>
+                          </div>
+
+                          {/* Substitute selector - ONLY shows that period's free teachers! */}
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
+                              <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-secondary)" }}>
+                                Select Substitute Staff (Timing: {p.startTime} - {p.endTime}):
+                              </label>
+                              <span style={{ fontSize: "0.72rem", color: hasFreeTeachers ? "#10b981" : "var(--danger)", fontWeight: 700 }}>
+                                {hasFreeTeachers ? `✓ ${p.freeTeachers.length} Colleague(s) Free in Period ${p.period}` : "⚠️ No Staff Free in this Period"}
+                              </span>
+                            </div>
+
+                            <select
+                              value={selectedVal}
+                              onChange={(e) => setPeriodShiftSelections(prev => ({
+                                ...prev,
+                                [p.timetableEntryId]: e.target.value
+                              }))}
+                              style={{
+                                width: "100%",
+                                padding: "0.55rem 0.75rem",
+                                borderRadius: "8px",
+                                border: selectedVal ? "1.5px solid var(--primary)" : "1px solid var(--border-color)",
+                                background: "var(--card-bg)",
+                                color: "inherit",
+                                fontSize: "0.85rem",
+                                fontWeight: 600
+                              }}
+                            >
+                              <option value="">-- Keep My Class (No Shift) --</option>
+                              {hasFreeTeachers && (
+                                <optgroup label={`Available Free Staff in Period ${p.period} (${p.freeTeachers.length})`}>
+                                  {p.freeTeachers.map(ft => (
+                                    <option key={ft.id} value={ft.id}>
+                                      {ft.name} {ft.subjects.length > 0 ? `• [${ft.subjects.join(", ")}]` : ""}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                            </select>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: "1rem 1.5rem", borderTop: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--card-bg)" }}>
+              <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                {Object.values(periodShiftSelections).filter(Boolean).length} period(s) selected to shift
+              </div>
+
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowShiftModal(false)}
+                  style={{ padding: "0.55rem 1rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "transparent", color: "inherit", cursor: "pointer", fontWeight: 600 }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveStaffShifts}
+                  disabled={isShiftPending || Object.values(periodShiftSelections).filter(Boolean).length === 0}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.45rem",
+                    padding: "0.55rem 1.25rem",
+                    borderRadius: "8px",
+                    border: "none",
+                    background: Object.values(periodShiftSelections).filter(Boolean).length > 0 ? "linear-gradient(135deg, #2563eb, #3b82f6)" : "rgba(107, 114, 128, 0.3)",
+                    color: "#fff",
+                    fontWeight: 700,
+                    cursor: Object.values(periodShiftSelections).filter(Boolean).length > 0 ? "pointer" : "not-allowed"
+                  }}
+                >
+                  {isShiftPending ? <Loader2 size={16} className="animate-spin" /> : <User size={16} />}
+                  Confirm &amp; Submit Staff Shift
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

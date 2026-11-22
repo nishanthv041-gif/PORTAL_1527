@@ -31,6 +31,7 @@ import {
   Check,
   Globe,
   UserCheck,
+  EyeOff,
   Search,
   Sparkles,
   Filter
@@ -621,18 +622,19 @@ export default function TimetableClient({
               display: "inline-flex",
               alignItems: "center",
               gap: "0.45rem",
-              padding: "0.6rem 1rem",
+              padding: "0.6rem 1.05rem",
               borderRadius: "8px",
-              background: pendingSubstitutionsCount > 0 ? "rgba(239, 68, 68, 0.12)" : "rgba(245, 158, 11, 0.1)",
-              color: pendingSubstitutionsCount > 0 ? "var(--danger)" : "#d97706",
-              border: `1px solid ${pendingSubstitutionsCount > 0 ? "rgba(239, 68, 68, 0.3)" : "rgba(245, 158, 11, 0.3)"}`,
+              background: pendingSubstitutionsCount > 0 ? "rgba(239, 68, 68, 0.12)" : "rgba(99, 102, 241, 0.12)",
+              color: pendingSubstitutionsCount > 0 ? "var(--danger)" : "var(--primary, #6366f1)",
+              border: `1px solid ${pendingSubstitutionsCount > 0 ? "rgba(239, 68, 68, 0.3)" : "rgba(99, 102, 241, 0.3)"}`,
               textDecoration: "none",
               fontWeight: 700,
-              fontSize: "0.85rem"
+              fontSize: "0.85rem",
+              whiteSpace: "nowrap"
             }}
           >
-            <ShieldAlert size={16} />
-            <span>Mark Teacher Absent</span>
+            <UserCheck size={16} />
+            <span>Staff Shift Changing</span>
             {pendingSubstitutionsCount > 0 && (
               <span style={{ background: "var(--danger)", color: "#fff", padding: "0.15rem 0.5rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700 }}>
                 {pendingSubstitutionsCount}
@@ -685,47 +687,54 @@ export default function TimetableClient({
             <FileText size={16} /> Upload &amp; Scan
           </button>
 
-          {/* Publish All Classes (Single button, no blocking) */}
-          <div style={{ display: "inline-flex", alignItems: "center", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--border-color)", width: "100%" }}>
-            <button
-              type="button"
-              onClick={handlePublishAll}
-              disabled={isPending}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.4rem",
-                padding: "0.6rem 1rem",
-                background: "var(--primary)",
-                color: "var(--primary-fg)",
-                border: "none",
-                cursor: "pointer",
-                fontSize: "0.85rem",
-                fontWeight: 700
-              }}
-              title="Publish all class timetables to students, teachers, and parents"
-            >
-              <Globe size={15} /> Publish All
-            </button>
-            <button
-              type="button"
-              onClick={handleUnpublishAll}
-              disabled={isPending}
-              style={{
-                padding: "0.6rem 0.65rem",
-                background: "rgba(0,0,0,0.15)",
-                color: "var(--primary-fg)",
-                border: "none",
-                borderLeft: "1px solid rgba(255,255,255,0.2)",
-                cursor: "pointer",
-                fontSize: "0.75rem",
-                fontWeight: 600
-              }}
-              title="Revert all timetables to Draft"
-            >
-              Unpublish
-            </button>
-          </div>
+          {/* Publish All Classes (Clean, standalone buttons with proper contrast and auto width) */}
+          <button
+            type="button"
+            onClick={handlePublishAll}
+            disabled={isPending}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.6rem 1.15rem",
+              borderRadius: "8px",
+              background: "linear-gradient(135deg, #2563eb, #3b82f6)",
+              color: "#ffffff",
+              border: "none",
+              cursor: isPending ? "not-allowed" : "pointer",
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              boxShadow: "0 2px 8px rgba(37, 99, 235, 0.25)",
+              whiteSpace: "nowrap"
+            }}
+            title="Publish all class timetables to students, teachers, and parents"
+          >
+            <Globe size={15} /> Publish All
+          </button>
+
+          {/* Unpublish All (High contrast red border & text on subtle tint, clearly visible in dark/light mode) */}
+          <button
+            type="button"
+            onClick={handleUnpublishAll}
+            disabled={isPending}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "0.6rem 1rem",
+              borderRadius: "8px",
+              background: "rgba(239, 68, 68, 0.12)",
+              color: "#ef4444",
+              border: "1px solid rgba(239, 68, 68, 0.4)",
+              cursor: isPending ? "not-allowed" : "pointer",
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              whiteSpace: "nowrap"
+            }}
+            title="Revert all timetables to Draft"
+          >
+            <EyeOff size={14} /> Unpublish All
+          </button>
         </div>
       </div>
 
