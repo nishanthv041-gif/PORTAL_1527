@@ -214,6 +214,7 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith("/api/notifications/unread-count") ||
       pathname.startsWith("/api/auth/session-status") ||
       pathname.startsWith("/api/health") ||
+      pathname.startsWith("/api/transport/bus-trigger") ||
       pathname.startsWith("/api/uploads/stream");
 
     // 5 req/min on login routes, 30 req/min on general /api/* routes

@@ -21,6 +21,14 @@ export const CreateBusSchema = z.object({
 
 export const UpdateBusSchema = CreateBusSchema.partial();
 
+export const UpdateBusDriverSchema = z.object({
+  busId: z.string().trim().min(1, "Bus ID is required"),
+  driverName: z.string().trim().min(1, "Driver Name is required"),
+  driverPhone: z.string().trim().min(6, "Valid Driver Phone is required"),
+  driverDob: z.string().trim().optional().nullable(),
+  routeDescription: z.string().trim().optional().nullable(),
+});
+
 export const AssignStudentItemSchema = z.object({
   studentId: z.string().trim().min(1, "Student ID is required"),
   pickupPoint: z.string().trim().optional().nullable(),

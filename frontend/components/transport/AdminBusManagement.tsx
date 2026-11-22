@@ -46,6 +46,7 @@ import {
   sendBusMessageAction,
   getBusDetailAction,
   updateBusStudentRouteAction,
+  triggerBusKeypadAction,
 } from "@/backend/api/actions/dashboard/admin/transport/actions";
 import { isDayScholarStudent } from "@/backend/lib/transport/dayScholarHelper";
 
@@ -256,6 +257,44 @@ export default function AdminBusManagement({
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [pickupPointInput, setPickupPointInput] = useState("");
   const [dropPointInput, setDropPointInput] = useState("");
+
+  const handleTriggerKeypad = async (bus: any, buttonKey: "1" | "2") => {
+    if (buttonKey === "2") {
+      const ok = await confirm({
+        title: `🚨 Emergency Danger SOS Trigger (Bus ${bus.busNumber})`,
+        message: `Are you sure you want to trigger Danger Button 2? This will dispatch an URGENT emergency alert to In-Charge Staff and all School Administrators! Parents will strictly NOT be notified to avoid panic.`,
+        confirmText: "Dispatch SOS Alert",
+        cancelText: "Cancel",
+        variant: "danger",
+      });
+      if (!ok) return;
+    }
+
+    startTransition(async () => {
+      const res = await triggerBusKeypadAction({
+        busId: bus.id,
+        buttonKey,
+        source: "Admin Dashboard Control",
+      });
+
+      if (res.error) {
+        showToast("error", res.error);
+      } else {
+        showToast("success", res.message || `Trigger Button ${buttonKey} executed.`);
+        setBuses((prev) =>
+          prev.map((b) =>
+            b.id === bus.id
+              ? {
+                  ...b,
+                  status: res.status || (buttonKey === "1" ? "RUNNING" : "DELAYED"),
+                }
+              : b
+          )
+        );
+        router.refresh();
+      }
+    });
+  };
 
   const handleOpenAssignStudents = (bus: any) => {
     setTargetBusForAssign(bus);
@@ -1416,6 +1455,55 @@ export default function AdminBusManagement({
                         <Trash2 size={13} />
                       )}
                       <span>Delete</span>
+                    </button>
+                  </div>
+
+                  {/* Keypad Speed-Dial Fast Triggers (Button 1: Start Trip, Button 2: Emergency SOS) */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.35rem", marginTop: "0.15rem" }}>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => handleTriggerKeypad(bus, "1")}
+                      style={{
+                        padding: "0.35rem 0.35rem",
+                        borderRadius: "6px",
+                        backgroundColor: "rgba(16, 185, 129, 0.08)",
+                        color: "var(--success)",
+                        border: "1px solid rgba(16, 185, 129, 0.25)",
+                        fontSize: "0.74rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.25rem",
+                      }}
+                      title="Button 1: Trip Started / Departed Campus (Notifies Parents + Admin + Teacher)"
+                    >
+                      <span>🟢 Key 1 (Start)</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => handleTriggerKeypad(bus, "2")}
+                      style={{
+                        padding: "0.35rem 0.35rem",
+                        borderRadius: "6px",
+                        backgroundColor: "rgba(239, 68, 68, 0.08)",
+                        color: "var(--danger)",
+                        border: "1px solid rgba(239, 68, 68, 0.25)",
+                        fontSize: "0.74rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.25rem",
+                      }}
+                      title="Button 2: Emergency SOS Alert (Notifies Teacher & Admin ONLY - NO PARENTS)"
+                    >
+                      <AlertOctagon size={12} />
+                      <span>🚨 Key 2 (SOS)</span>
                     </button>
                   </div>
                 </div>

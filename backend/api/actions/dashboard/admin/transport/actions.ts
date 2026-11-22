@@ -9,6 +9,7 @@ import { sendInstantPortalNotification } from "@/lib/pushDispatcher";
 import {
   CreateBusSchema,
   UpdateBusSchema,
+  UpdateBusDriverSchema,
   AssignStudentsSchema,
   UpdateBusStatusSchema,
   SendBusMessageSchema,
@@ -574,6 +575,485 @@ export async function updateBusAction(busId: string, rawData: any) {
   } catch (error: any) {
     console.error("Error updating bus:", error);
     return { error: error?.message || "Failed to update bus." };
+  }
+}
+
+// ==========================================
+// 4B. UPDATE BUS DRIVER DETAILS (TEACHER & ADMIN ACCESS)
+// Allows assigned bus in-charge teacher or admin to edit driver profile
+// ==========================================
+export async function updateBusDriverDetailsAction(rawData: any) {
+  try {
+    const session = await getServerSession(getAuthOptions());
+    if (!session || !["ADMIN", "TEACHER", "STAFF", "NON_TEACHING_STAFF"].includes(session.user.role)) {
+      return { error: "Unauthorized access: Staff/Teacher or Admin permissions required." };
+    }
+
+    const parsed = UpdateBusDriverSchema.safeParse(rawData);
+    if (!parsed.success) {
+      const firstError = parsed.error.issues[0]?.message || "Validation failed.";
+      return { error: firstError };
+    }
+
+    const { busId, driverName, driverPhone, driverDob, routeDescription } = parsed.data;
+
+    const bus = await prisma.bus.findUnique({
+      where: { id: busId },
+      include: {
+        inChargeStaff: {
+          include: { user: true },
+        },
+      },
+    });
+
+    if (!bus) {
+      return { error: "Bus not found." };
+    }
+
+    // Role check: If not ADMIN, user must be the assigned in-charge staff for this bus
+    if (session.user.role !== "ADMIN") {
+      const userStaff = await getStaffForUser(session.user.id);
+      if (!userStaff || bus.inChargeStaffId !== userStaff.id) {
+        return { error: "Permission denied: You can only edit driver details for your assigned bus." };
+      }
+    }
+
+    let parsedDriverDob: Date | null = null;
+    if (driverDob) {
+      const parsed = parseAndValidateDob(driverDob, "DRIVER", false);
+      if (parsed.isValid && parsed.dateStr) {
+        parsedDriverDob = new Date(`${parsed.dateStr}T00:00:00Z`);
+      }
+    }
+
+    // Clean driver phone (remove unnecessary whitespace)
+    const cleanedPhone = driverPhone.replace(/\s+/g, "").trim();
+
+    const updated = await prisma.bus.update({
+      where: { id: busId },
+      data: {
+        driverName: driverName.trim(),
+        driverPhone: cleanedPhone,
+        driverDob: parsedDriverDob,
+        routeDescription: routeDescription ? routeDescription.trim() : null,
+      },
+    });
+
+    // Log the update in status logs for audit trail
+    const userStaff = await getStaffForUser(session.user.id);
+    await prisma.busStatusLog.create({
+      data: {
+        busId,
+        status: updated.status,
+        description: `Driver details updated by ${session.user.name || "Staff"}: Driver ${updated.driverName} (${updated.driverPhone}).`,
+        reportedByStaffId: userStaff?.id || bus.inChargeStaffId || null,
+      },
+    });
+
+    revalidatePath("/admin/buses");
+    revalidatePath("/dashboard/admin/transport");
+    revalidatePath("/staff/my-bus");
+    revalidatePath("/parent/bus");
+    revalidatePath("/dashboard/parent/transport");
+
+    return {
+      success: true,
+      bus: updated,
+      message: `Driver details updated for Bus ${updated.busNumber}. Keypad trigger mapping updated to ${cleanedPhone}.`,
+    };
+  } catch (error: any) {
+    console.error("Error updating bus driver details:", error);
+    return { error: error?.message || "Failed to update driver details." };
+  }
+}
+
+// ==========================================
+// 4C. DUAL-BUTTON KEYPAD / SPEED DIAL TRIGGER ACTION
+// Button "1" = Departure / Start Trip (Notifies Parents + Admins + In-charge Teacher)
+// Button "2" = Emergency / Danger Alert (Notifies ONLY In-charge Teacher + Admins; NEVER PARENTS)
+// ==========================================
+export async function triggerBusKeypadAction(params: {
+  busId?: string;
+  callerPhone?: string;
+  buttonKey: "1" | "2" | string;
+  source?: string;
+}) {
+  try {
+    const { busId, callerPhone, buttonKey, source } = params;
+    const normalizedKey = String(buttonKey || "1").trim();
+
+    let targetBus: any = null;
+
+    if (busId) {
+      targetBus = await prisma.bus.findUnique({
+        where: { id: busId },
+        include: {
+          inChargeStaff: { include: { user: true } },
+          students: {
+            where: getDayScholarBusStudentWhere(),
+            include: {
+              student: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  parents: {
+                    select: {
+                      parent: {
+                        select: {
+                          userId: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+    } else if (callerPhone) {
+      // Find bus by matching driverPhone (normalize removing non-digits)
+      const rawDigits = callerPhone.replace(/\D/g, "");
+      const last10Digits = rawDigits.slice(-10);
+
+      const activeBuses = await prisma.bus.findMany({
+        where: { isActive: true },
+        include: {
+          inChargeStaff: { include: { user: true } },
+          students: {
+            where: getDayScholarBusStudentWhere(),
+            include: {
+              student: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  parents: {
+                    select: {
+                      parent: {
+                        select: {
+                          userId: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      targetBus = activeBuses.find((b) => {
+        const bDigits = b.driverPhone.replace(/\D/g, "");
+        return (
+          bDigits === rawDigits ||
+          (last10Digits.length >= 7 && (bDigits.endsWith(last10Digits) || last10Digits.endsWith(bDigits.slice(-10))))
+        );
+      });
+    }
+
+    if (!targetBus) {
+      return {
+        error: callerPhone
+          ? `No active bus found registered with driver phone (${callerPhone}).`
+          : "Bus record not found.",
+      };
+    }
+
+    const triggerSource = source || (callerPhone ? "Keypad Button Phone" : "Staff Portal");
+
+    // ==========================================
+    // BUTTON "1": START TRIP / CAMPUS DEPARTURE
+    // Recipient: All Parents of Present Day-Scholars + All Admins + In-Charge Teacher
+    // ==========================================
+    if (normalizedKey === "1") {
+      // 1. Update Bus status to RUNNING
+      const updatedBus = await prisma.bus.update({
+        where: { id: targetBus.id },
+        data: { status: "RUNNING" },
+      });
+
+      // 2. Add transit status log
+      const statusLog = await prisma.busStatusLog.create({
+        data: {
+          busId: targetBus.id,
+          status: "RUNNING",
+          issueType: null,
+          description: `Bus trip commenced and departed campus. Triggered via ${triggerSource} (Key 1).`,
+          reportedByStaffId: targetBus.inChargeStaffId || null,
+        },
+      });
+
+      // 3. Create BusMessage record
+      await prisma.busMessage.create({
+        data: {
+          busId: targetBus.id,
+          senderStaffId: targetBus.inChargeStaffId || null,
+          type: "COMMON",
+          title: "Bus Departed Campus - Trip Started",
+          message: `Bus ${targetBus.busNumber} (${targetBus.name}) has commenced its trip from campus. Driver: ${targetBus.driverName} (${targetBus.driverPhone}). Please be prepared at your designated stop.`,
+          priority: "NORMAL",
+        },
+      });
+
+      // 4. Resolve Day-Scholar students attending today
+      const studentIds = targetBus.students.map((bs: any) => bs.student.id);
+
+      // Check today's absent/leave students
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      let absentStudentIds = new Set<string>();
+      if (studentIds.length > 0) {
+        try {
+          const absentees = await prisma.attendance.findMany({
+            where: {
+              studentId: { in: studentIds },
+              date: { gte: todayStart, lte: todayEnd },
+              status: { in: ["ABSENT", "LEAVE"] },
+            },
+            select: { studentId: true },
+          });
+          absentStudentIds = new Set(absentees.map((a) => a.studentId));
+        } catch (err) {
+          console.warn("Could not query today's attendance, defaulting to all enrolled day-scholars:", err);
+        }
+      }
+
+      // Collect parent user IDs for present students
+      const parentUserIds: string[] = [];
+      for (const bs of targetBus.students) {
+        if (!absentStudentIds.has(bs.student.id)) {
+          for (const p of bs.student.parents) {
+            if (p.parent?.userId && !parentUserIds.includes(p.parent.userId)) {
+              parentUserIds.push(p.parent.userId);
+            }
+          }
+        }
+      }
+
+      // 5. Collect Admin user IDs
+      const admins = await prisma.user.findMany({
+        where: { role: "ADMIN", status: "ACTIVE" },
+        select: { id: true },
+      });
+      const adminUserIds = admins.map((a) => a.id);
+
+      // 6. In-Charge Teacher user ID
+      const teacherUserId = targetBus.inChargeStaff?.user?.id || null;
+
+      // 7. Dispatch notifications in bulk
+      const notifRows: any[] = [];
+
+      // Parents
+      for (const pId of parentUserIds) {
+        notifRows.push({
+          userId: pId,
+          title: `🚌 Bus ${targetBus.busNumber}: Trip Started & Departed Campus`,
+          content: `Bus ${targetBus.busNumber} (${targetBus.name}) has departed the campus. Driver: ${targetBus.driverName} (${targetBus.driverPhone}).`,
+          type: "BUS",
+          category: "BUS",
+          priority: "NORMAL",
+          link: "/parent/bus",
+          isRead: false,
+        });
+      }
+
+      // Admins
+      for (const aId of adminUserIds) {
+        notifRows.push({
+          userId: aId,
+          title: `🚌 Bus ${targetBus.busNumber}: Departed Campus (Trip Started)`,
+          content: `Driver ${targetBus.driverName} triggered Button 1 for Bus ${targetBus.busNumber} (${targetBus.name}). Notified ${parentUserIds.length} parents.`,
+          type: "BUS",
+          category: "BUS",
+          priority: "NORMAL",
+          link: "/admin/buses",
+          isRead: false,
+        });
+      }
+
+      // In-Charge Teacher (if not already in admin list)
+      if (teacherUserId && !adminUserIds.includes(teacherUserId)) {
+        notifRows.push({
+          userId: teacherUserId,
+          title: `🚌 Bus ${targetBus.busNumber}: Departed Campus (Trip Started)`,
+          content: `Driver ${targetBus.driverName} triggered Button 1. Bus ${targetBus.busNumber} is now running. Notified ${parentUserIds.length} parents.`,
+          type: "BUS",
+          category: "BUS",
+          priority: "NORMAL",
+          link: "/staff/my-bus",
+          isRead: false,
+        });
+      }
+
+      if (notifRows.length > 0) {
+        await prisma.notification.createMany({
+          data: notifRows,
+        });
+
+        // Invalidate cache
+        const allTargetUserIds = Array.from(new Set([
+          ...parentUserIds,
+          ...adminUserIds,
+          ...(teacherUserId ? [teacherUserId] : []),
+        ]));
+
+        for (const uid of allTargetUserIds) {
+          invalidateUserNotifCache(uid);
+        }
+
+        // Push instant notification
+        await sendInstantPortalNotification({
+          targetUserIds: allTargetUserIds,
+          category: "BUS_MESSAGE",
+          title: `🚌 Bus ${targetBus.busNumber}: Trip Started`,
+          body: `Bus ${targetBus.busNumber} has departed campus. Driver: ${targetBus.driverName}.`,
+          link: "/parent/bus",
+          tag: `bus-start-${targetBus.id}`,
+          priority: "NORMAL",
+          bypass48h: true,
+        }).catch((err) => console.warn("Push note error:", err));
+      }
+
+      revalidatePath("/admin/buses");
+      revalidatePath("/dashboard/admin/transport");
+      revalidatePath("/staff/my-bus");
+      revalidatePath("/parent/bus");
+      revalidatePath("/dashboard/parent/transport");
+
+      return {
+        success: true,
+        action: "START_TRIP",
+        buttonKey: "1",
+        busNumber: targetBus.busNumber,
+        driverName: targetBus.driverName,
+        status: "RUNNING",
+        recipients: {
+          parents: parentUserIds.length,
+          admins: adminUserIds.length,
+          teacher: teacherUserId ? 1 : 0,
+        },
+        message: `Bus ${targetBus.busNumber} trip started. Notified ${parentUserIds.length} parents, ${adminUserIds.length} admins, and assigned teacher.`,
+      };
+    }
+
+    // ==========================================
+    // BUTTON "2": EMERGENCY / DANGER ALERT (SOS)
+    // Recipient: STRICTLY ONLY Assigned Teacher & Admins (NEVER PARENTS)
+    // ==========================================
+    if (normalizedKey === "2") {
+      // 1. Update Bus status to DELAYED
+      const updatedBus = await prisma.bus.update({
+        where: { id: targetBus.id },
+        data: { status: "DELAYED" },
+      });
+
+      // 2. Add emergency transit status log
+      const statusLog = await prisma.busStatusLog.create({
+        data: {
+          busId: targetBus.id,
+          status: "DELAYED",
+          issueType: "BREAKDOWN",
+          description: `🚨 EMERGENCY SOS ALERT: Driver ${targetBus.driverName} pressed Danger Button 2 via ${triggerSource}! Urgent teacher and admin intervention required.`,
+          reportedByStaffId: targetBus.inChargeStaffId || null,
+        },
+      });
+
+      // 3. Create BusMessage record for internal audit trail
+      await prisma.busMessage.create({
+        data: {
+          busId: targetBus.id,
+          senderStaffId: targetBus.inChargeStaffId || null,
+          type: "COMMON",
+          title: "🚨 Driver Emergency SOS Alert",
+          message: `URGENT: Driver ${targetBus.driverName} (${targetBus.driverPhone}) triggered Emergency Key 2 on Bus ${targetBus.busNumber}. Immediate contact required.`,
+          priority: "URGENT",
+        },
+      });
+
+      // 4. STRICT RECIPIENT LIST: ONLY Assigned Teacher + All Admins
+      // NO PARENT NOTIFICATIONS SENT TO PREVENT PANIC
+      const admins = await prisma.user.findMany({
+        where: { role: "ADMIN", status: "ACTIVE" },
+        select: { id: true },
+      });
+      const adminUserIds = admins.map((a) => a.id);
+      const teacherUserId = targetBus.inChargeStaff?.user?.id || null;
+
+      const emergencyUserIds = Array.from(new Set([
+        ...adminUserIds,
+        ...(teacherUserId ? [teacherUserId] : []),
+      ]));
+
+      const notifRows: any[] = [];
+
+      for (const uId of emergencyUserIds) {
+        const isTeacher = uId === teacherUserId;
+        notifRows.push({
+          userId: uId,
+          title: `🚨 EMERGENCY ALERT: Bus ${targetBus.busNumber} (${targetBus.name})`,
+          content: `URGENT SOS: Driver ${targetBus.driverName} (${targetBus.driverPhone}) triggered Emergency Button 2 on Bus ${targetBus.busNumber}. Please call the driver immediately!`,
+          type: "BUS",
+          category: "BUS",
+          priority: "URGENT",
+          link: isTeacher ? "/staff/my-bus" : "/admin/buses",
+          isRead: false,
+        });
+      }
+
+      if (notifRows.length > 0) {
+        await prisma.notification.createMany({
+          data: notifRows,
+        });
+
+        for (const uid of emergencyUserIds) {
+          invalidateUserNotifCache(uid);
+        }
+
+        // Push instant URGENT notification
+        await sendInstantPortalNotification({
+          targetUserIds: emergencyUserIds,
+          category: "BUS_MESSAGE",
+          title: `🚨 EMERGENCY SOS: Bus ${targetBus.busNumber}`,
+          body: `Driver ${targetBus.driverName} (${targetBus.driverPhone}) pressed Emergency Key 2! Urgent action needed.`,
+          link: teacherUserId ? "/staff/my-bus" : "/admin/buses",
+          tag: `bus-emergency-${targetBus.id}-${Date.now()}`,
+          priority: "URGENT",
+          bypass48h: true,
+        }).catch((err) => console.warn("Emergency push note error:", err));
+      }
+
+      revalidatePath("/admin/buses");
+      revalidatePath("/dashboard/admin/transport");
+      revalidatePath("/staff/my-bus");
+      revalidatePath("/parent/bus");
+      revalidatePath("/dashboard/parent/transport");
+
+      return {
+        success: true,
+        action: "EMERGENCY_SOS",
+        buttonKey: "2",
+        busNumber: targetBus.busNumber,
+        driverName: targetBus.driverName,
+        status: "DELAYED",
+        recipients: {
+          parents: 0, // STRICTLY ZERO PARENTS
+          admins: adminUserIds.length,
+          teacher: teacherUserId ? 1 : 0,
+        },
+        message: `🚨 Emergency SOS Alert triggered. High-priority alert sent to assigned teacher and ${adminUserIds.length} administrators. Parents were NOT alerted.`,
+      };
+    }
+
+    return { error: `Invalid button key: "${normalizedKey}". Expected "1" (Start Trip) or "2" (Emergency Alert).` };
+  } catch (error: any) {
+    console.error("Error triggering bus keypad action:", error);
+    return { error: error?.message || "Failed to execute bus trigger." };
   }
 }
 

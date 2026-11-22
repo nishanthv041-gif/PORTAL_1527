@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useTransition } from "react";
+import React, { useState, useMemo, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bus,
@@ -15,10 +15,19 @@ import {
   MapPin,
   ShieldAlert,
   Info,
+  Edit3,
+  Smartphone,
+  Radio,
+  X,
+  Check,
+  AlertCircle,
+  Copy,
 } from "lucide-react";
 import {
   updateBusStatusAction,
   sendBusMessageAction,
+  updateBusDriverDetailsAction,
+  triggerBusKeypadAction,
 } from "@/backend/api/actions/dashboard/admin/transport/actions";
 import { MultiSelect } from "@/frontend/components/ui";
 
@@ -33,7 +42,7 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
 
   const [buses, setBuses] = useState<any[]>(initialBuses || []);
   const [selectedBusIndex, setSelectedBusIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState<"STATUS" | "MESSAGES" | "STUDENTS" | "LOGS">("STATUS");
+  const [activeTab, setActiveTab] = useState<"STATUS" | "KEYPAD" | "MESSAGES" | "STUDENTS" | "LOGS">("STATUS");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const showToast = (type: "success" | "error", message: string) => {
@@ -41,7 +50,107 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
     setTimeout(() => setFeedback(null), 5000);
   };
 
-  const currentBus = (buses && buses.length > 0) ? (buses[selectedBusIndex] || buses[0]) : null;
+  const currentBus = buses && buses.length > 0 ? buses[selectedBusIndex] || buses[0] : null;
+
+  // ==========================================
+  // DRIVER DETAILS EDIT STATE (TEACHER ACCESS)
+  // ==========================================
+  const [isEditingDriver, setIsEditingDriver] = useState(false);
+  const [driverNameInput, setDriverNameInput] = useState(currentBus?.driverName || "");
+  const [driverPhoneInput, setDriverPhoneInput] = useState(currentBus?.driverPhone || "");
+  const [driverDobInput, setDriverDobInput] = useState(
+    currentBus?.driverDob ? new Date(currentBus.driverDob).toISOString().split("T")[0] : ""
+  );
+  const [routeDescriptionInput, setRouteDescriptionInput] = useState(currentBus?.routeDescription || "");
+
+  // Emergency SOS confirmation modal
+  const [confirmEmergencyModal, setConfirmEmergencyModal] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+
+  useEffect(() => {
+    if (currentBus) {
+      setDriverNameInput(currentBus.driverName || "");
+      setDriverPhoneInput(currentBus.driverPhone || "");
+      setDriverDobInput(currentBus.driverDob ? new Date(currentBus.driverDob).toISOString().split("T")[0] : "");
+      setRouteDescriptionInput(currentBus.routeDescription || "");
+      setStatusInput(currentBus.status || "RUNNING");
+    }
+  }, [currentBus?.id]);
+
+  const handleSaveDriverDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!driverNameInput.trim() || !driverPhoneInput.trim()) {
+      showToast("error", "Driver name and phone number are required.");
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await updateBusDriverDetailsAction({
+        busId: currentBus.id,
+        driverName: driverNameInput.trim(),
+        driverPhone: driverPhoneInput.trim(),
+        driverDob: driverDobInput || null,
+        routeDescription: routeDescriptionInput.trim() || null,
+      });
+
+      if (res.error) {
+        showToast("error", res.error);
+      } else {
+        showToast("success", res.message || "Driver details updated successfully.");
+        setIsEditingDriver(false);
+        setBuses((prev) =>
+          prev.map((b) =>
+            b.id === currentBus.id
+              ? {
+                  ...b,
+                  driverName: driverNameInput.trim(),
+                  driverPhone: driverPhoneInput.trim(),
+                  driverDob: driverDobInput ? new Date(driverDobInput) : null,
+                  routeDescription: routeDescriptionInput.trim() || null,
+                }
+              : b
+          )
+        );
+        router.refresh();
+      }
+    });
+  };
+
+  // ==========================================
+  // DUAL-BUTTON KEYPAD TRIGGER (KEY 1 & KEY 2)
+  // ==========================================
+  const handleTriggerKeypad = async (buttonKey: "1" | "2") => {
+    if (buttonKey === "2" && !confirmEmergencyModal) {
+      setConfirmEmergencyModal(true);
+      return;
+    }
+    setConfirmEmergencyModal(false);
+
+    startTransition(async () => {
+      const res = await triggerBusKeypadAction({
+        busId: currentBus.id,
+        buttonKey,
+        source: "In-Charge Teacher Portal",
+      });
+
+      if (res.error) {
+        showToast("error", res.error);
+      } else {
+        showToast("success", res.message || `Trigger Button ${buttonKey} executed.`);
+        setBuses((prev) =>
+          prev.map((b) =>
+            b.id === currentBus.id
+              ? {
+                  ...b,
+                  status: res.status || (buttonKey === "1" ? "RUNNING" : "DELAYED"),
+                }
+              : b
+          )
+        );
+        router.refresh();
+      }
+    });
+  };
 
   // ==========================================
   // STATUS UPDATE & ISSUE REPORTING
@@ -144,6 +253,15 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
     });
   };
 
+  const handleCopyWebhookUrl = (key: string) => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const url = `${origin}/api/transport/bus-trigger?phone=${encodeURIComponent(currentBus?.driverPhone || "")}&button=${key}`;
+    navigator.clipboard.writeText(url);
+    setCopiedUrl(true);
+    showToast("success", `Copied Speed-Dial ${key} Webhook URL to clipboard.`);
+    setTimeout(() => setCopiedUrl(false), 2500);
+  };
+
   if (!buses || buses.length === 0 || !currentBus) {
     return (
       <div
@@ -213,7 +331,9 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
               }}
             >
               <Bus size={16} />
-              <span>{b.busNumber} ({b.name})</span>
+              <span>
+                {b.busNumber} ({b.name})
+              </span>
             </button>
           ))}
         </div>
@@ -245,58 +365,180 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
           }}
         >
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
               <span style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--foreground)" }}>
                 {currentBus.busNumber}
               </span>
-              <span style={{ fontSize: "0.8rem", padding: "3px 8px", borderRadius: "4px", backgroundColor: "rgba(0,0,0,0.06)", fontFamily: "monospace" }}>
+              <span
+                style={{
+                  fontSize: "0.8rem",
+                  padding: "3px 8px",
+                  borderRadius: "4px",
+                  backgroundColor: "rgba(0,0,0,0.06)",
+                  fontFamily: "monospace",
+                }}
+              >
                 {currentBus.registrationNo}
               </span>
+              <span
+                style={{
+                  fontSize: "0.75rem",
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  backgroundColor: "rgba(37, 99, 235, 0.1)",
+                  color: "var(--primary)",
+                  fontWeight: 600,
+                }}
+              >
+                Assigned In-Charge: {staffName}
+              </span>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--foreground)", fontSize: "0.95rem", fontWeight: 500, marginTop: "4px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                color: "var(--foreground)",
+                fontSize: "0.95rem",
+                fontWeight: 500,
+                marginTop: "4px",
+              }}
+            >
               <MapPin size={16} style={{ color: "var(--primary)" }} />
               <span>{currentBus.name}</span>
             </div>
-            <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "3px" }}>
-              Driver: <strong>{currentBus.driverName}</strong> ({currentBus.driverPhone})
-              <a href={`tel:${currentBus.driverPhone}`} style={{ color: "var(--primary)", marginLeft: "8px", textDecoration: "none" }}>
-                <Phone size={13} style={{ display: "inline", verticalAlign: "middle" }} /> Call Driver
+            <div
+              style={{
+                fontSize: "0.88rem",
+                color: "var(--text-secondary)",
+                marginTop: "6px",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.6rem",
+                flexWrap: "wrap",
+              }}
+            >
+              <span>
+                Driver: <strong>{currentBus.driverName}</strong> ({currentBus.driverPhone})
+              </span>
+              <a
+                href={`tel:${currentBus.driverPhone}`}
+                style={{
+                  color: "var(--primary)",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  fontWeight: 600,
+                  fontSize: "0.82rem",
+                }}
+              >
+                <Phone size={13} /> Call
               </a>
+              <button
+                type="button"
+                onClick={() => setIsEditingDriver(true)}
+                style={{
+                  padding: "3px 8px",
+                  borderRadius: "4px",
+                  border: "1px solid var(--border)",
+                  backgroundColor: "rgba(0,0,0,0.03)",
+                  color: "var(--primary)",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <Edit3 size={12} /> Edit Driver Details
+              </button>
             </div>
           </div>
 
-          {/* Status Badge */}
-          <span
-            style={{
-              padding: "4px 12px",
-              borderRadius: "12px",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              backgroundColor:
-                currentBus.status === "RUNNING"
-                  ? "rgba(16, 185, 129, 0.15)"
-                  : currentBus.status === "DELAYED"
-                  ? "rgba(245, 158, 11, 0.18)"
-                  : "rgba(239, 68, 68, 0.18)",
-              color:
-                currentBus.status === "RUNNING"
-                  ? "var(--success)"
-                  : currentBus.status === "DELAYED"
-                  ? "#f59e0b"
-                  : "#ef4444",
-              border: `1px solid ${
-                currentBus.status === "RUNNING" ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"
-              }`,
-            }}
-          >
-            {currentBus.status.replace("_", " ")}
-          </span>
+          {/* Status Badge & Fast Buttons */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.6rem" }}>
+            <span
+              style={{
+                padding: "4px 12px",
+                borderRadius: "12px",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                backgroundColor:
+                  currentBus.status === "RUNNING"
+                    ? "rgba(16, 185, 129, 0.15)"
+                    : currentBus.status === "DELAYED"
+                    ? "rgba(245, 158, 11, 0.18)"
+                    : "rgba(239, 68, 68, 0.18)",
+                color:
+                  currentBus.status === "RUNNING"
+                    ? "var(--success)"
+                    : currentBus.status === "DELAYED"
+                    ? "#f59e0b"
+                    : "#ef4444",
+                border: `1px solid ${
+                  currentBus.status === "RUNNING" ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"
+                }`,
+              }}
+            >
+              {currentBus.status.replace("_", " ")}
+            </span>
+
+            {/* Quick 1-click trigger buttons */}
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <button
+                type="button"
+                onClick={() => handleTriggerKeypad("1")}
+                disabled={isPending}
+                title="Button 1: Trip Started / Campus Departure (Notifies Parents + Admin + Teacher)"
+                style={{
+                  padding: "0.4rem 0.75rem",
+                  borderRadius: "6px",
+                  backgroundColor: "rgba(16, 185, 129, 0.12)",
+                  color: "var(--success)",
+                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <span>🟢 Button 1 (Start)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTriggerKeypad("2")}
+                disabled={isPending}
+                title="Button 2: Emergency SOS Alert (Notifies Teacher & Admin ONLY - NO PARENTS)"
+                style={{
+                  padding: "0.4rem 0.75rem",
+                  borderRadius: "6px",
+                  backgroundColor: "rgba(239, 68, 68, 0.12)",
+                  color: "var(--danger)",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <AlertOctagon size={14} />
+                <span>🚨 Button 2 (SOS)</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Sub Tabs */}
-        <div style={{ display: "flex", borderBottom: "1px solid var(--border)", gap: "0.5rem" }}>
+        <div style={{ display: "flex", borderBottom: "1px solid var(--border)", gap: "0.5rem", overflowX: "auto" }}>
           {[
             { id: "STATUS", label: "Status & Issue Control", icon: <AlertTriangle size={16} /> },
+            { id: "KEYPAD", label: "Driver Button Phone 📱", icon: <Smartphone size={16} /> },
             { id: "MESSAGES", label: "Send Parent Alert", icon: <Send size={16} /> },
             { id: "STUDENTS", label: `Enrolled Students (${currentBus.students?.length || 0})`, icon: <Users size={16} /> },
             { id: "LOGS", label: `Transit Logs (${currentBus.statusLogs?.length || 0})`, icon: <Clock size={16} /> },
@@ -316,6 +558,7 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
                 display: "flex",
                 alignItems: "center",
                 gap: "0.4rem",
+                whiteSpace: "nowrap",
               }}
             >
               {tab.icon}
@@ -451,7 +694,302 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
         )}
 
         {/* ======================================================== */}
-        {/* TAB 2: SEND PARENT ALERT                                 */}
+        {/* TAB 2: DRIVER BUTTON PHONE (KEYPAD SPEED-DIAL SYSTEM)     */}
+        {/* ======================================================== */}
+        {activeTab === "KEYPAD" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+            {/* Keypad Header Notice */}
+            <div
+              style={{
+                padding: "1rem",
+                borderRadius: "8px",
+                backgroundColor: "rgba(37, 99, 235, 0.05)",
+                border: "1px solid rgba(37, 99, 235, 0.2)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <Smartphone size={20} style={{ color: "var(--primary)" }} />
+                  <strong style={{ color: "var(--foreground)", fontSize: "0.95rem" }}>
+                    Driver Button Phone Dual-Key Trigger System
+                  </strong>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingDriver(true)}
+                  style={{
+                    padding: "0.35rem 0.75rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--card)",
+                    color: "var(--primary)",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <Edit3 size={13} /> Edit Driver Phone ({currentBus.driverPhone})
+                </button>
+              </div>
+              <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                The driver has a basic keypad/button phone with 2 pre-configured speed-dial keys. When pressed, the telephony gateway sends an instant missed-call ping identifying driver mobile number <strong>{currentBus.driverPhone}</strong> and automatically executes the action below.
+              </p>
+            </div>
+
+            {/* Dual Trigger Cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1rem" }}>
+              {/* Button 1 Card */}
+              <div
+                style={{
+                  padding: "1.25rem",
+                  borderRadius: "10px",
+                  backgroundColor: "rgba(16, 185, 129, 0.04)",
+                  border: "1px solid rgba(16, 185, 129, 0.25)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.75rem",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "50%",
+                      backgroundColor: "var(--success)",
+                      color: "#fff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 800,
+                      fontSize: "1.1rem",
+                    }}
+                  >
+                    1
+                  </span>
+                  <span
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: "12px",
+                      backgroundColor: "rgba(16, 185, 129, 0.15)",
+                      color: "var(--success)",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Speed-Dial Key 1
+                  </span>
+                </div>
+
+                <div>
+                  <h4 style={{ margin: "0 0 0.35rem 0", color: "var(--foreground)", fontSize: "1.05rem" }}>
+                    Start Trip &amp; Campus Departure
+                  </h4>
+                  <p style={{ margin: 0, fontSize: "0.83rem", color: "var(--text-secondary)", lineHeight: 1.45 }}>
+                    Sets bus status to <strong>RUNNING</strong>. Automatically notifies:
+                  </p>
+                  <ul style={{ margin: "0.5rem 0 0 1.25rem", padding: 0, fontSize: "0.82rem", color: "var(--foreground)" }}>
+                    <li><strong>All Parents</strong> of attending Day Scholars on Bus {currentBus.busNumber}</li>
+                    <li><strong>All School Administrators</strong></li>
+                    <li><strong>Bus In-Charge Teacher</strong> ({staffName})</li>
+                  </ul>
+                </div>
+
+                <div style={{ marginTop: "auto", paddingTop: "0.5rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => handleTriggerKeypad("1")}
+                    disabled={isPending}
+                    style={{
+                      flex: 1,
+                      padding: "0.6rem 1rem",
+                      borderRadius: "6px",
+                      backgroundColor: "var(--success)",
+                      color: "#fff",
+                      border: "none",
+                      fontWeight: 600,
+                      fontSize: "0.88rem",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "0.4rem",
+                      opacity: isPending ? 0.7 : 1,
+                    }}
+                  >
+                    <span>Trigger Button 1 (Start Trip)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyWebhookUrl("1")}
+                    title="Copy Webhook Endpoint URL"
+                    style={{
+                      padding: "0.6rem 0.75rem",
+                      borderRadius: "6px",
+                      border: "1px solid var(--border)",
+                      backgroundColor: "var(--card)",
+                      color: "var(--foreground)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Copy size={15} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Button 2 Card */}
+              <div
+                style={{
+                  padding: "1.25rem",
+                  borderRadius: "10px",
+                  backgroundColor: "rgba(239, 68, 68, 0.04)",
+                  border: "1px solid rgba(239, 68, 68, 0.25)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.75rem",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "50%",
+                      backgroundColor: "var(--danger)",
+                      color: "#fff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 800,
+                      fontSize: "1.1rem",
+                    }}
+                  >
+                    2
+                  </span>
+                  <span
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: "12px",
+                      backgroundColor: "rgba(239, 68, 68, 0.15)",
+                      color: "var(--danger)",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Speed-Dial Key 2 (SOS)
+                  </span>
+                </div>
+
+                <div>
+                  <h4 style={{ margin: "0 0 0.35rem 0", color: "#ef4444", fontSize: "1.05rem" }}>
+                    🚨 Emergency / Danger Alert (SOS)
+                  </h4>
+                  <p style={{ margin: 0, fontSize: "0.83rem", color: "var(--text-secondary)", lineHeight: 1.45 }}>
+                    Flips bus status to <strong>DELAYED / BREAKDOWN</strong>. Dispatches high-priority urgent alert:
+                  </p>
+                  <ul style={{ margin: "0.5rem 0 0 1.25rem", padding: 0, fontSize: "0.82rem", color: "var(--foreground)" }}>
+                    <li><strong>ONLY In-Charge Teacher ({staffName})</strong></li>
+                    <li><strong>ALL School Administrators</strong></li>
+                    <li style={{ color: "var(--danger)", fontWeight: 600 }}>
+                      ⚠️ STRICT RULE: Parents are NOT notified (prevents panic!)
+                    </li>
+                  </ul>
+                </div>
+
+                <div style={{ marginTop: "auto", paddingTop: "0.5rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => handleTriggerKeypad("2")}
+                    disabled={isPending}
+                    style={{
+                      flex: 1,
+                      padding: "0.6rem 1rem",
+                      borderRadius: "6px",
+                      backgroundColor: "var(--danger)",
+                      color: "#fff",
+                      border: "none",
+                      fontWeight: 600,
+                      fontSize: "0.88rem",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "0.4rem",
+                      opacity: isPending ? 0.7 : 1,
+                    }}
+                  >
+                    <AlertOctagon size={16} />
+                    <span>Trigger Button 2 (Emergency SOS)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyWebhookUrl("2")}
+                    title="Copy Webhook Endpoint URL"
+                    style={{
+                      padding: "0.6rem 0.75rem",
+                      borderRadius: "6px",
+                      border: "1px solid var(--border)",
+                      backgroundColor: "var(--card)",
+                      color: "var(--foreground)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Copy size={15} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Hardware & Telephony Gateway Setup Documentation */}
+            <div
+              style={{
+                padding: "1rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                backgroundColor: "rgba(0,0,0,0.02)",
+                fontSize: "0.85rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}
+            >
+              <h5 style={{ margin: 0, color: "var(--foreground)", fontSize: "0.9rem" }}>
+                Keypad Phone Setup &amp; Webhook Integration
+              </h5>
+              <p style={{ margin: 0, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                1. On the driver&apos;s basic keypad phone, program Speed-Dial Key <strong>1</strong> and <strong>2</strong> to your school&apos;s telephony IVR / missed-call gateway virtual numbers.
+                <br />
+                2. When a call or ping is received, your telephony provider sends a GET or POST request to:
+              </p>
+              <code
+                style={{
+                  display: "block",
+                  padding: "0.5rem 0.75rem",
+                  borderRadius: "6px",
+                  backgroundColor: "rgba(0,0,0,0.06)",
+                  fontFamily: "monospace",
+                  fontSize: "0.8rem",
+                  color: "var(--primary)",
+                  wordBreak: "break-all",
+                }}
+              >
+                /api/transport/bus-trigger?phone={currentBus.driverPhone}&amp;button=1
+              </code>
+              <p style={{ margin: 0, color: "var(--text-secondary)", fontSize: "0.8rem" }}>
+                ⚡ Since you are the assigned in-charge teacher, editing the driver&apos;s phone number here immediately rebinds incoming button triggers to the new number without requiring any administrator intervention.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* TAB 3: SEND PARENT ALERT                                 */}
         {/* ======================================================== */}
         {activeTab === "MESSAGES" && (
           <form onSubmit={handleSendMessage} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -624,7 +1162,7 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
         )}
 
         {/* ======================================================== */}
-        {/* TAB 3: ENROLLED STUDENTS ROSTER (READ-ONLY)              */}
+        {/* TAB 4: ENROLLED STUDENTS ROSTER (READ-ONLY)              */}
         {/* ======================================================== */}
         {activeTab === "STUDENTS" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
@@ -637,7 +1175,7 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
               </span>
             </div>
 
-            {(!currentBus.students || currentBus.students.length === 0) ? (
+            {!currentBus.students || currentBus.students.length === 0 ? (
               <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)" }}>
                 No students enrolled on this bus yet. Contact administration for student assignments.
               </p>
@@ -698,15 +1236,17 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
         )}
 
         {/* ======================================================== */}
-        {/* TAB 4: TRANSIT STATUS LOGS                               */}
+        {/* TAB 5: TRANSIT STATUS LOGS                               */}
         {/* ======================================================== */}
         {activeTab === "LOGS" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             <h4 style={{ margin: "0 0 0.5rem 0", color: "var(--foreground)", fontSize: "0.95rem" }}>
               Bus Transit Logs &amp; Issue History
             </h4>
-            {(!currentBus.statusLogs || currentBus.statusLogs.length === 0) ? (
-              <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)" }}>No status logs recorded for this bus.</p>
+            {!currentBus.statusLogs || currentBus.statusLogs.length === 0 ? (
+              <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                No status logs recorded for this bus.
+              </p>
             ) : (
               <div style={{ maxHeight: "300px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {currentBus.statusLogs.map((log: any) => (
@@ -721,7 +1261,9 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
-                      <strong>{log.status} {log.issueType ? `(${log.issueType})` : ""}</strong>
+                      <strong>
+                        {log.status} {log.issueType ? `(${log.issueType})` : ""}
+                      </strong>
                       <span style={{ color: "var(--text-secondary)" }}>
                         {new Date(log.createdAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
                       </span>
@@ -734,6 +1276,297 @@ export default function StaffMyBusClient({ buses: initialBuses, staffName }: Sta
           </div>
         )}
       </div>
+
+      {/* ======================================================== */}
+      {/* MODAL: EDIT DRIVER DETAILS (TEACHER ACCESS)              */}
+      {/* ======================================================== */}
+      {isEditingDriver && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            backdropFilter: "blur(3px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+          }}
+          onClick={() => setIsEditingDriver(false)}
+        >
+          <div
+            style={{
+              backgroundColor: "var(--card)",
+              borderRadius: "12px",
+              border: "1px solid var(--border)",
+              maxWidth: "520px",
+              width: "100%",
+              padding: "1.5rem",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1.25rem",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Edit3 size={20} style={{ color: "var(--primary)" }} />
+                <h3 style={{ margin: 0, fontSize: "1.1rem", color: "var(--foreground)" }}>
+                  Edit Driver Details ({currentBus.busNumber})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditingDriver(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--text-secondary)",
+                  padding: "4px",
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDriverDetails} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--foreground)", marginBottom: "4px" }}>
+                  Driver Full Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={driverNameInput}
+                  onChange={(e) => setDriverNameInput(e.target.value)}
+                  placeholder="e.g. Ramesh Kumar"
+                  style={{
+                    width: "100%",
+                    padding: "0.55rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                    fontSize: "0.9rem",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--foreground)", marginBottom: "4px" }}>
+                  Driver Phone Number (Keypad Mobile) *
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={driverPhoneInput}
+                  onChange={(e) => setDriverPhoneInput(e.target.value)}
+                  placeholder="e.g. 9876543210"
+                  style={{
+                    width: "100%",
+                    padding: "0.55rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                    fontSize: "0.9rem",
+                    boxSizing: "border-box",
+                  }}
+                />
+                <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "4px", display: "block" }}>
+                  ⚡ Speed-dial Button 1 &amp; 2 pings are mapped directly to this number.
+                </span>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--foreground)", marginBottom: "4px" }}>
+                  Driver Date of Birth (Optional)
+                </label>
+                <input
+                  type="date"
+                  value={driverDobInput}
+                  onChange={(e) => setDriverDobInput(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.55rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                    fontSize: "0.9rem",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--foreground)", marginBottom: "4px" }}>
+                  Route Description &amp; Stop Details (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={routeDescriptionInput}
+                  onChange={(e) => setRouteDescriptionInput(e.target.value)}
+                  placeholder="e.g. Campus -> Gandhi Circle -> Railway Station -> Main Town Bus Stop"
+                  style={{
+                    width: "100%",
+                    padding: "0.55rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                    fontSize: "0.85rem",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingDriver(false)}
+                  style={{
+                    padding: "0.55rem 1rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "transparent",
+                    color: "var(--text-secondary)",
+                    cursor: "pointer",
+                    fontSize: "0.88rem",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  style={{
+                    padding: "0.55rem 1.3rem",
+                    borderRadius: "6px",
+                    backgroundColor: "var(--primary)",
+                    color: "#fff",
+                    border: "none",
+                    fontWeight: 600,
+                    fontSize: "0.88rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    opacity: isPending ? 0.7 : 1,
+                  }}
+                >
+                  <Check size={16} />
+                  <span>{isPending ? "Saving..." : "Save Driver Details"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: EMERGENCY CONFIRMATION (BUTTON 2 SOS ALERT)       */}
+      {/* ======================================================== */}
+      {confirmEmergencyModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            backgroundColor: "rgba(0, 0, 0, 0.65)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+          }}
+          onClick={() => setConfirmEmergencyModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: "var(--card)",
+              borderRadius: "12px",
+              border: "2px solid #ef4444",
+              maxWidth: "480px",
+              width: "100%",
+              padding: "1.5rem",
+              boxShadow: "0 12px 30px rgba(239,68,68,0.25)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1.25rem",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", color: "#ef4444" }}>
+              <AlertOctagon size={32} />
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.15rem", color: "#ef4444" }}>
+                  Confirm Emergency SOS Trigger?
+                </h3>
+                <span style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                  Bus {currentBus.busNumber} • Driver: {currentBus.driverName}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ fontSize: "0.88rem", color: "var(--foreground)", lineHeight: 1.5 }}>
+              <p style={{ margin: "0 0 0.5rem 0" }}>
+                This will trigger an <strong>URGENT EMERGENCY SOS ALERT</strong>:
+              </p>
+              <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "var(--text-secondary)" }}>
+                <li>Bus status will be set to <strong>DELAYED</strong>.</li>
+                <li>Instant lock-screen alert sent to <strong>All Administrators</strong> and <strong>In-Charge Teacher</strong>.</li>
+                <li style={{ color: "var(--danger)", fontWeight: 600 }}>
+                  Parents will <strong>NOT</strong> be notified to avoid panic.
+                </li>
+              </ul>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
+              <button
+                type="button"
+                onClick={() => setConfirmEmergencyModal(false)}
+                style={{
+                  padding: "0.55rem 1rem",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border)",
+                  backgroundColor: "transparent",
+                  color: "var(--text-secondary)",
+                  cursor: "pointer",
+                  fontSize: "0.88rem",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTriggerKeypad("2")}
+                disabled={isPending}
+                style={{
+                  padding: "0.55rem 1.4rem",
+                  borderRadius: "6px",
+                  backgroundColor: "#ef4444",
+                  color: "#fff",
+                  border: "none",
+                  fontWeight: 700,
+                  fontSize: "0.9rem",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.4rem",
+                }}
+              >
+                <AlertOctagon size={16} />
+                <span>Confirm &amp; Dispatch SOS</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
