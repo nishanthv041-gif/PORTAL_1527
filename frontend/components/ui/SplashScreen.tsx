@@ -77,12 +77,12 @@ export default function SplashScreen({
   useEffect(() => {
     if (!isVisible) return;
 
-    // Full cinematic animation cycle: ~4.2s for 3D rotation, orbital ring, letter reveal, divider, tagline & progress fill
-    let duration = 4200;
+    // Full cinematic animation cycle: 4.65s guarantees progress bar reaches 100% full before moving to login
+    let duration = 4650;
     try {
       const isReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (isReduced) {
-        duration = 1200; // Gentle transition for reduced motion
+        duration = 1000; // Gentle transition for reduced motion
       }
     } catch {}
 
@@ -107,7 +107,6 @@ export default function SplashScreen({
       role="dialog"
       aria-modal="true"
       aria-label="Welcome to SRT Universal School"
-      onClick={handleFinish}
       className={`${styles.splashContainer} ${isExiting ? styles.splashExit : ""} ${className}`}
     >
       {/* Background Soft Radial Glow */}

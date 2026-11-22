@@ -11,6 +11,8 @@ import {
   AlertCircle,
   Loader2,
   GraduationCap,
+  Bell,
+  X,
 } from "lucide-react";
 import styles from "@/frontend/app/login/modern-login.module.css";
 import ThemeToggle from "@/frontend/components/ThemeToggle";
@@ -70,6 +72,8 @@ export default function ModernLoginForm({
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [isMorphing, setIsMorphing] = useState(false);
+  const [showNotifQuick, setShowNotifQuick] = useState(false);
+  const [isEnablingNotif, setIsEnablingNotif] = useState(false);
 
   // Ensure any error immediately clears loading and morphing states to keep form visible
   useEffect(() => {
@@ -80,7 +84,7 @@ export default function ModernLoginForm({
     }
   }, [error]);
 
-  // Check URL reason parameter on mount
+  // Check URL reason parameter and once-only notification prompt on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
@@ -89,9 +93,42 @@ export default function ModernLoginForm({
         if (reasonParam && REASON_MESSAGES[reasonParam]) {
           setError(REASON_MESSAGES[reasonParam]);
         }
+
+        // Show enable notification prompt ONLY ONCE, not twice
+        const alreadyPrompted = localStorage.getItem("srt_notif_prompted_once") === "true";
+        if (
+          !alreadyPrompted &&
+          typeof Notification !== "undefined" &&
+          Notification.permission === "default"
+        ) {
+          setShowNotifQuick(true);
+        }
       } catch {}
     }
   }, []);
+
+  const handleEnableNotificationsQuick = async () => {
+    setIsEnablingNotif(true);
+    try {
+      localStorage.setItem("srt_notif_prompted_once", "true");
+      if (typeof Notification !== "undefined" && typeof Notification.requestPermission === "function") {
+        await Notification.requestPermission();
+      }
+      const { requestPushPermission } = await import("@/frontend/lib/pushNotifications");
+      await requestPushPermission().catch(() => {});
+    } catch {}
+    finally {
+      setIsEnablingNotif(false);
+      setShowNotifQuick(false);
+    }
+  };
+
+  const handleDismissNotifQuick = () => {
+    try {
+      localStorage.setItem("srt_notif_prompted_once", "true");
+    } catch {}
+    setShowNotifQuick(false);
+  };
 
   // Carousel State
   const [activeSlide, setActiveSlide] = useState(0);
@@ -250,21 +287,21 @@ export default function ModernLoginForm({
 
   return (
     <div className={styles.pageWrapper}>
-      {/* Floating Top Bar (Clean, no fake browser/traffic lights) */}
-      <header className={styles.topBar}>
-        <div className={styles.brandPill}>
-          <GraduationCap size={15} className={styles.sparkleIcon} />
-          <span>{portalDisplayName}</span>
-        </div>
-        <ThemeToggle />
-      </header>
-
       {/* Main Split-Screen Canvas Card */}
       <div className={`${styles.mainCanvas} ${isMorphing ? styles.cardFadeOut : ""}`}>
         {/* ========================================================
             LEFT PANEL: FORM & PORTAL BRANDING
             ======================================================== */}
         <div className={`${styles.leftPanel} ${isMorphing ? styles.cardFadeOut : ""}`}>
+          {/* Card Top Header: Theme Option & Brand Pill integrated down inside login box top side */}
+          <div className={styles.cardHeaderRow}>
+            <div className={styles.brandPill}>
+              <GraduationCap size={15} className={styles.sparkleIcon} />
+              <span>{portalDisplayName}</span>
+            </div>
+            <ThemeToggle />
+          </div>
+
           {/* Brand Header with Crest Awakening & Shared Element Morph */}
           <div className={styles.brandRow}>
             <div className={`${styles.crestContainer} ${styles.crestAwakening} ${isMorphing ? styles.crestMorphing : ""}`}>
@@ -304,6 +341,34 @@ export default function ModernLoginForm({
                 Welcome to {portalDisplayName}. Enter your credentials to access your academic dashboard.
               </p>
             </div>
+
+            {/* Enable Notification Quick Prompt: Shows Only Once, reveals all login methods quickly */}
+            {showNotifQuick && (
+              <div className={styles.notifQuickBanner}>
+                <div className={styles.notifQuickText}>
+                  <Bell size={15} className={styles.notifIcon} />
+                  <span>Turn on instant alerts for attendance, live bus tracking & school notices</span>
+                </div>
+                <div className={styles.notifQuickActions}>
+                  <button
+                    type="button"
+                    onClick={handleEnableNotificationsQuick}
+                    className={styles.notifQuickEnableBtn}
+                    disabled={isEnablingNotif}
+                  >
+                    {isEnablingNotif ? <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> : "Enable"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDismissNotifQuick}
+                    className={styles.notifQuickDismissBtn}
+                    aria-label="Dismiss notification prompt"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Error Message Notification */}
             {error && (

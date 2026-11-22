@@ -88,7 +88,7 @@
   width: 48%;
   background-color: #ffffff;
   border-bottom-right-radius: 64px;
-  padding: 3rem 3.25rem 2.5rem 3.25rem;
+  padding: 2.25rem 2.75rem 2rem 2.75rem;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -101,6 +101,112 @@
 [data-theme="dark"] .leftPanel {
   background-color: #111827;
   box-shadow: 10px 0 35px -5px rgba(0, 0, 0, 0.35);
+}
+
+/* Card Top Header: Theme Option & Brand Pill inside the login box top side */
+.cardHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+[data-theme="dark"] .cardHeaderRow {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Push Notification Quick Alert Banner */
+.notifQuickBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  background-color: rgba(242, 184, 75, 0.12);
+  border: 1px solid rgba(242, 184, 75, 0.35);
+  border-radius: 12px;
+  margin-bottom: 1.15rem;
+  font-size: 0.8rem;
+  color: #92400e;
+}
+
+[data-theme="dark"] .notifQuickBanner {
+  background-color: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fef3c7;
+}
+
+.notifQuickText {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  line-height: 1.35;
+  font-weight: 500;
+}
+
+.notifIcon {
+  color: #d97706;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .notifIcon {
+  color: #fbbf24;
+}
+
+.notifQuickActions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.notifQuickEnableBtn {
+  background: #f59e0b;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notifQuickEnableBtn:hover:not(:disabled) {
+  background: #d97706;
+  transform: translateY(-1px);
+}
+
+.notifQuickEnableBtn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.notifQuickDismissBtn {
+  background: transparent;
+  color: #94a3b8;
+  border: none;
+  border-radius: 6px;
+  padding: 0.25rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+}
+
+.notifQuickDismissBtn:hover {
+  color: #475569;
+}
+
+[data-theme="dark"] .notifQuickDismissBtn:hover {
+  color: #cbd5e1;
 }
 
 /* ============================================================

@@ -44,9 +44,11 @@ export default function PwaWelcomeNotificationPrompt() {
       return;
     }
 
-    // If already granted or dismissed, no need to show modal prompt
-    const isDismissed = localStorage.getItem("srt_pwa_notif_dismissed_v1") === "true";
-    if (currentPerm === "granted" || isDismissed) {
+    // Enforce "shows only once, not twice": if already granted, denied, or prompted once, never show modal
+    const alreadyPrompted =
+      localStorage.getItem("srt_notif_prompted_once") === "true" ||
+      localStorage.getItem("srt_pwa_notif_dismissed_v1") === "true";
+    if (currentPerm !== "default" || alreadyPrompted) {
       setIsOpen(false);
       setShowFloatingPill(false);
       return;
@@ -63,6 +65,7 @@ export default function PwaWelcomeNotificationPrompt() {
 
   const handleDismiss = () => {
     try {
+      localStorage.setItem("srt_notif_prompted_once", "true");
       localStorage.setItem("srt_pwa_notif_dismissed_v1", "true");
     } catch {}
     setIsOpen(false);

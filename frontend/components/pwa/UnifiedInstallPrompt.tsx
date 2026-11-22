@@ -74,15 +74,14 @@ export default function UnifiedInstallPrompt() {
     window.addEventListener("beforeinstallprompt", handleBeforeInstall);
     window.addEventListener("appinstalled", handleAppInstalled);
 
-    // 4. Check dismissal preference
-    const dismissedUntil = localStorage.getItem(DISMISSED_KEY);
-    const isDismissed = dismissedUntil && Date.now() < Number(dismissedUntil);
+    // 4. Pop up firstly for browser visitors so user is immediately offered app installation
+    const isSessionDismissed = sessionStorage.getItem("srt_install_prompt_dismissed_session") === "true";
 
-    if (!isDismissed) {
-      // Automatic polite popup for all first-time visitors before installation
+    if (!isSessionDismissed) {
+      // Pop up firstly with a quick 450ms timer once page shell is mounted
       const timer = setTimeout(() => {
         setIsOpen(true);
-      }, 1500);
+      }, 450);
       return () => {
         clearTimeout(timer);
         window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
@@ -137,7 +136,7 @@ export default function UnifiedInstallPrompt() {
     setIsOpen(false);
     setShowFloatingPill(true);
     try {
-      localStorage.setItem(DISMISSED_KEY, String(Date.now() + DISMISS_DURATION_MS));
+      sessionStorage.setItem("srt_install_prompt_dismissed_session", "true");
     } catch {}
   }, []);
 

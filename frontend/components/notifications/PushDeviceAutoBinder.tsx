@@ -108,10 +108,11 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
       return;
     }
 
-    // If permission is default, prompt user with gentle banner (required for iOS Safari user gesture)
+    // If permission is default, check if already prompted once ("shows only once, not twice")
     if (Notification.permission === "default") {
+      const alreadyPrompted = localStorage.getItem("srt_notif_prompted_once") === "true";
       const bannerDismissed = sessionStorage.getItem("srt_notif_banner_dismissed");
-      if (!bannerDismissed) {
+      if (!alreadyPrompted && !bannerDismissed) {
         setShowPromptBanner(true);
       }
     }
@@ -222,6 +223,9 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
     try {
       if ("Notification" in window) {
         const perm = await Notification.requestPermission();
+        try {
+          localStorage.setItem("srt_notif_prompted_once", "true");
+        } catch {}
         if (perm === "granted") {
           setShowPromptBanner(false);
           const reg = await navigator.serviceWorker.ready;
@@ -261,7 +265,10 @@ export default function PushDeviceAutoBinder({ userId }: { userId: string }) {
   };
 
   const handleDismissBanner = () => {
-    sessionStorage.setItem("srt_notif_banner_dismissed", "true");
+    try {
+      localStorage.setItem("srt_notif_prompted_once", "true");
+      sessionStorage.setItem("srt_notif_banner_dismissed", "true");
+    } catch {}
     setShowPromptBanner(false);
   };
 
