@@ -77,12 +77,12 @@ export default function SplashScreen({
   useEffect(() => {
     if (!isVisible) return;
 
-    // Full cinematic animation cycle: ~5.6 seconds for mass 3D rotation, shine sweep, letter-by-letter reveal, divider, tagline, and progress fill
-    let duration = 5600;
+    // Fast cinematic animation cycle: ~2.0 seconds for smooth, snappy intro
+    let duration = 2000;
     try {
       const isReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (isReduced) {
-        duration = 1800; // Gentle transition for reduced motion
+        duration = 1000; // Gentle transition for reduced motion
       }
     } catch {}
 

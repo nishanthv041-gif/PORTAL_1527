@@ -23,9 +23,39 @@ export default function HomeClient({
   authenticatedRole = null,
 }: HomeClientProps) {
   const router = useRouter();
-  const [showSplash, setShowSplash] = useState(true);
 
-  // On native mobile app, immediately hide the native container splash so the full 3D web animation is visible
+  // If already authenticated, immediately skip splash and navigate
+  const isAuth = !!authenticatedRole;
+  const [showSplash, setShowSplash] = useState(() => {
+    if (isAuth) return false;
+    if (typeof window !== "undefined") {
+      try {
+        return sessionStorage.getItem("srt_splash_shown") !== "true";
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    if (authenticatedRole) {
+      const role = authenticatedRole.toUpperCase();
+      const target =
+        role === "ADMIN"
+          ? "/dashboard/admin"
+          : role === "TEACHER"
+          ? "/dashboard/teacher"
+          : role === "PARENT"
+          ? "/dashboard/parent"
+          : role === "STAFF" || role === "NON_TEACHING_STAFF"
+          ? "/staff/my-bus"
+          : "/dashboard";
+      router.replace(target);
+    }
+  }, [authenticatedRole, router]);
+
+  // On native mobile app, immediately hide the native container splash so the web app displays instantly
   useEffect(() => {
     if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
       const winCap = (window as unknown as {
@@ -53,28 +83,22 @@ export default function HomeClient({
     getPersistedNativeSession().catch(() => {});
   }, []);
 
+  if (authenticatedRole) {
+    return null;
+  }
+
   const handleSplashComplete = () => {
     setShowSplash(false);
     try {
       sessionStorage.setItem("srt_splash_shown", "true");
     } catch {}
-
-    // If user is already authenticated, transition smoothly to their dashboard
-    if (authenticatedRole) {
-      const role = authenticatedRole.toUpperCase();
-      const target =
-        role === "STAFF" || role === "NON_TEACHING_STAFF"
-          ? "/staff/my-bus"
-          : `/dashboard/${role.toLowerCase()}`;
-      router.replace(target);
-    }
   };
 
   return (
     <>
       {showSplash && (
         <SplashScreen
-          forceShow={true}
+          forceShow={false}
           onComplete={handleSplashComplete}
         />
       )}

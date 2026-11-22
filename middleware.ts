@@ -252,7 +252,31 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // C. Protected Page Route Authorization & Token Revocation Checks
+  // C. Instant App Launch Accelerator: When user opens installed app or hits '/' or '/login' while authenticated,
+  // immediately redirect them straight to their dashboard with 0 latency (bypassing any splash animation completely).
+  if (pathname === "/" || (pathname === "/login" && !req.nextUrl.searchParams.get("reason"))) {
+    const token = await getToken({
+      req,
+      secret: process.env.NEXTAUTH_SECRET,
+    });
+
+    if (token && token.id && !token.isRevoked) {
+      const role = String(token.role || "").toUpperCase();
+      let targetPath = "/dashboard";
+      if (role === "ADMIN") targetPath = "/dashboard/admin";
+      else if (role === "TEACHER") targetPath = "/dashboard/teacher";
+      else if (role === "PARENT") targetPath = "/dashboard/parent";
+      else if (role === "STAFF" || role === "NON_TEACHING_STAFF") targetPath = "/staff/my-bus";
+
+      const destinationUrl = new URL(targetPath, req.url);
+      return applySecurityHeaders(
+        NextResponse.redirect(destinationUrl),
+        allowedOriginHeader
+      );
+    }
+  }
+
+  // D. Protected Page Route Authorization & Token Revocation Checks
   const isProtectedPage =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/admin") ||
