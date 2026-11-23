@@ -151,8 +151,15 @@ export async function bulkCreateUsers(type: "teacher" | "student", payload: Reco
             });
             parentId = parentUser.parent!.id;
           } else {
-            if (parentUser.role !== "PARENT") {
-              throw new Error(`User with email ${cleanParentEmail} exists but is not a parent`);
+            // Allow existing TEACHER, STAFF, or ADMIN users to also have a PARENT profile (Dual Role Switcher)
+            if (
+              parentUser.role !== "PARENT" &&
+              parentUser.role !== "TEACHER" &&
+              parentUser.role !== "STAFF" &&
+              parentUser.role !== "NON_TEACHING_STAFF" &&
+              parentUser.role !== "ADMIN"
+            ) {
+              throw new Error(`User with email ${cleanParentEmail} exists but is not an authorized parent or staff account`);
             }
             if (!parentUser.parent) {
               const newParent = await prisma.parent.create({

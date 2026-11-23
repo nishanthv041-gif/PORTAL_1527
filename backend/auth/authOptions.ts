@@ -76,6 +76,11 @@ export function getAuthOptions(): NextAuthOptions {
             where: {
               OR: searchConditions,
             },
+            include: {
+              teacher: { select: { id: true, isActive: true } },
+              parent: { select: { id: true, isActive: true } },
+              staff: { select: { id: true, isActive: true } },
+            },
           });
         } catch (error) {
           console.error("[NextAuth] Prisma database error:", error);
@@ -116,19 +121,53 @@ export function getAuthOptions(): NextAuthOptions {
             );
           }
 
-          // If expectedRole is provided, ensure it matches the user's actual role
+          // Determine all roles available to this user account (Dual Role Switcher)
+          const availableRoles: string[] = [];
+          if (user.role) availableRoles.push(user.role);
+          if (user.teacher && user.teacher.isActive && !availableRoles.includes("TEACHER")) {
+            availableRoles.push("TEACHER");
+          }
+          if (user.parent && user.parent.isActive && !availableRoles.includes("PARENT")) {
+            availableRoles.push("PARENT");
+          }
+          if (user.staff && user.staff.isActive && !availableRoles.includes("STAFF")) {
+            availableRoles.push("STAFF");
+          }
+          if (user.role === "ADMIN" && !availableRoles.includes("ADMIN")) {
+            availableRoles.push("ADMIN");
+          }
+
+          let activeRole = user.role;
+
+          // If expectedRole is provided, ensure it matches one of the user's available roles
           if (credentials.expectedRole) {
             const exp = credentials.expectedRole.toUpperCase();
             const actual = user.role.toUpperCase();
             const isStaffMatch =
               (exp === "STAFF" || exp === "NON_TEACHING_STAFF") &&
               (actual === "STAFF" || actual === "NON_TEACHING_STAFF");
+            const isRoleAvailable =
+              isStaffMatch ||
+              availableRoles.map((r) => r.toUpperCase()).includes(exp);
 
-            if (!isStaffMatch && exp !== actual) {
+            if (!isRoleAvailable) {
               await logAttempt(false);
               throw new Error(
                 `This is a ${user.role.toLowerCase()} account. Please use the correct login page.`
               );
+            }
+
+            // If logging in via another portal that the user is authorized for, switch active role
+            if (exp !== actual && !isStaffMatch) {
+              activeRole = exp;
+              try {
+                await prisma.user.update({
+                  where: { id: user.id },
+                  data: { role: exp },
+                });
+              } catch (updateErr) {
+                console.warn("[NextAuth] Failed to sync active role on login:", updateErr);
+              }
             }
           }
 
@@ -136,7 +175,7 @@ export function getAuthOptions(): NextAuthOptions {
           try {
             userSession = await createUserSession({
               userId: user.id,
-              userRole: user.role,
+              userRole: activeRole,
               ipAddress: ip,
               deviceInfo: userAgent || "Web Browser",
             });
@@ -155,7 +194,8 @@ export function getAuthOptions(): NextAuthOptions {
             id: user.id,
             email: user.email,
             name: user.name,
-            role: user.role,
+            role: activeRole,
+            availableRoles,
             theme: user.theme,
             notificationsEnabled: user.notificationsEnabled,
             sessionVersion: user.sessionVersion || 1,
@@ -182,7 +222,7 @@ export function getAuthOptions(): NextAuthOptions {
       }
       return true;
     },
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account, trigger, session }) {
       if (account?.provider === "google") {
         return await populateGoogleJwt(token, user, account);
       }
@@ -194,6 +234,20 @@ export function getAuthOptions(): NextAuthOptions {
         token.notificationsEnabled = user.notificationsEnabled;
         token.sessionVersion = (user as any).sessionVersion || 1;
         token.sessionId = (user as any).sessionId;
+        token.availableRoles = (user as any).availableRoles || [user.role];
+      } else if (trigger === "update" && session) {
+        if (session.role) {
+          token.role = session.role;
+        }
+        if (session.availableRoles && Array.isArray(session.availableRoles)) {
+          token.availableRoles = session.availableRoles;
+        }
+        if (session.theme) {
+          token.theme = session.theme;
+        }
+        if (typeof session.notificationsEnabled === "boolean") {
+          token.notificationsEnabled = session.notificationsEnabled;
+        }
       } else if (token.sessionId) {
         try {
           const validation = await validateSession(token.sessionId as string);
@@ -201,8 +255,27 @@ export function getAuthOptions(): NextAuthOptions {
             token.isRevoked = true;
             token.revokedReason = validation.reason || "LOGOUT";
           } else if (validation.user) {
-            token.role = validation.user.role;
             token.name = validation.user.name;
+            // Ensure availableRoles is populated on token
+            if (!token.availableRoles || !Array.isArray(token.availableRoles) || token.availableRoles.length <= 1) {
+              const dbRoles = await prisma.user.findUnique({
+                where: { id: validation.user.id },
+                select: {
+                  role: true,
+                  teacher: { select: { id: true, isActive: true } },
+                  parent: { select: { id: true, isActive: true } },
+                  staff: { select: { id: true, isActive: true } },
+                },
+              });
+              if (dbRoles) {
+                const roles: string[] = [dbRoles.role];
+                if (dbRoles.teacher?.isActive && !roles.includes("TEACHER")) roles.push("TEACHER");
+                if (dbRoles.parent?.isActive && !roles.includes("PARENT")) roles.push("PARENT");
+                if (dbRoles.staff?.isActive && !roles.includes("STAFF")) roles.push("STAFF");
+                if (dbRoles.role === "ADMIN" && !roles.includes("ADMIN")) roles.push("ADMIN");
+                token.availableRoles = roles;
+              }
+            }
             // Activity tracking (throttled to at most once per ACTIVITY_UPDATE_INTERVAL_MIN minutes)
             recordSessionActivity(token.sessionId as string).catch((err) =>
               console.warn("[Auth JWT] recordSessionActivity error:", err)
@@ -215,13 +288,25 @@ export function getAuthOptions(): NextAuthOptions {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.id as string },
-            select: { status: true, sessionVersion: true, role: true }
+            select: {
+              status: true,
+              sessionVersion: true,
+              role: true,
+              teacher: { select: { id: true, isActive: true } },
+              parent: { select: { id: true, isActive: true } },
+              staff: { select: { id: true, isActive: true } },
+            },
           });
           if (!dbUser || dbUser.status === "INACTIVE" || (token.sessionVersion && dbUser.sessionVersion !== token.sessionVersion)) {
             token.isRevoked = true;
             token.revokedReason = "ADMIN_FORCED";
           } else {
-            token.role = dbUser.role;
+            const roles: string[] = [dbUser.role];
+            if (dbUser.teacher?.isActive && !roles.includes("TEACHER")) roles.push("TEACHER");
+            if (dbUser.parent?.isActive && !roles.includes("PARENT")) roles.push("PARENT");
+            if (dbUser.staff?.isActive && !roles.includes("STAFF")) roles.push("STAFF");
+            if (dbUser.role === "ADMIN" && !roles.includes("ADMIN")) roles.push("ADMIN");
+            token.availableRoles = roles;
           }
         } catch (err) {
           console.warn("[Auth JWT] Session verification error:", err);
@@ -235,6 +320,7 @@ export function getAuthOptions(): NextAuthOptions {
       }
       if (session.user) {
         session.user.role = token.role as string;
+        session.user.availableRoles = (token.availableRoles as string[]) || [token.role as string];
         session.user.id = token.id as string;
         session.user.theme = token.theme as string;
         session.user.notificationsEnabled = token.notificationsEnabled as boolean;

@@ -252,9 +252,9 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // C. Instant App Launch Accelerator: When user opens installed app or hits '/' or '/login' while authenticated,
-  // immediately redirect them straight to their dashboard with 0 latency (bypassing any splash animation completely).
-  if (pathname === "/" || (pathname === "/login" && !req.nextUrl.searchParams.get("reason"))) {
+  // C. Authenticated Login Redirect: When user visits '/login' while authenticated,
+  // immediately redirect them straight to their dashboard with 0 latency.
+  if (pathname === "/login" && !req.nextUrl.searchParams.get("reason")) {
     const token = await getToken({
       req,
       secret: process.env.NEXTAUTH_SECRET,

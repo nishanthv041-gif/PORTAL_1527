@@ -6,6 +6,7 @@ import ThemeToggle from "./ThemeToggle";
 import { Bell, Send, CheckCircle2 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { setAppBadgeCount, clearAppBadgeCount } from "@/frontend/lib/pwa/badgeManager";
+import RoleSwitcher from "@/frontend/components/auth/RoleSwitcher";
 
 // Matches the key used in NotificationPopupModal
 const CLEARED_KEY = "srt_portal_notif_cleared_v1";
@@ -394,6 +395,9 @@ export default function Topbar({
             <span>{isTestingPush ? "Testing..." : testPushSuccess ? "✓ Sent!" : "Test Push"}</span>
           </button>
         )}
+
+        {/* Multi-role switcher pill for dual-role users (e.g. Teacher with enrolled child) */}
+        <RoleSwitcher style={{ marginRight: "0.4rem" }} />
 
         <ThemeToggle style={{ marginRight: "0.25rem" }} />
         <div className={styles.userDetails}>

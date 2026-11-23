@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import styles from "./ParentBottomNav.module.css";
 import BottomSheet from "@/components/ui/BottomSheet";
+import RoleSwitcher from "@/frontend/components/auth/RoleSwitcher";
 
 export function ParentBottomNav() {
   const pathname = usePathname();
@@ -245,6 +246,10 @@ export function ParentBottomNav() {
               </Link>
             )
           )}
+        </div>
+
+        <div style={{ padding: "0 0.5rem" }}>
+          <RoleSwitcher variant="bottomsheet" />
         </div>
 
         <div className={styles.moreLogoutSection}>

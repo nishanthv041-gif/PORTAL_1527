@@ -27,6 +27,7 @@ import {
 import { CakeIcon as Cake } from "@/frontend/components/birthdays/BirthdayIcons";
 import styles from "./TeacherBottomNav.module.css";
 import BottomSheet from "@/components/ui/BottomSheet";
+import RoleSwitcher from "@/frontend/components/auth/RoleSwitcher";
 
 export function TeacherBottomNav() {
   const pathname = usePathname();
@@ -231,6 +232,10 @@ export function TeacherBottomNav() {
               </Link>
             )
           )}
+        </div>
+
+        <div style={{ padding: "0 0.5rem" }}>
+          <RoleSwitcher variant="bottomsheet" />
         </div>
 
         <div className={styles.moreLogoutSection}>

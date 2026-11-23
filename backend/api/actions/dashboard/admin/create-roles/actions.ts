@@ -246,10 +246,18 @@ export async function createParentStudentAction(formData: FormData) {
     // Check if user exists (case-insensitive)
     const existingUser = await prisma.user.findFirst({ 
       where: { email: { equals: parentEmail, mode: "insensitive" } },
-      include: { parent: true }
+      include: { parent: true, teacher: true, staff: true }
     });
     
-    if (existingUser && existingUser.role !== "PARENT") {
+    // Allow existing TEACHER, STAFF, or ADMIN users to also have a PARENT profile (Dual Role Switcher)
+    if (
+      existingUser &&
+      existingUser.role !== "PARENT" &&
+      existingUser.role !== "TEACHER" &&
+      existingUser.role !== "STAFF" &&
+      existingUser.role !== "NON_TEACHING_STAFF" &&
+      existingUser.role !== "ADMIN"
+    ) {
       return { error: `A user with email ${parentEmail} already exists with role ${existingUser.role}.` };
     }
 

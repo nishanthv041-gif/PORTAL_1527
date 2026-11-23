@@ -519,11 +519,33 @@ export async function deleteStudentPermanentlyAction(studentId: string) {
       for (const pId of parentIds) {
         const remainingChildren = await tx.parentStudent.count({ where: { parentId: pId } });
         if (remainingChildren === 0) {
-          // If no other children exist for this parent, clean up parent and user record
-          const parent = await tx.parent.findUnique({ where: { id: pId } });
+          // If no other children exist for this parent, clean up parent record
+          const parent = await tx.parent.findUnique({
+            where: { id: pId },
+            include: {
+              user: {
+                include: {
+                  teacher: true,
+                  staff: true,
+                },
+              },
+            },
+          });
           if (parent) {
             await tx.parent.delete({ where: { id: pId } });
-            await tx.user.delete({ where: { id: parent.userId } });
+            // Safeguard: Only delete User if they don't have Teacher, Staff, or Admin roles
+            const parentUser = parent.user;
+            const hasOtherStaffRoles =
+              parentUser &&
+              (parentUser.teacher !== null ||
+                parentUser.staff !== null ||
+                parentUser.role === "TEACHER" ||
+                parentUser.role === "ADMIN" ||
+                parentUser.role === "STAFF" ||
+                parentUser.role === "NON_TEACHING_STAFF");
+            if (parentUser && !hasOtherStaffRoles) {
+              await tx.user.delete({ where: { id: parent.userId } });
+            }
           }
         }
       }

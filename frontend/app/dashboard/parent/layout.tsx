@@ -14,8 +14,23 @@ export default async function ParentLayout({
     redirect("/login");
   }
 
-  if (session.user.role.toUpperCase() !== "PARENT") {
-    redirect("/dashboard");
+  const role = session.user.role.toUpperCase();
+  const availableRoles = ((session.user as any).availableRoles || [role]).map((r: string) => r.toUpperCase());
+
+  if (role !== "PARENT") {
+    if (availableRoles.includes("PARENT") || role === "ADMIN") {
+      try {
+        const { prisma } = await import("@/backend/db/prisma");
+        await prisma.user.update({
+          where: { id: session.user.id },
+          data: { role: "PARENT" },
+        });
+      } catch (err) {
+        console.warn("[ParentLayout] Error activating parent role:", err);
+      }
+    } else {
+      redirect("/dashboard");
+    }
   }
 
   return (

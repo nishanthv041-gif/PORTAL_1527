@@ -1553,7 +1553,14 @@ export async function executeImportTransaction(
                   name: parentFullName
                 };
               } else {
-                if (parentUser.role !== "PARENT") {
+                // Allow existing TEACHER, STAFF, or ADMIN users to also have a PARENT profile (Dual Role Switcher)
+                if (
+                  parentUser.role !== "PARENT" &&
+                  parentUser.role !== "TEACHER" &&
+                  parentUser.role !== "STAFF" &&
+                  parentUser.role !== "NON_TEACHING_STAFF" &&
+                  parentUser.role !== "ADMIN"
+                ) {
                   throw new Error(`User with email '${cleanParentEmail}' exists but has role '${parentUser.role}'.`);
                 }
 

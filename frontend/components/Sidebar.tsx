@@ -8,6 +8,7 @@ import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";
 import SrtLogo from "@/frontend/components/ui/SrtLogo";
 import { getActiveNavItemHref } from "@/lib/navigation/sidebarActive";
 import { logoutFromOneSignal } from "@/frontend/lib/onesignal";
+import RoleSwitcher from "@/frontend/components/auth/RoleSwitcher";
 import styles from "./Sidebar.module.css";
 import {
   Menu,
@@ -317,6 +318,7 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
         })}
       </nav>
       <div className={styles.logoutWrapper}>
+        <RoleSwitcher variant="sidebar" isCollapsed={isCollapsed} />
         <button
           onClick={async () => {
             const ok = await confirm({

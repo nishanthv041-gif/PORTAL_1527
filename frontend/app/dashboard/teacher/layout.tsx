@@ -13,8 +13,23 @@ export default async function TeacherLayout({
     redirect("/login");
   }
 
-  if (session.user.role.toUpperCase() !== "TEACHER") {
-    redirect("/dashboard");
+  const role = session.user.role.toUpperCase();
+  const availableRoles = ((session.user as any).availableRoles || [role]).map((r: string) => r.toUpperCase());
+
+  if (role !== "TEACHER") {
+    if (availableRoles.includes("TEACHER") || role === "ADMIN") {
+      try {
+        const { prisma } = await import("@/backend/db/prisma");
+        await prisma.user.update({
+          where: { id: session.user.id },
+          data: { role: "TEACHER" },
+        });
+      } catch (err) {
+        console.warn("[TeacherLayout] Error activating teacher role:", err);
+      }
+    } else {
+      redirect("/dashboard");
+    }
   }
 
   return (

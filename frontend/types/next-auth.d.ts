@@ -5,6 +5,7 @@ declare module "next-auth" {
     user: {
       id: string;
       role: string;
+      availableRoles?: string[];
       theme: string;
       notificationsEnabled: boolean;
       sessionId?: string;
@@ -14,6 +15,7 @@ declare module "next-auth" {
   interface User {
     id: string;
     role: string;
+    availableRoles?: string[];
     theme: string;
     notificationsEnabled: boolean;
     sessionId?: string;
@@ -24,6 +26,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     id: string;
     role: string;
+    availableRoles?: string[];
     theme: string;
     notificationsEnabled: boolean;
     sessionId?: string;
