@@ -397,7 +397,11 @@ export default function Topbar({
         )}
 
         {/* Multi-role switcher pill for dual-role users (e.g. Teacher with enrolled child) */}
-        <RoleSwitcher style={{ marginRight: "0.4rem" }} />
+        <RoleSwitcher
+          currentRole={user?.role || undefined}
+          availableRoles={(user as any)?.availableRoles || undefined}
+          style={{ marginRight: "0.4rem" }}
+        />
 
         <ThemeToggle style={{ marginRight: "0.25rem" }} />
         <div className={styles.userDetails}>

@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
 import { ArrowLeftRight, Loader2, GraduationCap, Users, Shield, Bus } from "lucide-react";
 import styles from "./RoleSwitcher.module.css";
 
 interface RoleSwitcherProps {
+  currentRole?: string;
+  availableRoles?: string[];
   variant?: "pill" | "sidebar" | "bottomsheet";
   isCollapsed?: boolean;
   className?: string;
@@ -42,33 +42,62 @@ const ROLE_DISPLAY: Record<string, { label: string; shortLabel: string; icon: Re
 };
 
 export default function RoleSwitcher({
+  currentRole,
+  availableRoles: initialAvailableRoles,
   variant = "pill",
   isCollapsed = false,
   className = "",
   style,
 }: RoleSwitcherProps) {
-  const { data: session, update } = useSession();
-  const router = useRouter();
+  const [activeRole, setActiveRole] = useState<string>(currentRole?.toUpperCase() || "");
+  const [roles, setRoles] = useState<string[]>(
+    Array.from(new Set((initialAvailableRoles || []).map((r) => r.toUpperCase())))
+  );
   const [isSwitching, setIsSwitching] = useState(false);
 
-  const currentRole = (session?.user?.role || "").toUpperCase();
-  const rawRoles = (session?.user?.availableRoles || []) as string[];
-  // Normalize & deduplicate available roles
-  const availableRoles = Array.from(new Set(rawRoles.map((r) => r.toUpperCase())));
+  useEffect(() => {
+    if (currentRole) {
+      setActiveRole(currentRole.toUpperCase());
+    }
+    if (initialAvailableRoles && initialAvailableRoles.length > 0) {
+      setRoles(Array.from(new Set(initialAvailableRoles.map((r) => r.toUpperCase()))));
+    }
+
+    // If available roles are not yet populated from props, fetch from active session
+    if (!initialAvailableRoles || initialAvailableRoles.length === 0) {
+      let isMounted = true;
+      fetch("/api/auth/session", { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (isMounted && data?.user) {
+            if (data.user.role) {
+              setActiveRole(data.user.role.toUpperCase());
+            }
+            if (data.user.availableRoles && Array.isArray(data.user.availableRoles)) {
+              setRoles(Array.from(new Set(data.user.availableRoles.map((r: string) => r.toUpperCase()))));
+            }
+          }
+        })
+        .catch(() => {});
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [currentRole, initialAvailableRoles]);
 
   // If user does not have multiple roles, don't show the switcher
-  if (availableRoles.length <= 1) {
+  if (roles.length <= 1) {
     return null;
   }
 
   // Find the primary alternate role to switch to
   const targetRole =
-    availableRoles.find((r) => r !== currentRole) ||
-    (currentRole === "TEACHER" ? "PARENT" : "TEACHER");
+    roles.find((r) => r !== activeRole) ||
+    (activeRole === "TEACHER" ? "PARENT" : "TEACHER");
 
-  const currentInfo = ROLE_DISPLAY[currentRole] || {
-    label: `${currentRole} Portal`,
-    shortLabel: currentRole,
+  const currentInfo = ROLE_DISPLAY[activeRole] || {
+    label: `${activeRole} Portal`,
+    shortLabel: activeRole,
     icon: <Users size={15} />,
   };
 
@@ -80,7 +109,7 @@ export default function RoleSwitcher({
 
   const handleSwitchRole = async (roleToActivate?: string) => {
     const role = roleToActivate || targetRole;
-    if (isSwitching || role === currentRole) return;
+    if (isSwitching || role === activeRole) return;
 
     setIsSwitching(true);
     try {
@@ -94,9 +123,6 @@ export default function RoleSwitcher({
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to switch role");
       }
-
-      // Synchronize client session JWT
-      await update({ role: role, availableRoles });
 
       // Fast, clean redirect to the target portal dashboard
       const targetUrl = data.redirectUrl || (role === "TEACHER" ? "/dashboard/teacher" : "/dashboard/parent");

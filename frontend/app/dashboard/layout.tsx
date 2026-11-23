@@ -66,7 +66,11 @@ export default async function DashboardLayout({
           <input type="checkbox" id="mobile-menu-toggle" className={styles.mobileMenuToggle} />
 
           <div className={styles.sidebarWrapper}>
-            <Sidebar role={session.user.role} settings={settings} />
+            <Sidebar
+              role={session.user.role}
+              availableRoles={(session.user as any).availableRoles}
+              settings={settings}
+            />
           </div>
 
           {/* Global touch backdrop overlay for mobile menu drawer */}

@@ -52,7 +52,15 @@ interface NavSection {
   items: NavItem[];
 }
 
-export default function Sidebar({ role, settings = {} }: { role: string; settings?: Record<string, string> }) {
+export default function Sidebar({
+  role,
+  settings = {},
+  availableRoles,
+}: {
+  role: string;
+  settings?: Record<string, string>;
+  availableRoles?: string[];
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -318,7 +326,12 @@ export default function Sidebar({ role, settings = {} }: { role: string; setting
         })}
       </nav>
       <div className={styles.logoutWrapper}>
-        <RoleSwitcher variant="sidebar" isCollapsed={isCollapsed} />
+        <RoleSwitcher
+          variant="sidebar"
+          isCollapsed={isCollapsed}
+          currentRole={role}
+          availableRoles={availableRoles}
+        />
         <button
           onClick={async () => {
             const ok = await confirm({
