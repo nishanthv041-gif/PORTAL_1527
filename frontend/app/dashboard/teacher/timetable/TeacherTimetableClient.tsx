@@ -6,7 +6,7 @@ import {
   Calendar as CalendarIcon, Clock, MapPin, User,
   BookOpen, CheckCircle2, PlayCircle,
   CalendarDays, ChevronRight, GraduationCap,
-  ArrowLeftRight, X, Loader2, AlertCircle, Sparkles
+  ArrowLeftRight, X, Loader2, AlertCircle
 } from "lucide-react";
 import {
   getStaffShiftPeriodsWithFreeTeachersAction,

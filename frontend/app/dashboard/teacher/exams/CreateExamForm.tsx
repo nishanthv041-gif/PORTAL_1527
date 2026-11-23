@@ -12,7 +12,6 @@ import {
   Clock,
   BookOpen,
   GraduationCap,
-  Sparkles,
 } from "lucide-react";
 import styles from "./CreateExamForm.module.css";
 import {

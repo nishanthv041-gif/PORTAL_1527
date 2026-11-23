@@ -7,7 +7,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   ArrowLeft,
-  Sparkles,
+  UserCheck,
   ShieldCheck,
   RefreshCw,
 } from "lucide-react";
@@ -154,7 +154,7 @@ export default function ClassTeacherReconciliationClient({ initialData }: Props)
         <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent rounded-3xl p-6 border border-amber-500/30 shadow-md">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-3">
-              <Sparkles className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              <UserCheck className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
               <div>
                 <h3 className="font-bold text-base text-slate-900 dark:text-white">
                   Class 2 - A Assignment Recommendation

@@ -26,6 +26,7 @@ const FORBIDDEN_PATTERNS = [
   { name: "Hardcoded Sample Marks for layout preview", regex: /Sample marks for layout preview/i },
   { name: "Hardcoded Total marks 500 maximum", regex: /Total marks: 500 maximum/i },
   { name: "SAMPLE_PREVIEW_STUDENTS", regex: /\bSAMPLE_PREVIEW_STUDENTS\b/ },
+  { name: "Prohibited AI Branding in UI", regex: /\b(Powered by AI|AI Assistant|AI Insights|AI Suggestions|ChatGPT|Anthropic)\b/i },
 ];
 
 function scanDirectory(dir: string, violations: string[]) {

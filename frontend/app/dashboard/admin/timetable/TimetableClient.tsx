@@ -33,7 +33,6 @@ import {
   UserCheck,
   EyeOff,
   Search,
-  Sparkles,
   Filter
 } from "lucide-react";
 import {

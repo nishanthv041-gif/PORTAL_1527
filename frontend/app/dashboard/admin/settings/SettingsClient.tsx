@@ -12,7 +12,7 @@ import { SystemSetting } from "@prisma/client";
 import {
   Building2, Save, Loader2, CheckCircle2, Upload, AlertCircle, Image as ImageIcon,
   Phone, Mail, Globe, User, Calendar, MapPin, Users, GraduationCap, Clock, ArrowRight,
-  Layers, Lock, KeyRound, Eye, EyeOff, ShieldCheck, ShieldAlert, Sparkles, RefreshCw,
+  Layers, Lock, KeyRound, Eye, EyeOff, ShieldCheck, ShieldAlert, RefreshCw,
   Smartphone, Bell
 } from "lucide-react";
 import { useConfirm } from "@/frontend/components/ui/ConfirmDialog";

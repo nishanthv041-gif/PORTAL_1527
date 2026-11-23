@@ -19,8 +19,7 @@ import {
   Trash2,
   CheckSquare,
   Square,
-  ArrowLeftRight,
-  Sparkles
+  ArrowLeftRight
 } from "lucide-react";
 import {
   markTeacherAbsenceAction,

@@ -10,7 +10,8 @@ import {
   FileText,
   CreditCard,
   Settings,
-  Sparkles,
+  GraduationCap,
+  LayoutDashboard,
   Info,
   ArrowRight,
   ShieldCheck,
@@ -156,7 +157,7 @@ export default async function UniversalDashboard({
       <div className={styles.welcomeHero}>
         <div className={styles.heroContent}>
           <div className={styles.schoolTag}>
-            <Sparkles size={14} />
+            <GraduationCap size={14} />
             <span>SRT Universal School Portal</span>
           </div>
           <h1 className={styles.welcomeTitle}>Welcome back, {displayName}</h1>
@@ -264,7 +265,7 @@ export default async function UniversalDashboard({
 
       {/* Quick Navigation Hub */}
       <h2 className={styles.sectionTitle}>
-        <Sparkles size={18} color="#f59e0b" />
+        <LayoutDashboard size={18} color="#f59e0b" />
         Quick Access Hub
       </h2>
       <div className={styles.quickActionsGrid}>

@@ -296,7 +296,7 @@ export default function ModernLoginForm({
           {/* Card Top Header: Theme Option & Brand Pill integrated down inside login box top side */}
           <div className={styles.cardHeaderRow}>
             <div className={styles.brandPill}>
-              <GraduationCap size={15} className={styles.sparkleIcon} />
+              <GraduationCap size={15} className={styles.brandPillIcon} />
               <span>{portalDisplayName}</span>
             </div>
             <ThemeToggle />

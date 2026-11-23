@@ -3,7 +3,7 @@ import { getCachedServerSession } from "@/backend/auth/sessionCache";
 import { prisma } from "@/backend/db/prisma";
 import { Prisma } from "@prisma/client";
 import styles from "../dashboard.module.css";
-import { Users, GraduationCap, BookOpen, Briefcase, Mail, Phone, CheckCircle2, XCircle, UserCheck, Sparkles } from "lucide-react";
+import { Users, GraduationCap, BookOpen, Briefcase, Mail, Phone, CheckCircle2, XCircle, UserCheck, Gift } from "lucide-react";
 import ClassSelector from "./ClassSelector";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -328,7 +328,7 @@ export default async function AdminDashboardPage({
           boxShadow: "0 2px 8px rgba(139, 92, 246, 0.1)"
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <Sparkles size={22} style={{ color: "#7c3aed" }} />
+            <Gift size={22} style={{ color: "#7c3aed" }} />
             <div>
               <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "#5b21b6" }}>
                 Today&apos;s School Birthday Celebrants: {totalSchoolCelebrantsToday} person{totalSchoolCelebrantsToday > 1 ? "s" : ""}

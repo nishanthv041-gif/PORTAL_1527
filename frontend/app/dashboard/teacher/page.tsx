@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { getEffectiveTimetable } from "@/backend/lib/timetable/getEffectiveTimetable";
 import { getSchoolNow, startOfSchoolDay } from "@/lib/time";
 import styles from "../dashboard.module.css";
-import { GraduationCap, Users, Clock, MessageSquare, Calendar as CalendarIcon, MapPin, Star, ArrowRight, ShieldAlert, Sparkles, Gift } from "lucide-react";
+import { GraduationCap, Users, Clock, MessageSquare, Calendar as CalendarIcon, MapPin, Star, ArrowRight, ShieldAlert, Gift } from "lucide-react";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -243,7 +243,7 @@ export default async function TeacherDashboard() {
           boxShadow: "0 2px 8px rgba(99, 102, 241, 0.1)"
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem", color: "#3730a3", fontWeight: 700, fontSize: "0.95rem" }}>
-            <Sparkles size={18} style={{ color: "#4f46e5" }} />
+            <Gift size={18} style={{ color: "#4f46e5" }} />
             Today&apos;s Student Birthdays in Your Classes ({classBirthdayStudents.length})
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
